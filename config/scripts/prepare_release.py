@@ -42,14 +42,12 @@ TEXT_SURFACES: tuple[tuple[str, str], ...] = (
     # The chart's default image tag. Its own `version` is not a release surface.
     ("config/deploy/helm/anix-control/Chart.yaml", r'^appVersion:\s*"([^"]+)"'),
     ("docs/docs.go", r'^\s*Version:\s*"([^"]+)"'),
-    ("docs/swagger.yaml", r"^\s{2}version:\s*([^\s]+)"),
     ("README.md", r"^- Current release:\s+`v([^`]+)`"),
 )
 # (file, number of leading "version" string fields to set).
 JSON_SURFACES: tuple[tuple[str, int], ...] = (
     ("web/package.json", 1),
     ("web/package-lock.json", 2),
-    ("docs/swagger.json", 1),
 )
 
 

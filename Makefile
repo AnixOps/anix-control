@@ -251,8 +251,8 @@ docker-stop:
 swagger:
 	@echo "Generating Swagger docs..."
 	$(eval SWAG := $(shell go env GOPATH)/bin/swag)
-	@command -v $(SWAG) >/dev/null 2>&1 || go install github.com/swaggo/swag/cmd/swag@latest
-	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal --exclude packages
+	@command -v $(SWAG) >/dev/null 2>&1 || go install github.com/swaggo/swag/cmd/swag@v1.16.6
+	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal --exclude packages --outputTypes go
 
 # 查看 Swagger 文档
 swagger-serve:

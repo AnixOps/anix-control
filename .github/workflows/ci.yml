@@ -1071,7 +1071,8 @@ jobs:
         run: |
           go mod verify
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude packages
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude packages --outputTypes go
+          git diff --exit-code -- docs/docs.go || { echo "docs/docs.go is out of date: run make swagger and commit it"; exit 1; }
           go vet ./docs
 
       - name: Upload the shard coverage profile
@@ -2013,11 +2014,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: Generate Swagger docs
-        run: |
-          go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude packages
 
       - name: Build binary
         run: |

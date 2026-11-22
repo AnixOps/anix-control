@@ -38,8 +38,8 @@ type SubscriptionTemplate struct {
 	Tags    *string `gorm:"size:255" json:"tags"`    // 标签 (JSON array)
 
 	// JSON 模板配置 (高级功能)
-	// 支持变量占位符: {{.UUID}}, {{.UserID}}, {{.Email}}, {{.ExpiredAt}}, {{.SpeedLimit}}, {{.DeviceLimit}}
-	// 以及自定义变量: {{.Custom.xxx}}
+	// Go 模板变量（写在双花括号里）: .UUID, .UserID, .Email, .ExpiredAt, .SpeedLimit, .DeviceLimit
+	// 以及自定义变量 .Custom.xxx
 	TemplateJSON string `gorm:"type:text" json:"template_json"`
 
 	// 服务器基础配置 (对应 AnixOps Agent CommonNode)

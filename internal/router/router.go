@@ -67,18 +67,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// is refused there like any other string that is not a JWT.
 	adminAPIToken := middleware.AdminAPIToken()
 
-	// Swagger API 文档
-	// 自定义 handler 来正确处理 doc.json
-	r.GET("/swagger/*any", func(c *gin.Context) {
-		path := c.Param("any")
-		if path == "/doc.json" || path == "doc.json" {
-			// 直接返回静态 swagger.json 文件
-			c.File("./docs/swagger.json")
-			return
-		}
-		// 其他 swagger 文件使用 ginSwagger
-		ginSwagger.WrapHandler(swaggerFiles.Handler)(c)
-	})
+	// Swagger API 文档：doc.json 来自编译进二进制的 docs 包（docs/docs.go）。
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 健康检查
 	// @Summary 健康检查

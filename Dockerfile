@@ -76,7 +76,6 @@ RUN groupadd --gid 10001 anixops \
     && install -d -o anixops -g anixops -m 0700 /var/lib/anix-control
 WORKDIR /app
 # Code, docs and playbooks are owned by root and read-only for the app user.
-COPY docs/swagger.json docs/swagger.yaml ./docs/
 COPY config/deploy/ansible/ansible.cfg config/deploy/ansible/README.md ./config/deploy/ansible/
 COPY config/deploy/ansible/playbooks/ ./config/deploy/ansible/playbooks/
 COPY config/config.yaml.example ./config/config.yaml.example

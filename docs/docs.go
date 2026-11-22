@@ -24,231 +24,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/admin/agent/list": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取所有在线的 Agent",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端 Agent"
-                ],
-                "summary": "获取在线 Agent 列表",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/agent/monitor": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Monitor snapshots came from the retired agent REST channel; Agents on the Agent Control stream report no snapshot, so this answers 404 for every node.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端 Agent"
-                ],
-                "summary": "Get latest monitor payload from agent node",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Node ID",
-                        "name": "node_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/agent/tasks": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Query recent whitelisted diagnostic tasks, optionally filtered by node_id",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端 Agent"
-                ],
-                "summary": "List diagnostic task history",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Node ID",
-                        "name": "node_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员向节点下发任务",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端 Agent"
-                ],
-                "summary": "创建任务",
-                "parameters": [
-                    {
-                        "description": "任务信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.CreateTaskRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/agent/tasks/{task_id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Query the latest status/result for a task by task_id",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端 Agent"
-                ],
-                "summary": "Get task execution result",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "task_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/dashboard": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取仪表盘统计数据，包括用户数、订单数、收入等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取仪表盘数据",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "description": "是否强制刷新缓存",
-                        "name": "refresh",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/invite/codes": {
             "get": {
                 "security": [
@@ -371,108 +146,6 @@ const docTemplate = `{
             }
         },
         "/admin/nodes": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取节点列表，支持分页和筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取节点列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "搜索关键词",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "节点状态",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "分组ID",
-                        "name": "group_id",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "id",
-                            "name",
-                            "host",
-                            "sort",
-                            "created_at",
-                            "last_check_at",
-                            "cpu_usage",
-                            "online_users"
-                        ],
-                        "type": "string",
-                        "description": "排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage, online_users; 缺省为管理员排序 (sort 升序, id 倒序)",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "default": "asc",
-                        "description": "排序方向, 仅与 sort 同用",
-                        "name": "order",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -526,205 +199,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/nodes/protocols/{protocol_id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定的节点协议配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "更新节点协议",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "协议ID",
-                        "name": "protocol_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "协议更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定的节点协议配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "删除节点协议",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "协议ID",
-                        "name": "protocol_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/nodes/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取节点统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取节点统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/nodes/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定节点的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取节点详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
             "put": {
                 "security": [
                     {
@@ -771,1096 +246,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定节点",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "删除节点",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/nodes/{id}/logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定节点通过 gRPC 上报的运行日志",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取节点运行日志",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "日志级别",
-                        "name": "level",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "日志来源",
-                        "name": "source",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "关键词",
-                        "name": "search",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/nodes/{id}/protocols": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定节点的协议配置列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取节点协议列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员为指定节点创建协议配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "创建节点协议",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "协议配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.NodeProtocol"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/nodes/{id}/sync": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员将协议配置同步到指定节点",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "同步协议到节点",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/notification/email/config": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取邮件发送配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "获取邮件配置",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新邮件发送配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "更新邮件配置",
-                "parameters": [
-                    {
-                        "description": "邮件配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/notification/logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取通知日志列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "获取通知日志列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "通知类型",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "发送状态",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/notification/templates": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取通知模板列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "获取通知模板列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "通知类型",
-                        "name": "type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员创建新的通知模板",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "创建通知模板",
-                "parameters": [
-                    {
-                        "description": "模板信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/notification/templates/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定通知模板",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "更新通知模板",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "模板ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "模板更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定通知模板",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "删除通知模板",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "模板ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/notification/test": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员发送测试通知",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "发送测试通知",
-                "parameters": [
-                    {
-                        "description": "测试通知请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/plans": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取所有套餐列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "获取套餐列表",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员创建新套餐",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "创建套餐",
-                "parameters": [
-                    {
-                        "description": "套餐信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.Plan"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/plans/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定套餐的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "获取套餐详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "套餐ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定套餐信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "更新套餐",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "套餐ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "套餐信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.Plan"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定套餐",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "删除套餐",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "套餐ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/plans/{id}/assign": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员将指定套餐分配给用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-套餐"
-                ],
-                "summary": "分配套餐给用户",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "套餐ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "分配请求 {user_id: uint, expire_at: int64}",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/protocol-templates": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取可用的协议模板列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取协议模板",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/audit-logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Admin query for system operation audit logs with optional filters.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin System"
-                ],
-                "summary": "Get system audit logs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by target type",
-                        "name": "target_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by action",
-                        "name": "action",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Page size",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2053,922 +438,6 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/bot": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取Telegram Bot的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "获取Telegram Bot配置",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新Telegram Bot的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "更新Telegram Bot配置",
-                "parameters": [
-                    {
-                        "description": "Bot配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.UpdateBotRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/broadcast": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员通过Telegram广播消息给所有绑定用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "广播Telegram消息",
-                "parameters": [
-                    {
-                        "description": "广播请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.BroadcastRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/notify": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员通过Telegram发送通知给指定用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "发送Telegram通知",
-                "parameters": [
-                    {
-                        "description": "通知请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.SendNotificationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/users": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取Telegram用户绑定列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "获取用户绑定列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/users/{id}/notify": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定Telegram用户的通知开关",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "更新Telegram用户通知设置",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Telegram绑定ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "通知设置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/telegram/webhook": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员设置Telegram Bot的Webhook地址",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "设置Telegram Webhook",
-                "parameters": [
-                    {
-                        "description": "Webhook配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.SetWebhookRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除Telegram Bot的Webhook配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-通知"
-                ],
-                "summary": "删除Telegram Webhook",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取用户列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "获取用户列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "邮箱搜索",
-                        "name": "email",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "状态筛选",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "套餐ID筛选",
-                        "name": "plan_id",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "id",
-                            "email",
-                            "created_at",
-                            "expired_at",
-                            "traffic",
-                            "transfer_enable"
-                        ],
-                        "type": "string",
-                        "description": "排序字段: id, email, created_at, expired_at, traffic, transfer_enable; 缺省为 created_at 倒序",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "default": "asc",
-                        "description": "排序方向, 仅与 sort 同用",
-                        "name": "order",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员创建新用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "创建用户",
-                "parameters": [
-                    {
-                        "description": "用户信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.AdminCreateUserRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取用户统计数据，包括总用户数、活跃用户等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "获取用户统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取用户详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "获取用户详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新用户信息，支持修改邮箱、密码、余额、套餐等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "更新用户信息",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "用户更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "删除用户",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/{id}/ban": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员封禁指定用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "封禁用户",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/{id}/reset-subscribe": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员为用户重新生成订阅 token, 旧订阅链接立即失效 (UUID 不变)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "重置用户订阅",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/{id}/reset-traffic": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员重置指定用户的已使用流量",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "重置用户流量",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/users/{id}/unban": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员解封指定用户",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-用户"
-                ],
-                "summary": "解封用户",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -7238,7 +4707,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The alerts of the kernel's alert monitor: Agent, forward link and module certificates that were not renewed in time (leaf certificates alert inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime), the current module and forward link CAs inside alerts.ca_expiry_days, and phased processes left untouched in a non-final phase for alerts.phase_stuck_after (the identity import and cutover). Critical alerts come first, then the soonest to end. The summary counts every active alert whatever the filters. Alerts hold no secret: kinds, node names, dates and counts only.",
+                "description": "The alerts of the kernel's alert monitor: Agent, forward link and module certificates that were not renewed in time (leaf certificates alert inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime), and the current module and forward link CAs inside alerts.ca_expiry_days. Critical alerts come first, then the soonest to end. The summary counts every active alert whatever the filters. Alerts hold no secret: kinds, node names, dates and counts only.",
                 "produces": [
                     "application/json"
                 ],
@@ -7341,7 +4810,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Issues a personal access token for automation: ` + "`" + `anixadm_` + "`" + ` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope ` + "`" + `read` + "`" + ` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; ` + "`" + `admin` + "`" + ` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) and a re-authentication: the current password, or a TOTP or recovery code when the account has a second factor (when the kernel cannot check a credential because identity holds it, the sign-in must be at most 10 minutes old, or it answers 403 step_up_sign_in_stale). Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as ` + "`" + `Authorization: Bearer \u003ctoken\u003e` + "`" + ` only, never in a URL.",
+                "description": "Issues a personal access token for automation: ` + "`" + `anixadm_` + "`" + ` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope ` + "`" + `read` + "`" + ` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; ` + "`" + `admin` + "`" + ` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) at most 10 minutes old, or it answers 403 step_up_sign_in_stale. Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as ` + "`" + `Authorization: Bearer \u003ctoken\u003e` + "`" + ` only, never in a URL.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7354,7 +4823,7 @@ const docTemplate = `{
                 "summary": "Create an admin API token",
                 "parameters": [
                     {
-                        "description": "name, scope (read or admin), optional expires_in_days, and password or code (+ method)",
+                        "description": "name, scope (read or admin), optional expires_in_days",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -7439,6 +4908,90 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/client-releases": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The ANX client releases agent_install.artifact_dir holds, newest first, each with its files (name, platform, os, size, sha256) and TestFlight address; latest is the one subscribers are offered. configured is false without an artifact directory. Administrators read it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "ANX client releases",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores a release of the ANX edition of AnixOps Net (docs/reference/client-downloads.md) in agent_install.artifact_dir: multipart field files with SHA256SUMS, SHA256SUMS.sig (ssh-keygen -Y sign by the anx release key, namespace anx-release) and at least one file named anixops-net-anx-\u003cversion\u003e\u003csuffix\u003e (-windows-x64.msi, -windows-x64-portable.zip, -macos.pkg, -macos.dmg, -linux-amd64.deb, -linux-x64.tar.gz, -android-arm64.apk, -ios-testflight.url), each listed in SHA256SUMS. A release can come in several uploads with the same SHA256SUMS. 201 with the stored release; 400 client_release_invalid when it does not verify, 409 client_release_conflict for another SHA256SUMS of a stored version, 409 agent_install_unconfigured without an artifact directory. Super administrators only.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Upload an ANX client release",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/client-releases/{version}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes one stored ANX client release and its files; subscribers are then offered the newest one left. Super administrators only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete an ANX client release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "release version, for example 0.3.0-beta.6",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -7571,6 +5124,221 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "egress route id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entitlements/{feature}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The ANX licensing settings (anx spec §2.4.1): whether licensing is on, whether nodes require a license, the trial length, the plans that include ANX (empty = every plan), the license CA's public key (empty without a root key) and the device counts. Off by default.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A licensed feature's settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "anx",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.entitlementSettingsView"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the given fields only. enabled turns ANX licensing on: subscriptions answer license requests and ANX nodes trust the license CA. require has the nodes refuse unlicensed sessions (not beside wg_listen_port). trial_days is 0 to 30 (0 = no trial). plan_ids lists the plans that include ANX ([] = every plan). Nodes get the change with their next configuration. Audited (module entitlement, action entitlement_settings_set).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a licensed feature's settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "anx",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.entitlementSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.entitlementSettingsView"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entitlements/{feature}/devices": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Devices that asked for an ANX license, newest activity first, with the user's email. user_id limits the list to one user. page (from 1) and page_size (1 to 100, default 20) page it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The devices of a licensed feature",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "anx",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "one user's devices",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page, from 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1 to 100, default 20",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entitlements/{feature}/devices/{id}/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device gets a license again at its next subscription refresh, if a seat is free. Audited (module entitlement, action entitlement_device_restore).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Lift a device's revocation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "anx",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "device row id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entitlements/{feature}/devices/{id}/revoke": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device gets no new license and frees its seat; ANX nodes that require a license drop it at their next configuration (within a minute). Audited (module entitlement, action entitlement_device_revoke).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Revoke a device's license",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "anx",
+                        "name": "feature",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "device row id",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -9304,6 +7072,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/reach": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The vantages (proxy nodes whose Agents probe the other nodes from their region, domestic or overseas, and whether each runs reach.probe now) and each probed node's status: ok, region_unreachable (reachable from overseas only), overseas_unreachable, unreachable or unknown, with each region's view. Answers older than 30 minutes do not count. The probe only opens and closes TCP connections to the ports of the node's enabled protocols, every 10 minutes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Node reachability by region",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.reachAnswer"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/reach/vantages": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the vantages: each proxy node with its region (domestic or overseas). A node that is no longer a vantage, or changed region, loses its answers. Audited (module reach_probe, action reach_vantages_set).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Set the reachability vantages",
+                "parameters": [
+                    {
+                        "description": "vantages",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.reachVantagesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.reachAnswer"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/reverse-proxies": {
             "get": {
                 "security": [
@@ -9850,6 +7682,126 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/net/lines": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the line: chain is its hops (devices; the first hop's are the entries, the last hop's device is the exit), and protocol_id names the exit device's protocol it serves, or targets are fixed addresses the exit connects to. A device on a cloud that scans its machines (its network settings, scan_cloud) forwards in the kernel. show offers the line in subscriptions. Validated and planned as a forward route: 422 with violations when refused. Idempotency-Key makes a retry safe. Answers the new line's id.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Network"
+                ],
+                "summary": "Create a line",
+                "parameters": [
+                    {
+                        "description": "the line",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/netline.Draft"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/net/lines/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the line at revision (409 revision_conflict when it moved on). The draft's policy, hop_balance, quota_bytes and expires_at_unix_ms replace the line's (send what the line API read to keep them); its labels stay, and so does a hop's transport while its devices do. As create otherwise.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Network"
+                ],
+                "summary": "Update a line",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "line id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the line",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/netline.Draft"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the line and its subscription offer; its devices drop it with the next plan. Needs a super administrator, as deleting a forward route does.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Network"
+                ],
+                "summary": "Delete a line",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "line id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v5/panel/certificates/retry": {
             "post": {
                 "security": [
@@ -9942,48 +7894,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/login": {
-            "post": {
-                "description": "用户登录获取 JWT Token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "认证"
-                ],
-                "summary": "用户登录",
-                "parameters": [
-                    {
-                        "description": "登录请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.LoginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "登录成功",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "认证失败",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/metrics": {
             "get": {
                 "description": "获取 Prometheus 格式的系统指标",
@@ -10004,44 +7914,72 @@ const docTemplate = `{
                 }
             }
         },
-        "/register": {
-            "post": {
-                "description": "创建新用户账户",
-                "consumes": [
-                    "application/json"
-                ],
+        "/s/{token}/client": {
+            "get": {
+                "description": "The newest ANX edition of AnixOps Net for a subscriber: version, files (name, platform, os, size, sha256, url to download), testflight_url for iOS when the release has one, sha256sums_url and signature_url. The token is the subscription's, in the path. 404 for an unknown token or when Control holds no client release, 403 subscription_inactive for a banned or expired subscriber.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "认证"
+                    "Subscription"
                 ],
-                "summary": "用户注册",
+                "summary": "The ANX client to download",
                 "parameters": [
                     {
-                        "description": "注册请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.RegisterRequest"
-                        }
+                        "type": "string",
+                        "description": "subscription token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "注册成功",
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
+                    }
+                }
+            }
+        },
+        "/s/{token}/client/{version}/{file}": {
+            "get": {
+                "description": "One file of a stored ANX client release (a package, SHA256SUMS or SHA256SUMS.sig) for a subscriber, as an attachment. 404 for an unknown token or file, 403 subscription_inactive for a banned or expired subscriber.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Subscription"
+                ],
+                "summary": "Download an ANX client file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "subscription token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
                     },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
+                    {
+                        "type": "string",
+                        "description": "release version",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "file name",
+                        "name": "file",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
                     }
                 }
             }
@@ -10115,367 +8053,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/dashboard": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取当前登录用户的仪表盘数据，包括订阅信息等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户仪表盘",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/notifications": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的通知列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户通知列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/notifications/read-all": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户将所有通知标记为已读",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "标记所有通知为已读",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/notifications/unread-count": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取未读通知的数量",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取未读通知数量",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/notifications/{id}/read": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户将指定通知标记为已读",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "标记通知为已读",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "通知ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/profile": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取当前登录用户的基本信息，包括邮箱、UUID、Token等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户基本信息",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/subscription": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取当前登录用户的订阅信息，包括流量、到期时间等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户订阅详情",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "description": "是否强制刷新缓存",
-                        "name": "refresh",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/subscription/reset": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户为自己重新生成订阅 token，旧订阅链接立即失效（UUID 不变，与管理员重置相同）。需重新验证身份：未开启两步验证时提交当前密码，已开启时提交验证码或恢复码。每个用户每小时最多尝试 3 次。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "重置我的订阅链接",
-                "parameters": [
-                    {
-                        "description": "password，或 code 与可选的 method（totp / backup）",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.subscriptionResetRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "data.token 为新的订阅 token",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/telegram/status": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的Telegram绑定状态",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取Telegram绑定状态",
-                "responses": {
-                    "200": {
-                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -10647,15 +8224,15 @@ const docTemplate = `{
                 "exit_host": {
                     "type": "string"
                 },
+                "exit_node_id": {
+                    "type": "integer"
+                },
                 "fallbacks": {
                     "description": "Fallbacks are the backup exits in the order they are tried.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.EgressExit"
                     }
-                },
-                "exit_node_id": {
-                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
@@ -10672,16 +8249,19 @@ const docTemplate = `{
                 }
             }
         },
-        "model.EgressExit": {
+        "entitlement.DeviceCounts": {
             "type": "object",
             "properties": {
-                "exit_host": {
-                    "type": "string"
-                },
-                "exit_node_id": {
+                "revoked": {
+                    "description": "Revoked devices get no license.",
                     "type": "integer"
                 },
-                "relay_port": {
+                "seated": {
+                    "description": "Seated devices asked within SeatWindow and are not revoked.",
+                    "type": "integer"
+                },
+                "total": {
+                    "description": "Total is every device ever registered.",
                     "type": "integer"
                 }
             }
@@ -10743,123 +8323,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.BroadcastRequest": {
-            "type": "object",
-            "required": [
-                "message"
-            ],
-            "properties": {
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.CreateTaskRequest": {
-            "type": "object",
-            "required": [
-                "action",
-                "node_id",
-                "type"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string"
-                },
-                "node_id": {
-                    "type": "integer"
-                },
-                "params": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "timeout": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.NotifySettingsRequest": {
-            "type": "object",
-            "properties": {
-                "notify_expire": {
-                    "type": "boolean"
-                },
-                "notify_ticket": {
-                    "type": "boolean"
-                },
-                "notify_traffic": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handler.SendNotificationRequest": {
-            "type": "object",
-            "required": [
-                "telegram_id"
-            ],
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "maxLength": 4096
-                },
-                "message": {
-                    "type": "string",
-                    "maxLength": 4096
-                },
-                "telegram_id": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string",
-                    "maxLength": 255
-                }
-            }
-        },
-        "handler.SetWebhookRequest": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "maxLength": 512
-                }
-            }
-        },
-        "handler.UpdateBotRequest": {
-            "type": "object",
-            "properties": {
-                "admin_ids": {},
-                "allow_bind": {
-                    "type": "boolean"
-                },
-                "allow_info": {
-                    "type": "boolean"
-                },
-                "allow_sub": {
-                    "type": "boolean"
-                },
-                "allow_ticket": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "token": {
-                    "type": "string",
-                    "minLength": 1
-                },
-                "welcome_message": {
-                    "type": "string",
-                    "maxLength": 1024
-                },
-                "welcome_msg": {
-                    "type": "string",
-                    "maxLength": 1024
-                }
-            }
-        },
         "handler.abortAgentUpgradeRequest": {
             "type": "object",
             "properties": {
@@ -10891,29 +8354,84 @@ const docTemplate = `{
                 "scope"
             ],
             "properties": {
-                "code": {
-                    "type": "string"
-                },
                 "expires_in_days": {
                     "description": "ExpiresInDays ends the token after that many days (at most 730); 0 or\nabsent never.",
                     "type": "integer",
                     "maximum": 730,
                     "minimum": 1
                 },
-                "method": {
-                    "type": "string"
-                },
                 "name": {
                     "description": "Name says what the token is for; 1 to 100 printable characters.",
-                    "type": "string"
-                },
-                "password": {
-                    "description": "Password re-authenticates the administrator; with a second factor on,\nCode and Method (totp or backup) do instead.",
                     "type": "string"
                 },
                 "scope": {
                     "description": "Scope is \"read\" or \"admin\".",
                     "type": "string"
+                }
+            }
+        },
+        "handler.entitlementSettingsRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "plan_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "require": {
+                    "type": "boolean"
+                },
+                "trial_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.entitlementSettingsView": {
+            "type": "object",
+            "properties": {
+                "ca": {
+                    "description": "CA is the hex of the license CA's public key; \"\" without a root key.",
+                    "type": "string"
+                },
+                "devices": {
+                    "$ref": "#/definitions/entitlement.DeviceCounts"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "feature": {
+                    "type": "string"
+                },
+                "max_trial_days": {
+                    "type": "integer"
+                },
+                "plan_ids": {
+                    "description": "PlanIDs are the plans that include the feature; empty is every plan.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "require": {
+                    "type": "boolean"
+                },
+                "root_key": {
+                    "description": "RootKey says whether the root key is loaded: without it no license\ncan be signed and nodes run unlicensed.",
+                    "type": "boolean"
+                },
+                "seat_window_days": {
+                    "type": "integer"
+                },
+                "trial_days": {
+                    "type": "integer"
+                },
+                "validity_days": {
+                    "description": "Validity and SeatWindowDays are the fixed rules, for the page's text.",
+                    "type": "integer"
                 }
             }
         },
@@ -10990,6 +8508,34 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/nodeentry.Input"
+                    }
+                }
+            }
+        },
+        "handler.reachAnswer": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reachprobe.NodeStatus"
+                    }
+                },
+                "vantages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reachprobe.Vantage"
+                    }
+                }
+            }
+        },
+        "handler.reachVantagesRequest": {
+            "type": "object",
+            "properties": {
+                "vantages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reachprobe.Vantage"
                     }
                 }
             }
@@ -11108,20 +8654,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.subscriptionResetRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "method": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
         "handler.telegramTestRequest": {
             "type": "object",
             "properties": {
@@ -11209,58 +8741,17 @@ const docTemplate = `{
                 }
             }
         },
-        "model.AdminCreateUserRequest": {
+        "model.EgressExit": {
             "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
             "properties": {
-                "device_limit": {
-                    "type": "integer"
-                },
-                "email": {
+                "exit_host": {
                     "type": "string"
                 },
-                "flowResetTime": {
+                "exit_node_id": {
                     "type": "integer"
                 },
-                "group_id": {
+                "relay_port": {
                     "type": "integer"
-                },
-                "is_admin": {
-                    "type": "integer"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 6
-                },
-                "speed_limit": {
-                    "type": "integer"
-                },
-                "transfer_enable": {
-                    "type": "integer"
-                }
-            }
-        },
-        "model.LoginRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "mfa_code": {
-                    "type": "string"
-                },
-                "mfa_method": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
                 }
             }
         },
@@ -11558,79 +9049,6 @@ const docTemplate = `{
                 "NodeStatusDisabled"
             ]
         },
-        "model.Plan": {
-            "type": "object",
-            "properties": {
-                "capacity_limit": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "device_limit": {
-                    "type": "integer"
-                },
-                "group_id": {
-                    "type": "integer"
-                },
-                "half_year_price": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "month_price": {
-                    "description": "Prices",
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "onetime_price": {
-                    "type": "integer"
-                },
-                "quarter_price": {
-                    "type": "integer"
-                },
-                "renew": {
-                    "type": "integer"
-                },
-                "reset_price": {
-                    "type": "integer"
-                },
-                "reset_traffic_method": {
-                    "type": "integer"
-                },
-                "show": {
-                    "type": "integer"
-                },
-                "sort": {
-                    "type": "integer"
-                },
-                "speed_limit": {
-                    "type": "integer"
-                },
-                "three_year_price": {
-                    "type": "integer"
-                },
-                "transfer_enable": {
-                    "description": "GB",
-                    "type": "integer"
-                },
-                "two_year_price": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "year_price": {
-                    "type": "integer"
-                }
-            }
-        },
         "model.ProtocolType": {
             "type": "string",
             "enum": [
@@ -11659,25 +9077,6 @@ const docTemplate = `{
                 "ProtocolANX",
                 "ProtocolSnell"
             ]
-        },
-        "model.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "invite_code": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 6
-                }
-            }
         },
         "model.SubscriptionGroup": {
             "type": "object",
@@ -11816,7 +9215,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "template_json": {
-                    "description": "JSON 模板配置 (高级功能)\n支持变量占位符: {{.UUID}}, {{.UserID}}, {{.Email}}, {{.ExpiredAt}}, {{.SpeedLimit}}, {{.DeviceLimit}}\n以及自定义变量: {{.Custom.xxx}}",
+                    "description": "JSON 模板配置 (高级功能)\nGo 模板变量（写在双花括号里）: .UUID, .UserID, .Email, .ExpiredAt, .SpeedLimit, .DeviceLimit\n以及自定义变量 .Custom.xxx",
                     "type": "string"
                 },
                 "tls": {
@@ -11840,6 +9239,88 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "netline.Draft": {
+            "type": "object",
+            "properties": {
+                "chain": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/netline.Hop"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "expires_at_unix_ms": {
+                    "type": "integer"
+                },
+                "hop_balance": {
+                    "type": "string"
+                },
+                "l4": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "policy": {
+                    "description": "Policy, HopBalance, QuotaBytes and ExpiresAt are the line's, as the\nline API reads them; they replace the stored ones.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/networkv1.ForwardPolicy"
+                        }
+                    ]
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "protocol_id": {
+                    "type": "integer"
+                },
+                "quota_bytes": {
+                    "type": "integer"
+                },
+                "revision": {
+                    "description": "Revision is the stored line's on an update.",
+                    "type": "integer"
+                },
+                "show": {
+                    "type": "boolean"
+                },
+                "targets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkv1.ForwardTarget"
+                    }
+                }
+            }
+        },
+        "netline.Hop": {
+            "type": "object",
+            "properties": {
+                "devices": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "dial": {
+                    "description": "Dial replaces the device's host for the hop before.",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "Port is where a hop after the entry listens for a kernel hop before\nit; 0 is the line's port.",
+                    "type": "integer"
+                },
+                "transport": {
+                    "description": "Transport is the transport from the hop before; empty after a kernel\ndevice, which forwards without one, and on the entry hop.",
                     "type": "string"
                 }
             }
@@ -12144,6 +9625,10 @@ const docTemplate = `{
                     "description": "Region is where the device is, a place key of the panel's map.",
                     "type": "string"
                 },
+                "scan_cloud": {
+                    "description": "ScanCloud marks a device on a cloud that scans its machines: it\nforwards in the kernel on every line (internal/netline).",
+                    "type": "boolean"
+                },
                 "source_v4": {
                     "type": "string"
                 },
@@ -12193,6 +9678,10 @@ const docTemplate = `{
                 "region": {
                     "description": "Region is where the device is, a place key of the panel's map.",
                     "type": "string"
+                },
+                "scan_cloud": {
+                    "description": "ScanCloud marks a device on a cloud that scans its machines: it\nforwards in the kernel on every line (internal/netline).",
+                    "type": "boolean"
                 },
                 "source_v4": {
                     "type": "string"
@@ -12426,6 +9915,78 @@ const docTemplate = `{
                 }
             }
         },
+        "networkv1.ForwardBreaker": {
+            "type": "object",
+            "properties": {
+                "failure_threshold": {
+                    "type": "integer"
+                },
+                "open_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkv1.ForwardHealth": {
+            "type": "object",
+            "properties": {
+                "disabled": {
+                    "type": "boolean"
+                },
+                "interval_ms": {
+                    "type": "integer"
+                },
+                "timeout_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkv1.ForwardPolicy": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "description": "round_robin (default), random, ip_hash, least_conn or failover.",
+                    "type": "string"
+                },
+                "bandwidth_bps": {
+                    "description": "Bits per second, each direction, shared by the whole forward; 0 is\nunlimited.",
+                    "type": "integer"
+                },
+                "circuit_breaker": {
+                    "$ref": "#/definitions/networkv1.ForwardBreaker"
+                },
+                "health": {
+                    "$ref": "#/definitions/networkv1.ForwardHealth"
+                },
+                "max_conns": {
+                    "description": "Concurrent TCP connections; 0 is unlimited.",
+                    "type": "integer"
+                },
+                "proxy_protocol": {
+                    "description": "off (default), v1 or v2: the PROXY header ahead of the client's bytes\non TCP connections to the target.",
+                    "type": "string"
+                }
+            }
+        },
+        "networkv1.ForwardTarget": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "An IP address or a DNS name, resolved where the traffic leaves.",
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "description": "Order under failover, lowest first.",
+                    "type": "integer"
+                },
+                "weight": {
+                    "description": "Share under round_robin and random; 0 is 1.",
+                    "type": "integer"
+                }
+            }
+        },
         "nodeentry.Input": {
             "type": "object",
             "properties": {
@@ -12506,6 +10067,52 @@ const docTemplate = `{
                 },
                 "token_expires_at": {
                     "description": "TokenExpiresAt, when set, ends the token's use; it must be in the\nfuture.",
+                    "type": "string"
+                }
+            }
+        },
+        "reachprobe.NodeStatus": {
+            "type": "object",
+            "properties": {
+                "domestic": {
+                    "$ref": "#/definitions/reachprobe.RegionView"
+                },
+                "node_id": {
+                    "type": "integer"
+                },
+                "overseas": {
+                    "$ref": "#/definitions/reachprobe.RegionView"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "reachprobe.RegionView": {
+            "type": "object",
+            "properties": {
+                "probed_at": {
+                    "type": "string"
+                },
+                "reachable": {
+                    "description": "Reachable is true when any fresh answer of the region reached it,\nnil when the region has no fresh answer.",
+                    "type": "boolean"
+                },
+                "vantages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "reachprobe.Vantage": {
+            "type": "object",
+            "properties": {
+                "capable": {
+                    "type": "boolean"
+                },
+                "node_id": {
+                    "type": "integer"
+                },
+                "region": {
                     "type": "string"
                 }
             }

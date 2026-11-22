@@ -238,7 +238,7 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `Makefile` (`VERSION :=`)
 - `cmd/server/main.go` (`// @version`)
 - `web/package.json` and `web/package-lock.json` (`version` and `packages[""].version`)
-- `docs/swagger.json`, `docs/swagger.yaml`, `docs/docs.go` (regenerate with `make swagger`)
+- `docs/docs.go` (`Version:`; regenerate with `make swagger`, CI fails when it is out of date)
 - `config/deploy/helm/anix-control/Chart.yaml` (`appVersion`, the chart's default image tag; the chart's own `version` is a separate SemVer, bumped on template or values changes)
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
