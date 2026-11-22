@@ -127,7 +127,7 @@ func buildControl(t *testing.T, root, dir string, keys testPKI) string {
 }
 
 // agentE2EVersion is the version the suite's Agent build reports.
-const agentE2EVersion = "5.0.8-e2e"
+const agentE2EVersion = "5.0.9-e2e"
 
 func gitHead(dir string) string {
 	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()

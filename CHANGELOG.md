@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 5.0.11 - 2026-11-22
+
+### Added
+
+- `source_url` (default `https://github.com/AnixOps/anix-control`): the source
+  code address the sign-in page and the account menu link to, the AGPL-3.0
+  offer of the source to the panel's users. An operator who runs modified
+  code points it at their own repository. `GET /api/v4/public/config` returns
+  it.
+- `internal/quota`: the check before a new user (identity platform
+  `CreateSubscriber`) or node (manual node, node group join, forward node) is
+  created. The community edition sets no check, so nothing is limited; a test
+  fails if public code ever sets one. The commercial edition sets it from its
+  license.
+- `web/src/extensions`: the routes and menu items the commercial edition adds
+  to the web app. Empty in the community edition.
+- `LICENSING.md` states what the community and commercial editions contain,
+  the license timeline (5.0.x stays MIT; the community edition moves to
+  AGPL-3.0 in 5.1) and four public commitments. `CLA.md`, `CONTRIBUTING.md`
+  and `NOTICE` (the V2Board MIT notice) are new. A "CLA" workflow checks that
+  the author of a pull request is listed in `.github/cla-signatures.txt`. No
+  runtime change; the repository is still MIT until the 5.1 switch.
+- Reachability probe (`internal/reachprobe`): mark proxy nodes as domestic
+  or overseas vantages (`PUT /api/v4/kernel/reach/vantages`, audited), and
+  every 10 minutes their Agents (5.0.9+, `reach.probe`) open and close a TCP
+  connection to the enabled protocol ports of every other node. Control keeps
+  the latest answer per vantage and node (migration `0039_reach_probes`) and
+  `GET /api/v4/kernel/reach` answers each node's status: `ok`,
+  `region_unreachable` (reachable from overseas only), `overseas_unreachable`,
+  `unreachable` or `unknown`. The node list shows it in a 可达性 column.
+
 ### Removed
 
 - Code with no runtime caller (2026-11 slimming, `docs/audit/slim-2026-11.md`):
@@ -79,6 +110,15 @@
   `packagebridgesdk.NewClient`, and `modulesdk.InProcess.Bridge` is a
   `grpc.ClientConnInterface`. Capabilities, fencing, limits and the bridge
   behaviour are unchanged; the Agent transport is unchanged.
+- `install.sh` no longer migrates or detects the `/opt/v2board`,
+  `/usr/local/v2board` and `v2board.service` layouts: the `preflight` and
+  `migrate` commands, a `rollback` without `--version`, `--plan` and the
+  `bin/v2board` link are gone (`update` deletes the link), as are the
+  `V2BOARD_*` environment variables of the installer and the scripts, and
+  `docs/guide/control-migration.md`. `deploy_panel.sh`,
+  `scripts/migrate_latest_sqlite_to_postgres.sh` and `sqlite2postgres` no
+  longer look for `v2board.service`, `/opt/v2board` or `/etc/v2board`, and
+  `config/scripts/v2board.service` is deleted.
 
 ### Changed
 
@@ -93,6 +133,57 @@
   (`docs/swagger.json` and `docs/swagger.yaml` are gone), and CI fails when
   it is out of date. `/swagger/doc.json` now comes from the binary, so binary
   installs serve it too, and it matches the current routes.
+- The "CLA" check now covers every commit author of a pull request, not only
+  the pull request author, accepts new signature lines only for the pull
+  request author, and rejects removed or changed signatures
+  (`.github/scripts/check_cla.py`, with a self-test). `CLA.md` documents the
+  rules. `docs/audit/commercial-5.1.md` records the 5.1 licensing decisions,
+  the evidence of each step and how each public commitment is enforced.
+- The names Control kept from V2Board, the project it was forked from, are
+  gone ([`docs/BRAND_MIGRATION.md`](docs/BRAND_MIGRATION.md), upgrade notes
+  in [`docs/UPGRADE.md`](docs/UPGRADE.md)):
+  - `/metrics` names its metrics `anixops_control_*` instead of `v2board_*`.
+  - The default SQLite file is `config/data/control.db`, no longer
+    `config/data/v2board.db`. `install.sh update` writes the old file into a
+    SQLite configuration that names none, so the panel keeps its data.
+  - The browser keeps the theme choice under `app.theme`.
+  - CI's PostgreSQL databases are `anix_control_test`,
+    `anix_control_migration_test` and `anix_control_restore_rehearsal`, and
+    the Agent checkout is `anix-agent`; the Agent archives of the dev and
+    hotfix releases no longer carry the `V2bX` link.
+- Wording follows the AnixOps Design neutral terminology
+  (`guidelines/terminology.md`): the VLESS + Reality template description,
+  the ANX bare port help text on the node form and code comments describe
+  network behaviour neutrally. CI runs a "Neutral terminology" check.
+  `TERMS.md` follows the baseline 2.1.2 (wording in section 5 only, no new
+  consent).
+- PostgreSQL is the default database. A configuration file without a
+  database driver now means PostgreSQL (`127.0.0.1:5432`, role and database
+  `anix_control`), no longer SQLite; SQLite needs `database.driver: sqlite`
+  and suits trials only. Control never falls back to SQLite: when PostgreSQL
+  cannot be reached it stops with the server it tried and how to configure
+  it. The `database.*` keys are operator keys again, no longer deprecated.
+- `install.sh install` asks for PostgreSQL (`--database-dsn`); without it
+  the install stops, and at a terminal it first asks whether to use SQLite.
+  `--sqlite` chooses SQLite. `install.sh update` writes `driver: sqlite` for
+  an install that ran SQLite without a driver, so it keeps its database.
+  Configurations that name their driver (PostgreSQL or SQLite) are
+  unchanged.
+- Shadowsocks 2022 server keys are stored instead of computed: migration
+  `0041_ss2022_server_keys` stores, for every 2022 protocol without a
+  `server_key`, the key earlier releases computed from its node's creation
+  time, so clients keep their key; Control no longer computes keys. A new or
+  edited Shadowsocks 2022 protocol needs a `server_key`: the admin form fills
+  a random one of the cipher's length. Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#shadowsocks-2022-server-keys-are-stored).
+- The 51 tables Control kept from V2Board lose the `v2_` prefix: migration
+  `0040_table_prefix` renames them to `v5_` (`v2_user` is `v5_user`), with
+  their `idx_` indexes and, on PostgreSQL, the constraints and id sequences
+  named after them; the node secret split's records follow. Data, columns,
+  grants and the kernel API views stay. The official packages adopt the new
+  names. Upgrade notes in [`docs/UPGRADE.md`](docs/UPGRADE.md#table-names-lose-the-v2_-prefix).
+- `sqlite2postgres` refuses a SQLite source whose schema is behind the
+  program's, instead of skipping the tables a later migration renamed.
 
 ## 5.0.10 - 2026-11-18
 
