@@ -24,6 +24,11 @@
   still removes it at once. The "Control to Agent Process E2E" tag gate,
   which exercised only that dispatcher, is gone; the real-Agent
   "Cross-Repo E2E" stays.
+- Code that nothing reached (2026-11 slimming, class B2): the Control
+  dependency lifecycle plans (never queued), the cohort advance and generation
+  rollback of package rollouts (never wired), and the topology observed-state
+  write-back left from the topology API removed in 5.0.0. Operation views drop
+  the never-set `topology_*` fields. The tables stay until a later migration.
 
 ## 5.0.10 - 2026-11-18
 

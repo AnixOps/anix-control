@@ -53,30 +53,13 @@ func TestNewKernelHandlerUsesDefaultPluginHostManager(t *testing.T) {
 	require.Same(t, manager, handler.controlPluginHosts)
 }
 
-func TestSetPluginOperationResponseHeadersIncludesDependencyApplyChain(t *testing.T) {
-	db := newKernelHandlerTestDB(t)
-	applyFirst := model.KernelOperation{
-		ID: "plan-operation-1", IdempotencyKey: "plan-key-1", Kind: "plugin.install",
-		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "apply", LifecyclePlanSequence: 1, State: "pending",
-	}
-	applyRoot := model.KernelOperation{
-		ID: "plan-operation-2", IdempotencyKey: "plan-key-2", Kind: "plugin.enable",
-		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "apply", LifecyclePlanSequence: 2, State: "pending",
-	}
-	rollback := model.KernelOperation{
-		ID: "plan-operation-3", IdempotencyKey: "plan-key-3", Kind: "plugin.disable",
-		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "rollback", LifecyclePlanSequence: 3, State: "pending",
-	}
-	require.NoError(t, db.Create(&applyFirst).Error)
-	require.NoError(t, db.Create(&applyRoot).Error)
-	require.NoError(t, db.Create(&rollback).Error)
-
+func TestSetPluginOperationResponseHeadersIsAOneItemChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
-	require.NoError(t, setPluginOperationResponseHeaders(context, db, applyRoot))
-	require.Equal(t, applyRoot.ID, recorder.Header().Get("X-AnixOps-Operation-ID"))
-	require.Equal(t, applyFirst.ID+","+applyRoot.ID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
+	setPluginOperationResponseHeaders(context, model.KernelOperation{ID: "operation-1"})
+	require.Equal(t, "operation-1", recorder.Header().Get("X-AnixOps-Operation-ID"))
+	require.Equal(t, "operation-1", recorder.Header().Get("X-AnixOps-Operation-Chain"))
 }
 
 func TestControlPluginHostRequestTimeoutUsesConfiguredValue(t *testing.T) {

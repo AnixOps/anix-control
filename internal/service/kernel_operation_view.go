@@ -11,28 +11,24 @@ import (
 // operation. ConfigJSON, ResultJSON, session identity, and raw Agent errors
 // intentionally stay inside the kernel persistence boundary.
 type KernelOperationStatus struct {
-	ID                   string     `json:"id"`
-	NodeID               *uint      `json:"node_id,omitempty"`
-	PluginID             string     `json:"plugin_id"`
-	TargetVersion        string     `json:"target_version"`
-	TopologyDeploymentID *uint      `json:"topology_deployment_id,omitempty"`
-	TopologyStepID       *uint      `json:"topology_step_id,omitempty"`
-	TopologyRevision     int64      `json:"topology_revision,omitempty"`
-	Kind                 string     `json:"kind"`
-	OperationChain       string     `json:"operation_chain,omitempty"`
-	Revision             int64      `json:"revision"`
-	ConfigHash           string     `json:"config_hash,omitempty"`
-	State                string     `json:"state"`
-	DeadlineAt           *time.Time `json:"deadline_at,omitempty"`
-	DispatchedAt         *time.Time `json:"dispatched_at,omitempty"`
-	AcknowledgedAt       *time.Time `json:"acknowledged_at,omitempty"`
-	ObservedAt           *time.Time `json:"observed_at,omitempty"`
-	CancelAt             *time.Time `json:"cancel_at,omitempty"`
-	Attempt              int        `json:"attempt"`
-	HasResult            bool       `json:"has_result"`
-	HasError             bool       `json:"has_error"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ID             string     `json:"id"`
+	NodeID         *uint      `json:"node_id,omitempty"`
+	PluginID       string     `json:"plugin_id"`
+	TargetVersion  string     `json:"target_version"`
+	Kind           string     `json:"kind"`
+	Revision       int64      `json:"revision"`
+	ConfigHash     string     `json:"config_hash,omitempty"`
+	State          string     `json:"state"`
+	DeadlineAt     *time.Time `json:"deadline_at,omitempty"`
+	DispatchedAt   *time.Time `json:"dispatched_at,omitempty"`
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+	ObservedAt     *time.Time `json:"observed_at,omitempty"`
+	CancelAt       *time.Time `json:"cancel_at,omitempty"`
+	Attempt        int        `json:"attempt"`
+	HasResult      bool       `json:"has_result"`
+	HasError       bool       `json:"has_error"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // PluginInstallationStatus is the public projection of a plugin installation.
@@ -113,8 +109,7 @@ func pluginInstallationErrorSummary(state string, hasError bool) string {
 func PublicKernelOperation(operation model.KernelOperation) KernelOperationStatus {
 	return KernelOperationStatus{
 		ID: operation.ID, NodeID: operation.NodeID, PluginID: operation.PluginID, TargetVersion: operation.TargetVersion,
-		TopologyDeploymentID: operation.TopologyDeploymentID, TopologyStepID: operation.TopologyStepID,
-		TopologyRevision: operation.TopologyRevision, Kind: operation.Kind, Revision: operation.Revision,
+		Kind: operation.Kind, Revision: operation.Revision,
 		ConfigHash: operation.ConfigHash, State: operation.State, DeadlineAt: operation.DeadlineAt,
 		DispatchedAt: operation.DispatchedAt, AcknowledgedAt: operation.AcknowledgedAt, ObservedAt: operation.ObservedAt,
 		CancelAt: operation.CancelAt, Attempt: operation.Attempt,

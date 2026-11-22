@@ -115,8 +115,8 @@ The installer will:
 
 No setting turns package execution, Agent plugin dispatch or topology
 execution on or off any more: the built-in packages' hosts always run (the
-identity package serves login), and dispatch and topology execution stay off
-until M4. Existing configuration files retain every other value; an existing
+identity package serves login), and Control does not dispatch Agent plugins
+or execute topologies. Existing configuration files retain every other value; an existing
 `plugins.identity_bootstrap_package_dir` stays, and Control ignores it.
 
 ### The first administrator

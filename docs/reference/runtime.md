@@ -55,8 +55,8 @@ the iptables backend runs with `nftables_ansible`). Legacy
   - diagnostics and job views
   - the official package hosts, built into the binary and run as its own
     child processes (`anix-control package-host <id>`), always started with
-    Control (no switch); Agent plugin dispatch and topology execution are
-    off until M4
+    Control (no switch); Control does not dispatch Agent plugins or execute
+    topologies
 - `NodeX`
   - internal-only execution control plane
   - stateful `gost` runtime

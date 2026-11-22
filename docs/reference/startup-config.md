@@ -197,8 +197,8 @@ on success). Use it as a one-shot Compose service or Kubernetes Job before the
 server starts; the server repeats it idempotently.
 
 Startup always starts the durable Control lifecycle worker and the package
-hosts. Agent plugin dispatch and topology execution stay off until M4: no
-setting turns them on, and the release builds no Agent plugin for them. A
+hosts. Control does not dispatch Agent plugins or execute topologies (both were
+removed in the 2026-11 slimming). A
 configuration that still sets one of the removed keys
 (`plugins.control_execution_enabled`, `dispatch_enabled`,
 `dispatch_poll_interval`, `topology_execution_enabled`,

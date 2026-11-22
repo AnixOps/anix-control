@@ -29,8 +29,8 @@
   materialization, MTU and sustained loss/reconnect behavior, composed
   `gost-mesh` to `nat-egress` failure rollback, accounting, multi-node rollback,
   and sustained canary records.
-- The dependency resolver now has deterministic recursive DB preflight,
-  dependency-aware Control execution, reverse rollback, and race coverage.
+- The dependency resolver has deterministic recursive DB preflight and race
+  coverage.
   Staging still needs a live restored Control canary before enabling plugin
   execution outside isolated test nodes.
 - Fresh kernel databases now seed a dedicated `monitoring` service scope owned

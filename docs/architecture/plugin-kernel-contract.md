@@ -8,16 +8,13 @@ unchanged.
 
 The kernel persists signed plugin releases, installation intent, scoped access
 groups, verified immutable plugin artifacts, node assignments, topology
-revisions, deployments, and idempotent operations. Control-target lifecycle
+and idempotent operations. Control-target lifecycle
 operations are executed by the in-process Control executor, which always
 runs: the built-in packages' hosts start with Control. Control does not
 dispatch Agent plugins (the dispatcher was removed in the 2026-11 slimming,
-`docs/audit/slim-2026-11.md`), and topology execution is off with no
-setting. Node assignments and Agent configuration changes record the
-desired state and queue no Agent operation, and a deployment created through
-`/api/v3/deployments` stays planned: apply and rollback answer
-`409 topology_execution_disabled`. The kernel does not switch forwarding
-traffic.
+`docs/audit/slim-2026-11.md`) and has no topology executor. Node
+assignments and Agent configuration changes record the desired state and
+queue no Agent operation. The kernel does not switch forwarding traffic.
 
 **What an administrator can do with a package** (single-binary design,
 section 4.3): read its state (`GET /api/v3/plugins`, `/plugin-releases`,
@@ -59,8 +56,8 @@ enables its own set at every start.
   entrypoint file: `"control_entrypoint":{"builtin":"<id>"}` (its own id and
   nothing else; the kernel rejects a built-in entrypoint for the Agent).
   File entrypoints keep their exact signed bytes: the fields are omitted when
-  empty. The Agent plugin payloads are not built in: Agent dispatch and
-  topology execution stay off (B23).
+  empty. The Agent plugin payloads are not built in, and Control does not
+  dispatch Agent plugins.
 
 **Start-up bootstrap** (`service.BootstrapBuiltinPackages`, under the
 bootstrap lock, after the schema and the trust root and before HTTP):
@@ -316,16 +313,12 @@ and exposes the verified steps on the artifact reference. v4.0.0 indexes carry
 no step digests; the kernel computes them from the packaged scripts.
 
 When a Control installation is enabled or updated (by the start-up bootstrap;
-no administrator route does it any more), the kernel compiles the
-same-target dependency closure into a durable lifecycle plan.
-Dependencies execute first, the root operation remains the user-visible
-operation, and failed, timed-out, cancelled, or superseded apply work stops
-later expansion. Changed steps are compensated in reverse order by restoring
-the previous installation snapshot or disabling newly introduced packages.
-Disabling an installed package is rejected while another enabled package on
-the same target depends on it. Target-level transaction locks serialize these
-checks across concurrent Control workers. These checks and plans only create
-package-manager intent; Agent plugin dispatch stays off until M4.
+no administrator route does it any more), the kernel checks that the
+same-target dependency closure resolves. Disabling an installed package is
+rejected while another enabled package on the same target depends on it.
+Target-level transaction locks serialize these checks across concurrent
+Control workers. (The dependency lifecycle plans that once executed the
+closure were never queued and were removed in the 2026-11 slimming.)
 
 ## Package Configuration
 
@@ -560,87 +553,13 @@ the browser does not duplicate or widen the allow-union calculation.
 
 ## Topologies
 
-Topology revisions are immutable snapshots. Validation rejects cycles, missing
-vertices, port conflicts on one node, invalid MTU, missing secure-protocol
-secret references, inline secret material, missing physical nodes, and missing
-enabled node/plugin assignments. Topology JSON may reference secrets by ID or
-`*_ref`; it must not contain passwords, API keys, tokens, or private keys.
-Observed-state write-back is revision-fenced and monotonic: an Agent result is
-accepted only for the exact deployment revision and known node, stale desired
-or observed revisions are ignored, and a deployment reaches a terminal state
-only after every distinct assigned node has reported. The executor (off until
-M4) compiles deployment steps by DAG order, dispatches per-node
-`plugin.configure`/`plugin.enable` or disable operations, fences later steps on
-failure, and rolls back changed steps in reverse DAG order. A succeeded task is
-not sufficient to promote a revision: the executor reads a bounded projection
-of the terminal Agent operation result and requires the exact plugin ID,
-version, configuration hash, desired revision, observed revision, enabled
-state, and health (`healthy` for enabled vertices or `disabled` for removals).
-Raw Agent JSON, raw errors, and unknown fields are never copied into topology
-health records.
-
-Packages that declare the signed `kernel.observed-state` capability add a
-second gate. The Agent heartbeat must persist a fresh structured observation
-after the terminal operation, with exact version/config hash/revisions,
-`healthy` state, a valid live ruleset SHA-256, and, for `nftables-forward`, the
-same rule-ID counter set as the desired topology config. The deployment stores
-a durable 90-second observation deadline so a Control restart resumes waiting;
-missing evidence only rolls back after that deadline, while mismatched or
-unhealthy evidence fails closed immediately. Rollback restore/disable steps use
-the same fixed terminal-state gate before a deployment becomes `rolled_back`.
-The Supervisor verifies the local package health socket on every heartbeat;
-when it cannot safely read a current private observation it sends an
-Supervisor-owned `unhealthy` record rather than replaying old health evidence.
-Control treats observations stale after two minutes of trusted receipt time.
-Public deployment, observed-state, and operation endpoints expose only fixed
-state and generic error summaries, never the configuration, runtime payload,
-session identity, or raw plugin error.
-This executor is off until M4 (`service.TopologyExecutionEnabled`, no
-setting) and must not be used as production traffic evidence until the
-corresponding protocol package and network tests exist.
-
-### Deleting a topology
-
-`DELETE /api/v3/topologies/:id` never removes a row. `v3_kernel_topology`
-carries a `deleted` flag (0 live, 1 deleted) and `deleted_at`;
-`gorm.io/plugin/soft_delete` adds `deleted = 0` to every query, update and
-delete of the model, so a deleted topology is missing from
-`GET /api/v3/topologies` and every `/api/v3/topologies/:id/...` route answers
-404; planning a deployment of it answers 404 and applying or rolling back one
-of its deployments answers 409 `topology_deleted`. Its revisions,
-deployments, steps, observed states and operations are kept, and
-`GET /api/v3/deployments`, `GET /api/v3/deployments/:id`, the observed states
-and the operation list still show them. Names are unique among live
-topologies only (the partial index `ux_topology_live_name ... WHERE deleted =
-0`), so a deleted topology's name can be reused.
-
-| Situation | Answer |
-| --- | --- |
-| Missing or already deleted | 404 `not_found` |
-| A deployment of the topology executes (any state but `planned`, `succeeded`, `failed`, `rolled_back`, `cancelled`) | 409 `topology_deployment_busy` |
-| Its teardown is running | 409 `topology_deleting` |
-| No active revision, or an active revision without plugin vertices | 200, deleted at once |
-| Active revision with plugin vertices, topology execution off (until M4) | 409 `topology_execution_disabled` |
-| Active revision with plugin vertices whose teardown cannot be compiled (for example a removed node assignment) | 422 `topology_teardown_invalid` |
-| Active revision with plugin vertices | 202, teardown deployment started |
-
-Both successful answers are `{"data": {"topology": {...}, "deleted": true|false,
-"deployment": null|{...}}}`; `deployment` is the teardown deployment's public
-view, with `"teardown": true`. Planned deployments of the topology are closed
-as `cancelled` (their steps `skipped`) in the same transaction.
-
-A teardown is an ordinary deployment of the active revision (`revision_id` and
-`previous_revision_id` both name it) whose steps are the removal steps a
-deployment compiles for vertices dropped from the active revision: each plugin
-vertex is disabled, with a `restore` rollback. It is created `applying`, and
-the topology's `delete_requested_at` is set; while it runs, creating
-revisions, planning, deleting again, and applying or rolling back any other
-deployment of the topology answer 409 `topology_deleting`. When the teardown succeeds the
-executor sets `deleted = 1` and `deleted_at`, and clears
-`active_revision_id` and `delete_requested_at`. When it fails or is rolled
-back (rolling back the teardown is how an operator cancels a deletion), the
-topology stays with its active revision, `delete_requested_at` is cleared and
-the failure stays on the deployment.
+The topology and deployment API (`/topologies*`, `/deployments*`,
+`/observed-states`) and its executor were removed in 5.0.0; the
+observed-state write-back left behind went in the 2026-11 slimming
+(`docs/audit/slim-2026-11.md`). The `v3_kernel_topology_*` tables and the
+topology columns of `v3_kernel_operation` remain until a migration drops
+them. Nodes and relays are configured on the node page and the network
+model.
 
 ## Operations
 

@@ -45,16 +45,6 @@ Code and playbooks are ready; the operator does these when there is time
   busy nodes per-shard and quarantine entries (`docs/guide/entry-pools.md`).
 - [ ] Bump networkcore in anx so anx-node has VLESS egress relays.
 
-## Implemented But Not Wired (keep; wire later)
-
-These code paths exist and have unit tests, but nothing in the running server
-calls them. Wire them (with tests and docs) or delete them deliberately.
-
-- [ ] `AdvancePackageCohort` and `RollbackPackageGeneration`
-  (`internal/service/plugin_rollout.go`) are not wired to any route or
-  worker. The migration-ledger half runs when a storage package's host starts
-  (`internal/service/package_host_migration.go`).
-
 ## Deployment And Repository Hygiene
 
 - [ ] Remove the hard-coded `/home/dev/...` Node.js paths from
