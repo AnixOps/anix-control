@@ -22,7 +22,7 @@ import (
 )
 
 // TestKernelOperationBridgeCrossRepositoryAgentProcess is an opt-in release
-// gate. It builds the sibling V2bX_AnixOps Agent fixture, connects it to the
+// gate. It builds the sibling anix-agent Agent fixture, connects it to the
 // real Control AgentControlGRPCServer, and drives one durable DB operation
 // through KernelOperationBridge to a terminal observed state. Keeping this
 // opt-in avoids making ordinary unit-test runs depend on a sibling checkout or
@@ -37,7 +37,7 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 
 	agentRoot := siblingAgentRoot(t)
 	if _, err := os.Stat(filepath.Join(agentRoot, "go.mod")); err != nil {
-		t.Skipf("sibling V2bX_AnixOps checkout is unavailable: %v", err)
+		t.Skipf("sibling anix-agent checkout is unavailable: %v", err)
 	}
 
 	cache.InitMemory()
@@ -165,8 +165,8 @@ func siblingAgentRoot(t *testing.T) string {
 	require.True(t, ok)
 	controlRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
 	candidates := []string{
-		filepath.Join(filepath.Dir(controlRoot), "V2bX_AnixOps"),
-		filepath.Join(controlRoot, "V2bX_AnixOps"),
+		filepath.Join(filepath.Dir(controlRoot), "anix-agent"),
+		filepath.Join(controlRoot, "anix-agent"),
 	}
 	for _, candidate := range candidates {
 		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {

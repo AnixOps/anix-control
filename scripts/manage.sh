@@ -7,7 +7,7 @@ set -uo pipefail
 
 # ============================ 配置 ============================
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-V2BOARD_DIR="${V2BOARD_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+CONTROL_DIR="${CONTROL_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 # 从配置文件读取端口 (fallback 到默认值)
 PANEL_PORT="${PANEL_PORT:-8080}"
@@ -19,11 +19,11 @@ if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "
     BINARY_NAME="anix-control.exe"
 fi
 
-PID_FILE="${V2BOARD_DIR}/.anix-control.pid"
-LOG_FILE="${V2BOARD_DIR}/logs/panel.log"
-BUILD_DIR="${V2BOARD_DIR}/build"
+PID_FILE="${CONTROL_DIR}/.anix-control.pid"
+LOG_FILE="${CONTROL_DIR}/logs/panel.log"
+BUILD_DIR="${CONTROL_DIR}/build"
 BINARY_PATH="${BUILD_DIR}/${BINARY_NAME}"
-CONFIG_PATH="${V2BOARD_DIR}/config/config.yaml"
+CONFIG_PATH="${CONTROL_DIR}/config/config.yaml"
 
 # 颜色
 RED='\033[0;31m'
@@ -170,7 +170,7 @@ get_status() {
 
 # 构建面板
 action_build() {
-    cd "$V2BOARD_DIR" || return 1
+    cd "$CONTROL_DIR" || return 1
 
     mkdir -p "$BUILD_DIR" "$(dirname "$LOG_FILE")"
 
@@ -188,7 +188,7 @@ action_build() {
 
 # 启动面板
 action_start() {
-    cd "$V2BOARD_DIR" || return 1
+    cd "$CONTROL_DIR" || return 1
 
     if is_running; then
         local pid
@@ -309,10 +309,10 @@ URL: ${PANEL_URL}/health"
 
 # 数据库备份
 action_backup() {
-    cd "$V2BOARD_DIR" || return 1
+    cd "$CONTROL_DIR" || return 1
 
-    local db_dir="${V2BOARD_DIR}/config/data"
-    local db_file="${db_dir}/v2board.db"
+    local db_dir="${CONTROL_DIR}/config/data"
+    local db_file="${db_dir}/control.db"
 
     if [[ ! -f "$db_file" ]]; then
         warn "数据库文件不存在: ${db_file}"
@@ -322,7 +322,7 @@ action_backup() {
     mkdir -p "$db_dir"
     local timestamp
     timestamp=$(date +%Y%m%d_%H%M%S)
-    local backup_file="${db_dir}/v2board.db.bak_${timestamp}"
+    local backup_file="${db_dir}/control.db.bak_${timestamp}"
 
     info "备份数据库..."
     cp "$db_file" "$backup_file"
@@ -330,9 +330,9 @@ action_backup() {
 
     # 保留最近 10 个备份
     local backup_count
-    backup_count=$(ls -1 "${db_dir}"/v2board.db.bak_* 2>/dev/null | wc -l)
+    backup_count=$(ls -1 "${db_dir}"/control.db.bak_* 2>/dev/null | wc -l)
     if [[ "$backup_count" -gt 10 ]]; then
-        ls -1t "${db_dir}"/v2board.db.bak_* | tail -n +11 | xargs rm -f
+        ls -1t "${db_dir}"/control.db.bak_* | tail -n +11 | xargs rm -f
         info "清理旧备份，保留最近 10 个"
     fi
 }

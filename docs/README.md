@@ -51,11 +51,10 @@ Use this tree like NodeX:
 - V4 plugin-only upgrade: [`guide/v4-plugin-only-upgrade.md`](guide/v4-plugin-only-upgrade.md)
 - V4 plugin-only rollback: [`guide/v4-plugin-only-rollback.md`](guide/v4-plugin-only-rollback.md)
 - Official package signing root rotation: [`guide/release-root-rotation.md`](guide/release-root-rotation.md)
-- In-place Control migration: [`guide/control-migration.md`](guide/control-migration.md)
 - Legacy panel migration: [`guide/legacy-migration.md`](guide/legacy-migration.md)
 - SQLite to PostgreSQL migration: [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 - Manual intervention requirements: [`manual-intervention.md`](manual-intervention.md)
-- Brand and compatibility migration: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)
+- Brand, origin and former names: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)
 
 ## Startup And Configuration
 

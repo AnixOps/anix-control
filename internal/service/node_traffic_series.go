@@ -192,8 +192,8 @@ func (s *StatsService) nodeDailyTraffic(nodeID uint, since, until time.Time) (ma
 		return nil, err
 	}
 	// A row belongs to the local day that contains its record time: the
-	// statistics of a panel imported from v2board were recorded at another
-	// zone's midnight, and a node's several server types have one row each.
+	// statistics of a panel imported from another panel were recorded at
+	// another zone's midnight, and a node's several server types have one row each.
 	out := make(map[int64]*NodeTrafficPoint, len(rows))
 	for _, row := range rows {
 		day := time.Unix(row.RecordAt, 0).In(time.Local)

@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -23,14 +22,11 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const (
-	primaryControlConfigPath = "/opt/anixops/control/config/config.yaml"
-	legacyControlConfigPath  = "/etc/v2board/config.yaml"
-)
+const controlConfigPath = "/opt/anixops/control/config/config.yaml"
 
 func main() {
-	sourcePath := flag.String("source", "config/data/v2board.db", "source SQLite database path")
-	targetConfig := flag.String("target-config", defaultControlConfigPath(), "target AnixOps Control config.yaml containing PostgreSQL database settings")
+	sourcePath := flag.String("source", database.DefaultSQLitePath, "source SQLite database path")
+	targetConfig := flag.String("target-config", controlConfigPath, "target AnixOps Control config.yaml containing PostgreSQL database settings")
 	targetDSN := flag.String("target-dsn", "", "target PostgreSQL DSN; overrides -target-config")
 	reset := flag.Bool("reset", false, "truncate PostgreSQL tables before importing")
 	dryRun := flag.Bool("dry-run", false, "inspect source and target only")
@@ -139,16 +135,6 @@ func main() {
 
 	fmt.Printf("Import complete in %s.\n", time.Since(start).Round(time.Millisecond))
 	printImportantCounts(counts)
-}
-
-func defaultControlConfigPath() string {
-	if _, err := os.Stat(primaryControlConfigPath); err == nil {
-		return primaryControlConfigPath
-	}
-	if _, err := os.Stat(legacyControlConfigPath); err == nil {
-		return legacyControlConfigPath
-	}
-	return primaryControlConfigPath
 }
 
 func openPostgres(configPath, dsn string) (*gorm.DB, error) {

@@ -52,7 +52,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 			Expire: 86400,
 		},
 		App: config.AppConfig{
-			Name:          "V2Board Smoke Test",
+			Name:          "Smoke Test",
 			Version:       "test",
 			SubscribePath: "s",
 		},

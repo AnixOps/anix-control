@@ -24,7 +24,7 @@ import (
 //
 // SS2022 (2022-blake3-*) 的 server_key 若 Settings 未显式给出, 按老 XBoard 算法
 // 从节点 created_at 派生 (子节点用父节点 created_at), 与订阅端 DeriveSS2022ServerKey
-// 和节点端 V2bX 三方一致。
+// 一致, 节点端使用下发的同一个值。
 //
 // The protocol's secrets are read through the node credential split and
 // checked first: a protocol whose secrets fail validation is reported

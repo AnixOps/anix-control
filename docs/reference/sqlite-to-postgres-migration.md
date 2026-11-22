@@ -8,7 +8,7 @@ Do not run the import against production data until the dry run, backups, rollba
 
 - A recent code checkout on the target host.
 - Go available for `go run ./cmd/sqlite2postgres`, or a built `sqlite2postgres` binary.
-- A readable SQLite database file, usually `config/data/v2board.db` or the value from `database.database`.
+- A readable SQLite database file: the value of `database.database` (`config/data/control.db` by default; `config/data/v2board.db` on an earlier install that named no file).
 - A reachable PostgreSQL database with an empty or disposable target schema.
 - A PostgreSQL target config file, or a DSN passed by `-target-dsn`.
 - A maintenance window where the panel can be stopped to prevent writes during the final import.
@@ -33,15 +33,12 @@ Stop writes before the final backup. On systemd deployments:
 sudo systemctl stop anix-control.service
 ```
 
-For an in-place legacy installation that still uses `v2board.service`, substitute
-that unit name throughout this runbook.
-
 Create a consistent SQLite backup:
 
 ```bash
 cd /path/to/anix-control
 mkdir -p /root/anix-control-migration
-sqlite3 config/data/v2board.db ".backup '/root/anix-control-migration/anix-control.sqlite.$(date +%Y%m%d%H%M%S).db'"
+sqlite3 config/data/control.db ".backup '/root/anix-control-migration/anix-control.sqlite.$(date +%Y%m%d%H%M%S).db'"
 ```
 
 If the PostgreSQL target already contains data, back it up before using `-reset`:
@@ -59,7 +56,7 @@ cd /path/to/anix-control
 POSTGRES_DSN='host=127.0.0.1 user=anix_control password=replace dbname=anix_control port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
-  -source config/data/v2board.db \
+  -source config/data/control.db \
   -target-dsn "$POSTGRES_DSN" \
   -dry-run
 ```
@@ -73,7 +70,7 @@ built from `-target-config`, the tool quotes every value itself.
 Expected dry-run signal:
 
 ```text
-Source: config/data/v2board.db
+Source: config/data/control.db
 Target: PostgreSQL
 Tables: ...
 dry-run: no PostgreSQL data changed
@@ -96,7 +93,7 @@ Run the import only after the dry run and backups are complete. `-reset` is requ
 ```bash
 cd /path/to/anix-control
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
-  -source config/data/v2board.db \
+  -source config/data/control.db \
   -target-dsn "$POSTGRES_DSN" \
   -reset
 ```
@@ -163,7 +160,7 @@ If the panel was switched to PostgreSQL and needs rollback:
 
 ```bash
 sudo systemctl stop anix-control.service
-sqlite3 config/data/v2board.db ".restore '/root/anix-control-migration/anix-control.sqlite.YYYYMMDDHHMMSS.db'"
+sqlite3 config/data/control.db ".restore '/root/anix-control-migration/anix-control.sqlite.YYYYMMDDHHMMSS.db'"
 sudo systemctl start anix-control.service
 ```
 

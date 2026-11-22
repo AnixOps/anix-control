@@ -46,7 +46,6 @@ func InitSubscriptionDefaults() {
 	}
 
 	// 创建示例模板 - VLESS Reality
-	// 符合 V2bX 协议配置规范
 	vlessTemplate := &model.SubscriptionTemplate{
 		GroupID:          defaultGroup.ID,
 		Name:             "示例节点 - VLESS Reality",
@@ -129,7 +128,6 @@ func InitSubscriptionDefaults() {
 	}
 
 	// 创建测试分组 - 包含本地测试节点
-	// 符合 V2bX/Xray 协议配置规范
 	testGroup := &model.SubscriptionGroup{
 		Name:        "test",
 		Description: strPtr("测试分组 - 包含本地测试节点，仅管理员可见"),
@@ -141,7 +139,7 @@ func InitSubscriptionDefaults() {
 		log.Printf("Failed to create test subscription group: %v", err)
 	} else {
 		// 创建本地测试节点 - VLESS TCP (无 TLS)
-		// 对应 V2bX: tls=0, network=tcp
+		// tls=0, network=tcp
 		localTest := &model.SubscriptionTemplate{
 			GroupID:   testGroup.ID,
 			Name:      "本地test",
@@ -156,7 +154,7 @@ func InitSubscriptionDefaults() {
 		db.Create(localTest)
 
 		// 美国节点 - VLESS Reality
-		// 对应 V2bX: tls=2, network=tcp, flow=xtls-rprx-vision
+		// tls=2, network=tcp, flow=xtls-rprx-vision
 		usReality := &model.SubscriptionTemplate{
 			GroupID:          testGroup.ID,
 			Name:             "🇺🇸 美国节点-Reality",
@@ -176,7 +174,7 @@ func InitSubscriptionDefaults() {
 		db.Create(usReality)
 
 		// 日本节点 - VLESS WebSocket + TLS
-		// 对应 V2bX: tls=1, network=ws
+		// tls=1, network=ws
 		jpWs := &model.SubscriptionTemplate{
 			GroupID:           testGroup.ID,
 			Name:              "🇯🇵 日本节点-WS",

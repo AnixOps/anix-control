@@ -588,8 +588,8 @@ func crossRepositorySiblingAgentRoot(t *testing.T) string {
 	require.True(t, ok)
 	controlRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
 	candidates := []string{
-		filepath.Join(filepath.Dir(controlRoot), "V2bX_AnixOps"),
-		filepath.Join(controlRoot, "V2bX_AnixOps"),
+		filepath.Join(filepath.Dir(controlRoot), "anix-agent"),
+		filepath.Join(controlRoot, "anix-agent"),
 	}
 	for _, candidate := range candidates {
 		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {

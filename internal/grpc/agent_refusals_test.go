@@ -87,9 +87,8 @@ func openRefusedStream(t *testing.T, ctx context.Context, conn *grpc.ClientConn,
 	return refusedTrailer(t, stream)
 }
 
-// Every refusal of an agent certificate, on the stream, on the enrollment
-// service and on the v2board services, names its reason in the
-// x-anix-error-code trailer.
+// Every refusal of an agent certificate, on the stream and on the
+// enrollment service, names its reason in the x-anix-error-code trailer.
 func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	l := startAgentListener(t, true)
 	ctx := testContext(t)
@@ -144,8 +143,8 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, []string{agentcontrol.ErrorCodeEnrollmentRejected}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 
 	// A certificate revoked while its stream is open ends the stream at
-	// the next heartbeat; then new streams, renewal, the trust bundle and
-	// the v2board services refuse it as revoked.
+	// the next heartbeat; then new streams, renewal and the trust bundle
+	// refuse it as revoked.
 	stream, helloAck, err := openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
 	require.NoError(t, err)
 	require.NoError(t, service.NewNodeService().UpdateNode(l.proxy.ID, map[string]any{"status": model.NodeStatusDisabled}))

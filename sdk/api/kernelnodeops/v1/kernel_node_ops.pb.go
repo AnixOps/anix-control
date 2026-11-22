@@ -519,8 +519,8 @@ const (
 	Channel_CHANNEL_KERNEL          Channel = 1
 	Channel_CHANNEL_AGENT_CONTROL   Channel = 2
 	Channel_CHANNEL_AGENT_WEBSOCKET Channel = 3
-	// Nothing was pushed: the node's next periodic pull (UniProxy, the
-	// v2board gRPC node service) reads the rebuilt configuration.
+	// Nothing was pushed: the node's next periodic pull, a channel removed
+	// in 5.0, reads the rebuilt configuration.
 	Channel_CHANNEL_LEGACY_PULL     Channel = 4
 	Channel_CHANNEL_NODEX           Channel = 5
 	Channel_CHANNEL_LOCAL_ANSIBLE   Channel = 6

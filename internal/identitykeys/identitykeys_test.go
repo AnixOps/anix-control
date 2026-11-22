@@ -109,7 +109,7 @@ func TestRefreshRefusesForeignOrMalformedKeys(t *testing.T) {
 	keys := New(testDB(t))
 	for name, response := range map[string]*identityv1.GetTokenKeysResponse{
 		"other audience": {Issuer: Issuer, Audience: "other-service"},
-		"other issuer":   {Issuer: "v2board", Audience: Audience},
+		"other issuer":   {Issuer: "other-issuer", Audience: Audience},
 		"short key":      {Issuer: Issuer, Audience: Audience, Keys: []*identityv1.TokenKey{tokenKey("idk-a", []byte("short"), identityv1.TokenKeyState_TOKEN_KEY_STATE_ACTIVE, 0)}},
 		"repeated kid": {Issuer: Issuer, Audience: Audience, Keys: []*identityv1.TokenKey{
 			tokenKey("idk-a", publicKey(t), identityv1.TokenKeyState_TOKEN_KEY_STATE_ACTIVE, 0),

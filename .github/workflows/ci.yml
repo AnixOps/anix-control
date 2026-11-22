@@ -1220,13 +1220,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: v2board_test
+          POSTGRES_DB: anix_control_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d v2board_test"
+          --health-cmd "pg_isready -U postgres -d anix_control_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -1242,7 +1242,7 @@ jobs:
 
       - name: Run PostgreSQL stats regression tests
         env:
-          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_test port=5432 sslmode=disable TimeZone=UTC
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=anix_control_test port=5432 sslmode=disable TimeZone=UTC
         run: go test -v ./internal/service ./internal/lease ./cmd/server -run 'TestStatsServicePostgres|TestPostgres' -count=1
 
   # Four shards, each with its own PostgreSQL. config/scripts/plan_test_shards.py
@@ -1338,13 +1338,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: v2board_migration_test
+          POSTGRES_DB: anix_control_migration_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d v2board_migration_test"
+          --health-cmd "pg_isready -U postgres -d anix_control_migration_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -1364,7 +1364,7 @@ jobs:
           python3 - <<'PY'
           import sqlite3
 
-          db_path = "/tmp/v2board-migration-source.db"
+          db_path = "/tmp/control-migration-source.db"
           conn = sqlite3.connect(db_path)
           conn.execute("CREATE TABLE v2_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT)")
           conn.execute("CREATE TABLE v2_plan (id INTEGER PRIMARY KEY, name TEXT)")
@@ -1379,11 +1379,11 @@ jobs:
 
       - name: Run SQLite to PostgreSQL migration dry run
         env:
-          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_migration_test port=5432 sslmode=disable TimeZone=UTC
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=anix_control_migration_test port=5432 sslmode=disable TimeZone=UTC
         shell: bash
         run: |
           go run ./cmd/sqlite2postgres \
-            -source /tmp/v2board-migration-source.db \
+            -source /tmp/control-migration-source.db \
             -target-dsn "$POSTGRES_TEST_DSN" \
             -dry-run | tee migration-dry-run.txt
           grep -q "dry-run: no PostgreSQL data changed" migration-dry-run.txt
@@ -1406,13 +1406,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: v2board_restore_rehearsal
+          POSTGRES_DB: anix_control_restore_rehearsal
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d v2board_restore_rehearsal"
+          --health-cmd "pg_isready -U postgres -d anix_control_restore_rehearsal"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -1434,7 +1434,7 @@ jobs:
 
       - name: Run destructive restore rehearsal on disposable PostgreSQL
         env:
-          POSTGRES_REHEARSAL_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_restore_rehearsal port=5432 sslmode=disable TimeZone=UTC
+          POSTGRES_REHEARSAL_DSN: host=127.0.0.1 user=postgres password=postgres dbname=anix_control_restore_rehearsal port=5432 sslmode=disable TimeZone=UTC
         run: |
           bash scripts/postgres_restore_rehearsal.sh \
             --unavailable fail \
@@ -1462,7 +1462,7 @@ jobs:
         with:
           repository: AnixOps/anix-agent
           ref: ${{ env.AGENT_REF }}
-          path: V2bX_AnixOps
+          path: anix-agent
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -1488,7 +1488,7 @@ jobs:
       # it reads the live advisory database.
       - name: Scan the Agent plugin binaries that ship in the signed packages
         shell: bash
-        working-directory: V2bX_AnixOps
+        working-directory: anix-agent
         env:
           GOEXPERIMENT: jsonv2
           GOWORK: 'off'
@@ -1628,7 +1628,7 @@ jobs:
         with:
           repository: AnixOps/anix-agent
           ref: ${{ env.AGENT_REF }}
-          path: V2bX_AnixOps
+          path: anix-agent
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -1644,7 +1644,7 @@ jobs:
       - name: Run real Control to Agent process E2E
         env:
           ANIXOPS_CROSS_REPO_E2E: '1'
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/anix-agent
           GOWORK: 'off'
         run: |
           go test -v -count=1 ./internal/grpc \
@@ -1693,7 +1693,7 @@ jobs:
         with:
           repository: AnixOps/anix-agent
           ref: ${{ env.AGENT_REF }}
-          path: V2bX_AnixOps
+          path: anix-agent
 
       # The node kernel the Agent's anixcore core runs (the Agent no longer
       # carries sing-box or Xray): built from the pinned networkcore_anixops.
@@ -1711,7 +1711,7 @@ jobs:
           cache: true
           cache-dependency-path: |
             go.sum
-            V2bX_AnixOps/go.sum
+            anix-agent/go.sum
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -1750,11 +1750,11 @@ jobs:
           set -euo pipefail
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go build -o "${E2E_BIN}/anix-control" ./cmd/server
-          go -C V2bX_AnixOps build -trimpath -tags anixcore \
+          go -C anix-agent build -trimpath -tags anixcore \
             -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.8-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           for arch in amd64 arm64; do
-            GOOS=linux GOARCH="${arch}" go -C V2bX_AnixOps build -trimpath -buildvcs=false \
+            GOOS=linux GOARCH="${arch}" go -C anix-agent build -trimpath -buildvcs=false \
               -o "${E2E_BIN}/machine-telemetry-linux-${arch}" ./cmd/machine-telemetry
           done
           go test -c -o "${E2E_BIN}/agente2e.test" ./internal/tests/agente2e
@@ -1763,7 +1763,7 @@ jobs:
         shell: bash
         env:
           ANIXOPS_AGENT_E2E: '1'
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/anix-agent
           ANIXOPS_AGENT_E2E_POSTGRES_DSN: host=127.0.0.1 user=postgres password=postgres dbname=agent_e2e port=5432 sslmode=disable TimeZone=UTC
           GOWORK: 'off'
         run: |

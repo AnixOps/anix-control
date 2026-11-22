@@ -6,8 +6,8 @@ set -euo pipefail
 # publishes no ports, and only receives NET_ADMIN plus /dev/net/tun.
 
 MIHOMO_IMAGE="${MIHOMO_IMAGE:-metacubex/mihomo:latest}"
-IMAGE="${MIHOMO_WG_TEST_IMAGE:-v2board-mihomo-wireguard-test:local}"
-CONTAINER="v2board-mihomo-wg-test-$$"
+IMAGE="${MIHOMO_WG_TEST_IMAGE:-anix-mihomo-wireguard-test:local}"
+CONTAINER="anix-mihomo-wg-test-$$"
 WORKDIR=$(mktemp -d)
 
 cleanup() {

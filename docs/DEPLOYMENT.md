@@ -336,7 +336,7 @@ npm run dev
 
 ### systemd 二进制更新
 
-- systemd 服务名默认是 `anix-control.service`，旧部署可用 `SERVICE_NAME=v2board` 原位升级。
+- systemd 服务名默认是 `anix-control.service`。
 - GitHub Release 中的匹配平台二进制是唯一发行二进制来源。
 - GitHub Release 中的 `anix-control-frontend.tar.gz` 是唯一发行前端来源（`v4.1.0-rc.2` 及更早的版本另附内容相同的 `anix-control-frontend.zip`）。
 - 4.2.x 之后的版本把全部官方包（含订单、支付、返佣）内置在 Control 程序里，每次启动自动校验、安装或升级并启用，不再有需要导入的包，Release 也不再附带 `anix-control-packages-<version>.tar.gz` 和 `identity-platform` 引导包（[`UPGRADE.md`](UPGRADE.md#official-packages-built-in)）。4.1.0-rc.3 到 4.2.x 的包放在已签名的 `anix-control-packages-<version>.tar.gz` 中，命令见 [`UPGRADE.md`](UPGRADE.md#getting-a-package-from-the-release)。
@@ -432,7 +432,7 @@ SQLite（仅试用，必须明确写 `driver: sqlite`）：
 ```yaml
 database:
   driver: "sqlite"
-  database: "config/data/v2board.db"
+  database: "config/data/control.db"
 ```
 
 SQLite 的连接参数是内置的，不是配置项：一个写连接加 4 个只读连接，WAL，`synchronous=NORMAL`，10 秒忙等待，事务以 `BEGIN IMMEDIATE` 开始；流量日志 `v2_server_log` 按小时合并，并由后台任务按保留期（400 天）分批清理。详见 [`reference/configuration.md`](reference/configuration.md) 与 [`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)。
@@ -719,8 +719,8 @@ Control 在运行时（它持有 `data_dir/control.lock`）还原会被拒绝。
 Control 的备份只支持 SQLite；PostgreSQL 请用 `pg_dump`，并把 `root.key` 一起保存：
 
 ```bash
-docker exec anix-control-db pg_dump -U v2board v2board > backup.sql
-docker exec -i anix-control-db psql -U v2board v2board < backup.sql   # 恢复
+docker exec anix-control-db pg_dump -U anix_control anix_control > backup.sql
+docker exec -i anix-control-db psql -U anix_control anix_control < backup.sql   # 恢复
 ```
 
 数据库迁移的 dry-run 与 rollback 步骤见 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)。

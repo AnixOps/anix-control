@@ -126,7 +126,7 @@ class ReleasePinsTest(unittest.TestCase):
     def test_finds_the_pins_operators_copy(self) -> None:
         text = "\n".join(
             [
-                "sudo bash scripts/install.sh migrate --version v3.0.0-alpha.2",
+                "sudo bash scripts/install.sh install --version v3.0.0-alpha.2",
                 "export VERSION=v4.2.0   # the release tag to install",
                 'export TARGET="v4.2.0" PREVIOUS=v4.1.0',
                 "ANIX_CONTROL_VERSION=v4.2.0-rc.4 bash install.sh",

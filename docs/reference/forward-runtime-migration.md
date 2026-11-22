@@ -23,7 +23,7 @@ That made the real runtime source of truth hard to reason about.
 Now the runtime config path is single-source:
 
 1. edit `config/config.yaml`
-2. restart `v2board`
+2. restart `anix-control`
 3. verify `/admin/system` or the runtime diagnostics page if needed
 
 ## Old To New Mapping
@@ -81,7 +81,7 @@ Use one of these instead:
 - use SSH keys under `config/deploy/ssh/`
 - pass ansible-level values through `forward_runtime.nftables_ansible.extra_vars` (or `forward_runtime.iptables_ansible.extra_vars` for legacy compatibility)
 
-Do not expect `v2board` to generate inventory files from env variables anymore.
+Do not expect `anix-control` to generate inventory files from env variables anymore.
 
 ## Minimal Migration Examples
 
@@ -142,7 +142,7 @@ Historical note: older local deployments often used `FORWARD_RUNTIME_BACKEND=ipt
 
 After migrating:
 
-1. start `v2board` with `-config ./config/config.yaml`
+1. start `anix-control` with `-config ./config/config.yaml`
 2. confirm any old `FORWARD_RUNTIME_*` shell exports or compose vars are removed from your deployment
 3. confirm the expected mode in `runtime.md`
 4. run the matching smoke path from `../guide/forward-tunnel-smoke-test.md`

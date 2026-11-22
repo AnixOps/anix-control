@@ -24,8 +24,8 @@
 
 | Mode | `forward.runtime_backend` | Execution path | What the relay must expose |
 |------|------|------|------|
-| NodeX mode | `gost` | `v2board -> NodeX -> relay gost API` | `host`, `api_port`, `api_token` |
-| local ansible mode | `nftables_ansible` (recommended) / `iptables_ansible` (legacy) | `v2board local executor -> ansible-playbook -> relay host` | SSH reachability through the configured ansible inventory |
+| NodeX mode | `gost` | `anix-control -> NodeX -> relay gost API` | `host`, `api_port`, `api_token` |
+| local ansible mode | `nftables_ansible` (recommended) / `iptables_ansible` (legacy) | `anix-control local executor -> ansible-playbook -> relay host` | SSH reachability through the configured ansible inventory |
 
 ## Proxy Nodes Vs Forward Nodes
 

@@ -7,7 +7,7 @@
     {"name": "unknown-kid", "header": {"kid": "idk-unknown"}, "reason": "only published keys verify"},
     {"name": "revoked-kid", "header": {"kid": "idk-revoked"}, "reason": "revoked keys verify nothing"},
     {"name": "wrong-audience", "claims": {"aud": "other-service"}, "reason": "tokens are scoped to the Control kernel"},
-    {"name": "wrong-issuer", "claims": {"iss": "v2board"}, "reason": "EdDSA tokens must come from the identity module"},
+    {"name": "wrong-issuer", "claims": {"iss": "other-issuer"}, "reason": "EdDSA tokens must come from the identity module"},
     {"name": "expired", "claims": {"exp": 1789999000}, "reason": "exp beyond the 60 s leeway"},
     {"name": "stale-token-version", "claims": {"tv": 2}, "reason": "a revocation raised the user's token version to 3"},
     {"name": "revoked-session", "claims": {"sid": "revoked-session"}, "reason": "the session was logged out"},

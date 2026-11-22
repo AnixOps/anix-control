@@ -11,8 +11,4 @@ const (
 
 	ControlRepositoryURL = "https://github.com/AnixOps/anix-control"
 	AgentRepositoryURL   = "https://github.com/AnixOps/anix-agent"
-
-	// Legacy names remain protocol and upgrade compatibility identifiers.
-	LegacyControlName = "V2Board"
-	LegacyAgentName   = "V2bX"
 )

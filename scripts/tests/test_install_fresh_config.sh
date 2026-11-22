@@ -151,10 +151,11 @@ USE_SQLITE=1
 ensure_layout_and_config >"${temporary}/sqlite.log" 2>&1
 USE_SQLITE=0
 check "sqlite: driver sqlite" grep -qxF "  driver: sqlite" "${CONFIG_FILE}"
-check "sqlite: the database file under the installation" grep -qxF "  database: \"${INSTALL_DIR}/config/data/v2board.db\"" "${CONFIG_FILE}"
+check "sqlite: the database file under the installation" grep -qxF "  database: \"${INSTALL_DIR}/config/data/control.db\"" "${CONFIG_FILE}"
 
 # --- 4. An update keeps an install that ran SQLite without a driver (the
-#        earlier default) on SQLite, and leaves a configured driver alone.
+#        earlier default) on SQLite at its earlier default file, and leaves
+#        a configured driver alone.
 new_install implicit-sqlite
 mkdir -p "${INSTALL_DIR}/config/data"
 : >"${INSTALL_DIR}/config/data/v2board.db"
@@ -166,6 +167,9 @@ printf '%s\n' 'database:' '  driver: postgres' '  host: 127.0.0.1' >"${CONFIG_FI
 before="$(sha256sum "${CONFIG_FILE}")"
 keep_implicit_sqlite >/dev/null 2>&1
 check "configured driver: unchanged" test "$(sha256sum "${CONFIG_FILE}")" = "${before}"
+printf '%s\n' 'database:' '  driver: sqlite' >"${CONFIG_FILE}"
+keep_implicit_sqlite >/dev/null 2>&1
+check "sqlite without a file: its earlier default file written" grep -qxF "  database: \"${INSTALL_DIR}/config/data/v2board.db\"" "${CONFIG_FILE}"
 
 # The Go test loads this file with the real configuration loader.
 if [[ -n "${ANIX_INSTALL_FRESH_CONFIG_OUT:-}" ]]; then

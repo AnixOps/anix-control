@@ -21,7 +21,7 @@ import (
 // against each other under agent_control.mtls: required, with chaos.
 //
 // It is opt-in: ANIXOPS_AGENT_E2E=1 and an anix-agent checkout
-// (ANIXOPS_AGENT_ROOT, or a sibling V2bX_AnixOps / anix-agent directory).
+// (ANIXOPS_AGENT_ROOT, or a sibling anix-agent / anix-agent directory).
 // ANIXOPS_AGENT_GO is the go command for the Agent's module (its
 // toolchain line), ANIXOPS_AGENT_E2E_POSTGRES_DSN runs Control on
 // PostgreSQL (SQLite otherwise), ANIXOPS_AGENT_E2E_LOGDIR keeps every log

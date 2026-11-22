@@ -50,7 +50,7 @@ official trust root.
     them are unchanged;
   - `sid` (session), `tv` (token version) and `jti`.
 - **Lifetime.** The configured `jwt.expire`, 24 h by default. The v2 login
-  response keeps its shape, so the web UI and v2board clients need no change.
+  response keeps its shape, so the web UI and API clients need no change.
 - **Keys.** Signing keys live only in the identity module, encrypted under
   `ANIX_IDENTITY_KEK` and shared by its replicas.
   - A `next` key is published at least one kernel refresh interval before it

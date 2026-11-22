@@ -7,7 +7,7 @@
 # installs and never builds on the target host.
 set -euo pipefail
 
-if [[ "${ANIX_CONTROL_LEGACY_SOURCE_INSTALL:-${V2BOARD_LEGACY_SOURCE_INSTALL:-0}}" == "1" ]]; then
+if [[ "${ANIX_CONTROL_LEGACY_SOURCE_INSTALL:-0}" == "1" ]]; then
   printf '[ERROR] The source/Docker Compose installer was removed because it built images on the target host.\n' >&2
   printf '        Deploy the released image instead: https://github.com/AnixOps/anix-control/blob/main/docs/DEPLOYMENT.md\n' >&2
   exit 1
@@ -32,10 +32,10 @@ command -v curl >/dev/null 2>&1 || {
 # The installer is fetched at the tag it installs, never from a moving branch.
 # The tag is --version (or ANIX_CONTROL_VERSION). INSTALL_REF overrides it, for
 # a developer who knowingly installs another ref, and for commands that take no
-# --version (preflight, enable-agents).
+# --version (enable-agents).
 install_ref="${INSTALL_REF:-}"
 if [[ -z "${install_ref}" ]]; then
-  install_ref="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
+  install_ref="${ANIX_CONTROL_VERSION:-}"
   previous=""
   for arg in "$@"; do
     if [[ "${previous}" == "--version" ]]; then
@@ -50,7 +50,7 @@ if [[ -z "${install_ref}" ]]; then
   if [[ ! "${install_ref}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
     printf '[ERROR] Name the release tag to install: --version vX.Y.Z (for example v5.0.0-rc.1).\n' >&2
     printf '        The installer is fetched at that tag, never from a moving branch.\n' >&2
-    printf '        Commands without --version (preflight, enable-agents) take INSTALL_REF=<tag>.\n' >&2
+    printf '        enable-agents, which takes no --version, takes INSTALL_REF=<tag>.\n' >&2
     exit 1
   fi
 fi

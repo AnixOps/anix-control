@@ -34,7 +34,7 @@ UI ownership:
 
 ### Required pieces
 
-1. `v2board` with:
+1. `anix-control` with:
 
 ```yaml
 forward_runtime:
@@ -60,7 +60,7 @@ forward_runtime:
 ### Execution chain
 
 1. panel creates or updates forward state
-2. `v2board` calls NodeX
+2. `anix-control` calls NodeX
 3. NodeX calls relay gost API
 4. relay gost stores services and limiters
 
@@ -83,7 +83,7 @@ The current real-machine validation baseline used:
 
 Important port split:
 
-- `18081` is the outer NodeX control-plane address that `v2board` must call
+- `18081` is the outer NodeX control-plane address that `anix-control` must call
 - `18080` is the relay gost management API that NodeX calls after it accepts the request
 
 This verified example forwarded the same target service through two runtime paths:
@@ -117,7 +117,7 @@ UI ownership:
 
 ### Required pieces
 
-1. `v2board` with:
+1. `anix-control` with:
 
 ```yaml
 forward_runtime:
@@ -133,7 +133,7 @@ forward_runtime:
     timeout_seconds: 120
 ```
 
-2. `ansible-playbook` available on the machine running `v2board`
+2. `ansible-playbook` available on the machine running `anix-control`
 3. an ansible inventory file, referenced by `config/config.yaml.forward_runtime.nftables_ansible.inventory`, that can SSH into the relay host
 4. a supported tunnel and forward
 5. a relay `ForwardNode`
@@ -157,7 +157,7 @@ not on extra fields inside `v2_forward_node`.
 ### Execution chain
 
 1. panel creates or updates forward state
-2. `v2board` stores a pending runtime job
+2. `anix-control` stores a pending runtime job
 3. local executor runs `ansible-playbook`
 4. ansible reaches the relay host over SSH
 5. relay host receives `nftables` rules (or `iptables` rules in legacy mode)

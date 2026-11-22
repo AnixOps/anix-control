@@ -284,7 +284,7 @@ func TestConfigDefaults(t *testing.T) {
 		},
 		Database: DatabaseConfig{
 			Driver:   "postgres",
-			Database: "v2board",
+			Database: "anix_control",
 			Host:     "localhost",
 			Port:     5432,
 		},
@@ -344,7 +344,7 @@ func TestDatabaseConfig(t *testing.T) {
 		config DatabaseConfig
 	}{
 		{"sqlite", DatabaseConfig{Driver: "sqlite", Database: "test.db"}},
-		{"postgres", DatabaseConfig{Driver: "postgres", Host: "localhost", Port: 5432, Database: "v2board"}},
+		{"postgres", DatabaseConfig{Driver: "postgres", Host: "localhost", Port: 5432, Database: "anix_control"}},
 		{"with credentials", DatabaseConfig{Driver: "postgres", Username: "user", Password: "pass"}},
 		{"with pool settings", DatabaseConfig{Driver: "postgres", MaxIdleConns: 10, MaxOpenConns: 100}},
 	}

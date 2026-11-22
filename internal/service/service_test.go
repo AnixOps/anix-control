@@ -44,11 +44,11 @@ func (s *ServiceTestSuite) SetupSuite() {
 
 	// 使用 sync.Once 确保数据库只初始化一次
 	dbInitOnce.Do(func() {
-		testDBDir, dbInitErr = os.MkdirTemp("", "v2board-service-test-*")
+		testDBDir, dbInitErr = os.MkdirTemp("", "control-service-test-*")
 		if dbInitErr != nil {
 			return
 		}
-		testDBPath = filepath.Join(testDBDir, "v2board_service_test.db")
+		testDBPath = filepath.Join(testDBDir, "control_service_test.db")
 
 		dbInitErr = database.Init(&config.DatabaseConfig{
 			Driver:   "sqlite",
@@ -164,7 +164,7 @@ func TestServiceTestDatabasePathIsIsolated(t *testing.T) {
 
 	require.NotEmpty(t, testDBDir)
 	require.NotEmpty(t, testDBPath)
-	assert.True(t, strings.HasPrefix(filepath.Base(testDBDir), "v2board-service-test-"))
+	assert.True(t, strings.HasPrefix(filepath.Base(testDBDir), "control-service-test-"))
 	assert.Equal(t, testDBDir, filepath.Dir(testDBPath))
 }
 

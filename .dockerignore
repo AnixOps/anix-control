@@ -9,9 +9,6 @@
 *.swo
 
 # Build artifacts
-v2board
-v2board.exe
-v2board-linux
 anix-control
 anix-control.exe
 anix-control-linux

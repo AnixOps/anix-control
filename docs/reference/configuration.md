@@ -98,9 +98,10 @@ uses the defaults. Control never falls back to SQLite: when PostgreSQL
 cannot be reached it stops, names the server it tried and says how to
 configure PostgreSQL or choose SQLite. A file that ran SQLite with an empty
 driver before PostgreSQL became the default must say `driver: sqlite` now:
-`install.sh update` writes it for an install that has
-`config/data/v2board.db` and no `database` keys, and `config rewrite` writes
-it for an earlier file. A fresh `install.sh install` asks for
+`install.sh update` writes it, with the file, for an install that has
+`config/data/v2board.db` (the default file of earlier Controls) and no
+`database.database`, and `config rewrite` writes it for an earlier file. The
+default SQLite file is `config/data/control.db`. A fresh `install.sh install` asks for
 `--database-dsn`, or `--sqlite` (at a terminal it asks before using SQLite).
 
 ### Environment Variables
@@ -312,7 +313,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `frontend.enable` | `ANIX_CONTROL_FRONTEND_ENABLE` | still read | M2 (P11) | serves the web app from frontend.path until the web app is built into the binary |
 | `frontend.path` | `ANIX_CONTROL_FRONTEND_PATH` | still read | M2 (P11) | the web app's directory until the web app is built into the binary |
 | `frontend.port` | `ANIX_CONTROL_FRONTEND_PORT` | still read | M2 (P11) | a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen; use `listen` |
-| `grpc.api_token` | `ANIX_CONTROL_GRPC_API_TOKEN` | ignored | M5 (N9) | the legacy administrator token of the v2board gRPC services, which are removed; the key does nothing, so remove it |
+| `grpc.api_token` | `ANIX_CONTROL_GRPC_API_TOKEN` | ignored | M5 (N9) | the administrator token of the removed node gRPC services; the key does nothing, so remove it |
 | `grpc.enabled` | `ANIX_CONTROL_GRPC_ENABLED` | still read | M2 (P11) | turns the gRPC listener on without domain; with domain it always runs |
 | `grpc.host` | `ANIX_CONTROL_GRPC_HOST` | still read | M2 (P11) | the gRPC listener's address, until it listens on every address |
 | `grpc.tls_cert_file` | `ANIX_CONTROL_GRPC_TLS_CERT_FILE` | still read | M2 (P11) | the gRPC listener's own certificate; config rewrite turns it into tls.cert_file with tls.mode external; use `tls.cert_file` |

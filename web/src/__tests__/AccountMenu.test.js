@@ -100,7 +100,7 @@ describe('AccountMenu.vue', () => {
     const { themePreference } = useTheme()
     expect(themePreference.value).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(localStorage.setItem).toHaveBeenCalledWith('v2board-theme', 'dark')
+    expect(localStorage.setItem).toHaveBeenCalledWith('app.theme', 'dark')
   })
 
   it('switches the language from the language submenu', async () => {
