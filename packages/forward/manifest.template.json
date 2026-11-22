@@ -16,13 +16,7 @@
   "entrypoints": {},
   "migration_version": 0,
   "control_routes": ["/api/v4/plugins/forward/*"],
-  "frontend_sha256": "GENERATED_AT_BUILD",
-  "webui": {
-    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
-    "permissions": ["forward.view"],
-    "menus": [{"id": "forward.main", "parent": "operations", "label": "Forward", "icon": "network", "route": "/admin/extensions/forward", "permission": "forward.view", "order": 150}],
-    "routes": [{"id": "forward.main", "path": "/admin/extensions/forward", "export": "mount", "permission": "forward.view"}]
-  },
+  "frontend_sha256": "",
   "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
   "agent_entrypoint": {"path": "agent/linux-amd64/plugin", "sha256": "GENERATED_AT_BUILD"},
   "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},

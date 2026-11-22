@@ -46,7 +46,6 @@ MAX_RUNTIME_BINARY_BYTES = 32 << 20
 ED25519_PUBLIC_KEY_BYTES = 32
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 SAFE_SEGMENT_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-")
-WEBUI_VERSION_TOKEN = b"__ANIXOPS_PACKAGE_VERSION__"
 MIGRATION_VERSION_TOKEN = "__ANIXOPS_PACKAGE_VERSION__"
 MIGRATION_ID_PATTERN = re.compile(r"[0-9a-z][0-9a-z_]{0,63}")
 ENTRYPOINT_INDEX_FORMAT = "anixops.package-entrypoints/v1"
@@ -116,7 +115,6 @@ MANIFEST_FIELDS = (
     "migration_version",
     "control_routes",
     "frontend_sha256",
-    "webui",
     "control_entrypoint",
     "agent_entrypoint",
     "migrations",
@@ -124,12 +122,10 @@ MANIFEST_FIELDS = (
     "route_contract_digest",
     "runtime_api_version",
 )
-# A package without an administrator WebUI leaves `webui` out of its manifest
-# template and keeps `frontend_sha256` empty. The kernel and the Agent encode
-# that manifest as `"frontend_sha256":""` without a `webui` key, which is the
-# byte form this builder signs.
-OPTIONAL_TEMPLATE_FIELDS = frozenset({"webui"})
-WEBUI_BUNDLE_PATH = "webui/index.mjs"
+# No package ships an administrator WebUI: every manifest keeps
+# `frontend_sha256` empty and has no `webui` key. The kernel and the Agent
+# encode that manifest as `"frontend_sha256":""`, the byte form this builder
+# signs.
 
 
 class PackageBuildError(RuntimeError):
@@ -332,25 +328,6 @@ def manifest_template(package_id: str) -> dict[str, Any]:
     if not isinstance(template, dict):
         raise PackageBuildError(f"{package_id} manifest template must be a JSON object")
     return template
-
-
-def declares_webui(package_id: str) -> bool:
-    """Whether the package ships an administrator WebUI bundle.
-
-    The manifest template decides: a `webui` block means a bundle at
-    webui/index.mjs, no block means no bundle and no webui/ directory.
-    """
-    declared = "webui" in manifest_template(package_id)
-    if not declared and (package_root(package_id) / "webui").exists():
-        raise PackageBuildError(f"{package_id} ships a webui/ directory but its manifest template declares no webui")
-    return declared
-
-
-def source_webui(package_id: str, version: str) -> bytes:
-    source = read_source(package_root(package_id) / WEBUI_BUNDLE_PATH, f"{package_id} WebUI bundle")
-    if source.count(WEBUI_VERSION_TOKEN) != 1:
-        raise PackageBuildError(f"{package_id} WebUI bundle must declare exactly one release version token")
-    return source.replace(WEBUI_VERSION_TOKEN, version.encode("utf-8"))
 
 
 def generated_control_host(package_id: str) -> bytes:
@@ -589,13 +566,10 @@ def package_entries(
 ) -> tuple[list[ArchiveEntry], dict[str, Any]]:
     migrations, migration_entries = source_migrations(spec.package_id, version)
     routes = source_compatibility_routes(spec.package_id)
-    webui = source_webui(spec.package_id, version) if declares_webui(spec.package_id) else None
     entries = [
         ArchiveEntry("compat/v2-routes.json", routes, 0o644),
         ArchiveEntry("migrations/index.json", migrations, 0o644),
     ]
-    if webui is not None:
-        entries.append(ArchiveEntry(WEBUI_BUNDLE_PATH, webui, 0o644))
     control_entrypoint = b""
     if not builtin:
         control_index_entries: list[dict[str, str]] = []
@@ -668,24 +642,23 @@ def package_entries(
         "migrations": migrations,
         "routes": routes,
         "runtime_entrypoints": runtime_entrypoints,
-        "webui": webui,
     }
 
 
 def ordered_manifest(template: Any) -> dict[str, Any]:
     if not isinstance(template, dict):
         raise PackageBuildError("manifest template must be a JSON object")
-    missing = [field for field in MANIFEST_FIELDS if field not in template and field not in OPTIONAL_TEMPLATE_FIELDS]
+    missing = [field for field in MANIFEST_FIELDS if field not in template]
     unknown = sorted(set(template) - set(MANIFEST_FIELDS))
     if missing or unknown:
         raise PackageBuildError(f"manifest template fields are invalid: missing={missing}, unknown={unknown}")
-    return {field: template[field] for field in MANIFEST_FIELDS if field in template}
+    return {field: template[field] for field in MANIFEST_FIELDS}
 
 
-def emitted_manifest_fields(spec: PackageSpec, has_webui: bool = True, builtin: bool = False) -> tuple[str, ...]:
-    omitted = set() if has_webui else {"webui"}
+def emitted_manifest_fields(spec: PackageSpec, builtin: bool = False) -> tuple[str, ...]:
+    omitted = set()
     if builtin or "agent" not in spec.targets:
-        omitted |= {"agent_entrypoint", "runtime_api_version"}
+        omitted = {"agent_entrypoint", "runtime_api_version"}
     return tuple(field for field in MANIFEST_FIELDS if field not in omitted)
 
 
@@ -704,20 +677,8 @@ def generated_manifest(
     if tuple(manifest["targets"]) != spec.targets:
         raise PackageBuildError(f"{spec.package_id} manifest targets do not match the package matrix")
 
-    webui = manifest.get("webui")
-    if "webui" in manifest:
-        if not isinstance(webui, dict) or not isinstance(webui.get("bundle"), dict):
-            raise PackageBuildError(f"{spec.package_id} manifest webui must declare a bundle")
-        bundle_path = require_relative_path(webui["bundle"].get("path"), f"{spec.package_id} WebUI bundle")
-        if bundle_path != WEBUI_BUNDLE_PATH:
-            raise PackageBuildError(f"{spec.package_id} manifest WebUI bundle must use {WEBUI_BUNDLE_PATH}")
-        if contents["webui"] is None:
-            raise PackageBuildError(f"{spec.package_id} manifest declares a WebUI bundle the package does not ship")
-    else:
-        if manifest["frontend_sha256"] != "":
-            raise PackageBuildError(f"{spec.package_id} manifest without webui must keep frontend_sha256 empty")
-        if contents["webui"] is not None:
-            raise PackageBuildError(f"{spec.package_id} ships a WebUI bundle its manifest does not declare")
+    if manifest["frontend_sha256"] != "":
+        raise PackageBuildError(f"{spec.package_id} manifest must keep frontend_sha256 empty")
 
     manifest["version"] = version
     manifest["api_version"] = MANIFEST_API_VERSION
@@ -731,9 +692,6 @@ def generated_manifest(
     manifest["config_schema"] = sorted_json_value(manifest["config_schema"])
     manifest["entrypoints"] = contents["runtime_entrypoints"]
     manifest["migration_version"] = 0
-    if webui is not None:
-        manifest["frontend_sha256"] = sha256_bytes(contents["webui"])
-        webui["bundle"]["sha256"] = manifest["frontend_sha256"]
     if builtin:
         manifest["control_entrypoint"] = {"builtin": spec.package_id}
     else:
@@ -769,22 +727,11 @@ def valid_digest(value: Any) -> bool:
 
 
 def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec, *, builtin: bool = False) -> None:
-    has_webui = "webui" in manifest
-    if tuple(manifest) != emitted_manifest_fields(spec, has_webui, builtin):
+    if tuple(manifest) != emitted_manifest_fields(spec, builtin):
         raise PackageBuildError("generated manifest field order is not canonical")
     targets = BUILTIN_TARGETS if builtin else spec.targets
-    if has_webui:
-        webui = manifest["webui"]
-        bundle = webui.get("bundle") if isinstance(webui, dict) else None
-        if (
-            not isinstance(bundle, dict)
-            or bundle.get("path") != WEBUI_BUNDLE_PATH
-            or not valid_digest(manifest.get("frontend_sha256"))
-            or bundle.get("sha256") != manifest.get("frontend_sha256")
-        ):
-            raise PackageBuildError("generated manifest WebUI bundle is invalid")
-    elif manifest.get("frontend_sha256") != "":
-        raise PackageBuildError("generated manifest without webui must keep frontend_sha256 empty")
+    if manifest.get("frontend_sha256") != "":
+        raise PackageBuildError("generated manifest must keep frontend_sha256 empty")
     if manifest.get("api_version") != MANIFEST_API_VERSION:
         raise PackageBuildError("generated manifest API version is invalid")
     if manifest.get("publisher") != "AnixOps":
@@ -1117,15 +1064,6 @@ def verify_output(
             for member in members:
                 if not member.isfile() or member.mtime != 0 or member.uid != 0 or member.gid != 0:
                     raise PackageBuildError("artifact metadata is not deterministic")
-            webui_members = [name for name in names if name.startswith("webui/")]
-            if "webui" in manifest:
-                if webui_members != [WEBUI_BUNDLE_PATH]:
-                    raise PackageBuildError(f"{spec.package_id} artifact must hold exactly its declared WebUI bundle")
-                bundle = archive.extractfile(WEBUI_BUNDLE_PATH)
-                if bundle is None or sha256_bytes(bundle.read()) != manifest["frontend_sha256"]:
-                    raise PackageBuildError(f"{spec.package_id} WebUI bundle does not match the manifest digest")
-            elif webui_members:
-                raise PackageBuildError(f"{spec.package_id} artifact holds a WebUI bundle its manifest does not declare")
             if builtin:
                 binaries = [name for name in names if name.startswith(("bin/", "agent/", "runtime/"))]
                 if binaries:

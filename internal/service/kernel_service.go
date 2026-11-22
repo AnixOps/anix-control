@@ -18,7 +18,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -71,7 +70,6 @@ const pluginManifestAPIVersionV2 = "v2"
 const pluginManifestAPIVersion = pluginManifestAPIVersionV1
 const agentRuntimeAPIVersionV110 = "anixops.agent.sdk/v1.1.0"
 const MaxPluginArtifactBytes = 64 << 20
-const maxPluginWebUIBundleBytes = 2 << 20
 const maxPluginControlEntrypointBytes = 128 << 20
 const maxPluginEntrypointPlatforms = 2
 const PluginAPIGrantResourceType = "plugin_api"
@@ -292,19 +290,6 @@ const (
 	PluginWebUIMenuParentSystem     = "system"
 	PluginWebUIMenuParentExtensions = "extensions"
 )
-
-func normalizePluginWebUIMenuParent(parent string) string {
-	switch strings.ToLower(strings.TrimSpace(parent)) {
-	case PluginWebUIMenuParentServices:
-		return PluginWebUIMenuParentServices
-	case PluginWebUIMenuParentOperations:
-		return PluginWebUIMenuParentOperations
-	case PluginWebUIMenuParentSystem:
-		return PluginWebUIMenuParentSystem
-	default:
-		return PluginWebUIMenuParentExtensions
-	}
-}
 
 type PluginWebUIRoute struct {
 	ID         string `json:"id"`
@@ -920,179 +905,6 @@ func pluginIDInList(pluginID string, candidates []string) bool {
 	return false
 }
 
-type WebUIExtension struct {
-	PluginID       string               `json:"plugin_id"`
-	PluginName     string               `json:"plugin_name"`
-	Publisher      string               `json:"publisher"`
-	Version        string               `json:"version"`
-	APIVersion     string               `json:"api_version"`
-	InstallationID uint                 `json:"installation_id"`
-	State          string               `json:"state"`
-	Bundle         WebUIExtensionBundle `json:"bundle"`
-	Permissions    []string             `json:"permissions"`
-	Menus          []PluginWebUIMenu    `json:"menus"`
-	Routes         []PluginWebUIRoute   `json:"routes"`
-	ConfigSchema   json.RawMessage      `json:"config_schema"`
-	// ControlRoutes are the signed manifest's control routes, listed only
-	// when the actor may call them (the package's api permission). The web
-	// app reads a capability from them, such as the forward package's v4
-	// API (/api/v4/plugins/forward/*), which F5b's pages need.
-	ControlRoutes []string `json:"control_routes,omitempty"`
-}
-
-type WebUIExtensionBundle struct {
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
-	URL    string `json:"url"`
-}
-
-// ListEnabledWebUIExtensionsForActor applies the same authoritative plugin
-// permissions as the control route gateway. Restricted actors only receive
-// routes, menus and declared permissions that they can actually use.
-func ListEnabledWebUIExtensionsForActor(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin bool) ([]WebUIExtension, error) {
-	return listEnabledWebUIExtensions(db, publicKey, actorID, legacyAdmin, true)
-}
-
-func listEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin, quarantineInvalid bool) ([]WebUIExtension, error) {
-	if db == nil {
-		return nil, errors.New("database is not initialized")
-	}
-	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
-	if err != nil {
-		return nil, err
-	}
-	var installations []model.PluginInstallation
-	if err := db.Where("target = ? AND enabled = ? AND state IN ?", "control", true, []string{"enabled", "healthy"}).
-		Order("plugin_id, id").Find(&installations).Error; err != nil {
-		return nil, err
-	}
-	extensions := make([]WebUIExtension, 0, len(installations))
-	for _, installation := range installations {
-		if !access.HasAnyPermission(installation.PluginID) {
-			continue
-		}
-		if strings.TrimSpace(installation.DesiredVersion) == "" || installation.ObservedVersion != installation.DesiredVersion {
-			if quarantineInvalid {
-				continue
-			}
-			return nil, fmt.Errorf("%w: plugin %s observed version does not match desired version", ErrExtensionCatalogIntegrity, installation.PluginID)
-		}
-		if len(publicKey) != ed25519.PublicKeySize {
-			return nil, ErrPluginTrustRootRequired
-		}
-		var plugin model.Plugin
-		if err := db.First(&plugin, "id = ? AND official = ? AND publisher = ?", installation.PluginID, true, "AnixOps").Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if quarantineInvalid {
-					continue
-				}
-				return nil, fmt.Errorf("%w: plugin %s is not an official catalog entry", ErrExtensionCatalogIntegrity, installation.PluginID)
-			}
-			if quarantineInvalid {
-				continue
-			}
-			return nil, err
-		}
-		var release model.PluginRelease
-		if err := db.First(&release, "plugin_id = ? AND version = ?", installation.PluginID, installation.ObservedVersion).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if quarantineInvalid {
-					continue
-				}
-				return nil, fmt.Errorf("%w: plugin %s release %s is missing", ErrExtensionCatalogIntegrity, installation.PluginID, installation.ObservedVersion)
-			}
-			if quarantineInvalid {
-				continue
-			}
-			return nil, err
-		}
-		manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
-		if err != nil {
-			if quarantineInvalid {
-				continue
-			}
-			return nil, fmt.Errorf("%w: plugin %s release signature: %v", ErrExtensionCatalogIntegrity, installation.PluginID, err)
-		}
-		if manifest.ID != release.PluginID || manifest.Version != release.Version || manifest.APIVersion != release.APIVersion || !strings.EqualFold(manifest.ArtifactSHA256, release.ArtifactSHA256) || !manifestSupportsTarget(*manifest, "control") {
-			if quarantineInvalid {
-				continue
-			}
-			return nil, fmt.Errorf("%w: plugin %s release metadata is not version-bound", ErrExtensionCatalogIntegrity, installation.PluginID)
-		}
-		if manifest.WebUI == nil {
-			continue
-		}
-		permissions, menus, routes := filterPluginWebUIForActor(installation.PluginID, *manifest.WebUI, *access)
-		if len(routes) == 0 {
-			continue
-		}
-		asset, err := LoadVerifiedPluginWebUIAsset(db, release, *manifest)
-		if err != nil {
-			if quarantineInvalid {
-				continue
-			}
-			return nil, fmt.Errorf("%w: plugin %s webui asset: %v", ErrExtensionCatalogIntegrity, installation.PluginID, err)
-		}
-		extensions = append(extensions, WebUIExtension{
-			PluginID: installation.PluginID, PluginName: manifest.Name, Publisher: manifest.Publisher,
-			Version: manifest.Version, APIVersion: manifest.APIVersion, InstallationID: installation.ID,
-			State: installation.State,
-			Bundle: WebUIExtensionBundle{
-				Path:   asset.BundlePath,
-				SHA256: asset.BundleSHA256,
-				URL:    PluginWebUIAssetURL(asset.PluginID, asset.Version, asset.BundleSHA256, asset.BundlePath),
-			},
-			Permissions:   permissions,
-			Menus:         menus,
-			Routes:        routes,
-			ConfigSchema:  append(json.RawMessage(nil), manifest.ConfigSchema...),
-			ControlRoutes: controlRoutesForActor(installation.PluginID, manifest.ControlRoutes, *access),
-		})
-	}
-	return extensions, nil
-}
-
-// controlRoutesForActor answers a package's control routes when the actor
-// holds its api permission, which every control route needs.
-func controlRoutesForActor(pluginID string, routes []string, access ActorPluginAccess) []string {
-	if len(routes) == 0 || !access.Allows(pluginID, PluginAPIPermission(pluginID)) {
-		return nil
-	}
-	out := append([]string(nil), routes...)
-	sort.Strings(out)
-	return out
-}
-
-func filterPluginWebUIForActor(pluginID string, webUI PluginWebUI, access ActorPluginAccess) ([]string, []PluginWebUIMenu, []PluginWebUIRoute) {
-	permissions := make([]string, 0, len(webUI.Permissions))
-	for _, permission := range webUI.Permissions {
-		if access.Allows(pluginID, permission) {
-			permissions = append(permissions, permission)
-		}
-	}
-	sort.Strings(permissions)
-
-	routes := make([]PluginWebUIRoute, 0, len(webUI.Routes))
-	routePaths := make(map[string]struct{}, len(webUI.Routes))
-	for _, route := range webUI.Routes {
-		if !access.Allows(pluginID, route.Permission) {
-			continue
-		}
-		routes = append(routes, route)
-		routePaths[route.Path] = struct{}{}
-	}
-
-	menus := make([]PluginWebUIMenu, 0, len(webUI.Menus))
-	for _, menu := range webUI.Menus {
-		if _, ok := routePaths[menu.Route]; !ok || !access.Allows(pluginID, menu.Permission) {
-			continue
-		}
-		menu.Parent = normalizePluginWebUIMenuParent(menu.Parent)
-		menus = append(menus, menu)
-	}
-	return permissions, menus, routes
-}
-
 // VerifyPluginArtifact checks the bytes fetched from the signed repository
 // before they are handed to an installer. The manifest signature alone is not
 // sufficient when an artifact is replaced at the transport layer.
@@ -1117,14 +929,6 @@ func validatePluginArtifactSize(size int) error {
 
 func PluginArtifactStorageKey(pluginID, version, artifactSHA256 string) string {
 	return path.Join("plugins", pluginID, version, strings.ToLower(artifactSHA256)+".artifact")
-}
-
-func PluginWebUIAssetStorageKey(pluginID, version, bundleSHA256, bundlePath string) string {
-	return path.Join("plugins", pluginID, version, "webui", strings.ToLower(bundleSHA256), path.Base(bundlePath))
-}
-
-func PluginWebUIAssetURL(pluginID, version, bundleSHA256, bundlePath string) string {
-	return "/api/v3/extensions/" + url.PathEscape(pluginID) + "/" + url.PathEscape(version) + "/webui/" + strings.ToLower(bundleSHA256) + "/" + url.PathEscape(path.Base(bundlePath))
 }
 
 func PluginAPIPermission(pluginID string) string {
@@ -1252,9 +1056,6 @@ func StorePluginArtifact(db *gorm.DB, releaseID uint, artifact []byte) (*model.P
 				strings.EqualFold(existing.ArtifactSHA256, release.ArtifactSHA256) &&
 				existing.SizeBytes == int64(len(artifact)) &&
 				bytes.Equal(existing.Data, artifact) {
-				if err := storePluginWebUIAsset(tx, release, *manifest, artifact); err != nil {
-					return err
-				}
 				result = &existing
 				return nil
 			}
@@ -1270,9 +1071,6 @@ func StorePluginArtifact(db *gorm.DB, releaseID uint, artifact []byte) (*model.P
 			Data:           append([]byte(nil), artifact...),
 		}
 		if err := tx.Create(&artifactRow).Error; err != nil {
-			return err
-		}
-		if err := storePluginWebUIAsset(tx, release, *manifest, artifact); err != nil {
 			return err
 		}
 		result = &artifactRow
@@ -1298,259 +1096,6 @@ func GetPluginArtifact(db *gorm.DB, releaseID uint) (*model.PluginArtifact, erro
 	return &artifact, nil
 }
 
-// ResolveActivePluginWebUIAsset binds an immutable asset URL to the currently
-// active control installation and to the requesting actor. Stored signatures,
-// release metadata, artifact bytes and the extracted bundle are revalidated on
-// every request so disabling or replacing an installation invalidates old URLs.
-func ResolveActivePluginWebUIAsset(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin bool, pluginID, version, bundleSHA256 string) (*model.PluginWebUIAsset, error) {
-	if db == nil {
-		return nil, errors.New("database is not initialized")
-	}
-	pluginID = strings.TrimSpace(pluginID)
-	version = strings.TrimSpace(version)
-	bundleSHA256 = strings.ToLower(strings.TrimSpace(bundleSHA256))
-	if !safePluginSegment(pluginID) || !safePluginSegment(version) || len(bundleSHA256) != sha256.Size*2 {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
-	if err != nil {
-		return nil, err
-	}
-	if !access.HasAnyPermission(pluginID) {
-		return nil, ErrPluginRouteForbidden
-	}
-
-	var installation model.PluginInstallation
-	if err := db.First(&installation, "plugin_id = ? AND target = ? AND enabled = ? AND state IN ?", pluginID, "control", true, []string{"enabled", "healthy"}).Error; err != nil {
-		return nil, err
-	}
-	if installation.DesiredVersion == "" || installation.ObservedVersion != installation.DesiredVersion || version != installation.ObservedVersion {
-		return nil, gorm.ErrRecordNotFound
-	}
-	if len(publicKey) != ed25519.PublicKeySize {
-		return nil, ErrPluginTrustRootRequired
-	}
-
-	var plugin model.Plugin
-	if err := db.First(&plugin, "id = ? AND official = ? AND publisher = ?", pluginID, true, "AnixOps").Error; err != nil {
-		return nil, err
-	}
-	var release model.PluginRelease
-	if err := db.First(&release, "plugin_id = ? AND version = ?", pluginID, version).Error; err != nil {
-		return nil, err
-	}
-	manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
-	if err != nil {
-		return nil, fmt.Errorf("%w: plugin %s release signature: %v", ErrExtensionCatalogIntegrity, pluginID, err)
-	}
-	if manifest.ID != pluginID || manifest.Version != version || manifest.APIVersion != release.APIVersion || !strings.EqualFold(manifest.ArtifactSHA256, release.ArtifactSHA256) || !manifestSupportsTarget(*manifest, "control") {
-		return nil, fmt.Errorf("%w: plugin %s release metadata is not version-bound", ErrExtensionCatalogIntegrity, pluginID)
-	}
-	if manifest.WebUI == nil {
-		return nil, gorm.ErrRecordNotFound
-	}
-	_, _, routes := filterPluginWebUIForActor(pluginID, *manifest.WebUI, *access)
-	if len(routes) == 0 {
-		return nil, ErrPluginRouteForbidden
-	}
-	if err := requireVerifiedPluginArtifact(db, release); err != nil {
-		return nil, err
-	}
-	asset, err := LoadVerifiedPluginWebUIAsset(db, release, *manifest)
-	if err != nil {
-		return nil, fmt.Errorf("%w: plugin %s webui asset: %v", ErrExtensionCatalogIntegrity, pluginID, err)
-	}
-	if !strings.EqualFold(asset.BundleSHA256, bundleSHA256) {
-		return nil, gorm.ErrRecordNotFound
-	}
-	return asset, nil
-}
-
-func LoadVerifiedPluginWebUIAsset(db *gorm.DB, release model.PluginRelease, manifest PluginManifest) (*model.PluginWebUIAsset, error) {
-	if manifest.WebUI == nil {
-		return nil, errors.New("plugin release has no webui bundle")
-	}
-	var asset model.PluginWebUIAsset
-	if err := db.First(&asset, "release_id = ?", release.ID).Error; err != nil {
-		return nil, err
-	}
-	if asset.PluginID != release.PluginID || asset.Version != release.Version || asset.BundlePath != manifest.WebUI.Bundle.Path || !strings.EqualFold(asset.BundleSHA256, manifest.WebUI.Bundle.SHA256) {
-		return nil, errors.New("webui asset metadata does not match release manifest")
-	}
-	if err := validateStoredPluginWebUIAsset(asset); err != nil {
-		return nil, err
-	}
-	return &asset, nil
-}
-
-func storePluginWebUIAsset(db *gorm.DB, release model.PluginRelease, manifest PluginManifest, artifact []byte) error {
-	if manifest.WebUI == nil {
-		return nil
-	}
-	bundleBytes, err := ExtractPluginWebUIBundle(manifest, artifact)
-	if err != nil {
-		return err
-	}
-	asset := model.PluginWebUIAsset{
-		ReleaseID:    release.ID,
-		PluginID:     release.PluginID,
-		Version:      release.Version,
-		BundlePath:   manifest.WebUI.Bundle.Path,
-		BundleSHA256: strings.ToLower(manifest.WebUI.Bundle.SHA256),
-		SizeBytes:    int64(len(bundleBytes)),
-		ContentType:  "text/javascript; charset=utf-8",
-		StorageKey:   PluginWebUIAssetStorageKey(release.PluginID, release.Version, manifest.WebUI.Bundle.SHA256, manifest.WebUI.Bundle.Path),
-		Data:         append([]byte(nil), bundleBytes...),
-	}
-	var existing model.PluginWebUIAsset
-	if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "release_id = ?", release.ID).Error; err == nil {
-		if existing.PluginID == asset.PluginID && existing.Version == asset.Version && existing.BundlePath == asset.BundlePath &&
-			strings.EqualFold(existing.BundleSHA256, asset.BundleSHA256) && existing.SizeBytes == asset.SizeBytes &&
-			existing.ContentType == asset.ContentType && existing.StorageKey == asset.StorageKey && bytes.Equal(existing.Data, asset.Data) {
-			return nil
-		}
-		return ErrPluginArtifactImmutable
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	return db.Create(&asset).Error
-}
-
-func validateStoredPluginWebUIAsset(asset model.PluginWebUIAsset) error {
-	if asset.SizeBytes != int64(len(asset.Data)) || len(asset.Data) == 0 {
-		return errors.New("webui asset blob is missing or truncated")
-	}
-	digest := sha256.Sum256(asset.Data)
-	actual := hex.EncodeToString(digest[:])
-	if !strings.EqualFold(actual, asset.BundleSHA256) {
-		return fmt.Errorf("webui asset hash mismatch: expected %s, got %s", asset.BundleSHA256, actual)
-	}
-	return nil
-}
-
-func ExtractPluginWebUIBundle(manifest PluginManifest, artifact []byte) ([]byte, error) {
-	if manifest.WebUI == nil {
-		return nil, errors.New("plugin release has no webui bundle")
-	}
-	bundlePath := manifest.WebUI.Bundle.Path
-	if err := validatePluginBundlePath(bundlePath); err != nil {
-		return nil, err
-	}
-	if bundle, found, err := extractBundleFromZip(artifact, bundlePath); err != nil {
-		return nil, err
-	} else if found {
-		return verifyPluginWebUIBundleDigest(manifest, bundle)
-	}
-	if bundle, found, err := extractBundleFromTarGzip(artifact, bundlePath); err != nil {
-		return nil, err
-	} else if found {
-		return verifyPluginWebUIBundleDigest(manifest, bundle)
-	}
-	if bundle, found, err := extractBundleFromTar(bytes.NewReader(artifact), bundlePath); err != nil {
-		return nil, err
-	} else if found {
-		return verifyPluginWebUIBundleDigest(manifest, bundle)
-	}
-	return nil, fmt.Errorf("webui bundle %q not found in plugin artifact", bundlePath)
-}
-
-func verifyPluginWebUIBundleDigest(manifest PluginManifest, bundle []byte) ([]byte, error) {
-	if len(bundle) == 0 {
-		return nil, errors.New("webui bundle is empty")
-	}
-	digest := sha256.Sum256(bundle)
-	actual := hex.EncodeToString(digest[:])
-	if !strings.EqualFold(actual, manifest.WebUI.Bundle.SHA256) {
-		return nil, fmt.Errorf("webui bundle hash mismatch: expected %s, got %s", manifest.WebUI.Bundle.SHA256, actual)
-	}
-	return bundle, nil
-}
-
-func extractBundleFromZip(artifact []byte, bundlePath string) ([]byte, bool, error) {
-	reader, err := zip.NewReader(bytes.NewReader(artifact), int64(len(artifact)))
-	if err != nil {
-		return nil, false, nil
-	}
-	for _, file := range reader.File {
-		name := strings.TrimPrefix(file.Name, "./")
-		if name != bundlePath {
-			continue
-		}
-		if file.FileInfo().IsDir() {
-			return nil, true, fmt.Errorf("webui bundle %q is a directory", bundlePath)
-		}
-		if file.UncompressedSize64 > maxPluginWebUIBundleBytes {
-			return nil, true, fmt.Errorf("webui bundle exceeds %d bytes", maxPluginWebUIBundleBytes)
-		}
-		opened, err := file.Open()
-		if err != nil {
-			return nil, true, err
-		}
-		bundle, err := io.ReadAll(io.LimitReader(opened, maxPluginWebUIBundleBytes+1))
-		closeErr := opened.Close()
-		if err != nil {
-			return nil, true, err
-		}
-		if closeErr != nil {
-			return nil, true, closeErr
-		}
-		if len(bundle) > maxPluginWebUIBundleBytes {
-			return nil, true, fmt.Errorf("webui bundle exceeds %d bytes", maxPluginWebUIBundleBytes)
-		}
-		return bundle, true, nil
-	}
-	return nil, false, nil
-}
-
-func extractBundleFromTarGzip(artifact []byte, bundlePath string) ([]byte, bool, error) {
-	gzipReader, err := gzip.NewReader(bytes.NewReader(artifact))
-	if err != nil {
-		return nil, false, nil
-	}
-	bundle, found, extractErr := extractBundleFromTar(gzipReader, bundlePath)
-	closeErr := gzipReader.Close()
-	if extractErr != nil {
-		return nil, found, extractErr
-	}
-	if closeErr != nil {
-		return nil, found, closeErr
-	}
-	return bundle, found, nil
-}
-
-func extractBundleFromTar(reader io.Reader, bundlePath string) ([]byte, bool, error) {
-	tarReader := tar.NewReader(reader)
-	for {
-		header, err := tarReader.Next()
-		if errors.Is(err, io.EOF) {
-			return nil, false, nil
-		}
-		if err != nil {
-			return nil, false, nil
-		}
-		name := strings.TrimPrefix(header.Name, "./")
-		if name != bundlePath {
-			continue
-		}
-		const legacyRegularFileType byte = 0
-		if header.Typeflag != tar.TypeReg && header.Typeflag != legacyRegularFileType {
-			return nil, true, fmt.Errorf("webui bundle %q is not a regular file", bundlePath)
-		}
-		if header.Size > maxPluginWebUIBundleBytes {
-			return nil, true, fmt.Errorf("webui bundle exceeds %d bytes", maxPluginWebUIBundleBytes)
-		}
-		bundle, err := io.ReadAll(io.LimitReader(tarReader, maxPluginWebUIBundleBytes+1))
-		if err != nil {
-			return nil, true, err
-		}
-		if len(bundle) > maxPluginWebUIBundleBytes {
-			return nil, true, fmt.Errorf("webui bundle exceeds %d bytes", maxPluginWebUIBundleBytes)
-		}
-		return bundle, true, nil
-	}
-}
-
 func requireVerifiedPluginArtifact(db *gorm.DB, release model.PluginRelease) error {
 	var artifact model.PluginArtifact
 	if err := db.First(&artifact, "release_id = ?", release.ID).Error; err != nil {
@@ -1571,11 +1116,6 @@ func requireVerifiedPluginArtifact(db *gorm.DB, release model.PluginRelease) err
 	}
 	if err := VerifyPluginArtifact(*manifest, artifact.Data); err != nil {
 		return fmt.Errorf("%w: %v", ErrPluginArtifactRequired, err)
-	}
-	if manifest.WebUI != nil {
-		if _, err := LoadVerifiedPluginWebUIAsset(db, release, *manifest); err != nil {
-			return fmt.Errorf("%w: %v", ErrPluginArtifactRequired, err)
-		}
 	}
 	return nil
 }

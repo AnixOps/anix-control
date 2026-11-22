@@ -38,7 +38,6 @@ export default {
         overview: '概览',
         users: '用户',
         network: '网络',
-        extensions: '扩展',
         system: '系统',
         commerce: '商业'
       },

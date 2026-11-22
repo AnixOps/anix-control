@@ -17,14 +17,9 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 //              ending in '/'); `to` and its sub-paths always match
 //   optional   true: shown only when the router has the route (for a page
 //              whose route lands in a separate pull request)
-//   capability shown only when a package provides it (extensions/runtime.js
-//              catalogCapabilities, e.g. forward.v4); page sections
+//   capability shown only when a package provides it (capabilities/index.js,
+//              GET /api/v3/capabilities, e.g. forward.v4); page sections
 //              (sections.js) take it too
-//
-// Plugin menus (extensions/runtime.js, signed WebUI contract) are merged in
-// by their `parent`: services and operations go to 扩展 (Extensions),
-// system to 系统 (System), unknown parents to 扩展. Each plugin menu needs
-// its permission and must not belong to a package the edition hides.
 
 export const ADMIN_MENU = Object.freeze([
   {
@@ -66,14 +61,6 @@ export const ADMIN_MENU = Object.freeze([
     ]
   },
   {
-    // Only the packages' own WebUI menus land here (EXTENSION_PARENT_GROUPS):
-    // the built-in packages have no page of their own any more, their status
-    // is 系统设置 → 内置包 (/admin/system/packages).
-    id: 'extensions',
-    labelKey: 'shell.admin.groups.extensions',
-    items: []
-  },
-  {
     id: 'system',
     labelKey: 'shell.admin.groups.system',
     items: [
@@ -96,14 +83,6 @@ export const ADMIN_MENU = Object.freeze([
     ]
   }
 ])
-
-// Where plugin menus land, by their (normalized) WebUI parent.
-export const EXTENSION_PARENT_GROUPS = Object.freeze({
-  services: 'extensions',
-  operations: 'extensions',
-  system: 'system',
-  extensions: 'extensions'
-})
 
 // Sections of settings-style pages: navigation/sections.js (kept apart so
 // the page titles in the entry chunk do not pull in this file).
@@ -146,17 +125,10 @@ function itemVisible(item, { editionAllows, hasPermission, routeExists, hasCapab
   return true
 }
 
-function compareExtensionMenus(left, right) {
-  const leftOrder = Number.isSafeInteger(left.order) ? left.order : 1000
-  const rightOrder = Number.isSafeInteger(right.order) ? right.order : 1000
-  return leftOrder - rightOrder ||
-    String(left.label || '').localeCompare(String(right.label || '')) ||
-    String(left.id || '').localeCompare(String(right.id || ''))
-}
-
 /**
- * buildAdminMenu merges the built-in items, the edition, the admin's
- * permissions and the plugin menus into the groups the sidebar renders.
+ * buildAdminMenu filters the built-in items by the edition, the admin's
+ * permissions and the package capabilities into the groups the sidebar
+ * renders.
  * Pure: everything it depends on is passed in (tests drive it directly).
  *
  * @returns {{ id, label, items: { id, to, label, icon, match, exact, source }[] }[]}
@@ -168,10 +140,7 @@ export function buildAdminMenu({
   editionAllows = () => true,
   hasPermission = () => true,
   routeExists = null,
-  hasCapability = () => false,
-  extensionMenus = [],
-  extensionMenuAllowed = () => true,
-  normalizeParent = value => value
+  hasCapability = () => false
 }) {
   const context = { editionAllows, hasPermission, routeExists, hasCapability }
   const groups = menu.map(group => ({
@@ -190,26 +159,6 @@ export function buildAdminMenu({
         source: 'core'
       }))
   }))
-
-  const byId = new Map(groups.map(group => [group.id, group]))
-  const extensions = (extensionMenus || [])
-    .filter(menu => menu && typeof menu.to === 'string' && hasPermission(menu.permission) && extensionMenuAllowed(menu))
-    .slice()
-    .sort(compareExtensionMenus)
-  for (const menu of extensions) {
-    const parent = normalizeParent(menu.parent)
-    const group = byId.get(EXTENSION_PARENT_GROUPS[parent] || 'extensions')
-    group.items.push({
-      id: menu.id,
-      to: menu.to,
-      label: menu.label,
-      icon: menu.icon,
-      match: [],
-      exact: false,
-      source: 'extension',
-      parent
-    })
-  }
 
   return groups.filter(group => group.items.length > 0)
 }

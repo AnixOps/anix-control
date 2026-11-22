@@ -21,7 +21,7 @@ describe('kernel API', () => {
       [kernelApi.getKernelScopes, '/service-scopes'],
       [kernelApi.getKernelAccessGroups, '/access-groups'],
       [() => kernelApi.getKernelAccessGroupDetail(7), '/access-groups/7'],
-      [kernelApi.getKernelExtensions, '/extensions']
+      [kernelApi.getAdminCapabilities, '/capabilities']
     ]
 
     for (const [call, url] of calls) {

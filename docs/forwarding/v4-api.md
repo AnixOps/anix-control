@@ -38,10 +38,10 @@ were removed in v4.2 (F5d); their contract is archived in
     principal's `super_admin`.
     Only the `/api/v4/forward/` spelling resolves it; the same lists under
     `/api/v4/plugins/forward/` answer `can_delete` false.
-- **Discovery.** `GET /api/v3/extensions` lists each package's
-  `control_routes` to an actor who holds the package's `api` permission. The
-  web app shows the forwarding pages when the forward package lists
-  `/api/v4/plugins/forward/*`.
+- **Discovery.** `GET /api/v3/capabilities` answers `forward.v4` to an
+  administrator who holds `forward.api` while the forward package is enabled,
+  healthy and declares `/api/v4/plugins/forward/*`. The web app shows the
+  forwarding pages only then.
 - **Audit.** Every `POST`, `PUT` and `DELETE` under `/api/v4/forward/` is
   written to the audit log as module `forward`, with the action derived
   from the path (`create`, `update`, `delete`, `pause`, `resume`, `toggle`,

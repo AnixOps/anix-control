@@ -91,6 +91,14 @@ protocol's secret, once, and Control no longer computes any key.
 with the previous release. The stored keys equal the computed ones, so a
 client never notices either way.
 
+### The package WebUI extension catalog is gone
+
+`GET /api/v3/extensions` and its bundle asset route answer 404 (slim audit
+2c, `audit/slim-2026-11.md`). The admin app reads
+`GET /api/v3/capabilities` instead; the forwarding pages open under the same
+conditions. Nothing to do on upgrade: reload open admin tabs once. Rollback
+is the previous release; there is no schema change.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

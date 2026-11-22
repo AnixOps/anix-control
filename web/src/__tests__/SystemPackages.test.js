@@ -17,13 +17,8 @@ const kernelApi = vi.hoisted(() => ({
   updateKernelInstallationConfig: vi.fn(),
   restartKernelInstallation: vi.fn()
 }))
-const runtime = vi.hoisted(() => ({
-  refreshAdminExtensions: vi.fn(),
-  adminExtensionErrors: []
-}))
 
 vi.mock('@/api/kernel', () => kernelApi)
-vi.mock('@/extensions/runtime', () => runtime)
 
 enableAutoUnmount(afterEach)
 
@@ -59,7 +54,6 @@ describe('built-in packages section', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    runtime.adminExtensionErrors.length = 0
     kernelApi.getKernelPlugins.mockResolvedValue(PLUGINS)
     kernelApi.getKernelPluginReleases.mockResolvedValue(RELEASES)
     kernelApi.getKernelInstallations.mockResolvedValue(INSTALLATIONS)
@@ -136,7 +130,6 @@ describe('built-in packages section', () => {
     await inBody('[data-testid="save-package-config"]').trigger('click')
     await flushPromises()
     expect(kernelApi.updateKernelInstallationConfig).toHaveBeenCalledWith(12, { interval_seconds: 30 }, 4)
-    expect(runtime.refreshAdminExtensions).toHaveBeenCalled()
   })
 
   it('says when the build carries no package and when the list fails', async () => {

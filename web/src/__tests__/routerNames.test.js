@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import router from '@/router'
 
 vi.mock('@/api/kernel', () => ({
-  getKernelExtensions: vi.fn(async () => []),
+  getAdminCapabilities: vi.fn(async () => []),
 }))
 
 // Vue Router warns when a named route has an unnamed child with an empty

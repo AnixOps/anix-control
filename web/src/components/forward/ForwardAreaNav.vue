@@ -26,7 +26,7 @@ import { useRouter } from 'vue-router'
 import { RefreshCw } from '@lucide/vue'
 import { UiIconButton, UiSegmentedControl } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { adminCapabilities } from '@/extensions/runtime'
+import { adminCapabilities } from '@/capabilities'
 
 defineProps({
   area: { type: String, required: true },

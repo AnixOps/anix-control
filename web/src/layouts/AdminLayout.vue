@@ -133,7 +133,6 @@ import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { loadEdition } from '@/composables/useEdition'
 import { loadMessageGroup } from '@/i18n'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
-import { adminExtensionMenus } from '@/extensions/runtime'
 import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import { useAdminMenu } from '@/navigation/useNavigation'
 import { ADMIN_ACCOUNT_PATH } from '@/navigation/menu'
@@ -187,9 +186,7 @@ const toggleLabel = computed(() => {
 
 const pageTitle = computed(() => {
   if (route.meta?.titleKey) return t(route.meta.titleKey)
-  const extensionMenu = adminExtensionMenus.value.find(item => item.to === route.path && userStore.hasPermission(item.permission))
-  return extensionMenu?.label ||
-    resolveRoutePageTitle(t, route.path, '') ||
+  return resolveRoutePageTitle(t, route.path, '') ||
     active.value?.item.label ||
     t('pageTitles.admin.fallback')
 })

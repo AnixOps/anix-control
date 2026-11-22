@@ -38,7 +38,6 @@ export default {
         overview: 'Overview',
         users: 'Users',
         network: 'Network',
-        extensions: 'Extensions',
         system: 'System',
         commerce: 'Commerce'
       },

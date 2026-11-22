@@ -8,13 +8,8 @@ import { getPublicConfig } from '@/api/public'
 export const EDITION_COMMUNITY = 'community'
 export const EDITION_COMMERCIAL = 'commercial'
 
-// Packages the community edition hides when the backend does not say
-// (config/editions.json). Their extension menus are not shown.
-const DEFAULT_HIDDEN_PACKAGES = Object.freeze(['affiliate', 'order', 'payment'])
-
 const state = reactive({
   edition: EDITION_COMMUNITY,
-  hiddenPackages: [...DEFAULT_HIDDEN_PACKAGES],
   registrationEnabled: true,
   requireInvite: false,
   loaded: false
@@ -27,11 +22,7 @@ export function normalizeEdition(value) {
 }
 
 export function applyPublicConfig(config = {}) {
-  const edition = normalizeEdition(config.edition)
-  state.edition = edition
-  state.hiddenPackages = Array.isArray(config.hidden_packages)
-    ? config.hidden_packages.map(String)
-    : (edition === EDITION_COMMERCIAL ? [] : [...DEFAULT_HIDDEN_PACKAGES])
+  state.edition = normalizeEdition(config.edition)
   state.registrationEnabled = config.registration?.enabled !== false
   state.requireInvite = config.registration?.require_invite === true
   state.loaded = true
@@ -60,18 +51,15 @@ export function loadEdition({ force = false } = {}) {
 }
 
 // setEdition sets the edition without the backend (tests, previews).
-export function setEdition(edition, { requireInvite = false, registrationEnabled = true, hiddenPackages } = {}) {
-  const normalized = normalizeEdition(edition)
+export function setEdition(edition, { requireInvite = false, registrationEnabled = true } = {}) {
   return applyPublicConfig({
-    edition: normalized,
-    hidden_packages: hiddenPackages ?? (normalized === EDITION_COMMERCIAL ? [] : [...DEFAULT_HIDDEN_PACKAGES]),
+    edition: normalizeEdition(edition),
     registration: { enabled: registrationEnabled, require_invite: requireInvite }
   })
 }
 
 export function resetEdition() {
   state.edition = EDITION_COMMUNITY
-  state.hiddenPackages = [...DEFAULT_HIDDEN_PACKAGES]
   state.registrationEnabled = true
   state.requireInvite = false
   state.loaded = false
@@ -93,19 +81,9 @@ export function filterByEdition(items) {
   return (items || []).filter(item => editionAllows(item?.edition))
 }
 
-// routeAllowedByEdition checks a resolved route against `meta.edition` and
-// the extension pages of hidden packages (`meta.extensionPluginID`).
+// routeAllowedByEdition checks a resolved route against `meta.edition`.
 export function routeAllowedByEdition(route) {
-  return !(route?.matched || []).some(record => (
-    !editionAllows(record?.meta?.edition) ||
-    (record?.meta?.extensionPluginID && state.hiddenPackages.includes(record.meta.extensionPluginID))
-  ))
-}
-
-// extensionMenuAllowed hides the extension menus of hidden packages.
-export function extensionMenuAllowed(menu) {
-  const pluginID = String(menu?.pluginID || menu?.plugin_id || String(menu?.id || '').split('.')[0] || '')
-  return !state.hiddenPackages.includes(pluginID)
+  return !(route?.matched || []).some(record => !editionAllows(record?.meta?.edition))
 }
 
 export function useEdition() {

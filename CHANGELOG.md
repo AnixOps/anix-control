@@ -29,6 +29,13 @@
   rollback of package rollouts (never wired), and the topology observed-state
   write-back left from the topology API removed in 5.0.0. Operation views drop
   the never-set `topology_*` fields. The tables stay until a later migration.
+- The package WebUI extension system (2026-11 slimming, class B3): the
+  extension catalog `GET /api/v3/extensions` and its bundle asset route
+  (both 404 now), the browser extension runtime and the 扩展 menu group, the
+  package builder's bundle support, and the forward package's only bundle,
+  a page that linked to the core forwarding pages. The admin app reads
+  `GET /api/v3/capabilities` instead (`forward.v4` opens the forwarding
+  pages, under the same conditions as before).
 
 ## 5.0.10 - 2026-11-18
 

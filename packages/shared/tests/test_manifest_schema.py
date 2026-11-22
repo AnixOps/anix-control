@@ -409,49 +409,14 @@ func main() {
             self.assertIsNotNone(member)
             self.assertEqual(b"x" * 4096, member.read() if member else b"")
 
-    def test_v4_package_builder_materializes_each_webui_release_version(self) -> None:
-        with_webui = [
-            spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if BUILD_PACKAGE_MODULE.declares_webui(spec.package_id)
-        ]
-        # The WebUI bundle is optional; only these packages ship one.
-        self.assertEqual(["forward"], with_webui)
-        for package_id in with_webui:
-            with self.subTest(package_id=package_id):
-                bundle = BUILD_PACKAGE_MODULE.source_webui(package_id, "4.0.0")
-                self.assertNotIn(b"__ANIXOPS_PACKAGE_VERSION__", bundle)
-                self.assertIn(b"4.0.0", bundle)
-
-    def test_package_without_webui_needs_no_bundle_and_rejects_a_stray_one(self) -> None:
-        original = BUILD_PACKAGE_MODULE.package_root
-        template = json.loads((REPO_ROOT / "packages" / "knowledge" / "manifest.template.json").read_text(encoding="utf-8"))
-        self.assertNotIn("webui", template)
-        self.assertEqual("", template["frontend_sha256"])
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "knowledge"
-            root.mkdir()
-            BUILD_PACKAGE_MODULE.package_root = lambda _package_id: root
-            try:
-                (root / "manifest.template.json").write_text(json.dumps(template), encoding="utf-8")
-                self.assertFalse(BUILD_PACKAGE_MODULE.declares_webui("knowledge"))
-                ordered = BUILD_PACKAGE_MODULE.ordered_manifest(template)
-                self.assertNotIn("webui", ordered)
-                self.assertEqual(list(ordered), [field for field in BUILD_PACKAGE_MODULE.MANIFEST_FIELDS if field != "webui"])
-
-                (root / "webui").mkdir()
-                (root / "webui" / "index.mjs").write_text("export default {}\n", encoding="utf-8")
-                with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "declares no webui"):
-                    BUILD_PACKAGE_MODULE.declares_webui("knowledge")
-            finally:
-                BUILD_PACKAGE_MODULE.package_root = original
-
-    def test_manifest_without_webui_keeps_frontend_digest_empty(self) -> None:
+    def test_manifest_keeps_frontend_digest_empty(self) -> None:
         spec = next(spec for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if spec.package_id == "knowledge")
-        contents = {"runtime_entrypoints": {}, "webui": None, "control_entrypoint": b"{}", "migrations": b"{}", "routes": b"{}"}
+        contents = {"runtime_entrypoints": {}, "control_entrypoint": b"{}", "migrations": b"{}", "routes": b"{}"}
         manifest = BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", (("linux", "amd64"),), b"artifact", contents)
         self.assertEqual("", manifest["frontend_sha256"])
         self.assertNotIn("webui", manifest)
-        # The kernel and the Agent encode a manifest without WebUI exactly so:
-        # the empty frontend digest, then the next field, no webui key.
+        # The kernel and the Agent encode the manifest exactly so: the empty
+        # frontend digest, then the next field, no webui key.
         canonical = BUILD_PACKAGE_MODULE.canonical_json(manifest)
         self.assertIn(b'"control_routes":[],"frontend_sha256":"","control_entrypoint":', canonical)
 
@@ -463,8 +428,9 @@ func main() {
             with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "keep frontend_sha256 empty"):
                 BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", (("linux", "amd64"),), b"artifact", contents)
             template["frontend_sha256"] = ""
-            with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "does not declare"):
-                BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", (("linux", "amd64"),), b"artifact", {**contents, "webui": b"x"})
+            template["webui"] = {"bundle": {"path": "webui/index.mjs"}}
+            with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "unknown=\\['webui'\\]"):
+                BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", (("linux", "amd64"),), b"artifact", contents)
         finally:
             BUILD_PACKAGE_MODULE.manifest_template = original
 
@@ -727,12 +693,8 @@ func main() {
                 self.assertRegex(manifest["route_contract_digest"], r"^[0-9a-f]{64}$")
                 self.assertEqual(hashlib.sha256(artifact_path.read_bytes()).hexdigest(), manifest["artifact_sha256"])
                 package_id = manifest["id"]
-                if package_id == "forward":
-                    self.assertRegex(manifest["frontend_sha256"], r"^[0-9a-f]{64}$")
-                    self.assertEqual(manifest["frontend_sha256"], manifest["webui"]["bundle"]["sha256"])
-                else:
-                    self.assertNotIn("webui", manifest, package_id)
-                    self.assertEqual("", manifest["frontend_sha256"], package_id)
+                self.assertNotIn("webui", manifest, package_id)
+                self.assertEqual("", manifest["frontend_sha256"], package_id)
 
                 raw_signature_path = output / f"{stem}.manifest.raw.sig"
                 raw_signature_path.write_bytes(base64.b64decode(signature_path.read_bytes()))
@@ -760,11 +722,7 @@ func main() {
                     members = archive.getmembers()
                     self.assertEqual(sorted(member.name for member in members), [member.name for member in members])
                     self.assertTrue(all(member.mtime == 0 for member in members))
-                    self.assertEqual(
-                        "webui" in manifest,
-                        "webui/index.mjs" in [member.name for member in members],
-                        manifest["id"],
-                    )
+                    self.assertFalse([member.name for member in members if member.name.startswith("webui/")], manifest["id"])
                     control_index = archive.extractfile("bin/control-entrypoints.json")
                     self.assertIsNotNone(control_index)
                     self.assertEqual(
@@ -815,7 +773,7 @@ class BuiltinPackageSetTest(unittest.TestCase):
                 self.assertFalse([name for name in names if name.startswith(("bin/", "agent/", "runtime/"))], package_id)
                 self.assertIn("compat/v2-routes.json", names)
                 self.assertIn("migrations/index.json", names)
-                self.assertEqual("webui" in manifest, "webui/index.mjs" in names, package_id)
+                self.assertFalse([name for name in names if name.startswith("webui/")], package_id)
 
     def test_builtin_formal_release_verifies_against_the_official_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

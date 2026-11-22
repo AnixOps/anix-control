@@ -63,15 +63,6 @@
         </UiGroupedListRow>
       </UiGroupedList>
       <p v-if="loadError && rows.length" class="package-banner" role="alert">{{ loadError }}</p>
-      <section v-if="adminExtensionErrors.length" class="package-banner" data-testid="package-extension-errors" role="alert">
-        <strong>{{ t('control.extensions.errorsTitle') }}</strong>
-        <ul>
-          <li v-for="(extensionError, index) in adminExtensionErrors" :key="`${extensionError.plugin_id || 'catalog'}-${index}`">
-            <code v-if="extensionError.plugin_id">{{ extensionError.plugin_id }}</code>
-            {{ extensionError.message }}
-          </li>
-        </ul>
-      </section>
       <p class="package-note">{{ t('adminSettings.packages.note') }}</p>
     </UiSection>
 
@@ -117,7 +108,6 @@
 // host and editing the configuration of a package that declares settings.
 // There is nothing to import, install, upgrade, roll back or disable.
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { Package, RefreshCw, RotateCw } from '@lucide/vue'
 import {
   getKernelInstallationConfig,
@@ -129,7 +119,6 @@ import {
 } from '@/api/kernel'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { adminExtensionErrors, refreshAdminExtensions } from '@/extensions/runtime'
 import { parseManifest } from '@/utils/kernelPluginRelease'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -148,7 +137,6 @@ const POLL_INTERVAL_MS = 2000
 const MAX_POLLS = 30
 
 const { t } = useAppI18n()
-const router = useRouter()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -312,7 +300,6 @@ async function saveConfig() {
     closeConfig()
     toast.success(t('control.messages.configSaved', { plugin: row.name }))
     await load({ silent: true })
-    await refreshAdminExtensions(router)
   } catch (cause) {
     configEditor.error = errorMessage(cause, 'control.errors.configSave')
   } finally {

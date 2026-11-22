@@ -86,13 +86,6 @@ func (access ActorPluginAccess) Allows(pluginID, permission string) bool {
 	return wildcard || namespacedWildcard || exact
 }
 
-func (access ActorPluginAccess) HasAnyPermission(pluginID string) bool {
-	if access.Unrestricted || (access.LegacyAdmin && !access.isRestricted(pluginID)) {
-		return true
-	}
-	return len(access.byPlugin[pluginID]) > 0
-}
-
 func (access ActorPluginAccess) isRestricted(pluginID string) bool {
 	_, ok := access.restricted[strings.TrimSpace(pluginID)]
 	return ok

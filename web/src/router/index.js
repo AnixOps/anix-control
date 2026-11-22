@@ -64,24 +64,18 @@ const WIDE = Object.freeze({ layout: 'wide' })
 const FORWARD_V4 = 'forward.v4'
 const forwardMeta = titleKey => Object.freeze({ layout: 'wide', capability: FORWARD_V4, titleKey })
 
-// The extension runtime (and the kernel API it calls) is admin-only: it loads
-// with the first admin route, so the sign-in page does not carry it.
-let extensionRuntime = null
+// The capabilities module (and the kernel API it calls) is admin-only: it
+// loads with the first admin route, so the sign-in page does not carry it.
+let capabilitiesModule = null
 
-function loadExtensionRuntime() {
-  return import('@/extensions/runtime').then((module) => {
-    extensionRuntime = module
-    return module
-  })
+async function ensureAdminCapabilities() {
+  capabilitiesModule ??= await import('@/capabilities')
+  return capabilitiesModule.ensureAdminCapabilities()
 }
 
-async function ensureAdminExtensions(targetRouter) {
-  return (await loadExtensionRuntime()).ensureAdminExtensions(targetRouter)
-}
-
-// Nothing to reset before the runtime has loaded.
-function resetAdminExtensions() {
-  extensionRuntime?.resetAdminExtensions()
+// Nothing to reset before the module has loaded.
+function resetAdminCapabilities() {
+  capabilitiesModule?.resetAdminCapabilities()
 }
 
 const routes = [
@@ -394,8 +388,8 @@ const routes = [
         meta: ACCOUNT_META
       },
       {
-        // Named so the parent's name ('admin', which extensions add their
-        // pages under) does not trigger Vue Router's empty-path warning.
+        // Named so the parent's name ('admin') does not trigger Vue
+        // Router's empty-path warning.
         path: '',
         name: 'admin-index',
         redirect: '/admin/dashboard'
@@ -488,7 +482,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Commercial pages (meta.edition) exist only in the commercial edition.
-  if (to.matched.some(record => record.meta?.edition || record.meta?.extensionPluginID)) {
+  if (to.matched.some(record => record.meta?.edition)) {
     await loadEdition()
     if (!routeAllowedByEdition(to)) {
       next(editionFallback(to))
@@ -497,10 +491,10 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if ((to.meta.requiresAuth || isAdminTarget) && !userStore.isLoggedIn) {
-    resetAdminExtensions()
+    resetAdminCapabilities()
     next('/login')
   } else if ((to.meta.requiresAdmin || isAdminTarget) && !userStore.isAdmin) {
-    resetAdminExtensions()
+    resetAdminCapabilities()
     next(forbiddenLocation(to)) // Signed in, but not an administrator: 无权限
   } else if (to.meta.guest && userStore.isLoggedIn) {
     if (userStore.isAdmin) {
@@ -511,51 +505,26 @@ router.beforeEach(async (to, from, next) => {
   } else {
     if (to.path.startsWith('/admin/') && userStore.isAdmin) {
       // Login responses from older panels may not carry the kernel grants.
-      // Resolve the authoritative profile before discovering any extension so
-      // the first admin render cannot silently omit authorized plugin UI.
+      // Resolve the authoritative profile before reading the capabilities.
       if (userStore.permissionMode === 'missing') {
         await userStore.getUserInfo()
       }
-      const isUnmatchedExtension = to.path.startsWith('/admin/extensions/') && !to.matched.some(record => record.meta.extension)
-      if (isUnmatchedExtension) {
-        await ensureAdminExtensions(router)
-        const resolved = router.resolve(to.fullPath)
-        if (resolved.matched.some(record => record.meta.extension)) {
-          const extensionPermission = resolved.meta.extensionPermission
-          if (!userStore.hasPermission(extensionPermission)) {
-            next(BUILTIN_PACKAGES_PATH)
-          } else {
-            next({ path: to.path, query: to.query, hash: to.hash, replace: true })
-          }
-        } else {
-          next(BUILTIN_PACKAGES_PATH)
-        }
-        return
-      }
-      if (to.meta.extension && !userStore.hasPermission(to.meta.extensionPermission)) {
-        next(BUILTIN_PACKAGES_PATH)
-        return
-      }
-      if (to.meta.extension) {
-        next()
-        return
-      }
       // A page that needs a package capability (the forwarding area needs
-      // the forward package's v4 API) waits for the catalog; without the
+      // the forward package's v4 API) waits for the answer; without the
       // capability it leads to 系统设置 → 内置包, which shows the package's
       // state.
       if (to.meta.capability) {
-        const snapshot = await ensureAdminExtensions(router).catch(() => null)
-        if (!snapshot?.capabilities?.includes(to.meta.capability)) {
+        const capabilities = await ensureAdminCapabilities().catch(() => [])
+        if (!capabilities.includes(to.meta.capability)) {
           next({ path: BUILTIN_PACKAGES_PATH, replace: true })
           return
         }
         next()
         return
       }
-      void ensureAdminExtensions(router).catch(() => {
-        // Optional extension discovery must never block core admin routes.
-      })
+      // The menu reads the capabilities too; a failure must never block a
+      // core admin page.
+      void ensureAdminCapabilities().catch(() => {})
     }
     next()
   }

@@ -6,11 +6,8 @@
  * What is left after the U9 cleanup:
  * - #app and the skip link;
  * - the baseline for bare <button>, <input>, <textarea> and <select>;
- * - the classes that signed plugin WebUI bundles render (packages/<name>/webui,
- *   anixops.webui/v1: .btn, .btn-secondary, .table-container, .data-table,
- *   .empty-state) and that the plugin configuration forms use (.btn-primary,
- *   .btn-sm, .btn-danger, .form-group, .required). Plugins ship separately,
- *   so these stay as long as the WebUI contract does.
+ * - the classes the plugin configuration forms use (.btn, .btn-primary,
+ *   .btn-sm, .btn-danger, .form-group, .required).
  * The pre-redesign variable aliases (--primary-color, --text-color, ...) and
  * the unused utility and page classes were removed in U9; the map from the
  * old names to the tokens is in docs/reference/frontend-design.md.
@@ -52,10 +49,7 @@ body {
 
 /* Buttons: pill shaped (radius-pill); .btn is 36 px, .btn-sm 28 px. Bare
    buttons size by padding (no min-height), so page styles that set their
-   own height keep working.
-   .btn, .btn-secondary, .table-container, .data-table and .empty-state are
-   the plugin WebUI class contract (docs/architecture/plugin-kernel-contract.md,
-   "WebUI CSS Classes"): never remove or rename them. */
+   own height keep working. */
 button,
 .btn {
   display: inline-flex;
@@ -120,15 +114,6 @@ button:disabled,
 
 .btn-primary:disabled {
   background: var(--accent-fill);
-}
-
-.btn-secondary {
-  background-color: var(--bg-elevated);
-  border-color: var(--separator-strong);
-}
-
-.btn-secondary:hover {
-  background-color: var(--fill-1);
 }
 
 .btn-sm {
@@ -209,52 +194,6 @@ textarea::placeholder {
   textarea {
     min-height: 44px;
   }
-}
-
-/* Tables in plugin WebUI bundles (the WebUI class contract, see above). */
-.table-container {
-  overflow-x: auto;
-  background: var(--bg-elevated);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.data-table th,
-.data-table td {
-  padding: var(--space-3) var(--space-4);
-  text-align: left;
-  border-bottom: 1px solid var(--separator);
-  vertical-align: middle;
-}
-
-.data-table th {
-  background: var(--bg-grouped);
-  color: var(--label-2);
-  font-size: var(--type-callout-size);
-  line-height: var(--type-callout-line);
-  font-weight: var(--weight-semibold);
-  text-transform: none;
-  white-space: nowrap;
-}
-
-.data-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.data-table tbody tr:hover {
-  background: var(--fill-1);
-}
-
-.empty-state {
-  color: var(--label-2);
-  text-align: center;
 }
 
 .form-group {

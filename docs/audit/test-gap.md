@@ -7,13 +7,11 @@
   before and after `pg_dump`/`pg_restore`; CI uploads the report and dump TOC.
 - The cross-repository E2E (`internal/tests/agente2e`) builds and launches
   the real Agent against a real Control.
-- Chromium Playwright tests cover signed-catalog WebUI loading, same-origin
-  digest binding, route collision isolation, disabled entries, and tampered
-  bundle recovery. The separate live-Control gate now builds an isolated
-  frontend and Control process, generates an ephemeral Ed25519 trust root and
-  signed `machine-telemetry` package, registers/uploads/enables it through
-  real `/api/v3`, and verifies the actual catalog, asset, menu, route, worker
-  completion, disable revocation, and reload behavior. It is an isolated CI
+- The live-Control gate builds an isolated frontend and Control process with
+  the signed built-in `identity-platform`, `machine-telemetry` and `forward`
+  packages, and verifies the bootstrap install, the `forward.v4` capability,
+  a forwarding page and the 内置包 section (the package WebUI and its
+  catalog tests went with slim audit 2c, 2026-11). It is an isolated CI
   boundary rather than staging/canary evidence, so production-like staging
   coverage remains a gap.
 - Package release gates prove reproducible unsigned output, ephemeral Ed25519

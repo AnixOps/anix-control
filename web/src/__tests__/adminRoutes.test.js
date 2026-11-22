@@ -4,7 +4,7 @@ import router from '@/router'
 import { useUserStore } from '@/stores/user'
 
 vi.mock('@/api/kernel', () => ({
-  getKernelExtensions: vi.fn(async () => []),
+  getAdminCapabilities: vi.fn(async () => []),
 }))
 
 vi.mock('@/api/user', () => ({
@@ -109,25 +109,8 @@ describe('admin routes', () => {
     }
   })
 
-  it('blocks plugin extension routes when the admin lacks the route permission', async () => {
-    const removeRoute = router.addRoute('admin', {
-      path: 'extensions/example',
-      name: 'test-extension-denied',
-      component: { template: '<div />' },
-      meta: {
-        requiresAuth: true,
-        requiresAdmin: true,
-        extension: true,
-        extensionPermission: 'example.view',
-      },
-    })
-    const userStore = useUserStore()
-    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['other.view'] })
-
-    await router.push('/admin/extensions/example')
-
-    expect(router.currentRoute.value.path).toBe('/admin/system/packages')
-    removeRoute()
+  it('has no plugin extension pages any more', () => {
+    expect(router.resolve('/admin/extensions/forward').matched.at(-1).path).toContain(':pathMatch')
   })
 
   it('redirects legacy Control routes to their replacement routes', async () => {
@@ -145,26 +128,5 @@ describe('admin routes', () => {
     await router.push('/admin/control')
 
     expect(router.currentRoute.value.path).toBe('/admin/system/packages')
-  })
-
-  it('allows plugin extension routes when the admin has the route permission', async () => {
-    const removeRoute = router.addRoute('admin', {
-      path: 'extensions/example',
-      name: 'test-extension-allowed',
-      component: { template: '<div />' },
-      meta: {
-        requiresAuth: true,
-        requiresAdmin: true,
-        extension: true,
-        extensionPermission: 'example.view',
-      },
-    })
-    const userStore = useUserStore()
-    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['example.view'] })
-
-    await router.push('/admin/extensions/example')
-
-    expect(router.currentRoute.value.path).toBe('/admin/extensions/example')
-    removeRoute()
   })
 })

@@ -27,7 +27,7 @@ async function installFixtures(page, options = {}) {
     }
     if (path === '/api/v4/public/config') return json({ edition: 'community', registration: { enabled: false } })
     if (path === '/api/v2/user/profile') return json({ code: 0, data: { id: 1, email: 'owner@example.com', is_admin: true } })
-    if (path === '/api/v3/extensions') return json([])
+    if (path === '/api/v3/capabilities') return json([])
     return json({ code: 0, data: null })
   })
   await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))

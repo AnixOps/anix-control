@@ -241,7 +241,7 @@ frontend_checks_block() {
   ' "${WORKFLOW_PATH}"
 }
 
-require_live_control_webui_gate() {
+require_live_control_gate() {
   local block
   block="$(frontend_checks_block)"
   if [[ -z "${block}" ]]; then
@@ -259,12 +259,12 @@ require_live_control_webui_gate() {
     "npx playwright install chromium" \
     "npx playwright test --config playwright.live-control.config.js"; do
     if ! grep -Fq -- "${required}" <<<"${block}"; then
-      fail "frontend-checks live Control WebUI gate is missing: ${required}"
+      fail "frontend-checks live Control gate is missing: ${required}"
       return 1
     fi
   done
 
-  echo "ok: live Control signed WebUI E2E gate dependencies"
+  echo "ok: live Control E2E gate dependencies"
 }
 
 check_release_workflow() {
@@ -300,7 +300,7 @@ check_release_workflow() {
   for dependency in "${PLUGIN_PACKAGE_PUBLISH_GATES[@]}"; do
     require_job_dependency plugin-package-publish "${dependency}" || failed=1
   done
-  require_live_control_webui_gate || failed=1
+  require_live_control_gate || failed=1
   # "Backend Tests" aggregates its shards: it must run when a shard fails and
   # fail unless every shard passed.
   require_job_dependency backend-test backend-test-shard || failed=1

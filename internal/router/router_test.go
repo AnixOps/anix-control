@@ -660,18 +660,18 @@ func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
+func TestSetup_V3CapabilitiesRequireAdminAndAreEmptyWithoutPackages(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v3/capabilities", nil)
 	unauthenticated := httptest.NewRecorder()
 	r.ServeHTTP(unauthenticated, request)
 	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
 
 	token := authntest.Token(t, 1, "admin@example.com", true)
-	request = httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
+	request = httptest.NewRequest(http.MethodGet, "/api/v3/capabilities", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	recorder := httptest.NewRecorder()
 	r.ServeHTTP(recorder, request)

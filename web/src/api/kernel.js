@@ -145,8 +145,8 @@ export async function resolveKernelAccess({ userID, scopeID, planID }) {
   return unwrap(await v3({ url: '/access-groups/resolve', method: 'get', params }))
 }
 
-export async function getKernelExtensions() {
-  return unwrap(await v3({ url: '/extensions', method: 'get' }))
+export async function getAdminCapabilities() {
+  return unwrap(await v3({ url: '/capabilities', method: 'get' }))
 }
 
 // The agent transport inventory (A2-6), /api/v4: each node's last agent
