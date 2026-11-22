@@ -314,8 +314,8 @@ There is nothing to import. Every official package, `identity-platform`,
 `order`, `payment` and `affiliate` included, is inside the Control binary: at
 every start Control verifies each one against `plugins.official_public_key`,
 installs or upgrades it to the binary's version (running its migrations) and
-enables it, then starts its host by running its own binary again
-(`anix-control package-host <id>`). Check the result in the start log:
+enables it, then starts its host inside the Control process. Check the
+result in the start log:
 
 ```bash
 journalctl -u anix-control -n 300 --no-pager | grep -E 'Built-in package|Control executable'

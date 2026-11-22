@@ -187,10 +187,8 @@ raised as a kernel alert, and the start goes on
 A binary built without them (`go build` from a checkout; `make build` embeds
 a development-key set) imports `identity-platform` from
 `plugins.identity_bootstrap_package_dir` instead. When the package host
-supervisor starts, Control logs its own executable and SHA-256, starts every
-enabled package's host as a child process of the same binary
-(`anix-control package-host <id>`) and runs the migrations of a package whose
-version changed.
+supervisor starts, Control starts every enabled package's host inside its
+own process and runs the migrations of a package whose version changed.
 
 `anix-control migrate [flags]` runs only this preparation and exits (status 0
 on success). Use it as a one-shot Compose service or Kubernetes Job before the

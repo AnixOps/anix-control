@@ -150,6 +150,23 @@ kernel CA) and every other operation column stay.
 **Rollback.** As for `0040_table_prefix`: restore the pre-migration backup
 with the previous release.
 
+### The built-in package hosts run inside Control
+
+Control no longer starts a child process per built-in package
+(`anix-control package-host <id>`, slim audit C1a,
+`architecture/plugin-kernel-contract.md`, "Built-in Packages"): each host
+runs on goroutines of the Control process, behind the same supervisor,
+package bridge, migrations and health checks.
+
+- `ps` and `systemctl status anix-control` show one process. Monitoring that
+  counted the `package-host` processes, or their memory, should look at the
+  Control process alone.
+- A host's log lines keep their `[pkg:<id> v:<version> gen:<n>]` prefix
+  when they go through the host's logger, which is how the packages log;
+  the `stdout`/`stderr` tag is gone.
+- Nothing to configure. Rollback is the previous release; there is no schema
+  change.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

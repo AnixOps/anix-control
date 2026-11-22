@@ -158,9 +158,16 @@ type ManagerConfig struct {
 	// host environment, for secrets that package alone needs (the identity
 	// key-encryption key). Hosts otherwise inherit nothing from the kernel.
 	PackageEnvironment map[string][]string
+	// InProcess runs a built-in host (ArtifactRef.Builtin) inside Control:
+	// it serves one release of one package until ctx ends, taking its
+	// settings and bridge from ctx (modulesdk.WithInProcess). Nil starts
+	// built-in hosts as child processes.
+	InProcess func(ctx context.Context, packageID, version string) error
 }
 
 type Supervisor struct {
+	// inProcess is ManagerConfig.InProcess.
+	inProcess func(ctx context.Context, packageID, version string) error
 	// packageEnvironment is ManagerConfig.PackageEnvironment.
 	packageEnvironment map[string][]string
 	// lifecycleMu serializes lifecycle transitions (Start, Drain, Stop,
@@ -207,13 +214,15 @@ type hostBridge interface {
 }
 
 type hostProcess struct {
-	packageID         string
-	version           string
-	generation        uint64
-	ref               ArtifactRef
-	runtimeDir        *hostRuntimeDir
-	socketPath        string
-	command           *exec.Cmd
+	packageID  string
+	version    string
+	generation uint64
+	ref        ArtifactRef
+	runtimeDir *hostRuntimeDir
+	socketPath string
+	command    *exec.Cmd
+	// cancel ends an in-process host (command is nil then).
+	cancel            context.CancelFunc
 	waitDone          chan struct{}
 	waitErr           error
 	client            hostRPCClient
@@ -252,7 +261,7 @@ func NewManager(config ManagerConfig) (*Supervisor, error) {
 		restartWindow: defaultRestartWindow, maxRestarts: defaultMaxRestarts, logf: log.Printf,
 		restartCtx: restartCtx, cancelRestart: cancelRestart, stats: make(map[string]*HostStats),
 		maxResponse:        normalizeMaxResponseBytes(config.MaxResponseBytes),
-		packageEnvironment: config.PackageEnvironment,
+		packageEnvironment: config.PackageEnvironment, inProcess: config.InProcess,
 	}, nil
 }
 

@@ -53,9 +53,8 @@ the iptables backend runs with `nftables_ansible`). Legacy
   - admin UI
   - persistence
   - diagnostics and job views
-  - the official package hosts, built into the binary and run as its own
-    child processes (`anix-control package-host <id>`), always started with
-    Control (no switch); Control does not dispatch Agent plugins or execute
+  - the official package hosts, built into the binary and run inside the
+    Control process, always started with Control (no switch); Control does not dispatch Agent plugins or execute
     topologies
 - `NodeX`
   - internal-only execution control plane

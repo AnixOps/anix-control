@@ -5,7 +5,6 @@ package control
 
 import (
 	"context"
-	"os"
 	// Embed the zone database so the TZ passed by the kernel resolves even
 	// without system zoneinfo.
 	_ "time/tzdata"
@@ -18,12 +17,12 @@ import (
 const PackageID = "identity-platform"
 
 // Run serves the host for one release of the package until the kernel stops
-// it (SIGTERM) or ctx ends, as a child process the kernel supervises.
+// it: ctx ends (inside Control) or SIGTERM arrives (as a child process).
 func Run(ctx context.Context, version string) error {
 	return modulesdk.Run(ctx, modulesdk.Options{
 		PackageID: PackageID, PackageVersion: version,
 		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
-			return newIdentityHost(host.Bridge, host.LeaseID, os.Getenv, host.Logf)
+			return newIdentityHost(host.Bridge, host.LeaseID, host.Getenv, host.Logf)
 		},
 	})
 }

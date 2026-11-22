@@ -95,15 +95,18 @@ development build) imports `identity-platform` from
 `plugins.identity_bootstrap_package_dir` as before; a binary with them
 ignores that key.
 
-**Launch and attestation.** A built-in host is a child process like any
-other: the same private runtime directory, Unix socket
-(`ANIX_CONTROL_HOST_SOCKET`), package bridge socketpair (FD 4), response
-limit, locale and package environment (`internal/pluginhost/process.go`),
-plus `ANIX_CONTROL_HOST_PACKAGE_VERSION`, the release version the kernel
-verified. Only the executable differs: instead of a materialized, digest-
-checked host binary, the launcher executes the running Control binary as
-`anix-control package-host <id>` (argv\[0\] `anix-control`). What it runs is
-established by these checks, in order:
+**Launch and attestation.** A built-in host runs inside Control, on its own
+goroutines (`ManagerConfig.InProcess`, `cmd/server` `runBuiltinHost`; slim
+audit C1a). The supervisor treats it like a child process: it gets the same
+private runtime directory and Unix socket (`ANIX_CONTROL_HOST_SOCKET`), its
+end of the package bridge socketpair, the response limit, the package
+environment and `ANIX_CONTROL_HOST_PACKAGE_VERSION` (the release version the
+kernel verified), as settings it reads through `modulesdk.Host.Getenv`, not
+from Control's environment. It answers Health before it serves, is restarted
+by the watchdog when it ends, and stops when the kernel ends its context
+(in-flight RPCs finish, the rest is cut after the 2 s grace period). A panic
+while it starts, in its background work or in a request ends only that host
+or request. What it runs is established by these checks:
 
 1. **The binary is the release's.** The release signs `SHA256SUMS.txt` with
    the official package key (`SHA256SUMS.txt.sig`, Base64 raw Ed25519 over
@@ -111,27 +114,20 @@ established by these checks, in order:
    every manifest). `scripts/install.sh` verifies that signature with the
    official key it carries, then the archive the binary comes from against
    the checksum. Separately signed host binaries no longer exist.
-2. **The release is this binary's.** The kernel materializes a built-in
-   host only for a release whose canonical manifest is byte-identical to the
-   manifest embedded in the running binary for that package
+2. **The release is this binary's.** The kernel starts a built-in host only
+   for a release whose canonical manifest is byte-identical to the manifest
+   embedded in the running binary for that package
    (`service.RequireEmbeddedBuiltinRelease`): a built-in entrypoint of any
    other release, even one signed by the official key, is refused, since the
    binary has no code for it. The slim artifact and the manifest are still
    materialized and rehashed before every start (`verifyArtifactRef`).
-3. **The process is the running binary.** When the host supervisor is
-   created the kernel records its executable once (`pluginhost.Self`): on
-   Linux `/proc/self/exe`, its device, inode, size and modification time and
-   its SHA-256, which the start log prints for comparison with the release.
-   Before every host start the launcher re-opens `/proc/self/exe` and refuses
-   to start if it is no longer that file (it changed in place). The child
-   execs `/proc/self/exe`, which the kernel resolves in the new process to
-   the image the parent runs, so a host always runs the parent's bytes, even
-   while an upgrade has replaced the file at the install path. Elsewhere
-   (development machines only) it executes `os.Executable()` and hashes it
-   again before every start.
-4. **The child checks its version.** `package-host <id>` runs only an id
+3. **The host checks its version.** `runBuiltinHost` runs only an id
    `packages/builtin` links, and, when the binary embeds that package, only
-   at the embedded version.
+   at the embedded version (`builtinpkg.HostVersion`).
+
+Until the subprocess path is removed (slim audit C1c), a package host that is
+not built in still runs as a child process, and `anix-control package-host
+<id>` still runs a built-in host by hand; Control itself no longer starts it.
 
 `package-host` reads no configuration and opens no database: a host reaches
 the kernel only through its bridge. `packages/builtin/cmd/package-host` is

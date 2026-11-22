@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/modulesdk"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 )
 
@@ -44,6 +47,8 @@ type hostStartOptions struct {
 	maxResponseBytes int64
 	// packageEnvironment adds entries to one package's environment.
 	packageEnvironment map[string][]string
+	// inProcess is ManagerConfig.InProcess.
+	inProcess func(ctx context.Context, packageID, version string) error
 }
 
 func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, options hostStartOptions) (*hostProcess, error) {
@@ -81,6 +86,14 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	if err := verifyArtifactRef(ref); err != nil {
 		cleanup()
 		return nil, err
+	}
+	if ref.Builtin && options.inProcess != nil {
+		host := startInProcessHost(ref, generation, options, directory, socketPath, bridgeChild)
+		bridgeChild = nil // the host owns it now
+		if bridge != nil {
+			host.bridge = bridge
+		}
+		return awaitHostStart(ctx, host, startupTimeout)
 	}
 	command, err := hostCommand(ref, directory)
 	if err != nil {
@@ -136,7 +149,56 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 		host.waitErr = command.Wait()
 		close(host.waitDone)
 	}()
+	return awaitHostStart(ctx, host, startupTimeout)
+}
 
+// startInProcessHost runs a built-in host on a goroutine of Control. It gets
+// the settings a child process gets in its environment, less the runtime
+// directory and locale (it shares Control's), and its end of the bridge
+// directly. A panic in its start ends the host, not Control.
+func startInProcessHost(ref ArtifactRef, generation uint64, options hostStartOptions, directory *hostRuntimeDir, socketPath string, bridgeChild *os.File) *hostProcess {
+	environment := map[string]string{
+		hostSocketEnvironment:           socketPath,
+		hostMaxResponseBytesEnvironment: strconv.FormatInt(normalizeMaxResponseBytes(options.maxResponseBytes), 10),
+		BuiltinHostVersionEnvironment:   ref.Version,
+	}
+	for _, entry := range options.packageEnvironment[ref.PackageID] {
+		if name, value, ok := strings.Cut(entry, "="); ok {
+			environment[name] = value
+		}
+	}
+	prefix := "[" + hostOutputPrefix(ref, generation) + "]"
+	runCtx, cancel := context.WithCancel(context.Background())
+	runCtx = modulesdk.WithInProcess(runCtx, modulesdk.InProcess{
+		Getenv: func(name string) string { return environment[name] }, Bridge: bridgeChild,
+		Logf: func(format string, args ...any) {
+			options.logf("%s "+format, append([]any{prefix}, args...)...)
+		},
+	})
+	host := &hostProcess{
+		packageID: ref.PackageID, version: ref.Version, generation: generation, ref: ref,
+		runtimeDir: directory, socketPath: socketPath, cancel: cancel, waitDone: make(chan struct{}),
+		stopGrace: options.stopGrace, maxResponseBytes: normalizeMaxResponseBytes(options.maxResponseBytes),
+	}
+	go func() {
+		defer close(host.waitDone)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				host.waitErr = fmt.Errorf("panic: %v", recovered)
+				options.logf("%s panic: %v\n%s", prefix, recovered, debug.Stack())
+			}
+		}()
+		host.waitErr = options.inProcess(runCtx, ref.PackageID, ref.Version)
+		if host.waitErr != nil {
+			options.logf("%s %v", prefix, host.waitErr)
+		}
+	}()
+	return host
+}
+
+// awaitHostStart waits until a started host answers Health, and stops it
+// when it does not within startupTimeout.
+func awaitHostStart(ctx context.Context, host *hostProcess, startupTimeout time.Duration) (*hostProcess, error) {
 	startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
 	client, health, err := waitForHost(startupCtx, host)
@@ -261,6 +323,10 @@ func (h *hostProcess) stop(ctx context.Context) error {
 	}
 	if h.client != nil {
 		_ = h.client.Close()
+	}
+	if h.cancel != nil {
+		// modulesdk stops the host's server, hard after its grace period.
+		h.cancel()
 	}
 	if h.command != nil && h.command.Process != nil {
 		pid := h.command.Process.Pid
