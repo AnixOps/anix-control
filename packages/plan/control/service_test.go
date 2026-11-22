@@ -51,7 +51,7 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 }
 
 // connectedBridge is a bridge whose connection also carries the kernel's
-// other contracts, as packagebridgesdk.Client and NetworkClient do.
+// other contracts, as packagebridgesdk.Client does.
 type connectedBridge struct {
 	*bridgeStub
 	conn grpc.ClientConnInterface

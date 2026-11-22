@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"google.golang.org/grpc"
 )
@@ -309,31 +308,9 @@ var _ MigrationManager = (*Supervisor)(nil)
 var _ WebSocketManager = (*Supervisor)(nil)
 var _ HostStatsProvider = (*Supervisor)(nil)
 
-// RemoteInstances lists the module instances bound to a generation.
-type RemoteInstances interface {
-	Instances(packageID string, generation uint64) []packagebridge.BoundInstance
-}
-
-// RemoteConfig enables the remote runtime of a Supervisor.
-type RemoteConfig struct {
-	Instances   RemoteInstances
-	TLS         moduletls.Source
-	Cluster     string
-	IsRemote    func(ctx context.Context, packageID string) (bool, error)
-	BindTimeout time.Duration
-}
-
-// EnableRemote is unavailable without Unix package hosts.
-func (m *Supervisor) EnableRemote(RemoteConfig) error { return ErrHostUnavailable }
-
 // PackageConn has no host to reach without Unix package hosts.
 func (m *Supervisor) PackageConn(string) (grpc.ClientConnInterface, error) {
 	return nil, ErrHostUnavailable
-}
-
-// BindInstance admits no remote instance without Unix package hosts.
-func (m *Supervisor) BindInstance(context.Context, packagebridge.InstanceBinding) (*packagebridge.GenerationSession, error) {
-	return nil, packagebridge.ErrNotRemote
 }
 
 // BuiltinHostCommand and BuiltinHostVersionEnvironment match the Unix build.

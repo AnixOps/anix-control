@@ -71,9 +71,6 @@ type Holder struct {
 	PackageID  string
 	Version    string
 	Generation uint64
-	// Remote holders are network module instances: they need PostgreSQL and
-	// connect through Store.RemoteDatabaseHost when it is set.
-	Remote bool
 }
 
 // Lease is what a package host receives. DSN connects as the package role on
@@ -99,13 +96,9 @@ type Store struct {
 	DSN string
 	// Now defaults to time.Now.
 	Now func() time.Time
-	// RemoteDatabaseHost replaces the host (and port, as host:port) of the
-	// kernel DSN in leases for remote holders, which reach the database from
-	// another container or pod.
-	RemoteDatabaseHost string
 	// Leases, when set, reuses one lease per holder generation and grants:
-	// every lease rotates the role password, so the replicas of one remote
-	// generation must share a lease instead of invalidating each other's.
+	// every lease rotates the role password, so repeated leases of one
+	// generation must share it instead of invalidating each other's.
 	Leases *LeaseCache
 }
 
@@ -150,7 +143,7 @@ func (c *LeaseCache) put(holder Holder, grants Grants, lease Lease) {
 }
 
 func leaseCacheKey(holder Holder, grants Grants) string {
-	return fmt.Sprintf("%s\x00%d\x00%t\x00%s\x00%s", holder.Version, holder.Generation, holder.Remote,
+	return fmt.Sprintf("%s\x00%d\x00%s\x00%s", holder.Version, holder.Generation,
 		strings.Join(grants.AdoptTables, ","), strings.Join(grants.Views, ","))
 }
 
@@ -195,9 +188,6 @@ func (s Store) Lease(ctx context.Context, holder Holder, grants Grants) (Lease, 
 	case DriverPostgres:
 		lease, err = s.leasePostgres(ctx, holder, grants)
 	case DriverSQLite:
-		if holder.Remote {
-			return Lease{}, errors.New("remote package hosts need PostgreSQL storage; they cannot share the kernel's SQLite file")
-		}
 		lease, err = s.leaseSQLite(ctx, holder, grants)
 	default:
 		return Lease{}, fmt.Errorf("package storage does not support database driver %q", s.Driver)

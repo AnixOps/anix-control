@@ -36,6 +36,14 @@
   a page that linked to the core forwarding pages. The admin app reads
   `GET /api/v3/capabilities` instead (`forward.v4` opens the forwarding
   pages, under the same conditions as before).
+- The remote module runtime (2026-11 slimming, class B4), which production
+  never enabled: the mTLS module listener, module enrollment
+  (`/api/v4/kernel/modules/enrollment-tokens`, `trust-bundle`, `runtimes`
+  now 404; `anix-control module token|runtime` gone), the module SDK's
+  remote mode, the `module_certificate_expiring` alert, `Dockerfile.module`,
+  the Compose and Helm module files and their CI smokes. The seven
+  `module_runtime.*` runtime keys are ignored with a warning; the kernel CA
+  that signs Agent certificates, its key and its rotation are unchanged.
 
 ## 5.0.10 - 2026-11-18
 

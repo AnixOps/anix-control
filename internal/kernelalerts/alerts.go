@@ -1,5 +1,5 @@
 // Package kernelalerts raises the kernel's operational alerts: leaf
-// certificates (Agent, forward link, module) that were not renewed in time,
+// certificates (Agent, forward link) that were not renewed in time,
 // CAs close to their end, and the panel's own certificates (close to their
 // end, or failing to renew). A Monitor scans the certificate stores
 // read-only, keeps one row per alert in v4_kernel_alert, and sends the
@@ -23,8 +23,6 @@ const (
 	// KindLinkCertificate: the same for a forward node's link certificate
 	// (H28).
 	KindLinkCertificate = "link_certificate_expiring"
-	// KindModuleCertificate: the same for a module's certificate.
-	KindModuleCertificate = "module_certificate_expiring"
 	// KindCAExpiring: the current module (Agent, kernel) CA or forward link
 	// CA is within ca_expiry_days of its end.
 	KindCAExpiring = "ca_expiring"
@@ -71,7 +69,6 @@ const (
 const (
 	SubjectNode    = "node"
 	SubjectCA      = "ca"
-	SubjectModule  = "module"
 	SubjectPackage = "package"
 	// SubjectPanelCertificate: a certificate of the panel, by name.
 	SubjectPanelCertificate = "panel_certificate"

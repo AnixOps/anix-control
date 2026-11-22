@@ -134,12 +134,10 @@ established by these checks, in order:
    at the embedded version.
 
 `package-host` reads no configuration and opens no database: a host reaches
-the kernel only through its bridge. With `ANIX_MODULE_MODE=remote` the same
-command runs the host as a network module (mTLS, `module-runtime.md`), at
-the embedded version unless `ANIX_CONTROL_HOST_PACKAGE_VERSION` names it.
-`packages/builtin/cmd/package-host` is the standalone build of the same
-hosts, for the full package format (`build_package.py` without `--builtin`)
-and the network module image.
+the kernel only through its bridge. `packages/builtin/cmd/package-host` is
+the standalone build of the same hosts, for the full package format
+(`build_package.py` without `--builtin`). The network module runtime was
+removed in the 2026-11 slimming audit (`kernel-ca.md`, "History").
 
 Third-party packages remain unsupported for execution: only official
 `AnixOps` manifests are accepted, and every built-in package is official.

@@ -497,20 +497,20 @@ keys:
     removed_in: M2 (P8)
     reason: nothing reads it; Control logs to standard output
 
-  # module_runtime: the remote module runtime, removed with PostgreSQL.
+  # module_runtime: the kernel CA; the remote module runtime was removed.
   - key: module_runtime.bind_timeout
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.ca_kek
     status: read
     removed_in: M5
     reason: the root key; adopted into root.key in data_dir at the next start, after which it must match that file and can be removed
     secret: true
   - key: module_runtime.cert_file
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.cert_lifetime
     status: read
     removed_in: M2 (P4)
@@ -520,29 +520,29 @@ keys:
     removed_in: M2 (P4)
     reason: names the cluster in every module and Agent identity; ignoring a set value would change the identities of enrolled Agents
   - key: module_runtime.database_host
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.enabled
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.key_file
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.listen
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
   - key: module_runtime.pki
     status: read
     removed_in: M2 (P4)
     reason: the remote module runtime, removed with PostgreSQL support
   - key: module_runtime.trust_bundle_file
-    status: read
-    removed_in: M2 (P4)
-    reason: the remote module runtime, removed with PostgreSQL support
+    status: ignored
+    removed_in: M5
+    reason: the remote module runtime was removed; every package runs inside Control
 
   # package_routes and plugins: the built-in packages.
   - key: package_routes.default_mode

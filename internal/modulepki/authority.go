@@ -1,8 +1,7 @@
-// Package modulepki is the kernel's built-in certificate authority for
-// network modules. It issues short-lived certificates whose only identity is
-// a SPIFFE URI SAN (see pkg/moduletls), enrolls modules with hashed one-time
-// or revocable credentials, renews certificates over mTLS, and rotates the CA
-// with an overlap during which both CAs are trusted.
+// Package modulepki is the kernel's built-in certificate authority. It signs
+// certificates whose only identity is a SPIFFE URI SAN (sdk/moduletls), such
+// as Agent certificates (internal/agentpki), and rotates the CA with an
+// overlap during which both CAs are trusted.
 //
 // The CA private key is stored sealed with AES-256-GCM under a
 // key-encryption key from configuration; it is unsealed only to sign.
@@ -268,16 +267,6 @@ func (a *Authority) Roots(ctx context.Context) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-// Issued is a signed leaf certificate.
-type Issued struct {
-	CertificateDER []byte
-	TrustBundleDER [][]byte
-	Identity       moduletls.Identity
-	Serial         string
-	NotAfter       time.Time
-	RenewAfter     time.Time
-}
-
 // signer is the current CA with its unsealed key.
 type signer struct {
 	row         model.ServiceCA
@@ -302,18 +291,6 @@ func (a *Authority) currentSigner(tx *gorm.DB) (*signer, error) {
 		return nil, err
 	}
 	return &signer{row: row, certificate: certificate, key: key}, nil
-}
-
-// sign issues a leaf for identity and publicKey with the current CA.
-func (a *Authority) sign(ctx context.Context, tx *gorm.DB, identity moduletls.Identity, publicKey crypto.PublicKey) (Issued, *signer, error) {
-	leaf, current, err := a.signURI(tx.WithContext(ctx), identity.URL(), a.lifetime, a.lifetime, publicKey)
-	if err != nil {
-		return Issued{}, nil, err
-	}
-	return Issued{
-		CertificateDER: leaf.CertificateDER, TrustBundleDER: leaf.TrustBundleDER, Identity: identity,
-		Serial: leaf.Serial, NotAfter: leaf.NotAfter, RenewAfter: leaf.RenewAfter,
-	}, current, nil
 }
 
 // SignedLeaf is a certificate the CA signed for an identity outside the

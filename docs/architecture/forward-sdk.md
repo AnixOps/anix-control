@@ -1713,8 +1713,8 @@ there is one, and the next report brings the counters up to date.
 ### 8.6 ForwardControl for packages
 
 The kernel serves `ForwardControl` to official packages that declare the
-kernel capability `kernel.forward.v1`, on local bridge sessions and the
-module listener, authorized on every call against the host's generation
+kernel capability `kernel.forward.v1`, on local bridge sessions,
+authorized on every call against the host's generation
 (as `KernelNodeOps`). The forward package (F5a) builds `/api/v4/forward/*`
 on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
 

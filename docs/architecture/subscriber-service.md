@@ -244,8 +244,7 @@ package and generation.
   - `PackageHostOperations.AuthorizeCapability` checks each call against the
     host's current generation and verified signed release, as for
     KernelIdentity.
-  - The contract is served on local package bridge sessions and on the mTLS
-    module listener, where calls resolve to the bound instance's generation.
+  - The contract is served on local package bridge sessions.
   - Idempotent writes go through the request ledger; entitlement edits and
     credential resets go through `UpdateUserTx`, so revocations and the
     change log apply.
@@ -253,7 +252,7 @@ package and generation.
     authorization every 30 seconds and answers `RESYNC` for pruned cursors.
   - Originally planned scope:
   - The capabilities join the grammar.
-  - `KernelSubscriber` is served on the module listener and package bridge,
+  - `KernelSubscriber` is served on the package bridge,
     with authorization and parity tests between legacy callers and contract
     callers.
 - **F2e. Subscription group membership** (in place).

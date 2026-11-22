@@ -2,35 +2,24 @@ package bridgecontract
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
-	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/AnixOps/anix-control/v5/internal/moduleruntime"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -317,104 +306,6 @@ func TestKernelNodeOpsIsAbsentWithoutAProvider(t *testing.T) {
 	client := dialPlanSession(t, packagebridge.SessionOptions{})
 	_, err := kernelnodeopsv1.NewKernelNodeOpsClient(client.Conn()).GetCapabilities(context.Background(), &kernelnodeopsv1.GetCapabilitiesRequest{})
 	require.Equal(t, codes.Unimplemented, status.Code(err))
-}
-
-// nodeOpsBinder binds remote instances of one generation.
-type nodeOpsBinder struct {
-	mu         sync.Mutex
-	generation *packagebridge.GenerationSession
-}
-
-func (b *nodeOpsBinder) BindInstance(_ context.Context, binding packagebridge.InstanceBinding) (*packagebridge.GenerationSession, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if identity := b.generation.Identity(); binding.PackageID != identity.PackageID || binding.Version != identity.Version {
-		return nil, packagebridge.ErrNotRemote
-	}
-	return b.generation, nil
-}
-
-// A network module reaches KernelNodeOps on the mTLS module listener through
-// its SDK bridge client: each call runs as its bound instance's generation,
-// and a fenced generation loses the contract.
-func TestKernelNodeOpsOverTheModuleListener(t *testing.T) {
-	nodeOpsDatabases(t, func(t *testing.T, db *gorm.DB) {
-		kernel := newNodeOpsKernel(t, db, "proxy-node")
-		pkiDB := openSQLiteForTest(t, "pki.db")
-		require.NoError(t, pkiDB.AutoMigrate(&model.ServiceCA{}, &model.ModuleEnrollment{}, &model.ModuleCertificate{}))
-		kek := make([]byte, 32)
-		_, err := rand.Read(kek)
-		require.NoError(t, err)
-		authority, err := modulepki.New(modulepki.Options{DB: pkiDB, Cluster: "prod", KEK: kek})
-		require.NoError(t, err)
-		require.NoError(t, authority.Ensure(context.Background()))
-		kernelTLS, err := authority.KernelTLS(context.Background(), time.Minute)
-		require.NoError(t, err)
-
-		allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
-		require.NoError(t, err)
-		generation, err := packagebridge.NewGenerationSession(packagebridge.HostIdentity{PackageID: "proxy-node", Version: "4.1.0", Generation: 9}, allowlist, packagebridge.SessionOptions{})
-		require.NoError(t, err)
-		bridge, err := packagebridge.NewModuleBridge(&nodeOpsBinder{generation: generation}, packagebridge.ModuleBridgeOptions{Cluster: "prod"})
-		require.NoError(t, err)
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		ctx, cancel := context.WithCancel(context.Background())
-		served := make(chan error, 1)
-		go func() {
-			served <- (&moduleruntime.Listener{TLS: kernelTLS, Cluster: "prod", PKI: authority, Bridge: bridge, KernelNodeOps: kernel.server.For}).Serve(ctx, listener)
-		}()
-		t.Cleanup(func() {
-			cancel()
-			require.NoError(t, <-served)
-		})
-
-		kernelID, err := moduletls.Kernel("prod")
-		require.NoError(t, err)
-		dial := func(certificate *tls.Certificate) *tls.Config {
-			source := moduletls.Source{Roots: kernelTLS.Roots}
-			if certificate != nil {
-				source.Certificate = func() (*tls.Certificate, error) { return certificate, nil }
-			}
-			return source.ClientConfig(moduletls.AcceptExactly(kernelID))
-		}
-		credential, _, err := authority.CreateEnrollment(context.Background(), modulepki.EnrollmentRequest{PackageID: "proxy-node", TTL: time.Hour})
-		require.NoError(t, err)
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-		csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
-		require.NoError(t, err)
-		anonymous, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(dial(nil))))
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = anonymous.Close() })
-		enrolled, err := modulepkiv1.NewModulePKIClient(anonymous).Enroll(context.Background(), &modulepkiv1.EnrollRequest{
-			EnrollmentCredential: credential, PackageId: "proxy-node", Cluster: "prod", CsrDer: csr,
-		})
-		require.NoError(t, err)
-		certificate := &tls.Certificate{Certificate: [][]byte{enrolled.GetCertificate().GetCertificateDer()}, PrivateKey: key}
-
-		_, err = kernelnodeopsv1.NewKernelNodeOpsClient(anonymous).GetCapabilities(context.Background(), &kernelnodeopsv1.GetCapabilitiesRequest{})
-		require.Equal(t, codes.Unauthenticated, status.Code(err), "no client certificate")
-
-		module, err := packagebridgesdk.DialNetwork(packagebridgesdk.NetworkConfig{
-			KernelAddr: listener.Addr().String(), TLS: dial(certificate), PackageID: "proxy-node", PackageVersion: "4.1.0",
-			InstanceID: "pod-a", AdvertiseAddr: "10.0.0.7:7000", LeaseID: "lease-a",
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { require.NoError(t, module.Close()) })
-		require.NoError(t, module.Bind(context.Background()))
-
-		exerciseNodeOps(t, kernel, module.Conn(), "proxy-node", 9, mintBinding(t, generation, "proxy-node"))
-
-		require.NoError(t, generation.Close())
-		fenced := kernelnodeopsv1.NewKernelNodeOpsClient(module.Conn())
-		_, err = fenced.GetCapabilities(context.Background(), &kernelnodeopsv1.GetCapabilitiesRequest{})
-		require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelNodeOps")
-		stream, err := fenced.WatchOperations(context.Background(), &kernelnodeopsv1.WatchOperationsRequest{})
-		require.NoError(t, err)
-		_, err = stream.Recv()
-		require.Equal(t, codes.PermissionDenied, status.Code(err), "streaming calls too")
-	})
 }
 
 // A binding is verified against the host the contract serves: a server for

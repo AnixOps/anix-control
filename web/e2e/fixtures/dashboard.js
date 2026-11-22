@@ -36,7 +36,7 @@ function kernelAlerts(now) {
       alert(34, 'node_secrets_split_stalled', 'warning', 'node_secrets', 'v5_node', { table: 'v5_node', phase: 'dual_write', since: iso(now, -5 * DAY_MS), stuck_after_hours: 72 })
     ],
     resolved: [
-      alert(21, 'module_certificate_expiring', 'warning', 'module', 'identity-platform#4c1d0e7a', { package_id: 'identity-platform', not_after: iso(now, -1 * DAY_MS), expired: false }, { status: 'resolved', resolved_at: iso(now, -3 * 3_600_000) }),
+      alert(21, 'agent_certificate_expiring', 'warning', 'node', 'proxy-2', { node: 'proxy-2', node_name: 'jp-02', not_after: iso(now, -1 * DAY_MS), expired: false, lifetime_hours: 168, window_hours: 28 }, { status: 'resolved', resolved_at: iso(now, -3 * 3_600_000) }),
       alert(20, 'builtin_package_invalid', 'warning', 'package', 'plan', { package_id: 'plan' }, { status: 'resolved', resolved_at: iso(now, -4 * DAY_MS) })
     ]
   }

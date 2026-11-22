@@ -301,18 +301,12 @@ func TestPostgresLeaseResetsOrRefusesAnExistingRole(t *testing.T) {
 	require.ErrorContains(t, err, "elevated attributes")
 }
 
-func TestPostgresRemoteReplicasShareOneLease(t *testing.T) {
+func TestPostgresRepeatedLeasesOfAGenerationShareOneLease(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	packageID := "pkgtest-" + randomSuffix(t)
 	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
-	settings, err := parseDSN(kernelDSN)
-	require.NoError(t, err)
-	remoteHost := settings["host"]
-	if settings["port"] != "" {
-		remoteHost += ":" + settings["port"]
-	}
-	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN, RemoteDatabaseHost: remoteHost, Leases: NewLeaseCache()}
-	holder := Holder{PackageID: packageID, Version: "4.1.0", Generation: 2, Remote: true}
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN, Leases: NewLeaseCache()}
+	holder := Holder{PackageID: packageID, Version: "4.1.0", Generation: 2}
 
 	first, err := store.Lease(context.Background(), holder, Grants{Storage: true})
 	require.NoError(t, err)
@@ -320,7 +314,7 @@ func TestPostgresRemoteReplicasShareOneLease(t *testing.T) {
 	require.NoError(t, replica.Exec("SELECT 1").Error)
 	second, err := store.Lease(context.Background(), holder, Grants{Storage: true})
 	require.NoError(t, err)
-	require.Equal(t, first.DSN, second.DSN, "a second replica does not rotate the first one's password")
+	require.Equal(t, first.DSN, second.DSN, "a second lease does not rotate the first one's password")
 	fresh := openPostgres(t, second.DSN)
 	require.NoError(t, fresh.Exec("SELECT 1").Error)
 	require.EqualValues(t, 1, second.LeaseGeneration)

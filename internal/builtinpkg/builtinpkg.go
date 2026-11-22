@@ -263,7 +263,7 @@ func SetDefault(set *Set) (restore func()) {
 // The kernel passes the version it verified; when this binary embeds the
 // package, that version must be the embedded one (the kernel admits a
 // built-in host only for the release this binary carries). Without a
-// version, a network module started by an operator serves the embedded one.
+// version, a host started by hand serves the embedded one.
 func HostVersion(id, requested string) (string, error) {
 	set, err := Embedded()
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -315,18 +316,18 @@ func TestRevokedSerialsAreRefusedWithinTheCacheWindow(t *testing.T) {
 
 func TestVerifyPeerRefusesForeignCertificates(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		// The kernel's own certificate chains to the same CA but is not an
-		// agent identity.
-		source, err := f.authority.KernelTLS(t.Context(), time.Minute)
+		// A certificate for the kernel's identity chains to the same CA but
+		// is not an agent identity.
+		_, csr := newCSR(t)
+		kernelIdentity, err := moduletls.Kernel(testCluster)
 		require.NoError(t, err)
-		kernel, err := source.Certificate()
+		kernel, err := f.authority.SignLeaf(t.Context(), f.db, kernelIdentity.URL(), time.Hour, csr)
 		require.NoError(t, err)
-		_, _, err = f.pki.VerifyPeer(t.Context(), kernel.Certificate)
+		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{kernel.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
 
 		// A certificate the CA signed for an agent identity but never
 		// recorded counts as revoked.
-		_, csr := newCSR(t)
 		identity, err := agentcontrol.NewAgentIdentity(testCluster, f.proxyNode())
 		require.NoError(t, err)
 		leaf, err := f.authority.SignLeaf(t.Context(), f.db, identity.URL(), time.Hour, csr)
@@ -346,7 +347,7 @@ func TestVerifyPeerRefusesForeignCertificates(t *testing.T) {
 		// Neither the kernel's certificate nor an expired one of another
 		// CA is reported as an expired agent certificate.
 		f.clock.Advance(2 * time.Hour)
-		_, _, err = f.pki.VerifyPeer(t.Context(), kernel.Certificate)
+		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{kernel.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
 		require.NotErrorIs(t, err, agentpki.ErrCertificateExpired)
 		otherKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -442,11 +443,11 @@ func TestFromConfigUsesTheCAAlone(t *testing.T) {
 		CAKEK: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=", Cluster: "edge",
 	}}
 	pki, err := agentpki.FromConfig(cfg, db)
-	require.NoError(t, err, "the module runtime need not be enabled")
+	require.NoError(t, err)
 	assert.Equal(t, "edge", pki.Cluster())
 	assert.Equal(t, agentpki.DefaultCertificateLifetime, pki.Lifetime())
 
-	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}
+	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{PKI: config.ModulePKIExternal}}
 	_, err = agentpki.FromConfig(external, db)
 	require.ErrorIs(t, err, agentpki.ErrExternalPKI)
 	require.ErrorIs(t, err, agentpki.ErrDisabled)

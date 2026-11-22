@@ -24,7 +24,6 @@ export function alertRoute(alert) {
 const KIND_ICONS = {
   agent_certificate_expiring: FileKey,
   link_certificate_expiring: FileKey,
-  module_certificate_expiring: FileKey,
   ca_expiring: ShieldAlert,
   node_secrets_split_stalled: Hourglass,
   node_secrets_finalize_interrupted: Hourglass,
@@ -77,10 +76,6 @@ export function alertText(alert, { t, format }) {
       hint = t(`${base}.${kind}.${ended ? 'endedHint' : 'endingHint'}`, { date: date(detail.not_after) })
       break
     }
-    case 'module_certificate_expiring':
-      title = t(`${base}.moduleCertificate.${ended ? 'ended' : 'ending'}`, { name: text(detail.package_id) || text(alert.subject) })
-      hint = t(`${base}.moduleCertificate.${ended ? 'endedHint' : 'endingHint'}`, { date: date(detail.not_after) })
-      break
     case 'ca_expiring': {
       const ca = detail.ca === 'forward_link' ? t(`${base}.ca.forwardLink`) : t(`${base}.ca.module`)
       title = t(`${base}.ca.${ended ? 'ended' : 'ending'}`, { ca })

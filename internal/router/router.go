@@ -496,15 +496,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// The forward package's v4 administrator API (forward-sdk.md F5a),
 		// served as its control route /api/v4/plugins/forward/*.
 		v4.Any("/forward/*route", kernel.ForwardGateway)
-		modules := handler.NewModuleHandler()
-		v4.POST("/kernel/modules/enrollment-tokens", modules.CreateEnrollment)
-		v4.GET("/kernel/modules/enrollment-tokens", modules.ListEnrollments)
-		v4.DELETE("/kernel/modules/enrollment-tokens/:id", modules.RevokeEnrollment)
-		v4.POST("/kernel/modules/ca/rotate", modules.RotateCA)
-		v4.GET("/kernel/modules/trust-bundle", modules.TrustBundle)
+		v4.POST("/kernel/modules/ca/rotate", handler.NewModuleHandler().RotateCA)
 		v4.GET("/kernel/features", handler.ListFeatures)
-		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
-		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 		// The console's administrator API that the kernel owns, under
 		// /api/v4/admin and outside the /api/v2 package catalog: when each user
 		// was last online, the members of a subscription group, and the bulk

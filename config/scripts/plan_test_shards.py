@@ -33,7 +33,6 @@ MODULE = "github.com/AnixOps/anix-control/v5/"
 # see its comment. Keys are relative to MODULE.
 WEIGHTS: dict[str, dict[str, float]] = {
     "backend": {
-        "internal/moduleruntime": 31.3,
         "internal/service": 31.0,
         "internal/pluginhost": 29.0,
         "internal/tests/identitycompat": 21.1,
@@ -76,7 +75,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/protocolruntimecompat": 77.7,
         "internal/subscriber": 61.6,
         "internal/tests/builtinpackages": 61.2,
-        "internal/moduleruntime": 58.8,
         "internal/tests/nodesecretsplit": 56.4,
         "internal/grpc": 55.4,
         "internal/router": 51.2,

@@ -55,8 +55,7 @@ const (
 
 var (
 	// ErrDisabled means the kernel does not run the built-in CA, which signs
-	// agent certificates. It needs module_runtime.ca_kek with pki builtin;
-	// the module listener (module_runtime.enabled) need not run.
+	// agent certificates. It needs module_runtime.ca_kek with pki builtin.
 	ErrDisabled = errors.New("agent enrollment needs the built-in CA (module_runtime.ca_kek with module_runtime.pki: builtin)")
 	// ErrExternalPKI is ErrDisabled with module_runtime.pki external: the
 	// kernel holds no CA key, so it cannot issue agent certificates.

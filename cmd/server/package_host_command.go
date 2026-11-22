@@ -14,7 +14,6 @@ import (
 // environment of internal/pluginhost, and the version it verified in
 // ANIX_CONTROL_HOST_PACKAGE_VERSION. It reads no configuration file and opens
 // no database: the host reaches the kernel only through its package bridge.
-// With ANIX_MODULE_MODE=remote it runs as a network module instead.
 func runPackageHostCommand(args []string) (int, bool) {
 	if len(args) == 0 || args[0] != builtin.CommandName {
 		return 0, false

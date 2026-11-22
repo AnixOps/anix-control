@@ -99,6 +99,26 @@ client never notices either way.
 conditions. Nothing to do on upgrade: reload open admin tabs once. Rollback
 is the previous release; there is no schema change.
 
+### The remote module runtime is gone
+
+Every package runs inside Control (slim audit 2d, `audit/slim-2026-11.md`,
+`architecture/kernel-ca.md`). The kernel CA, Agent enrollment and the CA
+rotation (`anix-control module ca rotate`,
+`POST /api/v4/kernel/modules/ca/rotate`) are unchanged.
+
+- `module_runtime.enabled`, `listen`, `bind_timeout`, `cert_file`,
+  `key_file`, `trust_bundle_file` and `database_host` are ignored with one
+  warning at start. Remove them when convenient; `ca_kek`, `pki`, `cluster`
+  and `cert_lifetime` are still read.
+- The module enrollment, trust-bundle and runtime routes under
+  `/api/v4/kernel/modules/` answer 404, and `anix-control module token ...`
+  and `module runtime ...` are unknown commands.
+- `Dockerfile.module`, `docker-compose.modules.yml` and the Helm chart's
+  `moduleRuntime`/`modules` values are gone (Helm ignores them if a values
+  file still sets them).
+
+No schema change. Rollback is the previous release.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user
@@ -1960,7 +1980,7 @@ request signed with a placeholder secret is refused.
 ### Agent Client Certificates Are Optional
 
 Control can issue mTLS client certificates to AnixOps Agents
-(`docs/architecture/module-runtime.md`, "Agent PKI"). Nothing is required of
+(`docs/architecture/kernel-ca.md`, "Agent PKI"). Nothing is required of
 operators: the new key `agent_control.mtls` defaults to `optional`, and
 every agent keeps authenticating with its node API key as before.
 
@@ -2898,7 +2918,7 @@ back up the database, delete the sealed roots (`DELETE FROM
 v4_kernel_service_ca; DELETE FROM v4_kernel_forward_link_ca;`), install the
 new key, start Control (it creates new CAs), then issue new enrollment
 tokens for every Agent and redo the module bootstrap (trust bundle and
-enrollment credential, `docs/architecture/module-runtime.md`).
+enrollment credential, `docs/architecture/kernel-ca.md`).
 
 ### Keeping `preferred` For A While
 

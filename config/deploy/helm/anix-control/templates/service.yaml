@@ -17,13 +17,6 @@ spec:
       port: {{ .Values.service.httpPort }}
       targetPort: http
       protocol: TCP
-    {{- if .Values.moduleRuntime.enabled }}
-    # mTLS module listener: ModulePKI and the package bridge of network modules.
-    - name: modules
-      port: {{ .Values.moduleRuntime.port }}
-      targetPort: modules
-      protocol: TCP
-    {{- end }}
 {{- if .Values.grpc.enabled }}
 ---
 apiVersion: v1

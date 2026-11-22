@@ -19,6 +19,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
@@ -163,6 +164,21 @@ func nodeCredentials(ctx context.Context, node agentcontrol.AgentNode, secret st
 
 func legacyCredentials(ctx context.Context, nodeID uint, apiKey string) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, "x-node-id", strconv.FormatUint(uint64(nodeID), 10), "x-api-key", apiKey)
+}
+
+// kernelCertificate is a certificate the CA signed for the kernel's
+// identity: it chains to the agents' CA but names no agent.
+func (l *agentListener) kernelCertificate(t *testing.T) *tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	require.NoError(t, err)
+	identity, err := moduletls.Kernel("test")
+	require.NoError(t, err)
+	leaf, err := l.authority.SignLeaf(t.Context(), database.Get(), identity.URL(), time.Hour, csr)
+	require.NoError(t, err)
+	return &tls.Certificate{Certificate: [][]byte{leaf.CertificateDER}, PrivateKey: key}
 }
 
 // enroll calls Enroll on conn and returns the agent's TLS certificate.
@@ -346,12 +362,9 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	_, _, err = openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 
-	// The kernel's own certificate chains to the same CA but is no agent.
-	source, err := l.authority.KernelTLS(ctx, time.Minute)
-	require.NoError(t, err)
-	kernelCertificate, err := source.Certificate()
-	require.NoError(t, err)
-	_, _, err = openStream(t, ctx, l.dial(t, kernelCertificate), uint32(l.proxy.ID))
+	// A certificate for the kernel's identity chains to the same CA but is
+	// no agent.
+	_, _, err = openStream(t, ctx, l.dial(t, l.kernelCertificate(t)), uint32(l.proxy.ID))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 
 	// A certificate from another CA is refused, never downgraded to the

@@ -82,12 +82,6 @@ export default {
           endingHint: '{date} 到期。它随 Agent 证书一起续期：请检查 Agent。',
           endedHint: '{date} 已到期。请让 Agent 恢复连接，或重新注册。'
         },
-        moduleCertificate: {
-          ending: '模块 {name} 的证书即将到期',
-          ended: '模块 {name} 的证书已过期',
-          endingHint: '{date} 到期。请确认模块在运行并能连上 Control。',
-          endedHint: '{date} 已到期。请重启模块、重新注册，或吊销其注册。'
-        },
         ca: {
           module: '模块',
           forwardLink: '转发链路',

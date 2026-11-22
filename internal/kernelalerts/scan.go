@@ -60,7 +60,6 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 	}{
 		{[]string{KindAgentCertificate}, s.agentCertificates},
 		{[]string{KindLinkCertificate}, s.linkCertificates},
-		{[]string{KindModuleCertificate}, s.moduleCertificates},
 		{[]string{KindCAExpiring}, s.authorities},
 		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
 		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
@@ -112,12 +111,10 @@ func severityFor(remaining, window time.Duration) string {
 
 // certRow is the part of a certificate record the scan reads.
 type certRow struct {
-	NodeKind     string
-	NodeID       uint
-	PackageID    string
-	EnrollmentID string
-	NotAfter     time.Time
-	CreatedAt    time.Time
+	NodeKind  string
+	NodeID    uint
+	NotAfter  time.Time
+	CreatedAt time.Time
 }
 
 // latestCerts answers, per holder, the not-revoked certificate that ends
@@ -166,8 +163,6 @@ func (s *Scanner) latestCerts(ctx context.Context, record any, holderColumns []s
 func nodeKey(row certRow) string {
 	return row.NodeKind + "-" + strconv.FormatUint(uint64(row.NodeID), 10)
 }
-
-func moduleKey(row certRow) string { return row.PackageID + "#" + row.EnrollmentID }
 
 // nodeCertFindings turns the latest certificates of nodes into findings,
 // skipping nodes that no longer exist or are disabled: their credentials
@@ -244,47 +239,6 @@ func (s *Scanner) linkCertificates(ctx context.Context, now time.Time) ([]Findin
 		}
 		return fmt.Sprintf("The forward link certificate of node %s ends at %s and was not renewed (it renews with the Agent certificate).", label, stamp(row.NotAfter))
 	})
-}
-
-// moduleCertificates finds module certificates that were not renewed. A
-// module's latest certificate per enrollment counts; revoking the
-// enrollment revokes its certificates, which ends the alert.
-func (s *Scanner) moduleCertificates(ctx context.Context, now time.Time) ([]Finding, error) {
-	latest, err := s.latestCerts(ctx, &model.ModuleCertificate{}, []string{"package_id", "enrollment_id"}, moduleKey, now)
-	if err != nil || len(latest) == 0 {
-		return nil, err
-	}
-	holders := make([]string, 0, len(latest))
-	for holder := range latest {
-		holders = append(holders, holder)
-	}
-	sort.Strings(holders)
-	var findings []Finding
-	for _, holder := range holders {
-		row := latest[holder]
-		lifetime := row.NotAfter.Sub(row.CreatedAt)
-		window := leafWindow(lifetime, s.Settings.LeafExpiryDays)
-		remaining := row.NotAfter.Sub(now)
-		if remaining > window {
-			continue
-		}
-		expired := remaining <= 0
-		subject := truncate(row.PackageID, 100) + "#" + truncate(row.EnrollmentID, 8)
-		message := fmt.Sprintf("The certificate of module %s ends at %s and was not renewed. Check that the module is running and reaches Control, or revoke its enrollment.", plain(row.PackageID), stamp(row.NotAfter))
-		if expired {
-			message = fmt.Sprintf("The certificate of module %s expired at %s: the module cannot connect any more. Restart it, enroll it again, or revoke its enrollment.", plain(row.PackageID), stamp(row.NotAfter))
-		}
-		expires := row.NotAfter.UTC()
-		findings = append(findings, Finding{
-			Kind: KindModuleCertificate, Severity: severityFor(remaining, window), SubjectKind: SubjectModule, Subject: subject,
-			Message: truncate(message, 500), ExpiresAt: &expires,
-			Detail: map[string]any{
-				"package_id": row.PackageID, "not_after": stamp(row.NotAfter), "expired": expired,
-				"lifetime_hours": int64(lifetime / time.Hour), "window_hours": int64(window / time.Hour),
-			},
-		})
-	}
-	return findings, nil
 }
 
 // authorities finds the current module (Agent, kernel) CA and forward link

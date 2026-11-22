@@ -196,13 +196,10 @@ type Supervisor struct {
 
 	statsMu sync.Mutex
 	stats   map[string]*HostStats
-
-	// remote is the network module runtime; nil until EnableRemote.
-	remote *remoteState
 }
 
-// hostBridge is the kernel side of a host's package bridge: a local
-// socketpair Session or the GenerationSession shared by remote instances.
+// hostBridge is the kernel side of a host's package bridge: the local
+// socketpair Session.
 type hostBridge interface {
 	Mint(packagebridge.Request) ([]byte, error)
 	Revoke([]byte)
@@ -227,10 +224,7 @@ type hostProcess struct {
 	relayHealthCancel context.CancelFunc
 	bridge            hostBridge
 	stopGrace         time.Duration
-	// remote marks a host served by network module instances: no local
-	// process, runtime directory or watchdog.
-	remote           bool
-	maxResponseBytes int64
+	maxResponseBytes  int64
 	// retiring is set once a lifecycle operation (Drain, Stop, replacement,
 	// Shutdown) owns this process, so its exit is expected and never restarted.
 	retiring atomic.Bool
@@ -274,13 +268,6 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 	}
 	if err := verifyArtifactRef(ref); err != nil {
 		return err
-	}
-	remote, err := m.remoteRuntime(ctx, ref.PackageID)
-	if err != nil {
-		return fmt.Errorf("%w: resolve package runtime: %v", ErrHostUnavailable, err)
-	}
-	if remote {
-		return m.startRemote(ctx, ref, generation)
 	}
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
@@ -631,7 +618,7 @@ func hostKey(packageID, _ string) string {
 
 // PackageConn returns a connection to the running host of packageID, for
 // the contracts a package serves beside the host protocol (such as
-// IdentityService). A remote package yields one of its bound instances.
+// IdentityService).
 // Callers must not keep it: restarts and rebinds replace connections.
 func (m *Supervisor) PackageConn(packageID string) (grpc.ClientConnInterface, error) {
 	if m == nil {
@@ -647,12 +634,6 @@ func (m *Supervisor) PackageConn(packageID string) (grpc.ClientConnInterface, er
 	switch client := host.client.(type) {
 	case *hostClient:
 		return client.connection, nil
-	case *remotePool:
-		picked, _, err := client.pick()
-		if err != nil {
-			return nil, err
-		}
-		return picked.connection, nil
 	default:
 		return nil, fmt.Errorf("%w: package %s host has no connection", ErrHostUnavailable, packageID)
 	}

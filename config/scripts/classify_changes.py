@@ -16,7 +16,7 @@ Prints GitHub output lines (name=true|false):
   code     anything besides documentation (Go checks and tests)
   web      the frontend
   db       schemas, storage and migrations (the PostgreSQL jobs)
-  modules  the module runtime, identity, images and deployment (Docker and
+  deploy   the server, identity, images and deployment files (Docker and
            Kubernetes smokes)
   packages official package sources (the package release contracts)
 """
@@ -30,7 +30,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CLASSES = ("code", "web", "db", "modules", "packages")
+CLASSES = ("code", "web", "db", "deploy", "packages")
 
 # Any of these makes the change run the full lane.
 FULL_PATTERNS = (
@@ -87,11 +87,10 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         # It splits the PostgreSQL package storage tests into shards.
         "config/scripts/plan_test_shards.py",
     ),
-    "modules": (
+    "deploy": (
         "Dockerfile*",
         "docker-compose*",
         "config/deploy/*",
-        "config/scripts/modules_*",
         "cmd/server/*",
         "internal/router/*",
         "internal/config/*",
@@ -272,20 +271,20 @@ def self_test() -> None:
     check(["internal/middleware/audit_log.go"], {"code"})
     check(["packages/plan/native/plans.go"], {"code", "db", "packages"})
     check(["internal/service/order_service.go"], {"code", "db"})
-    check(["internal/pluginhost/remote.go"], {"code", "modules"})
+    check(["internal/pluginhost/manager.go"], {"code", "deploy"})
     check(["internal/service/forward_panel_flow.go"], {"code", "db"})
-    check(["sdk/forward/driver/driver.go"], {"code", "modules"})
-    check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules"})
+    check(["sdk/forward/driver/driver.go"], {"code", "deploy"})
+    check(["sdk/api/forward/v1/forward.pb.go"], {"code", "deploy"})
     check(["contracts/forward/v1/plan-negative.json"], {"code"})
     check(["internal/kernelforward/plan.go"], {"code", "db"})
     check(["internal/forwardddns/alidns.go"], {"code"})
-    check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
+    check(["sdk/agentcontrol/identity.go"], {"code", "deploy"})
     check(["internal/grpc/node_server.go"], {"code"})
     check(["internal/agentpki/enrollment.go"], {"code", "db"})
     check(["internal/agentupgrade/worker.go"], {"code", "db"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
     check(["packages/order/native/orders.go"], {"code", "db", "packages"})
-    check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})
+    check(["packages/identity-platform/native/auth.go"], {"code", "db", "deploy", "packages"})
     check([workflow], everything)
     check([".github/actions/setup/action.yml"], everything)
     check([".github/workflows/sdk-sync.yml"], {"code"})
@@ -302,7 +301,7 @@ def self_test() -> None:
         on = {name for name, value in result.items() if value}
         assert on == expected, f"{paths} with {classes}: {sorted(on)} != {sorted(expected)}"
 
-    wf_check([workflow], {"code", "modules"}, {"code", "modules"})
+    wf_check([workflow], {"code", "deploy"}, {"code", "deploy"})
     wf_check([workflow, "internal/grpc/node_server.go"], {"code", "db"}, {"code", "db"})
     wf_check([workflow, "go.sum"], {"code"}, everything)
     wf_check([workflow], None, everything)
@@ -327,12 +326,12 @@ def self_test() -> None:
             "      - run: echo quality",
             "  build-images:",
             "    needs: [changes]",
-            "    if: ${{ needs.changes.outputs.modules == 'true' }}",
+            "    if: ${{ needs.changes.outputs.deploy == 'true' }}",
             "    steps:",
             "      - run: echo build",
             "  docker-smoke:",
             "    needs: [changes, build-images]",
-            "    if: ${{ needs.changes.outputs.modules == 'true' }}",
+            "    if: ${{ needs.changes.outputs.deploy == 'true' }}",
             "    services:",
             "      postgres:",
             "        image: postgres:16",
@@ -371,9 +370,9 @@ def self_test() -> None:
         assert got == expected, f"{old!r} -> {new!r}: {got} != {expected}"
 
     assert workflow_change_classes(base, base) == {"code"}
-    wf("echo smoke", "echo smoke again", {"code", "modules"})
-    wf("image: postgres:16", "image: postgres:17", {"code", "modules"})
-    wf("echo build\n  docker-smoke", "echo build v2\n  docker-smoke", {"code", "modules"})
+    wf("echo smoke", "echo smoke again", {"code", "deploy"})
+    wf("image: postgres:16", "image: postgres:17", {"code", "deploy"})
+    wf("echo build\n  docker-smoke", "echo build v2\n  docker-smoke", {"code", "deploy"})
     wf("echo pg", "echo pg sharded", {"code", "db"})
     wf("echo docs", "echo docs more", {"code"})
     wf("echo quality", "echo quality more", {"code"})
@@ -389,13 +388,13 @@ def self_test() -> None:
     wf("      - run: echo pg", "      - run: echo pg\n  extra:\n    steps:\n      - run: echo new", None)
     wf("        image: postgres:16", "        image: &pg postgres:16", None)
     wf("jobs:\n", "jobs:\nfoo: bar\n", None)
-    # A dependent's class runs too: changing a modules job that a db job needs.
+    # A dependent's class runs too: changing a deploy job that a db job needs.
     dependent = base.replace(
         "    needs: [changes]\n    if: ${{ needs.changes.outputs.db == 'true' }}",
         "    needs: [changes, build-images]\n    if: ${{ needs.changes.outputs.db == 'true' }}",
     )
     got = workflow_change_classes(dependent, dependent.replace("echo build\n  docker-smoke", "echo b2\n  docker-smoke"))
-    assert got == {"code", "modules", "db"}, got
+    assert got == {"code", "deploy", "db"}, got
     real = (Path(__file__).resolve().parents[2] / WORKFLOW).read_text(encoding="utf-8")
     assert split_workflow(real) is not None, "the real workflow must parse"
     assert workflow_change_classes(real, real) == {"code"}

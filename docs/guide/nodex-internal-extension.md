@@ -85,8 +85,8 @@ route mode is `legacy` (the default) the kernel probes NodeX; once an
 operator switches them to `native`, the gost-mesh package host reads the
 NodeX address, token and timeout through the kernel's KernelSettings contract
 and probes NodeX itself, with the same answers. A "reachable from the panel
-host" verdict then means reachable from where the package host runs, which
-differs from Control's network only for a network module. NodeX execution
+host" verdict then means reachable from where the package host runs: the
+Control machine. NodeX execution
 (applying forwards) stays in the kernel either way.
 
 Current admin UI entry split:

@@ -445,7 +445,7 @@ func TestLinkAuthorityOptionsAndConfig(t *testing.T) {
 
 	_, err = agentpki.LinkAuthorityFromConfig(nil, db)
 	require.ErrorIs(t, err, agentpki.ErrLinkDisabled)
-	_, err = agentpki.LinkAuthorityFromConfig(&config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}, db)
+	_, err = agentpki.LinkAuthorityFromConfig(&config.Config{ModuleRuntime: config.ModuleRuntimeConfig{PKI: config.ModulePKIExternal}}, db)
 	require.ErrorIs(t, err, agentpki.ErrLinkDisabled, "an external PKI holds no key")
 	_, err = agentpki.LinkAuthorityFromConfig(&config.Config{ModuleRuntime: config.ModuleRuntimeConfig{CAKEK: "short"}}, db)
 	require.Error(t, err)

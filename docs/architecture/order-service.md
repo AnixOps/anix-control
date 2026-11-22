@@ -1,8 +1,7 @@
 # Order Service (KernelOrder)
 
 Status: in place. The contract is `sdk/api/kernelorder/v1`, served by
-`internal/kernelorder` on local package bridge sessions and on the mTLS
-module listener. Phase 2 of the 2026-10 plan (class D, cross-domain
+`internal/kernelorder` on local package bridge sessions. Phase 2 of the 2026-10 plan (class D, cross-domain
 transactions: "支付回调完成订单").
 
 ## Why
