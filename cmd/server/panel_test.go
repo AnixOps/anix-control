@@ -308,8 +308,9 @@ func TestACMEModeObtainsTheCertificateAndServesTheSingleListener(t *testing.T) {
 
 	// The gRPC listener takes the same certificate per handshake and asks
 	// for client certificates.
-	cfg.GRPC.Host, cfg.GRPC.Port = "127.0.0.1", freePort(t)
+	cfg.GRPC.Host = "127.0.0.1"
 	grpcPanel := cfg.Panel()
+	grpcPanel.GRPCPort = 0
 	server, addr, err := startGRPCServer(cfg, grpcPanel, running.certs)
 	require.NoError(t, err)
 	t.Cleanup(server.Stop)
@@ -328,9 +329,10 @@ func TestACMEModeObtainsTheCertificateAndServesTheSingleListener(t *testing.T) {
 func TestRenewedCertificateReachesHTTPSAndGRPC(t *testing.T) {
 	cfg := panelTestConfig(t)
 	cfg.Domain = panelTestDomain
-	cfg.GRPC.Host, cfg.GRPC.Port = "127.0.0.1", freePort(t)
+	cfg.GRPC.Host = "127.0.0.1"
 	panel := cfg.Panel()
 	panel.HTTPSAddress, panel.HTTPAddress = "127.0.0.1:0", "127.0.0.1:0"
+	panel.GRPCPort = 0
 	// Nine-second certificates: each is renewed about six seconds after it
 	// was issued (a third of the lifetime before its end).
 	ca := panelcerttest.New(t, 9*time.Second)
@@ -340,7 +342,7 @@ func TestRenewedCertificateReachesHTTPSAndGRPC(t *testing.T) {
 	})
 	httpsAddr := running.byName["https"]
 	ca.SetTargets(func(string) string { return httpsAddr }, nil)
-	server, grpcAddr, err := startGRPCServer(cfg, cfg.Panel(), running.certs)
+	server, grpcAddr, err := startGRPCServer(cfg, panel, running.certs)
 	require.NoError(t, err)
 	t.Cleanup(server.Stop)
 	running.run(t)
@@ -485,9 +487,10 @@ func TestExternalModeReloadsTheGRPCCertificateFiles(t *testing.T) {
 	cfg.TLS.Mode = appconfig.TLSModeExternal
 	cfg.Listen = "127.0.0.1:0"
 	cfg.TLS.CertFile, cfg.TLS.KeyFile = filepath.Join(dir, "grpc.crt"), filepath.Join(dir, "grpc.key")
-	cfg.GRPC.Host, cfg.GRPC.Port = "127.0.0.1", freePort(t)
+	cfg.GRPC.Host = "127.0.0.1"
 	first := writeSelfSignedPair(t, cfg.TLS.CertFile, cfg.TLS.KeyFile, panelTestDomain)
 	panel := cfg.Panel()
+	panel.GRPCPort = 0
 	require.Equal(t, appconfig.GRPCCertFiles, panel.GRPCCertSource)
 	require.False(t, panel.NeedsACME())
 	running := startTestPanel(t, cfg, panel, func(o *panelcert.Options) { o.FilePollInterval = 20 * time.Millisecond })
