@@ -23,7 +23,7 @@ func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 		assert.NotEmpty(t, key.Description, key.Path)
 		assert.Equal(t, key.Path == "database.password" || key.Path == "database.dsn", key.Secret, "only the PostgreSQL credentials are secret: %s", key.Path)
 	}
-	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "data_dir",
+	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "source_url", "data_dir",
 		"database.driver", "database.host", "database.port", "database.username", "database.password", "database.database", "database.dsn",
 		"database.sslmode", "database.timezone", "database.log_level", "database.max_idle_conns", "database.max_open_conns", "database.conn_max_lifetime"}, paths)
 }

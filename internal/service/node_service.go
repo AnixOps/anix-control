@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -129,6 +130,9 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 
 	// 创建节点 + 默认协议 (事务)
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := quota.Allow(tx, quota.Nodes); err != nil {
+			return err
+		}
 		if err := tx.Omit(clause.Associations).Create(node).Error; err != nil {
 			return err
 		}

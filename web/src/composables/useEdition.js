@@ -12,6 +12,10 @@ const state = reactive({
   edition: EDITION_COMMUNITY,
   registrationEnabled: true,
   requireInvite: false,
+  // The source code address (source_url): the AGPL-3.0 offer of the source
+  // to everyone who uses the panel, linked from the sign-in page and the
+  // account menu.
+  sourceUrl: '',
   loaded: false
 })
 
@@ -25,6 +29,7 @@ export function applyPublicConfig(config = {}) {
   state.edition = normalizeEdition(config.edition)
   state.registrationEnabled = config.registration?.enabled !== false
   state.requireInvite = config.registration?.require_invite === true
+  state.sourceUrl = /^https?:\/\//i.test(config.source_url || '') ? config.source_url : ''
   state.loaded = true
   return state
 }
@@ -62,6 +67,7 @@ export function resetEdition() {
   state.edition = EDITION_COMMUNITY
   state.registrationEnabled = true
   state.requireInvite = false
+  state.sourceUrl = ''
   state.loaded = false
   pending = null
 }
@@ -93,6 +99,7 @@ export function useEdition() {
     isCommunity: computed(() => state.edition !== EDITION_COMMERCIAL),
     requireInvite: computed(() => state.requireInvite),
     registrationEnabled: computed(() => state.registrationEnabled),
+    sourceUrl: computed(() => state.sourceUrl),
     loaded: computed(() => state.loaded),
     filterByEdition,
     loadEdition

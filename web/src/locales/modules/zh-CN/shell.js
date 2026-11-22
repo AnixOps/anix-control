@@ -89,6 +89,7 @@ export default {
       appearance: '外观',
       language: '语言',
       about: '关于',
+      source: '源代码',
       revealAddresses: '显示服务器 IP',
       logout: '退出登录',
       roleAdmin: '管理员',

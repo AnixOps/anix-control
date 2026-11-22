@@ -11,6 +11,9 @@ domain: ""
 # tls.mode external's plain http address; empty: 127.0.0.1:8080 (or the
 # deprecated server.host, server.port and frontend.port when they are set).
 listen: ""
+# The source code the web app links to (AGPL-3.0 section 13); an operator
+# running modified code points it at their own repository.
+source_url: "https://github.com/AnixOps/anix-control"
 # The data directory: root.key (mode 0600, directory 0700).
 data_dir: "/var/lib/anix-control"
 tls:

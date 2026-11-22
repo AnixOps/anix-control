@@ -3,6 +3,7 @@ import {
   applyPublicConfig,
   filterByEdition,
   normalizeEdition,
+  resetEdition,
   routeAllowedByEdition,
   setEdition,
   useEdition,
@@ -32,5 +33,15 @@ describe('useEdition', () => {
     applyPublicConfig({ edition: 'commercial', registration: { require_invite: true } })
     expect(routeAllowedByEdition(commercialRoute)).toBe(true)
     expect(useEdition().requireInvite.value).toBe(true)
+  })
+
+  it('keeps an http(s) source_url only', () => {
+    applyPublicConfig({ source_url: 'https://github.com/AnixOps/anix-control' })
+    expect(useEdition().sourceUrl.value).toBe('https://github.com/AnixOps/anix-control')
+    applyPublicConfig({ source_url: 'javascript:alert(1)' })
+    expect(useEdition().sourceUrl.value).toBe('')
+    applyPublicConfig({ source_url: 'https://example.test/src' })
+    resetEdition()
+    expect(useEdition().sourceUrl.value).toBe('')
   })
 })

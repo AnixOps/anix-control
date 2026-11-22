@@ -162,6 +162,13 @@
           <span class="shell-menu__label">{{ t('shell.account.about') }}</span>
         </DropdownMenuItem>
 
+        <DropdownMenuItem v-if="sourceUrl" as-child>
+          <a class="shell-menu__item" :href="sourceUrl" target="_blank" rel="noopener noreferrer" data-menu-item="source">
+            <UiIcon :icon="Code" />
+            <span class="shell-menu__label">{{ t('shell.account.source') }}</span>
+          </a>
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator class="shell-menu__separator" />
         <DropdownMenuItem class="shell-menu__item" data-menu-item="logout" @select="logout">
           <UiIcon :icon="LogOut" />
@@ -186,11 +193,12 @@ import {
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger
 } from 'reka-ui'
-import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Info, Languages, LogOut, Monitor, Moon, Sun, SunMoon, UserRound } from '@lucide/vue'
+import { Check, ChevronRight, ChevronsUpDown, Code, Eye, EyeOff, Info, Languages, LogOut, Monitor, Moon, Sun, SunMoon, UserRound } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useTheme } from '@/composables/useTheme'
 import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
+import { useEdition } from '@/composables/useEdition'
 import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { navIcon } from '@/navigation/icons'
 import UiIcon from '@/ui/UiIcon.vue'
@@ -215,6 +223,7 @@ const userStore = useUserStore()
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
 const { themePreference, setThemePreference } = useTheme()
 const { revealed: addressesRevealed, setRevealed: setAddressesRevealed } = useAddressPrivacy()
+const { sourceUrl } = useEdition()
 const open = ref(false)
 // The open menu and its submenus sit in one labelled region, not on <body>.
 const layer = useMenuLayer(open, () => t('shell.account.menuLabel', { name: displayName.value }))

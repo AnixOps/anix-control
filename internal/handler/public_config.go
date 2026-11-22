@@ -19,6 +19,9 @@ type PublicConfig struct {
 	Edition        string                   `json:"edition"`
 	HiddenPackages []string                 `json:"hidden_packages"`
 	Registration   PublicRegistrationConfig `json:"registration"`
+	// SourceURL is the source code address the web app links to
+	// (source_url, the AGPL-3.0 offer of the source).
+	SourceURL string `json:"source_url"`
 }
 
 // PublicRegistrationConfig is the public part of the registration policy.
@@ -42,6 +45,7 @@ func NewPublicConfig(cfg *config.Config) PublicConfig {
 		Edition:        publicConfigEdition,
 		HiddenPackages: append([]string{}, publicConfigHiddenPackages...),
 		Registration:   PublicRegistrationConfig{Enabled: registration.Enabled, RequireInvite: registration.RequireInvite},
+		SourceURL:      cfg.SourceURL,
 	}
 }
 

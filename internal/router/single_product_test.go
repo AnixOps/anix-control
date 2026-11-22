@@ -82,9 +82,10 @@ func TestPublicConfigHidesTheCommercialSet(t *testing.T) {
 	}
 	router, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
+	cfg.SourceURL = "https://source.example.test/fork"
 	response := serveV2Request(router, http.MethodGet, "/api/v4/public/config")
 	require.Equal(t, http.StatusOK, response.Code)
-	require.JSONEq(t, `{"data":{"edition":"community","hidden_packages":["affiliate","order","payment"],"registration":{"enabled":true,"require_invite":false}}}`, response.Body.String())
+	require.JSONEq(t, `{"data":{"edition":"community","hidden_packages":["affiliate","order","payment"],"registration":{"enabled":true,"require_invite":false},"source_url":"https://source.example.test/fork"}}`, response.Body.String())
 
 	cfg.Auth.Registration.RequireInvite = true
 	response = serveV2Request(router, http.MethodGet, "/api/v4/public/config")

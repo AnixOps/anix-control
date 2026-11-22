@@ -89,6 +89,7 @@ export default {
       appearance: 'Appearance',
       language: 'Language',
       about: 'About',
+      source: 'Source code',
       revealAddresses: 'Show server IPs',
       logout: 'Sign out',
       roleAdmin: 'Administrator',

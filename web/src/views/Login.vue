@@ -163,6 +163,7 @@
       </section>
 
       <LocaleSwitcher class="auth__locale" compact />
+      <a v-if="sourceUrl" class="auth__source" :href="sourceUrl" target="_blank" rel="noopener noreferrer" data-auth-source>{{ t('shell.account.source') }}</a>
     </div>
   </main>
 </template>
@@ -203,7 +204,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const toast = useToast()
 const { t } = useAppI18n()
-const { requireInvite, registrationEnabled, loadEdition } = useEdition()
+const { requireInvite, registrationEnabled, sourceUrl, loadEdition } = useEdition()
 
 const titleId = 'login-page-title'
 const mode = ref('login') // 'login' | 'register'
@@ -496,6 +497,11 @@ defineExpose({ mode, step })
 
 .auth:focus {
   outline: none;
+}
+
+.auth__source {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
 }
 
 .auth__stack {

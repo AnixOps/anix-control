@@ -7,6 +7,7 @@ import (
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -99,7 +100,7 @@ func failure(err error, answer func(violations []*forwardv1.Violation) protoadap
 		return status.Error(codes.NotFound, "forward route not found")
 	case errors.Is(err, ErrRevisionMismatch):
 		return status.Error(codes.Aborted, err.Error())
-	case errors.Is(err, ErrRequestConflict):
+	case errors.Is(err, ErrRequestConflict), errors.Is(err, quota.ErrExceeded):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, err.Error())

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -45,6 +47,10 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 	}
 
 	if err := h.nodeService.CreateNode(&node); err != nil {
+		if errors.Is(err, quota.ErrExceeded) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "已达到授权的节点数上限", "error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败", "error": err.Error()})
 		return
 	}

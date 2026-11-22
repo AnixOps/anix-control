@@ -40,6 +40,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_GRPC_PUBLIC_NAME` | `grpc.public_name` | string | empty: `domain` |
 | `ANIX_CONTROL_GRPC_EDGE_PROXIES` | `grpc.edge_proxies` | list |  |
 | `ANIX_CONTROL_SUBSCRIBE_PATH` | `subscribe_path` | string | `s` |
+| `ANIX_CONTROL_SOURCE_URL` | `source_url` | string | `https://github.com/AnixOps/anix-control` |
 | `ANIX_CONTROL_DATA_DIR` | `data_dir` | string | `/var/lib/anix-control` |
 | `ANIX_CONTROL_DATABASE_DRIVER` | `database.driver` | string | `postgres` |
 | `ANIX_CONTROL_DATABASE_HOST` | `database.host` | string | `127.0.0.1` |

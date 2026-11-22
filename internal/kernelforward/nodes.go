@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -672,6 +673,9 @@ func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeR
 func createNodeTx(tx *gorm.DB, nodeRecord *forwardv1.ForwardNodeRecord, settings *NodeSettings, now time.Time) (model.ForwardNode, error) {
 	created := model.ForwardNode{Enabled: true, Status: model.ForwardNodeStatusOffline, CreatedAt: now, UpdatedAt: now}
 	if err := applyRecord(&created, nodeRecord, true); err != nil {
+		return model.ForwardNode{}, err
+	}
+	if err := quota.Allow(tx, quota.Nodes); err != nil {
 		return model.ForwardNode{}, err
 	}
 	if err := service.NewForwardNodeService(tx).Create(&created); err != nil {
