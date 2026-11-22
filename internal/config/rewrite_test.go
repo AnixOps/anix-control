@@ -62,13 +62,11 @@ func TestRewriteGolden(t *testing.T) {
 			require.NoError(t, err, "run UPDATE_GOLDEN=1 to create %s", golden)
 			assert.Equal(t, string(want), got)
 
-			// The new file loads without any deprecated key but the
-			// database section, and twice is the same as once.
+			// The new file loads without any deprecated key, and twice is
+			// the same as once.
 			loaded, report, err := loadBytes(result.Output)
 			require.NoError(t, err)
-			for _, key := range report.Deprecated {
-				assert.True(t, strings.HasPrefix(key.Path, "database."), key.Path)
-			}
+			assert.Empty(t, report.Deprecated)
 			again, err := Rewrite(result.Output, opts)
 			require.NoError(t, err)
 			reloaded, _, err := loadBytes(again.Output)

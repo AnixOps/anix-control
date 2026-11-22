@@ -202,8 +202,9 @@ check "backup_current_release is the installer's own" \
 FRESH="${temporary}/fresh/control"
 mkdir -p "${FRESH}"
 check "fresh: the installation directory starts empty" test -z "$(ls -A "${FRESH}")"
+FIXTURE_DSN="host=127.0.0.1 port=5432 user=anix_control password=fixture dbname=anix_control"
 run_main "${temporary}/fresh.log" install --version "${VERSION_UNDER_TEST}" \
-  --install-dir "${FRESH}" --health-url "http://127.0.0.1:18080/health"
+  --install-dir "${FRESH}" --health-url "http://127.0.0.1:18080/health" --database-dsn "${FIXTURE_DSN}"
 check "fresh: main exits 0" test "${RUN_STATUS}" -eq 0
 check "fresh: reports success" grep -qF "Installed ${VERSION_UNDER_TEST} successfully." "${temporary}/fresh.log"
 check "fresh: the binary is installed" test -x "${FRESH}/bin/anix-control"
@@ -215,6 +216,8 @@ check "fresh: the systemd unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-con
 check "fresh: the unit starts the installed binary with the installed config" \
   grep -qxF "ExecStart=${FRESH}/bin/anix-control -config ${FRESH}/config/config.yaml" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: the config is written" test -s "${FRESH}/config/config.yaml"
+check "fresh: the config uses PostgreSQL" grep -qxF "  driver: postgres" "${FRESH}/config/config.yaml"
+check "fresh: the config holds the given connection string" grep -qxF "  dsn: \"${FIXTURE_DSN}\"" "${FRESH}/config/config.yaml"
 check "fresh: the config sets no env (Control always runs as production)" test -z "$(top_level env "${FRESH}/config/config.yaml")"
 check "fresh: the unit gives Control its data directory" \
   grep -qxF "Environment=ANIX_CONTROL_DATA_DIR=${FRESH}/data" "${SYSTEMD_UNIT_DIR}/anix-control.service"
@@ -279,8 +282,9 @@ check "rollback: says so" grep -qF "Rollback completed by installing the request
 # --- 4. --skip-start on a directory that does not exist yet.
 SKIPPED="${temporary}/skipped/control"
 run_main "${temporary}/skip.log" install --version "${VERSION_UNDER_TEST}" \
-  --install-dir "${SKIPPED}" --skip-start
+  --install-dir "${SKIPPED}" --skip-start --sqlite
 check "skip-start: main exits 0" test "${RUN_STATUS}" -eq 0
+check "skip-start: --sqlite writes SQLite into the config" grep -qxF "  driver: sqlite" "${SKIPPED}/config/config.yaml"
 check "skip-start: the binary is installed" test -x "${SKIPPED}/bin/anix-control"
 check "skip-start: the unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "skip-start: says the start was skipped" grep -qF "service start was skipped" "${temporary}/skip.log"
@@ -311,11 +315,22 @@ for flag in --admin-email --admin-password; do
   check "${flag}: nothing is installed" test ! -e "${temporary}/removed/control/bin/anix-control"
 done
 
+# --- 7. A fresh install without PostgreSQL and without --sqlite stops before
+#        anything is downloaded or written (no terminal: nobody to ask).
+: >"${CURL_LOG}"
+run_main "${temporary}/no-database.log" install --version "${VERSION_UNDER_TEST}" \
+  --install-dir "${temporary}/no-database/control"
+check "no database: main exits 1" test "${RUN_STATUS}" -eq 1
+check "no database: says PostgreSQL is the default" grep -qF "uses PostgreSQL by default" "${temporary}/no-database.log"
+check "no database: names --database-dsn and --sqlite" grep -qF "or with --sqlite to use SQLite for a trial" "${temporary}/no-database.log"
+check "no database: nothing is downloaded" test ! -s "${CURL_LOG}"
+check "no database: no config is written" test ! -e "${temporary}/no-database/control/config/config.yaml"
+
 check "no account or group command was run at all" test ! -s "${TRIPWIRE_LOG}"
 
 if [[ "${failures}" -ne 0 ]]; then
   printf '%d check(s) failed\n' "${failures}"
-  for log in fresh update rollback skip broken removed-flag; do
+  for log in fresh update rollback skip broken removed-flag no-database; do
     if [[ -f "${temporary}/${log}.log" ]]; then
       printf -- '--- %s.log (last lines)\n' "${log}"
       tail -n 8 "${temporary}/${log}.log"

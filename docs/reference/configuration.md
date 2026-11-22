@@ -1,8 +1,9 @@
 # Configuration
 
 This page defines the configuration of `anix-control`: ten operator keys (nine,
-and `grpc.edge_proxies` for a reverse proxy on another machine), the root key
-in the data directory, and the keys earlier releases read.
+and `grpc.edge_proxies` for a reverse proxy on another machine), the
+[database](#database) section (PostgreSQL by default), the root key in the
+data directory, and the keys earlier releases read.
 
 ## Source Of Truth
 
@@ -35,7 +36,7 @@ domain: panel.example.com
 | `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
 | `grpc.edge_proxies` | empty | Non-empty: a reverse proxy on another machine (its addresses, IPs or CIDRs) terminates the nodes' TLS with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires `tls.mode` `external` and no certificate files. The recommended layout: [two hosts](../guide/deploy-two-hosts.md). |
 | `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
-| `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`); with a later milestone the database too. Absolute. |
+| `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`). Absolute. |
 
 [Panel Address, Listeners And Certificates](#panel-address-listeners-and-certificates)
 describes the modes in detail.
@@ -59,12 +60,48 @@ line and the closest known key:
 config.yaml:3: unknown configuration key tls.mod; did you mean tls.mode? (docs/reference/configuration.md lists the keys)
 ```
 
-While PostgreSQL is supported (until M2, P4), the `database` section keeps
-its 4.x meaning: with a configuration file only the file's `database` keys
-count (an empty `driver` is SQLite at `config/data/v2board.db` next to the
-file); without a file the container defaults apply (PostgreSQL on
-`127.0.0.1`). `app.subscribe_path` is read as `subscribe_path`; setting both
-to different values stops the start.
+A file with `database` keys replaces the built-in `database` section as a
+whole; a file without any keeps it ([Database](#database)).
+`app.subscribe_path` is read as `subscribe_path`; setting both to different
+values stops the start.
+
+### Database
+
+PostgreSQL is the default database, for every real deployment. SQLite is for
+trials and development only, and only when chosen explicitly.
+
+```yaml
+database:
+  driver: postgres            # the default; an empty driver is postgres too
+  host: 127.0.0.1
+  port: 5432
+  username: anix_control
+  password: "..."             # or ANIX_CONTROL_DATABASE_PASSWORD(_FILE)
+  database: anix_control
+  # dsn: "host=... user=... password=... dbname=..."   # instead of the fields above
+```
+
+| Key | Default | Meaning |
+|------|------|------|
+| `database.driver` | `postgres` | `postgres`, or `sqlite` (trials: set it explicitly). |
+| `database.host`, `database.port` | `127.0.0.1`, `5432` | The PostgreSQL server (a host may be a Unix socket directory). |
+| `database.username`, `database.password`, `database.database` | `anix_control`, empty, `anix_control` | Role, password and database. With `sqlite`, `database.database` is the database file (relative to the configuration file's directory). |
+| `database.dsn` | empty | A whole connection string, used verbatim instead of the fields above. |
+| `database.sslmode`, `database.timezone` | `disable`, `Asia/Shanghai` | libpq `sslmode`; the session `TimeZone` (an IANA name). |
+| `database.log_level` | `error` | SQL log: `silent`, `error`, `warn`, `info` (every statement, never the bound values). |
+| `database.max_idle_conns`, `max_open_conns`, `conn_max_lifetime` | `10`, `50`, `3600` | PostgreSQL pool; SQLite's connections are built in. |
+
+A file with `database` keys replaces the section as a whole, so an existing
+deployment keeps exactly the connection it configured (keys it leaves out
+are empty or zero, not the defaults above); a file without `database` keys
+uses the defaults. Control never falls back to SQLite: when PostgreSQL
+cannot be reached it stops, names the server it tried and says how to
+configure PostgreSQL or choose SQLite. A file that ran SQLite with an empty
+driver before PostgreSQL became the default must say `driver: sqlite` now:
+`install.sh update` writes it for an install that has
+`config/data/v2board.db` and no `database` keys, and `config rewrite` writes
+it for an earlier file. A fresh `install.sh install` asks for
+`--database-dsn`, or `--sqlite` (at a terminal it asks before using SQLite).
 
 ### Environment Variables
 
@@ -169,8 +206,9 @@ upgrade does (`docs/UPGRADE.md`, "Configuration rewrite on upgrade"):
   is not `domain`, so nodes keep dialling the same name;
 - `grpc.port`, `subscribe_path` (or `app.subscribe_path`), `listen` and
   `data_dir` only when they are not the defaults;
-- the `database` section is kept while PostgreSQL is supported, a relative
-  SQLite path made absolute, so the panel keeps its database; so are a
+- the `database` section is kept, a relative SQLite path made absolute and
+  an empty driver written as `sqlite` (it was SQLite in an earlier file),
+  so the panel keeps its database; so are a
   closed or restricted registration (`auth.registration.*`) and a cluster
   name other than `default` (`module_runtime.cluster`), while they are read;
 - every other key is dropped and printed with the reason.
@@ -233,19 +271,6 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `cache.redis_host` | `ANIX_CONTROL_CACHE_REDIS_HOST` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
 | `cache.redis_password` | `ANIX_CONTROL_CACHE_REDIS_PASSWORD` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
 | `cache.redis_port` | `ANIX_CONTROL_CACHE_REDIS_PORT` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
-| `database.conn_max_lifetime` | `ANIX_CONTROL_DATABASE_CONN_MAX_LIFETIME` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.database` | `ANIX_CONTROL_DATABASE_DATABASE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.driver` | `ANIX_CONTROL_DATABASE_DRIVER` | still read | M2 (P4) | selects SQLite or PostgreSQL until PostgreSQL support ends; ignoring it would switch databases |
-| `database.dsn` | `ANIX_CONTROL_DATABASE_DSN` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.host` | `ANIX_CONTROL_DATABASE_HOST` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.log_level` | `ANIX_CONTROL_DATABASE_LOG_LEVEL` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.max_idle_conns` | `ANIX_CONTROL_DATABASE_MAX_IDLE_CONNS` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.max_open_conns` | `ANIX_CONTROL_DATABASE_MAX_OPEN_CONNS` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.password` | `ANIX_CONTROL_DATABASE_PASSWORD` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.port` | `ANIX_CONTROL_DATABASE_PORT` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.sslmode` | `ANIX_CONTROL_DATABASE_SSLMODE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.timezone` | `ANIX_CONTROL_DATABASE_TIMEZONE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
-| `database.username` | `ANIX_CONTROL_DATABASE_USERNAME` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
 | `env` | `ANIX_CONTROL_ENV` | ignored | M2 (P8) | Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug |
 | `forward.anixops_experimental` | `ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL` | ignored | M2 (P8) | the experimental AnixOps engine stays off (a built-in value) |
 | `forward_runtime.backend` | `ANIX_CONTROL_FORWARD_RUNTIME_BACKEND` | ignored | M5 (N5) | the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it |
@@ -519,14 +544,7 @@ failing (built in; `server.shutdown_drain_delay` is ignored). The `-debug`
 flag runs a development instance (gin debug mode, debug logging); `env` and
 `server.mode` are ignored, Control always runs as production.
 
-PostgreSQL connection settings (deprecated: still read until PostgreSQL
-support ends in M2, P4):
-
-| Key | Default | Notes |
-|------|------|------|
-| `database.sslmode` | `disable` | libpq `sslmode`: `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` |
-| `database.timezone` | `Asia/Shanghai` | session `TimeZone`; must be a valid IANA name |
-| `database.dsn` | empty | full connection string used verbatim instead of the fields above |
+The PostgreSQL connection keys: [Database](#database).
 
 SQLite connection settings (`database.driver: sqlite`, a database file). They
 are built in, not keys: `database.max_open_conns`, `max_idle_conns` and

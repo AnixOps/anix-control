@@ -18,6 +18,10 @@
 #   grpc:
 #     public_name: grpc.example.com   # only when domain sits behind a CDN
 #
+# The database is PostgreSQL (127.0.0.1:5432, role and database anix_control
+# unless set): the database section in docs/reference/configuration.md. SQLite
+# is for trials only and needs database.driver: sqlite.
+#
 # Check a file with `anix-control config check --file <path>`; turn a 4.x
 # file into this form with `anix-control config rewrite --in <old> --out <new>`.
 domain: panel.example.com

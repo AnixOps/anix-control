@@ -15,15 +15,17 @@ import (
 
 // The operator keys are exactly the table of the design's section 5, plus
 // grpc.edge_proxies (docs/design/edge-grpc), which is read only in the edge
-// mode.
+// mode, and the database section (PostgreSQL by default).
 func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 	var paths []string
 	for _, key := range OperatorKeys() {
 		paths = append(paths, key.Path)
 		assert.NotEmpty(t, key.Description, key.Path)
-		assert.False(t, key.Secret, "the configuration file holds no secret: %s", key.Path)
+		assert.Equal(t, key.Path == "database.password" || key.Path == "database.dsn", key.Secret, "only the PostgreSQL credentials are secret: %s", key.Path)
 	}
-	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "data_dir"}, paths)
+	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "data_dir",
+		"database.driver", "database.host", "database.port", "database.username", "database.password", "database.database", "database.dsn",
+		"database.sslmode", "database.timezone", "database.log_level", "database.max_idle_conns", "database.max_open_conns", "database.conn_max_lifetime"}, paths)
 }
 
 // Every key an earlier release or template knew is an operator key or in
@@ -85,7 +87,7 @@ func TestDeprecatedListIsComplete(t *testing.T) {
 			ignored++
 		}
 	}
-	assert.Equal(t, 54, read, "keys still read")
+	assert.Equal(t, 41, read, "keys still read")
 	assert.Equal(t, 95, ignored, "keys ignored")
 	// The P7 switches are ignored whatever order the pull requests land in.
 	for _, path := range []string{"plugins.control_execution_enabled", "plugins.dispatch_enabled", "plugins.topology_execution_enabled", "package_routes.default_mode"} {

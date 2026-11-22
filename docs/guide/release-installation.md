@@ -44,9 +44,18 @@ curl -fsSL \
   -o /tmp/anix-control-install.sh
 sudo bash /tmp/anix-control-install.sh install \
   --version "${VERSION}" \
-  --grpc-name grpc.example.com
+  --grpc-name grpc.example.com \
+  --database-dsn 'host=127.0.0.1 port=5432 user=anix_control password=... dbname=anix_control'
 rm -f /tmp/anix-control-install.sh
 ```
+
+PostgreSQL is the default database: create the role and database first and
+pass them with `--database-dsn` (or `DATABASE_DSN`); the installer writes
+`database.driver: postgres` and the string into `config.yaml` (0640). Without
+it the install stops; at a terminal it first asks whether to use SQLite
+instead, which suits trials only. `--sqlite` chooses SQLite without asking.
+Control itself never falls back to SQLite
+([Database](../reference/configuration.md#database)).
 
 The installer verifies `SHA256SUMS.txt.sig` against the official key before it
 trusts any checksum (it needs OpenSSL 3, which it installs when missing), then
@@ -210,7 +219,7 @@ Control serves plain http on `127.0.0.1:8080` behind the reverse proxy
 | `/opt/anixops/control/config/secrets/module_ca_kek` | CA key-encryption key (service user, 0600); never replaced; Control adopts it as its root key |
 | `/opt/anixops/control/data/root.key` | The root key (service user, 0600; `ANIX_CONTROL_DATA_DIR` in the unit); back it up with the database |
 | `/opt/anixops/control/config/tls/control.crt`, `control.key` | gRPC certificate (0644) and key (0600) for Agents |
-| `/opt/anixops/control/config/data/v2board.db` | Default SQLite database; filename retained for compatibility |
+| `/opt/anixops/control/config/data/v2board.db` | The SQLite database of a trial install (`--sqlite`); filename retained for compatibility |
 | `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |
 | `/opt/anixops/control/data/plugin-artifacts/` | Service-user-private materialized Control package artifacts |
 | `/opt/anixops/control/backups/` | Binary/frontend rollback snapshots |

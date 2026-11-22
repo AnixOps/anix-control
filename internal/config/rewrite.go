@@ -126,8 +126,9 @@ type rewriteLeaf struct {
 //   - the host of agent_install.grpc_target becomes grpc.public_name when
 //     it is not domain (nodes keep dialling the same name);
 //   - the database section is kept, with a relative SQLite path made
-//     absolute, while PostgreSQL support exists (M2, P4): dropping it would
-//     move the panel to another database; a closed or restricted
+//     absolute and an empty driver written as sqlite (it was SQLite in an
+//     earlier file; it is PostgreSQL now), so the panel keeps its
+//     database; a closed or restricted
 //     registration and a cluster name other than default are kept while
 //     they are read (keptWhileRead);
 //   - only values that differ from the defaults are written; every other
@@ -397,7 +398,9 @@ func Rewrite(old []byte, opts RewriteOptions) (*RewriteResult, error) {
 		}
 	}
 
-	// The database section, while PostgreSQL support exists.
+	// The database section. In an earlier file an empty driver was SQLite;
+	// it is PostgreSQL now, so the rewrite writes driver: sqlite and the
+	// database file's absolute path, and the panel keeps its data.
 	var database []rewriteLeaf
 	for _, leaf := range leaves {
 		if strings.HasPrefix(leaf.path, "database.") && leaf.known {
@@ -424,7 +427,7 @@ func Rewrite(old []byte, opts RewriteOptions) (*RewriteResult, error) {
 			node.HeadComment, node.LineComment, node.FootComment = "", "", ""
 			newValues[leaf.path] = &node
 		}
-		result.Kept = append(result.Kept, RewriteNote{Key: "database", Reason: "still read until PostgreSQL support ends (M2, P4): the panel keeps its database" +
+		result.Kept = append(result.Kept, RewriteNote{Key: "database", Reason: "the panel keeps its database" +
 			map[bool]string{true: " (" + fmt.Sprint(newValues["database.database"]) + ")", false: ""}[sqlite]})
 	}
 
@@ -649,7 +652,7 @@ func marshalRewrite(values map[string]any, opts RewriteOptions) ([]byte, error) 
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		switch root.Content[i].Value {
 		case "database":
-			root.Content[i].HeadComment = "Still read until PostgreSQL support ends (M2, P4): the panel keeps its\ndatabase (a PostgreSQL password stays here until then)."
+			root.Content[i].HeadComment = "The panel's database (docs/reference/configuration.md, Database)."
 		case "auth":
 			root.Content[i].HeadComment = "Still read until the registration policy becomes an administrator\nsetting (M3): the panel keeps its registration rules."
 		case "module_runtime":
@@ -683,8 +686,7 @@ func marshalRewrite(values map[string]any, opts RewriteOptions) ([]byte, error) 
 // Control would load the file.
 func loadBytes(data []byte) (*Config, LoadReport, error) {
 	l := &loader{cfg: Defaults(), deprecated: map[string]*DeprecatedKey{}}
-	l.cfg.Database = DatabaseConfig{}
-	if err := l.applyYAML(data, "the rewritten configuration"); err != nil {
+	if err := l.applyFile(data, "the rewritten configuration"); err != nil {
 		return nil, LoadReport{}, err
 	}
 	report := l.report()

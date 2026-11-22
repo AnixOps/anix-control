@@ -104,7 +104,8 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 
 	switch cfg.Driver {
 	case "sqlite", "sqlite3", "":
-		// SQLite 为默认数据库
+		// SQLite: only when configured (config loading turns an empty
+		// driver into postgres).
 		dbPath := SQLitePath(cfg)
 
 		// 确保目录存在
@@ -141,6 +142,12 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		Logger: newSQLLogger(sqlLogWriter, colorful, logLevel),
 	})
 	if err != nil {
+		if cfg.Driver == "postgres" || cfg.Driver == "postgresql" {
+			return nil, fmt.Errorf("failed to connect PostgreSQL (host=%s port=%d db=%s user=%s): %w. "+
+				"PostgreSQL is the default database: point database.host, port, username, password and database (or database.dsn) at a reachable server. "+
+				"Control never falls back to SQLite by itself; for a trial, set database.driver: sqlite explicitly (docs/reference/configuration.md, Database)",
+				cfg.Host, cfg.Port, cfg.Database, cfg.Username, err)
+		}
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
@@ -181,8 +188,8 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 
 // sqlLogLevel is database.log_level as GORM's level: silent, error, warn or
 // info. Empty and unknown values are error, the built-in default
-// (defaults.yaml): a configuration file without a database section leaves
-// the value empty, and info would log every statement.
+// (defaults.yaml): a configuration file whose database section has no
+// log_level leaves the value empty, and info would log every statement.
 func sqlLogLevel(value string) logger.LogLevel {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "silent":

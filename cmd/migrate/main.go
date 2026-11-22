@@ -91,7 +91,7 @@ func main() {
 	}
 
 	driver := strings.ToLower(cfg.Database.Driver)
-	if driver == "" || driver == "sqlite" || driver == "sqlite3" {
+	if driver == "sqlite" || driver == "sqlite3" {
 		cfg.Database.Database = resolveRuntimePath(cfg.Database.Database, resolvedConfigPath)
 	}
 

@@ -16,7 +16,7 @@ func TestEnvVarsAreTheOperatorKeys(t *testing.T) {
 	for _, variable := range EnvVars(Defaults()) {
 		require.True(t, strings.HasPrefix(variable.Name, EnvPrefix), variable.Name)
 		require.False(t, reservedEnvNames[variable.Name], variable.Name)
-		assert.False(t, variable.Secret, variable.Name)
+		assert.Equal(t, variable.Name == "ANIX_CONTROL_DATABASE_PASSWORD" || variable.Name == "ANIX_CONTROL_DATABASE_DSN", variable.Secret, variable.Name)
 		assert.NotEmpty(t, variable.Description, variable.Name)
 		names = append(names, variable.Name)
 	}
@@ -25,6 +25,10 @@ func TestEnvVarsAreTheOperatorKeys(t *testing.T) {
 		"ANIX_CONTROL_LISTEN", "ANIX_CONTROL_GRPC_PORT", "ANIX_CONTROL_GRPC_PUBLIC_NAME", "ANIX_CONTROL_GRPC_EDGE_PROXIES",
 		"ANIX_CONTROL_SUBSCRIBE_PATH",
 		"ANIX_CONTROL_DATA_DIR",
+		"ANIX_CONTROL_DATABASE_DRIVER", "ANIX_CONTROL_DATABASE_HOST", "ANIX_CONTROL_DATABASE_PORT", "ANIX_CONTROL_DATABASE_USERNAME",
+		"ANIX_CONTROL_DATABASE_PASSWORD", "ANIX_CONTROL_DATABASE_DATABASE", "ANIX_CONTROL_DATABASE_DSN", "ANIX_CONTROL_DATABASE_SSLMODE",
+		"ANIX_CONTROL_DATABASE_TIMEZONE", "ANIX_CONTROL_DATABASE_LOG_LEVEL", "ANIX_CONTROL_DATABASE_MAX_IDLE_CONNS",
+		"ANIX_CONTROL_DATABASE_MAX_OPEN_CONNS", "ANIX_CONTROL_DATABASE_CONN_MAX_LIFETIME",
 	}, names)
 }
 

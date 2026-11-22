@@ -35,6 +35,10 @@ VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
 PLUGIN_HOST_RUNTIME_DIR=""
 PLUGIN_ARTIFACT_DIR=""
 FRESH_CONFIG=0
+# The database of a fresh install: PostgreSQL (--database-dsn) by default,
+# SQLite only when chosen (--sqlite, or a yes at the terminal).
+DATABASE_DSN="${DATABASE_DSN:-}"
+USE_SQLITE=0
 
 # Native production-layout migration paths.  They are overridable for fixture
 # tests, but default to the documented paths on a real host.
@@ -97,6 +101,11 @@ Options:
                            and finds /etc/letsencrypt/live/<host>/ when no certificate is given.
   --grpc-tls-cert <path>   PEM certificate chain for the gRPC listener (publicly trusted).
   --grpc-tls-key <path>    Its private key.
+  --database-dsn <dsn>     PostgreSQL connection string for a fresh install, for example
+                           'host=127.0.0.1 port=5432 user=anix_control password=... dbname=anix_control'.
+                           PostgreSQL is the default database. Also DATABASE_DSN.
+  --sqlite                 Use SQLite instead (trials only). Without --database-dsn or --sqlite a fresh
+                           install stops; at a terminal it asks first.
   --plan <path>            Preflight JSON output path (default: migration-plan.json).
   -h, --help               Show this help.
 
@@ -869,10 +878,49 @@ ensure_layout_and_config() {
   fi
 
   if [[ ! -f "${CONFIG_FILE}" ]]; then
+    choose_database
     write_fresh_config
+    write_database_config
   else
     info "Existing configuration found; preserving ${CONFIG_FILE}"
   fi
+}
+
+# choose_database: a fresh install needs PostgreSQL. Without --database-dsn
+# it stops, unless SQLite was chosen with --sqlite or, at a terminal, with
+# a yes; Control itself never falls back to SQLite.
+choose_database() {
+  [[ -n "${DATABASE_DSN}" || "${USE_SQLITE}" -eq 1 ]] && return 0
+  warn "AnixOps Control uses PostgreSQL by default, and no PostgreSQL was given (--database-dsn)."
+  local answer=""
+  if [[ -t 1 ]]; then
+    read -r -p "Use SQLite instead (for trials only; moving to PostgreSQL later means a migration)? [y/N] " answer </dev/tty || true
+  fi
+  [[ "${answer}" == [yY]* ]] || \
+    die "No PostgreSQL configured. Re-run with --database-dsn 'host=... port=5432 user=... password=... dbname=...', or with --sqlite to use SQLite for a trial."
+  USE_SQLITE=1
+}
+
+write_database_config() {
+  if [[ "${USE_SQLITE}" -eq 1 ]]; then
+    set_config_section_values database "driver=sqlite" "database=\"${INSTALL_DIR}/config/data/v2board.db\""
+    warn "Using SQLite (${INSTALL_DIR}/config/data/v2board.db): for trials only."
+    return 0
+  fi
+  [[ "${DATABASE_DSN}" != *[\"\\]* && "${DATABASE_DSN}" != *$'\n'* ]] || \
+    die "--database-dsn must not contain a double quote, a backslash or a newline."
+  set_config_section_values database "driver=postgres" "dsn=\"${DATABASE_DSN}\""
+}
+
+# keep_implicit_sqlite: a configuration without database.driver and
+# database.database ran SQLite at config/data/v2board.db before PostgreSQL
+# became the default. An update writes that choice into the file, so the
+# panel keeps its database.
+keep_implicit_sqlite() {
+  local db="${INSTALL_DIR}/config/data/v2board.db"
+  [[ -f "${db}" && -z "$(config_section_value database driver)" && -z "$(config_section_value database database)" ]] || return 0
+  set_config_section_values database "driver=sqlite" "database=\"${db}\""
+  warn "This install runs SQLite (${db}); PostgreSQL is the default now, so database.driver: sqlite was written to ${CONFIG_FILE}."
 }
 
 snapshot_migration_state() {
@@ -1235,7 +1283,7 @@ parse_args() {
       --version)
         [[ "$#" -ge 2 ]] || die "--version requires a release tag, for example --version v4.2.0"
         ;;
-      --install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key)
+      --install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key|--database-dsn)
         [[ "$#" -ge 2 ]] || die "$1 requires a value (see --help)"
         ;;
     esac
@@ -1255,6 +1303,8 @@ parse_args() {
       --grpc-name) GRPC_NAME="${2:-}"; shift 2 ;;
       --grpc-tls-cert) GRPC_TLS_CERT="${2:-}"; shift 2 ;;
       --grpc-tls-key) GRPC_TLS_KEY="${2:-}"; shift 2 ;;
+      --database-dsn) DATABASE_DSN="${2:-}"; shift 2 ;;
+      --sqlite) USE_SQLITE=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "Unknown argument: $1" ;;
     esac
@@ -1325,6 +1375,7 @@ main() {
   stop_running_service
   backup_current_release
   install_release_files "${binary_archive}"
+  keep_implicit_sqlite
   if uses_plugin_execution; then
     configure_plugin_execution_config
   fi

@@ -156,7 +156,7 @@ func (c *backupCommand) load(configFlag string, dataDir string, withKey bool) (*
 		cfg.DataDir = filepath.Clean(dataDir)
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.Database.Driver)) {
-	case "", "sqlite", "sqlite3":
+	case "sqlite", "sqlite3":
 		cfg.Database.Database = resolveSQLitePath(cfg.Database.Database, path)
 	case "postgres", "postgresql":
 	default:

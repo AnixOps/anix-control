@@ -3,15 +3,14 @@
 # from /opt/anixops/control/config/config.yaml on 2026-10-13T08:00:00Z.
 # Keys and defaults: docs/reference/configuration.md. The root key and the
 # secrets it adopted are in data_dir/root.key, not in this file.
-# Still read until PostgreSQL support ends (M2, P4): the panel keeps its
-# database (a PostgreSQL password stays here until then).
+# The panel's database (docs/reference/configuration.md, Database).
 database:
   database: /opt/anixops/control/config/data/v2board.db
   driver: sqlite
   log_level: "info"
 # --- the report ---
 Kept:
-  database: still read until PostgreSQL support ends (M2, P4): the panel keeps its database (/opt/anixops/control/config/data/v2board.db)
+  database: the panel keeps its database (/opt/anixops/control/config/data/v2board.db)
 
 Dropped:
   admin.email: the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected

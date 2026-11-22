@@ -128,9 +128,9 @@ func operatorPath(a, b string) string {
 //  2. the file at path, when path is not empty, key by key. The YAML is
 //     read strictly: an operator key is applied; a deprecated key is
 //     recorded and, when it is still read, applied; any other key is an
-//     error that names the closest known key. The database section keeps
-//     its 4.x meaning while PostgreSQL is supported: with a file, only the
-//     file's database keys count (an empty driver is SQLite);
+//     error that names the closest known key. The database section is
+//     replaced as a whole by the file's database keys, when it has any
+//     (applyFile);
 //  3. the ANIX_CONTROL_* variables of environ, the same way (an unknown
 //     variable is reported, not refused: the environment is shared with
 //     other tools).
@@ -144,8 +144,7 @@ func LoadFile(path string, environ []string) (*Config, LoadReport, error) {
 		if err != nil {
 			return nil, LoadReport{}, err
 		}
-		l.cfg.Database = DatabaseConfig{}
-		if err := l.applyYAML(data, path); err != nil {
+		if err := l.applyFile(data, path); err != nil {
 			return nil, LoadReport{}, err
 		}
 	}
@@ -158,6 +157,23 @@ func LoadFile(path string, environ []string) (*Config, LoadReport, error) {
 		return nil, report, err
 	}
 	return l.cfg, report, nil
+}
+
+// applyFile applies a configuration file. A file with database keys
+// replaces the database section as a whole, so an existing deployment keeps
+// exactly the connection it configured; a file without any keeps the
+// built-in PostgreSQL settings. An empty driver is PostgreSQL
+// (validateLoaded): SQLite is chosen only with driver: sqlite.
+func (l *loader) applyFile(data []byte, source string) error {
+	defaults := l.cfg.Database
+	l.cfg.Database = DatabaseConfig{}
+	if err := l.applyYAML(data, source); err != nil {
+		return err
+	}
+	if l.cfg.Database == (DatabaseConfig{}) {
+		l.cfg.Database = defaults
+	}
+	return nil
 }
 
 // report collects the findings, by key path.
@@ -342,6 +358,9 @@ func (l *loader) applyEnv(environ []string) error {
 // code expects normalized.
 func (c *Config) validateLoaded() error {
 	normalizeBrandDefaults(c)
+	if strings.TrimSpace(c.Database.Driver) == "" {
+		c.Database.Driver = "postgres"
+	}
 	var err error
 	c.App.SubscribePath, err = NormalizeSubscribePath(c.App.SubscribePath)
 	if err != nil {

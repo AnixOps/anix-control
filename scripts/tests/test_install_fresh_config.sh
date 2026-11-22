@@ -119,8 +119,12 @@ check "fresh: nothing appended" test "$(wc -l <"${CONFIG_FILE}")" -eq "$(wc -l <
 # --- 2. ensure_layout_and_config (install and update) creates the file only
 #        when it is missing and never rewrites an existing one.
 new_install ensure-fresh
+DATABASE_DSN="host=127.0.0.1 user=anix_control password=fixture dbname=anix_control"
 ensure_layout_and_config >"${temporary}/ensure-fresh.log" 2>&1
 check "ensure: fresh install writes the config" test -s "${CONFIG_FILE}"
+check "ensure: fresh install uses PostgreSQL" grep -qxF "  driver: postgres" "${CONFIG_FILE}"
+check "ensure: fresh install holds the connection string" grep -qxF "  dsn: \"${DATABASE_DSN}\"" "${CONFIG_FILE}"
+DATABASE_DSN=""
 check "ensure: fresh install has no administrator" test "$(grep -c '^admin:' "${CONFIG_FILE}")" -eq 0
 check "ensure: fresh install is marked fresh" test "${FRESH_CONFIG}" -eq 1
 new_install ensure-existing
@@ -133,6 +137,35 @@ check "ensure: existing config keeps its env" test "$(top_level env "${CONFIG_FI
 check "ensure: existing config reported as preserved" grep -qF "Existing configuration found; preserving" "${temporary}/ensure-existing.log"
 check "ensure: existing config is not marked fresh" test "${FRESH_CONFIG}" -eq 0
 check "ensure: nothing was downloaded for it" test "$(grep -c . "${CURL_URLS}")" -eq "${downloads_before}"
+
+# --- 3. Without PostgreSQL a fresh install stops (no terminal: nobody to
+#        ask); --sqlite chooses SQLite.
+new_install no-database
+status=0
+(ensure_layout_and_config) >"${temporary}/no-database.log" 2>&1 || status=$?
+check "no database: stops" test "${status}" -ne 0
+check "no database: says how to configure PostgreSQL" grep -qF -- "--database-dsn" "${temporary}/no-database.log"
+check "no database: writes no config" test ! -e "${CONFIG_FILE}"
+new_install sqlite
+USE_SQLITE=1
+ensure_layout_and_config >"${temporary}/sqlite.log" 2>&1
+USE_SQLITE=0
+check "sqlite: driver sqlite" grep -qxF "  driver: sqlite" "${CONFIG_FILE}"
+check "sqlite: the database file under the installation" grep -qxF "  database: \"${INSTALL_DIR}/config/data/v2board.db\"" "${CONFIG_FILE}"
+
+# --- 4. An update keeps an install that ran SQLite without a driver (the
+#        earlier default) on SQLite, and leaves a configured driver alone.
+new_install implicit-sqlite
+mkdir -p "${INSTALL_DIR}/config/data"
+: >"${INSTALL_DIR}/config/data/v2board.db"
+printf '%s\n' '# domain: panel.example.com' >"${CONFIG_FILE}"
+keep_implicit_sqlite >/dev/null 2>&1
+check "implicit sqlite: driver sqlite written" grep -qxF "  driver: sqlite" "${CONFIG_FILE}"
+check "implicit sqlite: its database file" grep -qxF "  database: \"${INSTALL_DIR}/config/data/v2board.db\"" "${CONFIG_FILE}"
+printf '%s\n' 'database:' '  driver: postgres' '  host: 127.0.0.1' >"${CONFIG_FILE}"
+before="$(sha256sum "${CONFIG_FILE}")"
+keep_implicit_sqlite >/dev/null 2>&1
+check "configured driver: unchanged" test "$(sha256sum "${CONFIG_FILE}")" = "${before}"
 
 # The Go test loads this file with the real configuration loader.
 if [[ -n "${ANIX_INSTALL_FRESH_CONFIG_OUT:-}" ]]; then

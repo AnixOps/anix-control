@@ -25,7 +25,7 @@ Execution ownership:
 important parts, in request order:
 
 - **Kernel** (`cmd/server`, `internal/`): gin HTTP server, GORM persistence
-  (SQLite default, PostgreSQL supported), JWT/admin middleware, background
+  (PostgreSQL default, SQLite for trials), JWT/admin middleware, background
   workers, and the gRPC listener for nodes.
 - **`/api/v2` package gateway**: every `/api/v2` business route is registered
   through `registeredPackageRoute` in `internal/router/router.go`. A request
