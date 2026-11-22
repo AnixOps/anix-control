@@ -69,11 +69,9 @@ func olderRelease(t *testing.T, db *gorm.DB) {
 		"INSERT INTO v2_node (name, host) VALUES ('proxy', '203.0.113.4')",
 		"INSERT INTO v2_forward_node (name, type, host, port) VALUES ('relay', 'exit', '203.0.113.3', 0)",
 	)
-	for _, status := range []int{model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning, model.ForwardRuntimeJobStatusPending} {
-		forwardID := uint(42)
-		require.NoError(t, db.Create(&model.ForwardRuntimeJob{
-			Backend: model.ForwardRuntimeBackendNftablesAnsible, Action: model.ForwardRuntimeJobActionPause, ForwardID: &forwardID, Status: status,
-		}).Error)
+	// Two pending and one running flux runtime job of forward 42.
+	for _, status := range []int{0, 1, 0} {
+		require.NoError(t, db.Exec("INSERT INTO v2_forward_runtime_job (backend, action, forward_id, status) VALUES ('nftables_ansible', 'pause', 42, ?)", status).Error)
 	}
 }
 

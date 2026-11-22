@@ -109,7 +109,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	})
 	db := database.Get()
 	require.NoError(t, db.AutoMigrate(
-		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardTunnel{},
+		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{},
 		&model.AgentDiagnosticTask{}, &model.OperationLog{},
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
@@ -130,7 +130,6 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	require.NoError(t, nodesecrets.SeedForTest(db, nodesecrets.TableNodeProtocol))
 	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "relay", Host: "198.51.100.2", Port: 22, APIPort: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
-	require.NoError(t, db.Create(&model.ForwardRule{Name: "rule", RelayNodeID: f.forward.ID, ListenPort: 2000, Protocol: "tcp", ExitNodeID: f.forward.ID, TargetHost: "203.0.113.3", TargetPort: 80, Enabled: true}).Error)
 
 	f.control = fakeagent.StartControl(t, db)
 	f.registry = kernelnodeops.NewRegistry()

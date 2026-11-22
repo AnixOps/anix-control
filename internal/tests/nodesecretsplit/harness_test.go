@@ -81,7 +81,7 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 	require.NoError(t, db.AutoMigrate(
 		&model.User{}, &model.Plan{}, &model.SubscriptionGroup{},
 		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
-		&model.ForwardNode{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
+		&model.ForwardNode{},
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, nodesecrets.MigrateForTest(db))

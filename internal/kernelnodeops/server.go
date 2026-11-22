@@ -53,14 +53,12 @@ var watchReauthorize = 30 * time.Second
 
 // splitTables are the tables of the node secret split (section 4.1) and
 // their phase, as GetCapabilities answers them: the split tables are
-// finalized (Control refuses to start otherwise), and v2_forward_runtime_job
-// is not split, its payloads carrying no token since NO-7.
+// finalized (Control refuses to start otherwise).
 var splitTables = []struct {
 	name  string
 	phase kernelnodeopsv1.SecretSplitPhase
 }{
 	{"v5_node", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
-	{"v2_forward_runtime_job", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY},
 	{"v5_node_protocol", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
 	{"v5_wireguard_peer", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
 }

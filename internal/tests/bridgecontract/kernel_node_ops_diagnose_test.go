@@ -20,18 +20,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// seedDiagnosis adds forward nodes 10 and 11, a two-hop tunnel 30 between
-// them and forward 40 on it, with a public and a loopback target.
+// seedDiagnosis adds forward nodes 10 and 11.
 func seedDiagnosis(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}, &model.ForwardTunnel{}, &model.Forward{}, &model.SystemConfig{}))
-	exit := uint(11)
+	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}, &model.SystemConfig{}))
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 10, Name: "relay", Type: model.ForwardNodeTypeRelay, Host: "198.51.100.10", Port: 443, APIPort: 18080},
 		{ID: 11, Name: "exit", Type: model.ForwardNodeTypeExit, Host: "198.51.100.11", Port: 443, APIPort: 18080},
 	}).Error)
-	require.NoError(t, db.Create(&model.ForwardTunnel{ID: 30, Name: "tunnel", InNodeID: 10, OutNodeID: &exit, Type: 2}).Error)
-	require.NoError(t, db.Create(&model.Forward{ID: 40, UserID: 1, Name: "web", TunnelID: 30, InPort: 1000, RemoteAddr: "203.0.113.1:80,127.0.0.1:5432"}).Error)
 }
 
 // diagnosisDial is the kernel's network in these tests: node 10 and the

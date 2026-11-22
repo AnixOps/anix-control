@@ -92,7 +92,7 @@ func seed(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(),
 		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{},
-		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.EgressRoute{}, &model.NodeExitPolicy{})...))
+		&fluxTunnel{}, &fluxForward{}, &fluxRule{}, &model.EgressRoute{}, &model.NodeExitPolicy{})...))
 	exit := uint(11)
 	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "proxy-1"}, {ID: 2, Name: "proxy-2"}}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 5, NodeID: 1, Name: "vless", Type: model.ProtocolVLESS, Port: 443}).Error)
@@ -100,15 +100,39 @@ func seed(t *testing.T, db *gorm.DB) {
 		{ID: 10, Name: "relay", Host: "198.51.100.10", Port: 22}, {ID: 11, Name: "exit", Host: "198.51.100.11", Port: 22},
 		{ID: 12, Name: "spare", Host: "198.51.100.12", Port: 22},
 	}).Error)
-	require.NoError(t, db.Create(&[]model.ForwardTunnel{
+	require.NoError(t, db.Create(&[]fluxTunnel{
 		{ID: 30, Name: "tunnel", InNodeID: 10, OutNodeID: &exit}, {ID: 31, Name: "empty", InNodeID: 12},
 	}).Error)
-	require.NoError(t, db.Create(&[]model.Forward{
-		{ID: 40, UserID: 1, Name: "a", TunnelID: 30, InPort: 1000, RemoteAddr: "203.0.113.1:80"},
-		{ID: 41, UserID: 1, Name: "b", TunnelID: 30, InPort: 1001, RemoteAddr: "203.0.113.2:80"},
-	}).Error)
-	require.NoError(t, db.Create(&model.ForwardRule{ID: 50, Name: "rule", RelayNodeID: 10, ListenPort: 2000, ExitNodeID: 12, TargetHost: "203.0.113.3", TargetPort: 80}).Error)
+	require.NoError(t, db.Create(&[]fluxForward{{ID: 40, TunnelID: 30}, {ID: 41, TunnelID: 30}}).Error)
+	require.NoError(t, db.Create(&fluxRule{ID: 50, RelayNodeID: 10, ExitNodeID: 12}).Error)
 }
+
+// fluxTunnel, fluxForward and fluxRule are the columns of the flux tables
+// (dropped by 0028_drop_flux_tables in production) that the contract's
+// forward kinds still look up.
+type fluxTunnel struct {
+	ID        uint `gorm:"primaryKey"`
+	Name      string
+	InNodeID  uint
+	OutNodeID *uint
+}
+
+func (fluxTunnel) TableName() string { return "v2_forward_tunnel" }
+
+type fluxForward struct {
+	ID       uint `gorm:"primaryKey"`
+	TunnelID uint
+}
+
+func (fluxForward) TableName() string { return "v2_forward" }
+
+type fluxRule struct {
+	ID          uint `gorm:"primaryKey"`
+	RelayNodeID uint
+	ExitNodeID  uint
+}
+
+func (fluxRule) TableName() string { return "v2_forward_rule" }
 
 // grants authorizes the capabilities it holds; "fenced" refuses every call
 // as a fenced generation. It is safe for concurrent use and can change.

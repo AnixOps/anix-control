@@ -3,11 +3,12 @@ package smoke
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -75,9 +76,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.InviteConfig{}, &model.NotificationTemplate{}, &model.NotificationLog{},
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{},
 		&model.SystemConfig{}, &model.PaymentGateway{}, &model.PaymentRecord{},
-		&model.ForwardNode{}, &model.Forward{}, &model.ForwardRule{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.ForwardPortBinding{}, &model.ForwardRuntimeJob{},
-		&model.ForwardTrafficCursor{},
+		&model.ForwardNode{},
 		&model.OperationLog{},
 		&model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.SubscriptionGroup{}, &model.SubscriptionTemplate{},
