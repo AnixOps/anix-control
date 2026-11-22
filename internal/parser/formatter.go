@@ -12,7 +12,7 @@ import (
 )
 
 // V2RayFormatter V2Ray Base64 格式化器
-// 符合 V2bX/Xray 协议配置规范
+// 符合 Xray 的分享链接格式
 type V2RayFormatter struct{}
 
 func (f *V2RayFormatter) Name() string {
@@ -458,7 +458,7 @@ func ss2022KeyLen(cipher string) int {
 }
 
 // generateSS2022UserKey 生成 SS2022 用户密钥。
-// 必须与节点端 V2bX (core/xray/ss.go) 完全一致:
+// 必须与节点端 anix-agent (core/anixcore/inbound.go) 完全一致:
 //
 //	base64.StdEncoding(uuid[:keyLen])
 //

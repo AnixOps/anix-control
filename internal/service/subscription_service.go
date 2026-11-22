@@ -1204,7 +1204,7 @@ func ss2022KeyLen(cipher string) int {
 
 // DeriveSS2022ServerKey 复刻老 XBoard `Helper::getServerKey($timestamp, $len)`:
 // base64(substr(md5(unix秒的十进制字符串), 0, len))。md5 输出取 hex 字符串的前
-// len 个字符(不是字节), 再 base64。节点端 V2bX 用相同的 server_key, 两边必须一致。
+// len 个字符(不是字节), 再 base64。节点端使用 Control 下发的同一个 server_key。
 // 导出供节点运行配置复用, 保证订阅端和节点端算出的值一致。
 func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
 	keyLen := ss2022KeyLen(cipher)

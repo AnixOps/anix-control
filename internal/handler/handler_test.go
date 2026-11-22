@@ -350,9 +350,9 @@ func (s *MetricsHandlerTestSuite) TestGetMetrics_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "v2board_info")
-	assert.Contains(s.T(), w.Body.String(), "v2board_users_total")
-	assert.Contains(s.T(), w.Body.String(), "v2board_nodes_total")
+	assert.Contains(s.T(), w.Body.String(), "anixops_control_info")
+	assert.Contains(s.T(), w.Body.String(), "anixops_control_users_total")
+	assert.Contains(s.T(), w.Body.String(), "anixops_control_nodes_total")
 }
 
 func (s *MetricsHandlerTestSuite) TestGetMetrics_IncludesV2GatewaySeries() {

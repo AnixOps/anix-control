@@ -167,7 +167,6 @@ test-clean:
 	@echo "Cleaning test cache..."
 	go clean -testcache
 	rm -f *_coverage.out $(COVERAGE_FILE) $(COVERAGE_HTML)
-	find . -name "v2board_*_test.db" -delete 2>/dev/null || true
 	find . -name "*.test" -delete 2>/dev/null || true
 	@echo "Test cache cleaned."
 

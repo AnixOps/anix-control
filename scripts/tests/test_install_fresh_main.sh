@@ -208,8 +208,7 @@ run_main "${temporary}/fresh.log" install --version "${VERSION_UNDER_TEST}" \
 check "fresh: main exits 0" test "${RUN_STATUS}" -eq 0
 check "fresh: reports success" grep -qF "Installed ${VERSION_UNDER_TEST} successfully." "${temporary}/fresh.log"
 check "fresh: the binary is installed" test -x "${FRESH}/bin/anix-control"
-check "fresh: the v2board compatibility link points at it" \
-  test "$(readlink "${FRESH}/bin/v2board")" = anix-control
+check "fresh: no compatibility link beside the binary" test ! -e "${FRESH}/bin/v2board" -a ! -L "${FRESH}/bin/v2board"
 check "fresh: the frontend is installed" test -f "${FRESH}/web/public/index.html"
 check "fresh: the release version is recorded" test "$(cat "${FRESH}/.release-version")" = "${VERSION_UNDER_TEST}"
 check "fresh: the systemd unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-control.service"

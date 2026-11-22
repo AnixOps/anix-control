@@ -9,20 +9,12 @@ REPO_NAME="${REPO_NAME:-anix-control}"
 RELEASE_BASE="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download"
 RAW_BASE="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}"
 
-SERVICE_NAME_EXPLICIT=0
-APP_USER_EXPLICIT=0
-INSTALL_DIR_EXPLICIT=0
-[[ -n "${SERVICE_NAME+x}" ]] && SERVICE_NAME_EXPLICIT=1
-[[ -n "${APP_USER+x}" ]] && APP_USER_EXPLICIT=1
-[[ -n "${INSTALL_DIR+x}" ]] && INSTALL_DIR_EXPLICIT=1
-
 SERVICE_NAME="${SERVICE_NAME:-anix-control}"
 APP_USER="${APP_USER:-anixops}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/anixops/control}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
 
 BINARY_PATH=""
-LEGACY_BINARY_PATH=""
 CONFIG_FILE=""
 FRONTEND_DIR=""
 BACKUP_ROOT=""
@@ -31,7 +23,7 @@ TMP_DIR=""
 BACKUP_DIR=""
 SKIP_START=0
 COMMAND="install"
-VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
+VERSION="${ANIX_CONTROL_VERSION:-}"
 PLUGIN_HOST_RUNTIME_DIR=""
 PLUGIN_ARTIFACT_DIR=""
 FRESH_CONFIG=0
@@ -39,19 +31,6 @@ FRESH_CONFIG=0
 # SQLite only when chosen (--sqlite, or a yes at the terminal).
 DATABASE_DSN="${DATABASE_DSN:-}"
 USE_SQLITE=0
-
-# Native production-layout migration paths.  They are overridable for fixture
-# tests, but default to the documented paths on a real host.
-LEGACY_PROGRAM_DIR="${LEGACY_PROGRAM_DIR:-/usr/local/v2board}"
-LEGACY_CONFIG_DIR="${LEGACY_CONFIG_DIR:-/etc/v2board}"
-LEGACY_DATA_DIR="${LEGACY_DATA_DIR:-/var/lib/v2board}"
-LEGACY_SERVICE_FILE="${LEGACY_SERVICE_FILE:-/etc/systemd/system/v2board.service}"
-MIGRATION_PLAN_PATH="${MIGRATION_PLAN_PATH:-migration-plan.json}"
-MIGRATION_BACKUP_DIR="${MIGRATION_BACKUP_DIR:-/var/backups/anixops-control}"
-TARGET_CONFIG_DIR="${TARGET_CONFIG_DIR:-/etc/anixops/control}"
-TARGET_DATA_DIR="${TARGET_DATA_DIR:-/var/lib/anixops/control}"
-TARGET_LOG_DIR="${TARGET_LOG_DIR:-/var/log/anixops/control}"
-MIGRATION_SNAPSHOT=""
 
 # Agent access (AgentEnrollment needs the built-in CA and gRPC with TLS).
 # CA_KEK_FILE holds module_runtime.ca_kek; TLS_DIR the gRPC certificate.
@@ -86,7 +65,7 @@ trap cleanup EXIT
 usage() {
   cat <<'EOF'
 Usage:
-  install.sh [install|update|rollback|preflight|migrate|enable-agents] [options]
+  install.sh [install|update|rollback|enable-agents] [options]
 
 This native systemd installer installs the release tag you name. It never
 resolves a moving "latest" release. Containers are the primary deployment
@@ -106,7 +85,6 @@ Options:
                            PostgreSQL is the default database. Also DATABASE_DSN.
   --sqlite                 Use SQLite instead (trials only). Without --database-dsn or --sqlite a fresh
                            install stops; at a terminal it asks first.
-  --plan <path>            Preflight JSON output path (default: migration-plan.json).
   -h, --help               Show this help.
 
 No administrator password is set or stored anywhere: while the panel has no
@@ -126,62 +104,8 @@ repository and never performs Go or frontend builds on the target host.
 EOF
 }
 
-json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-file_sha256() {
-  [[ -f "$1" ]] && sha256sum "$1" | awk '{print $1}' || printf ''
-}
-
-legacy_layout_present() {
-  [[ -x "${LEGACY_PROGRAM_DIR}/v2board" && -f "${LEGACY_CONFIG_DIR}/config.yaml" && -d "${LEGACY_DATA_DIR}" ]]
-}
-
-preflight_migration() {
-  local output="${MIGRATION_PLAN_PATH}" service_state="inactive" db="${LEGACY_DATA_DIR}/v2board.db"
-  install -d "$(dirname "${output}")" 2>/dev/null || true
-  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet v2board.service 2>/dev/null; then service_state="active"; fi
-  local config_hash db_hash unit_hash
-  config_hash="$(file_sha256 "${LEGACY_CONFIG_DIR}/config.yaml")"
-  db_hash="$(file_sha256 "${db}")"
-  unit_hash="$(file_sha256 "${LEGACY_SERVICE_FILE}")"
-  local disk_available; disk_available="$(df -Pk "${LEGACY_DATA_DIR}" 2>/dev/null | awk 'NR==2 {print $4}' | head -n1)"
-  cat > "${output}" <<EOF
-{
-  "schema": 1,
-  "source": {"program": "$(json_escape "${LEGACY_PROGRAM_DIR}/v2board")", "config": "$(json_escape "${LEGACY_CONFIG_DIR}/config.yaml")", "data": "$(json_escape "${LEGACY_DATA_DIR}")", "service": "$(json_escape "${LEGACY_SERVICE_FILE}")"},
-  "target": {"program": "${INSTALL_DIR}", "config": "${TARGET_CONFIG_DIR}", "data": "${TARGET_DATA_DIR}", "logs": "${TARGET_LOG_DIR}", "service": "${SERVICE_NAME}.service"},
-  "service_state": "${service_state}",
-  "files": {"config_sha256": "${config_hash}", "database_sha256": "${db_hash}", "service_sha256": "${unit_hash}"},
-  "database_readable": $( [[ -r "${db}" ]] && printf true || printf false ),
-  "layout_present": $( legacy_layout_present && printf true || printf false ),
-  "disk_available_kb": "${disk_available:-unknown}",
-  "dependencies": {"curl": $(command -v curl >/dev/null 2>&1 && printf true || printf false), "tar": $(command -v tar >/dev/null 2>&1 && printf true || printf false), "sha256sum": $(command -v sha256sum >/dev/null 2>&1 && printf true || printf false), "systemctl": $(command -v systemctl >/dev/null 2>&1 && printf true || printf false)}
-}
-EOF
-  info "Wrote migration preflight plan to ${output}"
-}
-
 need_root() {
   [[ "${EUID}" -eq 0 ]] || die "Run this installer as root (for example: sudo bash install.sh ...)."
-}
-
-detect_legacy_layout() {
-  if [[ "${SERVICE_NAME_EXPLICIT}" -eq 1 || "${APP_USER_EXPLICIT}" -eq 1 || "${INSTALL_DIR_EXPLICIT}" -eq 1 ]]; then
-    return
-  fi
-
-  if [[ -f /opt/v2board/config/config.yaml || -x /opt/v2board/bin/v2board ]]; then
-    SERVICE_NAME="v2board"
-    APP_USER="v2board"
-    INSTALL_DIR="/opt/v2board"
-    warn "Detected the supported /opt/v2board layout; upgrading it in place with the AnixOps Control binary."
-    return
-  fi
-
-  if systemctl list-unit-files v2board.service --no-legend 2>/dev/null | grep -q '^v2board\.service' ||
-     [[ -x /usr/local/v2board/v2board || -f /etc/v2board/config.yaml || -d /var/lib/v2board ]]; then
-    die "Detected a legacy v2board service/layout that cannot be migrated safely by the default installer. Stop and back up the old service, then rerun with explicit SERVICE_NAME, APP_USER and INSTALL_DIR values for its layout."
-  fi
 }
 
 validate_install_dir() {
@@ -837,20 +761,10 @@ backup_ca_kek() {
 # enable_agents configures Agent access on an existing install without
 # downloading a release, then restarts the service.
 enable_agents() {
-  local migrated=0
-  # A layout moved by `migrate` keeps its configuration in TARGET_CONFIG_DIR.
-  if [[ ! -f "${CONFIG_FILE}" && -f "${TARGET_CONFIG_DIR}/config.yaml" ]]; then
-    CONFIG_FILE="${TARGET_CONFIG_DIR}/config.yaml"
-    migrated=1
-  fi
   [[ -f "${CONFIG_FILE}" ]] || die "No installation at ${INSTALL_DIR} (missing ${CONFIG_FILE}); run install first."
   preflight_grpc_tls
   configure_agent_access 1
-  if [[ "${migrated}" -eq 1 ]]; then
-    write_migration_unit
-  else
-    write_systemd_unit
-  fi
+  write_systemd_unit
   if [[ "${SKIP_START}" -eq 1 ]]; then
     info "Agent access configured; service restart was skipped."
     return 0
@@ -903,8 +817,8 @@ choose_database() {
 
 write_database_config() {
   if [[ "${USE_SQLITE}" -eq 1 ]]; then
-    set_config_section_values database "driver=sqlite" "database=\"${INSTALL_DIR}/config/data/v2board.db\""
-    warn "Using SQLite (${INSTALL_DIR}/config/data/v2board.db): for trials only."
+    set_config_section_values database "driver=sqlite" "database=\"${INSTALL_DIR}/config/data/control.db\""
+    warn "Using SQLite (${INSTALL_DIR}/config/data/control.db): for trials only."
     return 0
   fi
   [[ "${DATABASE_DSN}" != *[\"\\]* && "${DATABASE_DSN}" != *$'\n'* ]] || \
@@ -912,178 +826,26 @@ write_database_config() {
   set_config_section_values database "driver=postgres" "dsn=\"${DATABASE_DSN}\""
 }
 
-# keep_implicit_sqlite: a configuration without database.driver and
-# database.database ran SQLite at config/data/v2board.db before PostgreSQL
-# became the default. An update writes that choice into the file, so the
-# panel keeps its database.
+# keep_implicit_sqlite: a SQLite configuration without database.database ran
+# at config/data/v2board.db, the default file of earlier Controls (and
+# without database.driver it ran SQLite before PostgreSQL became the default).
+# An update writes both into the file, so the panel keeps its database.
 keep_implicit_sqlite() {
-  local db="${INSTALL_DIR}/config/data/v2board.db"
-  [[ -f "${db}" && -z "$(config_section_value database driver)" && -z "$(config_section_value database database)" ]] || return 0
+  local db="${INSTALL_DIR}/config/data/v2board.db" driver
+  driver="$(config_section_value database driver)"
+  [[ -f "${db}" && "${driver}" =~ ^(sqlite3?)?$ && -z "$(config_section_value database database)" ]] || return 0
   set_config_section_values database "driver=sqlite" "database=\"${db}\""
   warn "This install runs SQLite (${db}); PostgreSQL is the default now, so database.driver: sqlite was written to ${CONFIG_FILE}."
-}
-
-snapshot_migration_state() {
-  MIGRATION_SNAPSHOT="${MIGRATION_BACKUP_DIR}/$(date -u +%Y%m%dT%H%M%SZ)-migration"
-  install -d -m 0700 "${MIGRATION_SNAPSHOT}"
-  [[ -f "${LEGACY_SERVICE_FILE}" ]] && cp -a "${LEGACY_SERVICE_FILE}" "${MIGRATION_SNAPSHOT}/v2board.service"
-  [[ -x "${LEGACY_PROGRAM_DIR}/v2board" ]] && cp -a "${LEGACY_PROGRAM_DIR}/v2board" "${MIGRATION_SNAPSHOT}/v2board"
-  [[ -d "${LEGACY_PROGRAM_DIR}/public" ]] && cp -a "${LEGACY_PROGRAM_DIR}/public" "${MIGRATION_SNAPSHOT}/public"
-  [[ -d "${LEGACY_CONFIG_DIR}" ]] && cp -a "${LEGACY_CONFIG_DIR}" "${MIGRATION_SNAPSHOT}/config"
-  [[ -d "${LEGACY_DATA_DIR}" ]] && cp -a "${LEGACY_DATA_DIR}" "${MIGRATION_SNAPSHOT}/data"
-  sha256sum "${MIGRATION_SNAPSHOT}"/v2board "${MIGRATION_SNAPSHOT}"/config/config.yaml "${MIGRATION_SNAPSHOT}"/data/v2board.db 2>/dev/null > "${MIGRATION_SNAPSHOT}/SHA256SUMS" || true
-  info "Migration snapshot: ${MIGRATION_SNAPSHOT}"
-}
-
-copy_migration_config() {
-  install -d -m 0750 "${TARGET_CONFIG_DIR}" "${TARGET_DATA_DIR}" "${TARGET_LOG_DIR}"
-  cp -a "${LEGACY_CONFIG_DIR}/." "${TARGET_CONFIG_DIR}/"
-  rm -f "${TARGET_CONFIG_DIR}/ssh.env"
-  if [[ ! -f "${TARGET_CONFIG_DIR}/inventory.ini" ]]; then
-    cat > "${TARGET_CONFIG_DIR}/inventory.ini" <<'EOF'
-[v2bx_nodes]
-# parent-01 ansible_host=CHANGE_ME ansible_port=22 ansible_user=root ansible_ssh_pass=CHANGE_ME node_id=CHANGE_ME v2bx_arch=amd64
-
-[role_overseas_exit]
-# parent-01
-
-[role_cn_dedicated_nftables]
-# parent-01
-
-[role_cn_standard_agent]
-# parent-01
-
-[v2bx_nodes:children]
-role_overseas_exit
-role_cn_standard_agent
-
-[forward_nodes:children]
-role_cn_dedicated_nftables
-EOF
-  fi
-  # Resolve the historical relative SQLite path against the new data root.
-  if [[ -f "${TARGET_CONFIG_DIR}/config.yaml" ]]; then
-    sed -i -E "s#(^[[:space:]]+database:[[:space:]]*)['\"]?data(/[^'\"]*)?['\"]?#\\1${TARGET_DATA_DIR}/v2board.db#" "${TARGET_CONFIG_DIR}/config.yaml" || true
-    sed -i -E "s#(^[[:space:]]+path:[[:space:]]*)['\"]?public['\"]?#\\1${INSTALL_DIR}/web/public#" "${TARGET_CONFIG_DIR}/config.yaml" || true
-    sed -i "s#${LEGACY_DATA_DIR}/frontend#${INSTALL_DIR}/web/public#g" "${TARGET_CONFIG_DIR}/config.yaml" || true
-    copy_tls_asset "${TARGET_CONFIG_DIR}/config.yaml" tls_cert_file control-cert.pem
-    copy_tls_asset "${TARGET_CONFIG_DIR}/config.yaml" tls_key_file control-key.pem
-    copy_tls_asset "${TARGET_CONFIG_DIR}/config.yaml" cert_file control-cert.pem
-    copy_tls_asset "${TARGET_CONFIG_DIR}/config.yaml" key_file control-key.pem
-  fi
-  if [[ -f "${LEGACY_DATA_DIR}/v2board.db" ]]; then
-    install -m 0640 "${LEGACY_DATA_DIR}/v2board.db" "${TARGET_DATA_DIR}/v2board.db"
-    [[ "$(file_sha256 "${LEGACY_DATA_DIR}/v2board.db")" == "$(file_sha256 "${TARGET_DATA_DIR}/v2board.db")" ]] || die "SQLite copy checksum mismatch"
-  fi
-  chown -R "${APP_USER}:${APP_USER}" "${TARGET_DATA_DIR}" "${TARGET_LOG_DIR}" 2>/dev/null || true
-  chown root:"${APP_USER}" "${TARGET_CONFIG_DIR}" "${TARGET_CONFIG_DIR}/config.yaml" "${TARGET_CONFIG_DIR}/inventory.ini"
-  chmod 0750 "${TARGET_CONFIG_DIR}"
-  chmod 0640 "${TARGET_CONFIG_DIR}/config.yaml"
-  chmod 0640 "${TARGET_CONFIG_DIR}/inventory.ini"
-}
-
-copy_tls_asset() {
-  local config="$1" key="$2" name="$3" source target
-  source="$(sed -n -E "s#^[[:space:]]+${key}:[[:space:]]*['\"]?([^'\"]+)['\"]?.*#\1#p" "${config}" | head -n1)"
-  [[ "${source}" == /etc/letsencrypt/* && -r "${source}" ]] || return 0
-  target="${TARGET_CONFIG_DIR}/${name}"
-  cp -L "${source}" "${target}"
-  chown root:"${APP_USER}" "${target}"
-  chmod 0640 "${target}"
-  sed -i "s#${source}#${target}#g" "${config}"
-}
-
-write_migration_unit() {
-  write_systemd_unit
-  # Migration config/data live outside the program root and must be writable.
-  sed -i "s#ReadWritePaths=.*#ReadWritePaths=${INSTALL_DIR} ${TARGET_CONFIG_DIR} ${TARGET_DATA_DIR} ${TARGET_LOG_DIR}#" "${SYSTEMD_UNIT_DIR}/${SERVICE_NAME}.service"
-  systemctl daemon-reload
-}
-
-migrate_legacy_layout() {
-  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || die "migrate requires --version <release tag>"
-  legacy_layout_present || die "Expected legacy layout was not found"
-  BINARY_PATH="${INSTALL_DIR}/bin/anix-control"
-  LEGACY_BINARY_PATH="${INSTALL_DIR}/bin/v2board"
-  CONFIG_FILE="${TARGET_CONFIG_DIR}/config.yaml"
-  FRONTEND_DIR="${INSTALL_DIR}/web/public"
-  BACKUP_ROOT="${MIGRATION_BACKUP_DIR}"
-  VERSION_FILE="${INSTALL_DIR}/.release-version"
-  TMP_DIR="$(mktemp -d)"
-  PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
-  PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
-  CA_KEK_FILE="${INSTALL_DIR}/config/secrets/module_ca_kek"
-  TLS_DIR="${INSTALL_DIR}/config/tls"
-  DATA_DIR="${INSTALL_DIR}/data"
-  preflight_grpc_tls
-  install_base_tools
-  ensure_app_user
-  install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" "${INSTALL_DIR}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/web" "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${TARGET_CONFIG_DIR}" "${TARGET_DATA_DIR}" "${TARGET_LOG_DIR}"
-  # Download and verify everything before touching the running legacy service.
-  local binary_archive; binary_archive="$(asset_name)"
-  download_asset "SHA256SUMS.txt"; verify_release_checksums
-  download_asset "${binary_archive}"; download_asset "anix-control-frontend.tar.gz"
-  verify_asset "${binary_archive}"; verify_asset "anix-control-frontend.tar.gz"
-  snapshot_migration_state
-  stop_legacy_service
-  copy_migration_config
-  install_release_files "${binary_archive}"
-  if uses_plugin_execution; then
-    configure_plugin_execution_config
-  fi
-  # A migrated install keeps its configuration: a missing CA key is reported,
-  # not generated (enable-agents adds it).
-  configure_agent_access 0
-  write_migration_unit
-  # Existing installations commonly use a non-default HTTP port.
-  local migrated_port
-  migrated_port="$(sed -n -E '/^server:/,/^[^[:space:]]/ s/^[[:space:]]+port:[[:space:]]*([0-9]+).*/\1/p' "${CONFIG_FILE}" | head -n1)"
-  [[ "${migrated_port}" =~ ^[0-9]+$ ]] && HEALTH_URL="http://127.0.0.1:${migrated_port}/health"
-  if [[ "${SKIP_START}" -eq 1 ]]; then return 0; fi
-  if ! start_and_verify || ! verify_plugin_only_startup; then
-    restore_migration_on_error
-    die "Migration failed health verification; legacy service was restored"
-  fi
-  systemctl disable v2board.service >/dev/null 2>&1 || true
-  info "Legacy layout migrated successfully; v2board.service is disabled"
-}
-
-restore_migration_on_error() {
-  systemctl stop "${SERVICE_NAME}" >/dev/null 2>&1 || true
-  [[ -n "${MIGRATION_SNAPSHOT}" && -f "${MIGRATION_SNAPSHOT}/v2board.service" ]] && cp -a "${MIGRATION_SNAPSHOT}/v2board.service" "${LEGACY_SERVICE_FILE}"
-  [[ -n "${MIGRATION_SNAPSHOT}" && -f "${MIGRATION_SNAPSHOT}/v2board" ]] && install -m 0755 "${MIGRATION_SNAPSHOT}/v2board" "${LEGACY_PROGRAM_DIR}/v2board"
-  if [[ -n "${MIGRATION_SNAPSHOT}" && -d "${MIGRATION_SNAPSHOT}/public" ]]; then
-    rm -rf "${LEGACY_PROGRAM_DIR}/public"
-    cp -a "${MIGRATION_SNAPSHOT}/public" "${LEGACY_PROGRAM_DIR}/public"
-  fi
-  systemctl daemon-reload >/dev/null 2>&1 || true
-  systemctl enable v2board.service >/dev/null 2>&1 || true
-  systemctl start v2board.service >/dev/null 2>&1 || true
-}
-
-rollback_migration() {
-  local snapshot="${1:-}"
-  [[ -n "${snapshot}" && -d "${snapshot}" ]] || snapshot="$(find "${MIGRATION_BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -name '*-migration' -print 2>/dev/null | sort | tail -n 1)"
-  [[ -n "${snapshot}" && -d "${snapshot}" ]] || die "No migration snapshot found"
-  systemctl stop "${SERVICE_NAME}" >/dev/null 2>&1 || true
-  [[ -f "${snapshot}/v2board.service" ]] && cp -a "${snapshot}/v2board.service" "${LEGACY_SERVICE_FILE}"
-  [[ -f "${snapshot}/v2board" ]] && install -m 0755 "${snapshot}/v2board" "${LEGACY_PROGRAM_DIR}/v2board"
-  systemctl daemon-reload; systemctl enable v2board.service >/dev/null; systemctl start v2board.service
-  info "Rolled back legacy service from ${snapshot}"
 }
 
 backup_current_release() {
   # A fresh install has nothing to back up. A bare `return` would hand the
   # failed test's status 1 to main, which runs under errexit and would stop
   # here, before the binary, the unit or the service are installed.
-  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return 0
+  [[ -x "${BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return 0
   BACKUP_DIR="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ)-${VERSION}"
   install -d -m 0700 -o root -g root "${BACKUP_DIR}"
-  if [[ -x "${BINARY_PATH}" ]]; then
-    cp -a "${BINARY_PATH}" "${BACKUP_DIR}/anix-control"
-  elif [[ -x "${LEGACY_BINARY_PATH}" ]]; then
-    cp -aL "${LEGACY_BINARY_PATH}" "${BACKUP_DIR}/anix-control"
-  fi
+  [[ -x "${BINARY_PATH}" ]] && cp -a "${BINARY_PATH}" "${BACKUP_DIR}/anix-control"
   [[ -d "${FRONTEND_DIR}" ]] && cp -a "${FRONTEND_DIR}" "${BACKUP_DIR}/frontend"
   [[ -f "${CONFIG_FILE}" ]] && cp -a "${CONFIG_FILE}" "${BACKUP_DIR}/config.yaml"
   [[ -f "${VERSION_FILE}" ]] && cp -a "${VERSION_FILE}" "${BACKUP_DIR}/release-version"
@@ -1094,12 +856,6 @@ backup_current_release() {
 stop_running_service() {
   if systemctl is-active --quiet "${SERVICE_NAME}"; then
     systemctl stop "${SERVICE_NAME}"
-  fi
-}
-
-stop_legacy_service() {
-  if systemctl is-active --quiet v2board.service 2>/dev/null; then
-    systemctl stop v2board.service
   fi
 }
 
@@ -1115,8 +871,8 @@ install_release_files() {
 
   install -m 0755 "${stage}/bin/${binary_name}" "${BINARY_PATH}.new"
   mv -f "${BINARY_PATH}.new" "${BINARY_PATH}"
-  rm -f "${LEGACY_BINARY_PATH}"
-  ln -s "$(basename "${BINARY_PATH}")" "${LEGACY_BINARY_PATH}"
+  # Earlier installers linked bin/v2board to the binary.
+  rm -f "${INSTALL_DIR}/bin/v2board"
   rm -rf "${FRONTEND_DIR}.new"
   mv "${stage}/web/public" "${FRONTEND_DIR}.new"
   rm -rf "${FRONTEND_DIR}"
@@ -1172,8 +928,6 @@ restore_backup() {
   warn "Restoring the previous release from ${BACKUP_DIR}"
   if [[ -f "${BACKUP_DIR}/anix-control" ]]; then
     install -m 0755 "${BACKUP_DIR}/anix-control" "${BINARY_PATH}"
-    rm -f "${LEGACY_BINARY_PATH}"
-    ln -s "$(basename "${BINARY_PATH}")" "${LEGACY_BINARY_PATH}"
   fi
   if [[ -d "${BACKUP_DIR}/frontend" ]]; then
     rm -rf "${FRONTEND_DIR}"
@@ -1271,7 +1025,7 @@ print_claim_link() {
 }
 
 parse_args() {
-  if [[ "${1:-}" == "install" || "${1:-}" == "update" || "${1:-}" == "rollback" || "${1:-}" == "preflight" || "${1:-}" == "migrate" || "${1:-}" == "enable-agents" ]]; then
+  if [[ "${1:-}" == "install" || "${1:-}" == "update" || "${1:-}" == "rollback" || "${1:-}" == "enable-agents" ]]; then
     COMMAND="$1"
     shift
   fi
@@ -1283,7 +1037,7 @@ parse_args() {
       --version)
         [[ "$#" -ge 2 ]] || die "--version requires a release tag, for example --version v4.2.0"
         ;;
-      --install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key|--database-dsn)
+      --install-dir|--health-url|--grpc-name|--grpc-tls-cert|--grpc-tls-key|--database-dsn)
         [[ "$#" -ge 2 ]] || die "$1 requires a value (see --help)"
         ;;
     esac
@@ -1292,13 +1046,8 @@ parse_args() {
       --admin-email|--admin-password)
         die "$1 was removed: no administrator password is configured any more. The installer prints a one-time link that creates the first administrator (anix-control admin claim-link)."
         ;;
-      --install-dir)
-        INSTALL_DIR="${2:-}"
-        INSTALL_DIR_EXPLICIT=1
-        shift 2
-        ;;
+      --install-dir) INSTALL_DIR="${2:-}"; shift 2 ;;
       --health-url) HEALTH_URL="${2:-}"; shift 2 ;;
-      --plan) MIGRATION_PLAN_PATH="${2:-}"; shift 2 ;;
       --skip-start) SKIP_START=1; shift ;;
       --grpc-name) GRPC_NAME="${2:-}"; shift 2 ;;
       --grpc-tls-cert) GRPC_TLS_CERT="${2:-}"; shift 2 ;;
@@ -1313,7 +1062,6 @@ parse_args() {
 
 set_install_paths() {
   BINARY_PATH="${INSTALL_DIR}/bin/anix-control"
-  LEGACY_BINARY_PATH="${INSTALL_DIR}/bin/v2board"
   CONFIG_FILE="${INSTALL_DIR}/config/config.yaml"
   FRONTEND_DIR="${INSTALL_DIR}/web/public"
   BACKUP_ROOT="${INSTALL_DIR}/backups"
@@ -1328,22 +1076,8 @@ set_install_paths() {
 
 main() {
   parse_args "$@"
-  if [[ "${COMMAND}" == "preflight" ]]; then
-    preflight_migration
-    exit 0
-  fi
   need_root
-  if [[ "${COMMAND}" == "migrate" ]]; then
-    [[ -n "${VERSION}" ]] || die "migrate requires --version <release tag>"
-    migrate_legacy_layout
-    exit 0
-  fi
-  if [[ "${COMMAND}" == "rollback" && "${VERSION}" == "" ]]; then
-    rollback_migration ""
-    exit 0
-  fi
   if [[ "${COMMAND}" == "enable-agents" ]]; then
-    detect_legacy_layout
     validate_install_dir
     set_install_paths
     enable_agents
@@ -1351,7 +1085,6 @@ main() {
   fi
   warn "Containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/main/docs/DEPLOYMENT.md"
   require_version
-  detect_legacy_layout
   validate_install_dir
   install_base_tools
 

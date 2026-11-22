@@ -74,7 +74,7 @@ func TestInit_SQLite_DefaultPath(t *testing.T) {
 	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
-	assert.FileExists(t, filepath.Join("config", "data", "v2board.db"))
+	assert.FileExists(t, filepath.Join("config", "data", "control.db"))
 }
 
 func TestInit_SQLite_WithDirectory(t *testing.T) {

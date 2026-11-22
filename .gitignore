@@ -4,8 +4,6 @@
 *.dll
 *.so
 *.dylib
-v2board
-v2board-*
 /anix-control
 anix-control-*
 
@@ -78,7 +76,6 @@ web/.histoire/
 
 # Secrets and local state (never commit)
 .authkey
-.v2board.pid
 
 # Tool/editor local dirs
 .codex/
@@ -104,7 +101,6 @@ config/docker/nginx/ssl/
 # Local build artifacts / production binary backups
 /server
 /migrate
-v2board.bak.*
 
 # Build output of `go build` in the repository root or in a package's host
 # directory. packages/<id>/control/ itself is source (the hosts are libraries

@@ -143,13 +143,7 @@ ensure_node_version_supported() {
 detect_systemd_paths() {
   local exec_start detected_install detected_config detected_workdir
 
-  if [[ -z "${SERVICE_NAME}" ]]; then
-    SERVICE_NAME="anix-control.service"
-    if [[ "$("${SUDO[@]}" systemctl show anix-control.service -p LoadState --value 2>/dev/null || true)" != "loaded" ]] &&
-       [[ "$("${SUDO[@]}" systemctl show v2board.service -p LoadState --value 2>/dev/null || true)" == "loaded" ]]; then
-      SERVICE_NAME="v2board.service"
-    fi
-  fi
+  [[ -n "${SERVICE_NAME}" ]] || SERVICE_NAME="anix-control.service"
 
   exec_start=$("${SUDO[@]}" systemctl show "${SERVICE_NAME}" -p ExecStart --value 2>/dev/null || true)
   detected_install=$(sed -n 's/.*path=\([^ ;}]*\).*/\1/p' <<<"${exec_start}" | head -n1)
@@ -286,11 +280,11 @@ run_self_test() {
   cat >"${fakebin}/systemctl" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == "show" && "$3" == "-p" && "$4" == "ExecStart" ]]; then
-  echo "{ path=/opt/anix/v2board ; argv[]=/opt/anix/v2board -config /opt/anix/config/config.yaml ; ignore_errors=no }"
+  echo "{ path=/opt/anix/bin/anix-control ; argv[]=/opt/anix/bin/anix-control -config /opt/anix/config/config.yaml ; ignore_errors=no }"
   exit 0
 fi
 if [[ "$1" == "show" && "$3" == "-p" && "$4" == "WorkingDirectory" ]]; then
-  echo "/srv/v2board"
+  echo "/srv/anix-control"
   exit 0
 fi
 exit 1
@@ -299,18 +293,18 @@ EOF
 
   SUDO=()
   PATH="${fakebin}:${PATH}"
-  SERVICE_NAME="v2board.service"
+  SERVICE_NAME="anix-control.service"
   INSTALL_PATH=""
   CONFIG_PATH=""
   WORKING_DIR=""
   detect_systemd_paths
-  assert_self_test_equal "${INSTALL_PATH}" "/opt/anix/v2board" "detected install path"
+  assert_self_test_equal "${INSTALL_PATH}" "/opt/anix/bin/anix-control" "detected install path"
   assert_self_test_equal "${CONFIG_PATH}" "/opt/anix/config/config.yaml" "detected config path"
-  assert_self_test_equal "${WORKING_DIR}" "/srv/v2board" "detected working directory"
+  assert_self_test_equal "${WORKING_DIR}" "/srv/anix-control" "detected working directory"
 
   mkdir -p "${tmpdir}/panel/config" "${tmpdir}/panel/web/public" "${tmpdir}/runtime"
   CONFIG_PATH="${tmpdir}/panel/config/config.yaml"
-  INSTALL_PATH="${tmpdir}/install/v2board"
+  INSTALL_PATH="${tmpdir}/install/anix-control"
   WORKING_DIR="${tmpdir}/runtime"
   cat >"${CONFIG_PATH}" <<'EOF'
 server:
@@ -505,10 +499,6 @@ append_frontend_dir "${WORKING_DIR}/web/public"
 append_frontend_dir "$(dirname "${CONFIG_PATH}")/web/public"
 append_frontend_dir "$(dirname "${INSTALL_PATH}")/web/public"
 append_frontend_dir "/opt/anixops/control/web/public"
-append_frontend_dir "/var/lib/v2board/web/public"
-append_frontend_dir "/var/lib/v2board/frontend"
-append_frontend_dir "/opt/v2board/web/public"
-append_frontend_dir "/etc/v2board/web/public"
 
 if [[ -e "${INSTALL_PATH}" ]]; then
   echo "==> Backing up current binary to ${BACKUP_PATH}"

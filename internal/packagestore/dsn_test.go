@@ -8,10 +8,10 @@ import (
 )
 
 func TestPackageDSNKeepsOnlyServerSettings(t *testing.T) {
-	kernel := `sslmode=verify-full TimeZone=UTC host='db.internal' port='5432' user='kernel' password='s3cr\'et x' dbname='v2board' sslcert=/etc/kernel.crt sslkey=/etc/kernel.key passfile=/root/.pgpass options='-c role=postgres'`
+	kernel := `sslmode=verify-full TimeZone=UTC host='db.internal' port='5432' user='kernel' password='s3cr\'et x' dbname='anix_control' sslcert=/etc/kernel.crt sslkey=/etc/kernel.key passfile=/root/.pgpass options='-c role=postgres'`
 	dsn, err := packageDSN(kernel, "anix_pkg_knowledge", "p'w", "anix-pkg-knowledge")
 	require.NoError(t, err)
-	require.Equal(t, `TimeZone=UTC dbname='v2board' host='db.internal' port='5432' sslmode='verify-full' user='anix_pkg_knowledge' password='p\'w' application_name='anix-pkg-knowledge'`, dsn)
+	require.Equal(t, `TimeZone=UTC dbname='anix_control' host='db.internal' port='5432' sslmode='verify-full' user='anix_pkg_knowledge' password='p\'w' application_name='anix-pkg-knowledge'`, dsn)
 	for _, leaked := range []string{"kernel", "s3cr", "sslcert", "sslkey", "passfile", "options"} {
 		require.NotContains(t, strings.ReplaceAll(dsn, "anix-pkg-knowledge", ""), leaked)
 	}
@@ -28,9 +28,9 @@ func TestPackageDSNKeepsOnlyServerSettings(t *testing.T) {
 }
 
 func TestPackageDSNFromURL(t *testing.T) {
-	dsn, err := packageDSN("postgresql://kernel:secret@db1:5433,[::1]/v2board?sslmode=require&sslcert=/k.crt&connect_timeout=5", "anix_pkg_ticket", "pw", "anix-pkg-ticket")
+	dsn, err := packageDSN("postgresql://kernel:secret@db1:5433,[::1]/anix_control?sslmode=require&sslcert=/k.crt&connect_timeout=5", "anix_pkg_ticket", "pw", "anix-pkg-ticket")
 	require.NoError(t, err)
-	require.Equal(t, `connect_timeout='5' dbname='v2board' host='db1,::1' port='5433,' sslmode='require' user='anix_pkg_ticket' password='pw' application_name='anix-pkg-ticket'`, dsn)
+	require.Equal(t, `connect_timeout='5' dbname='anix_control' host='db1,::1' port='5433,' sslmode='require' user='anix_pkg_ticket' password='pw' application_name='anix-pkg-ticket'`, dsn)
 	require.NotContains(t, dsn, "secret")
 }
 
@@ -57,13 +57,13 @@ func TestScramVerifierFormat(t *testing.T) {
 }
 
 func TestPackageDSNForRemoteHolders(t *testing.T) {
-	kernel := `host='localhost' hostaddr='127.0.0.1' port='5432' dbname='v2board' user='kernel' password='k'`
+	kernel := `host='localhost' hostaddr='127.0.0.1' port='5432' dbname='anix_control' user='kernel' password='k'`
 	dsn, err := packageDSNWithHost(kernel, "postgres.anix.svc:6432", "u", "p", "a")
 	require.NoError(t, err)
-	require.Equal(t, `dbname='v2board' host='postgres.anix.svc' port='6432' user='u' password='p' application_name='a'`, dsn)
+	require.Equal(t, `dbname='anix_control' host='postgres.anix.svc' port='6432' user='u' password='p' application_name='a'`, dsn)
 	dsn, err = packageDSNWithHost(kernel, "db.internal", "u", "p", "a")
 	require.NoError(t, err)
-	require.Equal(t, `dbname='v2board' host='db.internal' port='5432' user='u' password='p' application_name='a'`, dsn)
+	require.Equal(t, `dbname='anix_control' host='db.internal' port='5432' user='u' password='p' application_name='a'`, dsn)
 	dsn, err = packageDSNWithHost(kernel, "[fd00::5]:5433", "u", "p", "a")
 	require.NoError(t, err)
 	require.Contains(t, dsn, `host='fd00::5' port='5433'`)

@@ -531,7 +531,6 @@ jobs:
           GOEXPERIMENT=jsonv2 go build -o build_assets/anix-agent \
             -tags "anixcore" -trimpath \
             -ldflags "-X 'github.com/AnixOps/anix-agent/v5/cmd.version=${TAG}' -s -w -buildid="
-          ln -s anix-agent build_assets/V2bX
           cp README.md LICENSE example/*.json build_assets/
 
       - name: Package
@@ -540,7 +539,6 @@ jobs:
           set -Eeuo pipefail
           pushd build_assets
           touch -mt "$(date +%Y01010000)" ./*
-          touch -h -mt "$(date +%Y01010000)" V2bX
           zip -9yr "../anix-agent-${{ matrix.asset_name }}.zip" .
           popd
           file="anix-agent-${{ matrix.asset_name }}.zip"

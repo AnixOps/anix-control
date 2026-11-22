@@ -1,4 +1,4 @@
-- name: Apply V2Board forward iptables rules
+- name: Apply forward iptables rules
   hosts: all
   gather_facts: false
   become: true

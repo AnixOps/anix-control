@@ -53,7 +53,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 			Expire: 86400,
 		},
 		App: config.AppConfig{
-			Name:          "V2Board Subscribe E2E Test",
+			Name:          "Subscribe E2E Test",
 			Version:       "test",
 			SubscribePath: "s",
 		},

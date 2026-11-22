@@ -1,4 +1,4 @@
-- name: Collect V2Board forward traffic stats (iptables)
+- name: Collect forward traffic stats (iptables)
   hosts: all
   gather_facts: false
   become: true

@@ -166,7 +166,7 @@ export async function openScreen(page, name, { theme = 'light', locale = 'en', c
   const signedOut = Boolean(fixture.signedOut?.(scenario))
   await page.addInitScript(({ theme, locale, signedOut, profile }) => {
     localStorage.setItem('app.locale', locale)
-    localStorage.setItem('v2board-theme', theme)
+    localStorage.setItem('app.theme', theme)
     if (signedOut) return
     localStorage.setItem('token', 'e2e-screen-token')
     localStorage.setItem('userInfo', JSON.stringify(profile))

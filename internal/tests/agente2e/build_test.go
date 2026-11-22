@@ -46,8 +46,8 @@ func agentRoot(t *testing.T, control string) string {
 		return filepath.Clean(configured)
 	}
 	for _, candidate := range []string{
-		filepath.Join(control, "V2bX_AnixOps"),
-		filepath.Join(filepath.Dir(control), "V2bX_AnixOps"),
+		filepath.Join(control, "anix-agent"),
+		filepath.Join(filepath.Dir(control), "anix-agent"),
 		filepath.Join(filepath.Dir(control), "anix-agent"),
 	} {
 		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {

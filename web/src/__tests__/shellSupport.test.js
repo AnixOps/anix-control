@@ -27,11 +27,11 @@ describe('useTheme preference', () => {
     setThemePreference('light')
     expect(themePreference.value).toBe('light')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    expect(localStorage.getItem('v2board-theme')).toBe('light')
+    expect(localStorage.getItem('app.theme')).toBe('light')
 
     setThemePreference('system')
     expect(themePreference.value).toBe('system')
-    expect(localStorage.getItem('v2board-theme')).toBeNull()
+    expect(localStorage.getItem('app.theme')).toBeNull()
     expect(currentTheme.value).toBe('dark')
   })
 })

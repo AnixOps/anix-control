@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTROL_HOME="${ANIX_CONTROL_HOME:-${V2BOARD_HOME:-/opt/anixops/control}}"
+CONTROL_HOME="${ANIX_CONTROL_HOME:-/opt/anixops/control}"
 
 pick_existing_file() {
   local fallback="$1"
@@ -18,29 +18,18 @@ pick_existing_file() {
 }
 
 SOURCE_DB="${SOURCE_DB:-$(pick_existing_file \
+  "${CONTROL_HOME}/config/data/control.db" \
   "${CONTROL_HOME}/config/data/v2board.db" \
-  "${ROOT_DIR}/config/data/v2board.db" \
-  "/opt/v2board/config/data/v2board.db" \
-  "/var/lib/v2board/data/v2board.db")}"
-TARGET_CONFIG="${TARGET_CONFIG:-$(pick_existing_file \
-  "${CONTROL_HOME}/config/config.yaml" \
-  "/opt/v2board/config/config.yaml" \
-  "/etc/v2board/config.yaml")}"
-TOOL="${TOOL:-${V2BOARD_MIGRATION_TOOL:-/tmp/anix-control-sqlite2postgres}}"
-BACKUP_DIR="${BACKUP_DIR:-${V2BOARD_BACKUP_DIR:-${CONTROL_HOME}/backups}}"
-SERVICE_NAME="${SERVICE_NAME:-}"
+  "${ROOT_DIR}/config/data/control.db" \
+  "${ROOT_DIR}/config/data/v2board.db")}"
+TARGET_CONFIG="${TARGET_CONFIG:-${CONTROL_HOME}/config/config.yaml}"
+TOOL="${TOOL:-/tmp/anix-control-sqlite2postgres}"
+BACKUP_DIR="${BACKUP_DIR:-${CONTROL_HOME}/backups}"
+SERVICE_NAME="${SERVICE_NAME:-anix-control.service}"
 
 if [[ -z "${GO_BIN:-}" ]]; then
   GO_BIN="$(command -v go 2>/dev/null || true)"
   [[ -n "${GO_BIN}" ]] || GO_BIN="/usr/local/go/bin/go"
-fi
-
-if [[ -z "${SERVICE_NAME}" ]]; then
-  SERVICE_NAME="anix-control.service"
-  if ! systemctl list-unit-files anix-control.service --no-legend 2>/dev/null | grep -q '^anix-control\.service' &&
-     systemctl list-unit-files v2board.service --no-legend 2>/dev/null | grep -q '^v2board\.service'; then
-    SERVICE_NAME="v2board.service"
-  fi
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then

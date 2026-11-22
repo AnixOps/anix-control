@@ -280,7 +280,7 @@ func resolveRuntimePath(rawPath, resolvedConfigPath string) string {
 
 func resolveSQLitePath(rawDBPath, resolvedConfigPath string) string {
 	if rawDBPath == "" {
-		rawDBPath = "config/data/v2board.db"
+		rawDBPath = database.DefaultSQLitePath
 	}
 	return resolveRuntimePath(rawDBPath, resolvedConfigPath)
 }

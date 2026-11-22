@@ -18,7 +18,7 @@ other only through contracts:
   - `sdk/api/identity/v1` `IdentityService`;
   - `sdk/api/kernelidentity/v1` `KernelIdentity`.
 - **Public protocols:**
-  - the v2 HTTP API (v2board compatible) behind the kernel gateway;
+  - the v2 HTTP API behind the kernel gateway;
   - JWT (EdDSA) and JWKS for access tokens;
   - Prometheus metrics.
 

@@ -9,7 +9,7 @@ format, or node credential semantics of an unrelated historical panel.
 
 | Source | Automation level | Required path |
 |---|---|---|
-| Earlier `v2board_AnixOps` native install | Supported | Version-pinned release installer plus backup and health check |
+| Earlier AnixOps Control native install | Supported | Version-pinned release installer plus backup and health check |
 | Current AnixOps SQLite to PostgreSQL | Supported with operator approval | SQLite-to-PostgreSQL dry run, backup, import, verification, rollback plan |
 | Existing AnixOps Docker deployment | Operator-guided | Preserve volumes/config, deploy matching release image or native target in staging |
 | PHP V2Board, XBoard, or another fork | No automatic import | Export, field mapping, staged import, credential rotation, and cutover validation |
@@ -34,13 +34,13 @@ Perform these steps before every migration:
 For a native AnixOps installation, a minimum SQLite backup is:
 
 ```bash
-sudo systemctl stop v2board
-sudo install -d -m 0700 /root/v2board-migration-backup
-sudo cp -a /opt/v2board/config /root/v2board-migration-backup/config
-sudo cp -a /opt/v2board/.release-version /root/v2board-migration-backup/ 2>/dev/null || true
-sudo sha256sum /root/v2board-migration-backup/config/data/v2board.db \
-  | sudo tee /root/v2board-migration-backup/v2board.db.sha256
-sudo systemctl start v2board
+sudo systemctl stop anix-control
+sudo install -d -m 0700 /root/anix-control-migration-backup
+sudo cp -a /opt/anixops/control/config /root/anix-control-migration-backup/config
+sudo cp -a /opt/anixops/control/.release-version /root/anix-control-migration-backup/ 2>/dev/null || true
+sudo sha256sum /root/anix-control-migration-backup/config/data/*.db \
+  | sudo tee /root/anix-control-migration-backup/sqlite.sha256
+sudo systemctl start anix-control
 ```
 
 Verify the backup on a separate location before proceeding. Do not leave a
@@ -49,8 +49,8 @@ plaintext database or private keys in a public object store.
 ## Earlier AnixOps Native Releases
 
 This is an application upgrade, not a database import. The release installer
-preserves `/opt/v2board/config`, including `config/data/v2board.db`, and creates
-a binary/frontend snapshot before it changes files.
+preserves `/opt/anixops/control/config`, including the SQLite database, and
+creates a binary/frontend snapshot before it changes files.
 
 1. Create and verify the backup above.
 2. Run the target-tag installer with `update --version <target>`.

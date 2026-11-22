@@ -90,7 +90,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 
 // A JWT in the query string is accepted only on a WebSocket handshake, which
 // cannot carry an Authorization header; on any other request it is refused,
-// the way V2Board-style panels leaked or forged credentials through the URL.
+// since a token in a URL leaks through logs, history and the Referer header.
 func TestJWTAuth_QueryTokenOnlyOnWebSocketUpgrade(t *testing.T) {
 	token := authntest.Token(t, 1, "test@example.com", false)
 

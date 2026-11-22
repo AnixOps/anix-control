@@ -218,7 +218,7 @@ func newSQLLogger(writer logger.Writer, colorful bool, level logger.LogLevel) lo
 }
 
 // DefaultSQLitePath is the SQLite database file used when none is configured.
-const DefaultSQLitePath = "config/data/v2board.db"
+const DefaultSQLitePath = "config/data/control.db"
 
 // SQLitePath returns the configured SQLite database file.
 func SQLitePath(cfg *config.DatabaseConfig) string {

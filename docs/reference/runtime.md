@@ -63,7 +63,7 @@ the iptables backend runs with `nftables_ansible`). Legacy
   - `Node-Agent` and operator tooling (status, doctor, runtime jobs)
 - `nftables_ansible` / `iptables_ansible`
   - stateless local execution path on the panel host
-  - background executor inside `v2board`
+  - background executor inside `anix-control`
   - `ansible-playbook` plus SSH and playbooks
 
 ## Admin Entry Points
@@ -104,8 +104,8 @@ Operational implications:
 
 Actual flow:
 
-1. `v2board` builds a runtime request from the selected forward and tunnel
-2. `v2board` calls NodeX
+1. `anix-control` builds a runtime request from the selected forward and tunnel
+2. `anix-control` calls NodeX
 3. NodeX talks to the relay gost API
 4. NodeX creates or updates relay services and limiters
 
@@ -132,13 +132,13 @@ Operational implications:
 - no NodeX control-plane is required
 - no Node-Agent is required
 - no proxy ingress node is required in this stateless path
-- `ansible-playbook` must exist on the `v2board` executor host
+- `ansible-playbook` must exist on the `anix-control` executor host
 - SSH credentials come from the configured ansible inventory
 - the runtime is attached only after the playbook succeeds on the relay host
 
 Actual flow:
 
-1. `v2board` stores a pending runtime job in `v2_forward_runtime_job`
+1. `anix-control` stores a pending runtime job in `v2_forward_runtime_job`
 2. the local executor polls pending local-ansible jobs
 3. the executor runs `ansible-playbook`
 4. the relay host receives or removes `nftables` rules

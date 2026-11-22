@@ -74,61 +74,61 @@ func (h *MetricsHandler) GetMetrics(c *gin.Context) {
 	h.db.Model(&User{}).Where("u > 0 OR d > 0").Count(&onlineUsers)
 
 	// 构建指标
-	metrics := `# HELP v2board_info Application information
-# TYPE v2board_info gauge
-v2board_info{version="` + branding.DefaultVersion + `",go_version="` + runtime.Version() + `"} 1
+	metrics := `# HELP anixops_control_info Application information
+# TYPE anixops_control_info gauge
+anixops_control_info{version="` + branding.DefaultVersion + `",go_version="` + runtime.Version() + `"} 1
 
-# HELP v2board_uptime_seconds Application uptime in seconds
-# TYPE v2board_uptime_seconds gauge
-v2board_uptime_seconds ` + formatFloat(time.Since(h.startTime).Seconds()) + `
+# HELP anixops_control_uptime_seconds Application uptime in seconds
+# TYPE anixops_control_uptime_seconds gauge
+anixops_control_uptime_seconds ` + formatFloat(time.Since(h.startTime).Seconds()) + `
 
-# HELP v2board_requests_total Total number of HTTP requests
-# TYPE v2board_requests_total counter
-v2board_requests_total ` + formatUint(atomic.LoadUint64(&h.requestCount)) + `
+# HELP anixops_control_requests_total Total number of HTTP requests
+# TYPE anixops_control_requests_total counter
+anixops_control_requests_total ` + formatUint(atomic.LoadUint64(&h.requestCount)) + `
 
-# HELP v2board_requests_success_total Total number of successful requests
-# TYPE v2board_requests_success_total counter
-v2board_requests_success_total ` + formatUint(atomic.LoadUint64(&h.successCount)) + `
+# HELP anixops_control_requests_success_total Total number of successful requests
+# TYPE anixops_control_requests_success_total counter
+anixops_control_requests_success_total ` + formatUint(atomic.LoadUint64(&h.successCount)) + `
 
-# HELP v2board_requests_error_total Total number of error requests
-# TYPE v2board_requests_error_total counter
-v2board_requests_error_total ` + formatUint(atomic.LoadUint64(&h.errorCount)) + `
+# HELP anixops_control_requests_error_total Total number of error requests
+# TYPE anixops_control_requests_error_total counter
+anixops_control_requests_error_total ` + formatUint(atomic.LoadUint64(&h.errorCount)) + `
 
-# HELP v2board_users_total Total number of users
-# TYPE v2board_users_total gauge
-v2board_users_total ` + formatInt(userCount) + `
+# HELP anixops_control_users_total Total number of users
+# TYPE anixops_control_users_total gauge
+anixops_control_users_total ` + formatInt(userCount) + `
 
-# HELP v2board_nodes_total Total number of nodes
-# TYPE v2board_nodes_total gauge
-v2board_nodes_total ` + formatInt(nodeCount) + `
+# HELP anixops_control_nodes_total Total number of nodes
+# TYPE anixops_control_nodes_total gauge
+anixops_control_nodes_total ` + formatInt(nodeCount) + `
 
-# HELP v2board_orders_total Total number of orders
-# TYPE v2board_orders_total gauge
-v2board_orders_total ` + formatInt(orderCount) + `
+# HELP anixops_control_orders_total Total number of orders
+# TYPE anixops_control_orders_total gauge
+anixops_control_orders_total ` + formatInt(orderCount) + `
 
-# HELP v2board_online_users Number of online users
-# TYPE v2board_online_users gauge
-v2board_online_users ` + formatInt(onlineUsers) + `
+# HELP anixops_control_online_users Number of online users
+# TYPE anixops_control_online_users gauge
+anixops_control_online_users ` + formatInt(onlineUsers) + `
 
-# HELP v2board_go_goroutines Number of goroutines
-# TYPE v2board_go_goroutines gauge
-v2board_go_goroutines ` + formatInt(int64(runtime.NumGoroutine())) + `
+# HELP anixops_control_go_goroutines Number of goroutines
+# TYPE anixops_control_go_goroutines gauge
+anixops_control_go_goroutines ` + formatInt(int64(runtime.NumGoroutine())) + `
 
-# HELP v2board_go_mem_alloc_bytes Number of bytes allocated in heap
-# TYPE v2board_go_mem_alloc_bytes gauge
-v2board_go_mem_alloc_bytes ` + formatUint(m.Alloc) + `
+# HELP anixops_control_go_mem_alloc_bytes Number of bytes allocated in heap
+# TYPE anixops_control_go_mem_alloc_bytes gauge
+anixops_control_go_mem_alloc_bytes ` + formatUint(m.Alloc) + `
 
-# HELP v2board_go_mem_sys_bytes Number of bytes obtained from system
-# TYPE v2board_go_mem_sys_bytes gauge
-v2board_go_mem_sys_bytes ` + formatUint(m.Sys) + `
+# HELP anixops_control_go_mem_sys_bytes Number of bytes obtained from system
+# TYPE anixops_control_go_mem_sys_bytes gauge
+anixops_control_go_mem_sys_bytes ` + formatUint(m.Sys) + `
 
-# HELP v2board_go_mem_heap_objects Number of heap objects
-# TYPE v2board_go_mem_heap_objects gauge
-v2board_go_mem_heap_objects ` + formatUint(m.HeapObjects) + `
+# HELP anixops_control_go_mem_heap_objects Number of heap objects
+# TYPE anixops_control_go_mem_heap_objects gauge
+anixops_control_go_mem_heap_objects ` + formatUint(m.HeapObjects) + `
 
-# HELP v2board_go_gc_duration_seconds GC duration in seconds
-# TYPE v2board_go_gc_duration_seconds gauge
-v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
+# HELP anixops_control_go_gc_duration_seconds GC duration in seconds
+# TYPE anixops_control_go_gc_duration_seconds gauge
+anixops_control_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 `
 
 	var body strings.Builder

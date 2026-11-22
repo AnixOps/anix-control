@@ -104,16 +104,12 @@ func (s *InviteService) loadConfig() (*model.InviteConfig, error) {
 }
 
 // DefaultInviteCodeLimit is how many unused invite codes a user may hold
-// when the invite configuration sets no code_count, as v2board's
-// invite_gen_limit defaults to 5.
+// when the invite configuration sets no code_count.
 const DefaultInviteCodeLimit = 5
 
 // ErrInviteCodeLimit is returned by GenerateUserInviteCode when the user
 // already holds as many unused invite codes as allowed.
 var ErrInviteCodeLimit = errors.New("invite code limit reached")
-
-// InviteCodeLimitMessage is the answer at the limit, v2board's.
-const InviteCodeLimitMessage = "The maximum number of creations has been reached"
 
 // GenerateInviteCode 生成邀请码
 func (s *InviteService) GenerateInviteCode(userID *uint) (*model.InviteCode, error) {
@@ -129,8 +125,8 @@ func (s *InviteService) GenerateInviteCode(userID *uint) (*model.InviteCode, err
 	return inviteCode, nil
 }
 
-// GenerateUserInviteCode generates an invite code a user asked for. As in
-// v2board, a user may hold at most the configured number (code_count,
+// GenerateUserInviteCode generates an invite code a user asked for. A user
+// may hold at most the configured number (code_count,
 // default DefaultInviteCodeLimit) of unused codes; an expired code is not
 // counted, since it can no longer be used. Codes made otherwise
 // (GenerateInviteCode) are not limited.

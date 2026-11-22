@@ -246,7 +246,8 @@ func seedInventory(t *testing.T, db *gorm.DB, now time.Time) {
 		// Node 2 is a legacy agent: WebSocket and REST.
 		{NodeKind: "proxy", NodeID: 2, Transport: legacyWebSocket, FirstSeenAt: at(600), LastSeenAt: at(3)},
 		{NodeKind: "proxy", NodeID: 2, Transport: legacyHTTP, FirstSeenAt: at(600), LastSeenAt: at(2)},
-		// Node 3 was third-party software on UniProxy and v2board gRPC only.
+		// Node 3 was third-party software on the removed pull channels only
+		// (rows a 4.x Control recorded keep their channel names).
 		{NodeKind: "proxy", NodeID: 3, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		{NodeKind: "proxy", NodeID: 3, Transport: "v2board-grpc", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// A deleted node's row is not listed.
@@ -290,7 +291,7 @@ func TestInventory(t *testing.T) {
 	require.Equal(t, "1.1.0-node", retired.AgentVersion, "the node row's version")
 	require.Nil(t, retired.Certificate, "a revoked certificate is no identity")
 
-	require.Equal(t, StatusUnseen, byNode["proxy-3"].Status, "UniProxy and v2board gRPC are retired")
+	require.Equal(t, StatusUnseen, byNode["proxy-3"].Status, "the pull channels are retired")
 	never := byNode["proxy-4"]
 	require.Equal(t, StatusUnseen, never.Status)
 	require.False(t, never.Enabled)

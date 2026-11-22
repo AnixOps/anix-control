@@ -8,7 +8,7 @@ readonly SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 OUTPUT_DIR="${POSTGRES_REHEARSAL_OUTPUT_DIR:-postgres-restore-rehearsal}"
-TARGET_DSN="${POSTGRES_REHEARSAL_DSN:-${POSTGRES_TEST_DSN:-host=127.0.0.1 port=5432 user=postgres dbname=v2board_restore_rehearsal sslmode=disable TimeZone=UTC}}"
+TARGET_DSN="${POSTGRES_REHEARSAL_DSN:-${POSTGRES_TEST_DSN:-host=127.0.0.1 port=5432 user=postgres dbname=anix_control_restore_rehearsal sslmode=disable TimeZone=UTC}}"
 PG_CLI_DSN=""
 SOURCE_DB="${POSTGRES_REHEARSAL_SOURCE:-}"
 GO_BIN="${GO_BIN:-go}"
@@ -171,7 +171,7 @@ check_postgres() {
 }
 
 make_fixture() {
-  SOURCE_DB="${SOURCE_DB:-${WORK_DIR}/v2board-restore-fixture.db}"
+  SOURCE_DB="${SOURCE_DB:-${WORK_DIR}/control-restore-fixture.db}"
   python3 - "${SOURCE_DB}" <<'PY'
 import os
 import sqlite3
@@ -323,7 +323,7 @@ run_self_test() {
   local tmpdir dsn output
   tmpdir="$(mktemp -d)"
   SELF_TEST_TMPDIR="${tmpdir}"
-  dsn='host=127.0.0.1 port=1 user=invalid dbname=v2board_restore_rehearsal connect_timeout=1'
+  dsn='host=127.0.0.1 port=1 user=invalid dbname=anix_control_restore_rehearsal connect_timeout=1'
 
   if output="$(bash "${SCRIPT_PATH}" --target-dsn "${dsn}" --output-dir "${tmpdir}/skip" --unavailable skip 2>&1)"; then
     grep -q '^SKIP: PostgreSQL unavailable:' <<<"${output}" || {

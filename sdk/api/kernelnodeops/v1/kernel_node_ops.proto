@@ -509,8 +509,8 @@ enum Channel {
   CHANNEL_KERNEL = 1;
   CHANNEL_AGENT_CONTROL = 2;
   CHANNEL_AGENT_WEBSOCKET = 3;
-  // Nothing was pushed: the node's next periodic pull (UniProxy, the
-  // v2board gRPC node service) reads the rebuilt configuration.
+  // Nothing was pushed: the node's next periodic pull, a channel removed
+  // in 5.0, reads the rebuilt configuration.
   CHANNEL_LEGACY_PULL = 4;
   CHANNEL_NODEX = 5;
   CHANNEL_LOCAL_ANSIBLE = 6;

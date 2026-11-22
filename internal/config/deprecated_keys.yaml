@@ -430,7 +430,7 @@ keys:
   - key: grpc.api_token
     status: ignored
     removed_in: M5 (N9)
-    reason: the legacy administrator token of the v2board gRPC services, which are removed; the key does nothing, so remove it
+    reason: the administrator token of the removed node gRPC services; the key does nothing, so remove it
     secret: true
   - key: grpc.enabled
     status: read

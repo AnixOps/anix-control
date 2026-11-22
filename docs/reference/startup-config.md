@@ -54,7 +54,7 @@ panel is:
 domain: panel.example.com
 database:
   driver: sqlite
-  database: /opt/anixops/control/config/data/v2board.db
+  database: /opt/anixops/control/config/data/control.db
 ```
 
 No secret and no administrator go into the file: the root key in `data_dir`

@@ -20,9 +20,9 @@ It does not own the relay execution plane itself.
 The execution plane is one of:
 
 - `NodeX/gost`
-  - `v2board -> NodeX -> relay gost API`
+  - `anix-control -> NodeX -> relay gost API`
 - local ansible
-  - `v2board local job executor -> ansible-playbook -> relay host`
+  - `anix-control local job executor -> ansible-playbook -> relay host`
   - recommended backend: `nftables_ansible`
   - legacy backend: `iptables_ansible`
 
@@ -30,8 +30,8 @@ The execution plane is one of:
 
 The current real-machine validated deployment baseline is:
 
-- `v2board` UI on `3000`
-- `v2board` API on `8080`
+- `anix-control` UI on `3000`
+- `anix-control` API on `8080`
 - NodeX control-plane on `18081`
 - relay gost API on `18080`
 - `binary + SQLite + systemd`
@@ -69,7 +69,7 @@ For local ansible mode, SSH data comes from:
 All of these must be true before a relay is really attached:
 
 1. NodeX control-plane is running.
-2. `forward.runtime.nodex.base_url` is configured and reachable from `v2board`.
+2. `forward.runtime.nodex.base_url` is configured and reachable from `anix-control`.
 3. `forward.runtime.nodex.token` matches the NodeX control-plane token.
 4. The relay host already exposes a gost management API on `ForwardNode.api_port`.
 5. `ForwardNode.api_token` matches what the relay gost API expects.
@@ -89,7 +89,7 @@ When a forward is created, updated, resumed, paused, or deleted:
 
 Check all three layers:
 
-1. `v2board`
+1. `anix-control`
   - `/api/v2/admin/forward/runtime/status`
   - `/api/v2/admin/forward/runtime/doctor`
   - `SELECT * FROM v2_forward_runtime_job WHERE backend='gost' ORDER BY id DESC LIMIT 10;`
@@ -106,7 +106,7 @@ Check all three layers:
 
 All of these must be true before a relay is really attached:
 
-1. `ansible-playbook` exists on the machine running `v2board`.
+1. `ansible-playbook` exists on the machine running `anix-control`.
 2. inventory and playbook paths are valid.
 3. the relay host is reachable over SSH through the configured ansible inventory.
 4. the selected tunnel is supported by the ansible runtime.
@@ -138,7 +138,7 @@ Check all three layers:
 1. local executor host
   - confirm `ansible-playbook` exists
   - confirm inventory path exists
-2. `v2board`
+2. `anix-control`
   - `SELECT * FROM v2_forward_runtime_job WHERE backend IN ('nftables_ansible','iptables_ansible') ORDER BY id DESC LIMIT 10;`
   - confirm job transitions `pending -> running -> success`
 3. relay host

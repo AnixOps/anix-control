@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// NodeLog stores runtime logs reported by V2bX parent nodes over gRPC.
+// NodeLog stores runtime logs reported by nodes.
 type NodeLog struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
 	NodeID     uint       `gorm:"index;not null" json:"node_id"`

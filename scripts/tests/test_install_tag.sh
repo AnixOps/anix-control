@@ -113,7 +113,7 @@ for forwarder in install.sh panel_install.sh; do
 
   # The tag comes from --version, and the installer is fetched at that tag.
   : >"${CURL_LOG}"
-  out="$(env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  out="$(env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
     bash "${script}" install --version v4.2.0 --grpc-name grpc.example.com)"
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" ]] ||
@@ -123,7 +123,7 @@ for forwarder in install.sh panel_install.sh; do
 
   # A command that names no tag is refused, and nothing is downloaded.
   : >"${CURL_LOG}"
-  if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
     bash "${script}" install --grpc-name grpc.example.com >/dev/null 2>"${workdir}/forwarder.err"; then
     fail "${forwarder}: a command without a tag must fail"
@@ -134,7 +134,7 @@ for forwarder in install.sh panel_install.sh; do
 
   # "latest" is not a tag.
   : >"${CURL_LOG}"
-  if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
     bash "${script}" install --version latest >/dev/null 2>&1; then
     fail "${forwarder}: --version latest must be refused"
@@ -143,7 +143,7 @@ for forwarder in install.sh panel_install.sh; do
 
   # The tag may come from the environment instead of the flag.
   : >"${CURL_LOG}"
-  env -u INSTALL_REF -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  env -u INSTALL_REF -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" ANIX_CONTROL_VERSION=v4.2.0-rc.4 \
     bash "${script}" install >/dev/null
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0-rc.4/scripts/install.sh" ]] ||
@@ -151,7 +151,7 @@ for forwarder in install.sh panel_install.sh; do
 
   # INSTALL_REF overrides, for commands that take no --version.
   : >"${CURL_LOG}"
-  env -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  env -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" INSTALL_REF=v4.1.0 \
     bash "${script}" enable-agents --grpc-name grpc.example.com >/dev/null
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.1.0/scripts/install.sh" ]] ||
@@ -161,7 +161,7 @@ for forwarder in install.sh panel_install.sh; do
   # the environment names one: the flag is not silently ignored.
   for tag_env in "" v4.2.0; do
     : >"${CURL_LOG}"
-    if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+    if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
       PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" ${tag_env:+ANIX_CONTROL_VERSION="${tag_env}"} \
       bash "${script}" install --grpc-name grpc.example.com --version >/dev/null 2>"${workdir}/forwarder.err"; then
       fail "${forwarder}: a bare --version must fail (ANIX_CONTROL_VERSION='${tag_env}')"
@@ -181,7 +181,7 @@ for forwarder in install.sh panel_install.sh; do
     printf '#!/usr/bin/env bash\necho "decoy-installer-ran"\n' >"${decoy}/${file}"
   done
   : >"${CURL_LOG}"
-  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
     bash -s -- install --version v4.2.0 --grpc-name grpc.example.com <"${script}")"
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" ]] ||
@@ -190,7 +190,7 @@ for forwarder in install.sh panel_install.sh; do
     fail "${forwarder}: piped from a directory with scripts/install.sh it ran the wrong installer: ${out}"
 
   : >"${CURL_LOG}"
-  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
     bash <(cat "${script}") install --version v4.2.0)"
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" && "${out}" == "stub-installer install --version v4.2.0" ]] ||
@@ -204,7 +204,7 @@ for forwarder in install.sh panel_install.sh; do
   printf '#!/usr/bin/env bash\necho "local-installer $*"\n' >"${checkout}/scripts/install.sh"
   for invocation in "${checkout}/${forwarder}" "./${forwarder}" "${forwarder}"; do
     : >"${CURL_LOG}"
-    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
       PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
       bash "${invocation}" install --version v4.2.0)"
     [[ "${out}" == "local-installer install --version v4.2.0" ]] ||
@@ -216,10 +216,10 @@ for forwarder in install.sh panel_install.sh; do
   # itself, and panel_install.sh reaches scripts/install.sh only through it.
   # (scripts/install.sh has no such check; running it directly, as panel_install.sh
   # once did in a checkout, installed from the checkout instead of refusing.)
-  for legacy_variable in ANIX_CONTROL_LEGACY_SOURCE_INSTALL V2BOARD_LEGACY_SOURCE_INSTALL; do
+  for legacy_variable in ANIX_CONTROL_LEGACY_SOURCE_INSTALL; do
     : >"${CURL_LOG}"
     status=0
-    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u REPO_OWNER -u REPO_NAME \
       PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" "${legacy_variable}=1" \
       bash "${checkout}/${forwarder}" install --version v4.2.0 2>&1)" || status=$?
     [[ "${status}" -eq 1 ]] ||

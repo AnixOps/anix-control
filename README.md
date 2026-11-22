@@ -58,7 +58,7 @@ is unavailable.
 - Roadmap: [`ROADMAP.md`](ROADMAP.md)
 - Concrete backlog: [`TODO.md`](TODO.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
-- Brand and artifact migration: [`docs/BRAND_MIGRATION.md`](docs/BRAND_MIGRATION.md)
+- Brand, origin and former names: [`docs/BRAND_MIGRATION.md`](docs/BRAND_MIGRATION.md)
 - Deployment guide (containers first): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Container design and multi-replica status: [`docs/architecture/container-deployment.md`](docs/architecture/container-deployment.md)
 - Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)

@@ -4,7 +4,6 @@ import userPages from './modules/zh-CN/userPages'
 import { CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
-  'V2Board Admin': `${CONTROL_NAME} 管理台`,
   'Admin': '工作室管理台',
   'Overview': '概览',
   'Dashboard': '仪表盘',

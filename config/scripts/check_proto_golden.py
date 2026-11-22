@@ -32,7 +32,7 @@ GOLDEN = "contracts/proto/descriptors.golden"
 DRAFT_PACKAGES: frozenset[str] = frozenset({"anixops.network.v1"})
 
 # Protobuf packages removed with what served them: their lines may go.
-# v2board: the third-party node services (V2bX, XrayR), removed in 5.0.
+# v2board: the node services third-party node software used, removed in 5.0.
 RETIRED_PACKAGES: frozenset[str] = frozenset({"v2board"})
 
 

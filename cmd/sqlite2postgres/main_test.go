@@ -94,7 +94,7 @@ func TestCopyTableCopiesRows(t *testing.T) {
 
 func TestOpenPostgresRejectsNonPostgresConfig(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	content := []byte("database:\n  driver: sqlite\n  database: config/data/v2board.db\n")
+	content := []byte("database:\n  driver: sqlite\n  database: config/data/control.db\n")
 	if err := os.WriteFile(configPath, content, 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

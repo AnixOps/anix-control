@@ -182,7 +182,7 @@ been set up, stop the service and remove the SQLite database as well:
 
 ```bash
 sudo systemctl stop anix-control
-sudo rm -f /opt/anixops/control/config/data/v2board.db{,-wal,-shm}
+sudo rm -f /opt/anixops/control/config/data/control.db{,-wal,-shm}
 ```
 
 That discards everything the database holds. With PostgreSQL, start from an
@@ -213,13 +213,12 @@ Control serves plain http on `127.0.0.1:8080` behind the reverse proxy
 | Path | Purpose |
 |---|---|
 | `/opt/anixops/control/bin/anix-control` | GitHub Actions-built backend binary |
-| `/opt/anixops/control/bin/v2board` | Compatibility symlink to the primary binary |
 | `/opt/anixops/control/web/public` | GitHub Actions-built frontend files |
 | `/opt/anixops/control/config/config.yaml` | Persistent control-plane configuration |
 | `/opt/anixops/control/config/secrets/module_ca_kek` | CA key-encryption key (service user, 0600); never replaced; Control adopts it as its root key |
 | `/opt/anixops/control/data/root.key` | The root key (service user, 0600; `ANIX_CONTROL_DATA_DIR` in the unit); back it up with the database |
 | `/opt/anixops/control/config/tls/control.crt`, `control.key` | gRPC certificate (0644) and key (0600) for Agents |
-| `/opt/anixops/control/config/data/v2board.db` | The SQLite database of a trial install (`--sqlite`); filename retained for compatibility |
+| `/opt/anixops/control/config/data/control.db` | The SQLite database of a trial install (`--sqlite`); an earlier install that named no file keeps `v2board.db` |
 | `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |
 | `/opt/anixops/control/data/plugin-artifacts/` | Service-user-private materialized Control package artifacts |
 | `/opt/anixops/control/backups/` | Binary/frontend rollback snapshots |
@@ -480,5 +479,3 @@ For older panel products or a coordinated panel/node cutover, follow
 - Release artifacts are built and tested by GitHub Actions. Do not compile a
   replacement binary or frontend bundle on the panel host.
 
-Existing `/opt/v2board` installations should use the in-place command and
-compatibility notes in [`../BRAND_MIGRATION.md`](../BRAND_MIGRATION.md).

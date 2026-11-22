@@ -36,7 +36,7 @@ Real attachment must be proven by runtime job success plus relay-side state.
 
 ### Checks
 
-1. Confirm `v2board` runtime config:
+1. Confirm `anix-control` runtime config:
    - open `/admin/forward/nodex`
    - confirm NodeX mode values and doctor/readiness
 2. Confirm NodeX health:
@@ -84,7 +84,7 @@ Recommended path in this section is `nftables_ansible`.
 ### Preconditions
 
 1. `config/config.yaml` has `forward_runtime.backend=nftables_ansible`.
-2. `ansible-playbook` exists on the machine running `v2board`.
+2. `ansible-playbook` exists on the machine running `anix-control`.
 3. inventory and playbooks exist.
 4. the configured ansible inventory can SSH into the relay host.
 5. the selected tunnel supports ansible execution.
@@ -156,8 +156,8 @@ sudo iptables-save
 
 The current authoritative proof was validated on a temporary Debian host with:
 
-- `v2board` UI on `143.20.204.14:3000`
-- `v2board` API on `143.20.204.14:8080`
+- `anix-control` UI on `143.20.204.14:3000`
+- `anix-control` API on `143.20.204.14:8080`
 - NodeX control-plane on `143.20.204.14:18081`
 - relay gost API on `143.20.204.14:18080`
 

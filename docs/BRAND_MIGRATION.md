@@ -1,92 +1,56 @@
 # AnixOps Brand Migration
 
-The product names and repositories are now:
+The product names and repositories are:
 
 | Role | Primary name | Repository |
 |---|---|---|
 | Control plane | AnixOps Control | `https://github.com/AnixOps/anix-control` |
 | Node runtime | AnixOps Agent | `https://github.com/AnixOps/anix-agent` |
 
-New installations use `anix-control` for the binary, systemd service, Docker
-image, container, and release assets. The node runtime uses `anix-agent`.
-The development template enables the Agent gRPC control channel on loopback
-port `50051`. Production keeps it disabled until TLS or a restricted
-HTTP/2-capable proxy is configured. Existing configuration files are preserved
-and are not force-enabled. In `v4.0.0-alpha.7`, `anix.agent.v1` and the
-official signed package/WebUI path are an operational alpha preview: they are
-available for canary use but do not yet replace every REST/UniProxy, legacy
-gRPC, or WebSocket task path. Stable publication requires a passing 72-hour
-canary and explicit operator authorization.
+Control uses `anix-control` for the binary, systemd service, Docker image,
+container and release assets. The node runtime uses `anix-agent`.
 
-## Compatibility Window
+## Origin
 
-The v3 migration deliberately keeps these compatibility identifiers unchanged;
-the v4 release continues to preserve them:
+Control started in December 2025 as a fork of the community-maintained
+`wyx2685/v2board` (V2Board, PHP, MIT). The PHP code was replaced by a Go
+backend and a Vue 3 frontend within the first weeks; no PHP code remains. The
+original MIT notice is kept in [`NOTICE`](../NOTICE).
 
-- HTTP API versions and compatibility routes: `/api/v1`, `/api/v2`, and UniProxy
-- protobuf package/service namespace and generated directory: `v2board`
-- database tables prefixed with `v2_`
-- default SQLite filename `config/data/v2board.db`
-- existing PostgreSQL database/user names when already deployed
-- JWT issuer `v2board` and browser storage key `v2board-theme`
-- Prometheus metric names prefixed with `v2board_`
-- Docker runtime user/home path `/home/v2board` used by mounted SSH material
-- Ansible variables and legacy playbooks prefixed with `v2bx_`
+## Names That Are Gone
 
-Renaming those values in place would invalidate tokens, disconnect old nodes,
-or make an existing database appear empty. They will only move behind explicit
-migrations with dual-read or dual-registration support.
+The names inherited from V2Board are no longer used:
+
+| Former name | Now |
+|---|---|
+| UniProxy, the `v2board` gRPC services and the node WebSocket | removed in 5.0; nodes run `anix-agent` on the `anix.agent.v1` stream |
+| default SQLite file `config/data/v2board.db` | `config/data/control.db` (an install whose configuration names no file keeps `v2board.db`: `install.sh update` writes it into the configuration) |
+| Prometheus metrics `v2board_*` | `anixops_control_*` |
+| browser storage key `v2board-theme` | `app.theme` (the theme choice is asked again once) |
+| `bin/v2board` link and the `/opt/v2board` layout of the installer | removed; `install.sh update` deletes the link |
+| `/home/v2board/.ssh` in the container | `/home/anixops/.ssh` |
+
+Still unchanged:
+
+- database tables prefixed with `v2_` (renamed by a later migration);
+- the HTTP API versions `/api/v2` to `/api/v5`, which are Control's own;
+- PostgreSQL database and role names an operator chose, for example
+  `anix_control_v2board`: renaming a database is an operator decision.
 
 ## Release Naming
 
 GitHub Releases publish only `anix-control-*` artifacts and the
-`anixops/anix-control` Docker image. Existing installations upgrade in place
-through the AnixOps installer, which preserves their configuration and data.
+`anixops/anix-control` Docker image.
 
 The Go module is `github.com/AnixOps/anix-control/v5` (the 4.x tags were built
-with `github.com/AnixOps/anix-control/v4`). Stable and prerelease tags are
-accepted in these forms:
-
-- `v4.0.0`
-- `v4.0.0-alpha.1`
-- `v4.0.0-alpha.4`
-- `v4.0.0-alpha.6`
-- `v4.0.0-alpha.7`
-- `v4.0.0-beta.1`
-- `v4.0.0-rc.1`
+with `github.com/AnixOps/anix-control/v4`). Stable and prerelease tags take
+the forms `vX.Y.Z` and `vX.Y.Z-alpha.N`, `-beta.N`, `-rc.N`.
 
 ## Native Install Paths
-
-Fresh installations default to:
 
 ```text
 /opt/anixops/control/bin/anix-control
 /opt/anixops/control/config/config.yaml
 /opt/anixops/control/web/public
 anix-control.service
-```
-
-The installer also creates `bin/v2board` as a compatibility symlink. For an
-in-place upgrade of an existing `/opt/v2board` deployment, keep the old service
-account and directory explicitly:
-
-```bash
-sudo SERVICE_NAME=v2board APP_USER=v2board INSTALL_DIR=/opt/v2board \
-  bash /tmp/anix-control-install.sh update --version v4.2.0
-```
-
-The existing configuration and database are preserved. Back them up before the
-first branded release exactly as for any other application upgrade.
-
-## Test Expectations
-
-Brand migration changes must keep these checks green:
-
-```bash
-go test ./internal/config ./internal/handler ./cmd/server
-cd web && npm test && npm run build
-bash config/scripts/check_release_workflow.sh --self-test
-bash config/scripts/check_release_workflow.sh
-python3 config/scripts/generate_release_manifest.py --self-test
-python3 config/scripts/verify_release_artifacts.py --self-test
 ```

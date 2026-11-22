@@ -153,12 +153,12 @@ describe('useTheme', () => {
     listeners.forEach(listener => listener())
     expect(currentTheme.value).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(localStorage.getItem('v2board-theme')).toBe('dark')
+    expect(localStorage.getItem('app.theme')).toBe('dark')
   })
 
   it('writes data-theme="light" explicitly so a dark system cannot override the choice', async () => {
     systemDark = true
-    localStorage.setItem('v2board-theme', 'light')
+    localStorage.setItem('app.theme', 'light')
     const { initTheme } = await import('@/composables/useTheme')
     initTheme()
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')

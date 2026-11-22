@@ -8,8 +8,8 @@ set -euo pipefail
 REPO_ROOT="${CLEAN_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 EXACT_ARTIFACTS=(
-  "v2board"
-  "v2board.exe"
+  "anix-control"
+  "anix-control.exe"
   "server"
   "migrate"
   "coverage.out"
@@ -190,17 +190,17 @@ run_self_test() {
   mkdir -p "${tmpdir}/web/coverage" "${tmpdir}/web/bundle-reports" "${tmpdir}/web/bundle-reports-check"
   mkdir -p "${tmpdir}/backups" "${tmpdir}/internal/handler/backups"
   mkdir -p "${tmpdir}/release"
-  touch "${tmpdir}/v2board" "${tmpdir}/v2board.exe" "${tmpdir}/server" "${tmpdir}/migrate"
-  touch "${tmpdir}/coverage.out" "${tmpdir}/coverage.html" "${tmpdir}/v2board.bak.20260709"
+  touch "${tmpdir}/anix-control" "${tmpdir}/anix-control.exe" "${tmpdir}/server" "${tmpdir}/migrate"
+  touch "${tmpdir}/coverage.out" "${tmpdir}/coverage.html" "${tmpdir}/anix-control.bak.20260709"
   touch "${tmpdir}/web/public/assets/app.js" "${tmpdir}/web/bundle-reports/report.md"
   touch "${tmpdir}/web/public-check/assets/app.js" "${tmpdir}/web/coverage/coverage-final.json"
   touch "${tmpdir}/web/bundle-reports-check/bundle-size.md"
-  touch "${tmpdir}/release/v2board-linux-amd64.tar.gz"
+  touch "${tmpdir}/release/anix-control-linux-amd64.tar.gz"
   touch "${tmpdir}/backups/frontend_20260709_000000.tar.gz"
   touch "${tmpdir}/backups/backup_20260709_000000.db"
   touch "${tmpdir}/internal/handler/backups/backup_20260709_000000.zip"
   touch "${tmpdir}/internal/handler/backups/backup_20260709_000000.db"
-  touch "${tmpdir}/config/config.yaml" "${tmpdir}/data/v2board.db"
+  touch "${tmpdir}/config/config.yaml" "${tmpdir}/data/control.db"
   touch "${tmpdir}/web/node_modules/pkg/dist/index.js"
 
   clean_artifacts "${tmpdir}" 1 0 >/dev/null
@@ -208,7 +208,7 @@ run_self_test() {
 
   clean_artifacts "${tmpdir}" 0 0 >/dev/null
 
-  assert_missing "${tmpdir}/v2board" "backend binary"
+  assert_missing "${tmpdir}/anix-control" "backend binary"
   assert_missing "${tmpdir}/web/public" "frontend build output"
   assert_missing "${tmpdir}/web/public-check" "frontend check build output"
   assert_missing "${tmpdir}/web/coverage" "frontend coverage output"
@@ -219,8 +219,8 @@ run_self_test() {
   assert_exists "${tmpdir}/backups/frontend_20260709_000000.tar.gz" "deploy backup archive without opt-in"
   assert_exists "${tmpdir}/internal/handler/backups/backup_20260709_000000.zip" "internal backup archive without opt-in"
   assert_exists "${tmpdir}/config/config.yaml" "config file"
-  assert_exists "${tmpdir}/data/v2board.db" "database file"
-  assert_exists "${tmpdir}/v2board.bak.20260709" "local deploy backup"
+  assert_exists "${tmpdir}/data/control.db" "database file"
+  assert_exists "${tmpdir}/anix-control.bak.20260709" "local deploy backup"
   assert_exists "${tmpdir}/backups/backup_20260709_000000.db" "database backup"
   assert_exists "${tmpdir}/internal/handler/backups/backup_20260709_000000.db" "internal database backup"
   assert_exists "${tmpdir}/web/node_modules/pkg/dist/index.js" "node_modules package dist"

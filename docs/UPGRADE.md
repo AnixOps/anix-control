@@ -11,6 +11,37 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To The Release After 5.0.10: Former V2Board Names Are Gone
+
+Control started as a fork of V2Board ([`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)).
+This release removes the names it kept from it. Check these before the upgrade:
+
+- **Prometheus metrics.** `/metrics` names them `anixops_control_*`
+  (`anixops_control_info`, `anixops_control_users_total`, ...) instead of
+  `v2board_*`. Rename them in scrape rules, dashboards and alerts.
+- **SQLite default file.** A SQLite configuration that names no file now
+  means `config/data/control.db`, no longer `config/data/v2board.db`.
+  `install.sh update` writes `database.database: <install>/config/data/v2board.db`
+  into a configuration that has the old file and names none, so the panel
+  keeps its data. Set it yourself where Control is started another way.
+  Installs whose configuration names the file are not affected.
+- **Installer.** The `preflight` and `migrate` commands, a `rollback` without
+  `--version`, `--plan`, the detection of `/opt/v2board`,
+  `/usr/local/v2board`, `/etc/v2board` and `v2board.service`, and the
+  `bin/v2board` link are removed; `update` deletes the link.
+  `rollback --version <tag>` and `enable-agents` are unchanged. The
+  environment variables `V2BOARD_VERSION`, `V2BOARD_LEGACY_SOURCE_INSTALL`,
+  `V2BOARD_HOME`, `V2BOARD_MIGRATION_TOOL`, `V2BOARD_BACKUP_DIR` and
+  `V2BOARD_DIR` are no longer read: use `ANIX_CONTROL_VERSION`,
+  `ANIX_CONTROL_LEGACY_SOURCE_INSTALL`, `ANIX_CONTROL_HOME`, `TOOL`,
+  `BACKUP_DIR` and `CONTROL_DIR`.
+- **Browser theme.** The admin and user pages keep the theme choice under
+  `app.theme`; each browser falls back to the system theme once.
+
+Nothing changes in the database, the API or the Agent protocol. Roll back by
+installing the previous release; a SQLite configuration that the update wrote
+`database.database` into keeps working with it.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

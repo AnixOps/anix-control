@@ -329,7 +329,7 @@ func TestCreateDefaultIndexWritesFile(t *testing.T) {
 }
 
 func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
-	if os.Getenv("V2BOARD_BUILDINFO_LDFLAGS_CHILD") == "1" {
+	if os.Getenv("ANIX_CONTROL_BUILDINFO_LDFLAGS_CHILD") == "1" {
 		syncBuildInfo()
 		if handler.BuildVersion != "9.8.7 #456" {
 			t.Fatalf("handler.BuildVersion = %q, want %q", handler.BuildVersion, "9.8.7 #456")
@@ -370,7 +370,7 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		"-ldflags", "-X github.com/AnixOps/anix-control/v5/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v5/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v5/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v5/cmd/server.commit=abcdef123456 -X github.com/AnixOps/anix-control/v5/cmd/server.agentRelease=v9.8.6",
 	)
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), "V2BOARD_BUILDINFO_LDFLAGS_CHILD=1")
+	cmd.Env = append(os.Environ(), "ANIX_CONTROL_BUILDINFO_LDFLAGS_CHILD=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("child go test failed: %v\n%s", err, strings.TrimSpace(string(output)))

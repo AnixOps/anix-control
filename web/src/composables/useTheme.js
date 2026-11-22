@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const STORAGE_KEY = 'v2board-theme'
+const STORAGE_KEY = 'app.theme'
 const THEME_LIGHT = 'light'
 const THEME_DARK = 'dark'
 const DARK_QUERY = '(prefers-color-scheme: dark)'

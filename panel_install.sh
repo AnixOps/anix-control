@@ -24,7 +24,7 @@ REPO_NAME="${REPO_NAME:-anix-control}"
 # --version (preflight, enable-agents).
 INSTALL_REF="${INSTALL_REF:-}"
 if [[ -z "${INSTALL_REF}" ]]; then
-  INSTALL_REF="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
+  INSTALL_REF="${ANIX_CONTROL_VERSION:-}"
   previous=""
   for arg in "$@"; do
     if [[ "${previous}" == "--version" ]]; then

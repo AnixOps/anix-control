@@ -16,6 +16,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// legacySQLitePath is the SQLite file a configuration file of a 4.x Control
+// meant when it named none.
+const legacySQLitePath = "config/data/v2board.db"
+
 // RewriteOptions configure Rewrite.
 type RewriteOptions struct {
 	// Source names the old file in the new file's header.
@@ -398,9 +402,10 @@ func Rewrite(old []byte, opts RewriteOptions) (*RewriteResult, error) {
 		}
 	}
 
-	// The database section. In an earlier file an empty driver was SQLite;
-	// it is PostgreSQL now, so the rewrite writes driver: sqlite and the
-	// database file's absolute path, and the panel keeps its data.
+	// The database section. In an earlier file an empty driver was SQLite,
+	// at legacySQLitePath when no file was named; it is PostgreSQL now, so
+	// the rewrite writes driver: sqlite and the database file's absolute
+	// path, and the panel keeps its data.
 	var database []rewriteLeaf
 	for _, leaf := range leaves {
 		if strings.HasPrefix(leaf.path, "database.") && leaf.known {
@@ -411,7 +416,7 @@ func Rewrite(old []byte, opts RewriteOptions) (*RewriteResult, error) {
 		driver := strings.ToLower(scalar("database.driver"))
 		sqlite := driver == "" || driver == "sqlite" || driver == "sqlite3"
 		if sqlite {
-			path := firstNonEmpty(scalar("database.database"), "config/data/v2board.db")
+			path := firstNonEmpty(scalar("database.database"), legacySQLitePath)
 			if opts.ResolvePath != nil && !filepath.IsAbs(path) {
 				path = opts.ResolvePath(path)
 			}

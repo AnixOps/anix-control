@@ -61,8 +61,7 @@ const (
 	// SPIFFE ID, or presented while Control runs no agent PKI.
 	ErrorCodeCertInvalid = "agent_cert_invalid"
 	// ErrorCodeCertWrongNode: the certificate names another node than the
-	// call: x-node-id or x-node-kind, an envelope's node_id, or a forward
-	// node's certificate on the proxy-only v2board services.
+	// call: x-node-id or x-node-kind, or an envelope's node_id.
 	ErrorCodeCertWrongNode = "agent_cert_wrong_node"
 	// ErrorCodeCertWrongCluster: the certificate is an agent certificate of
 	// another cluster.

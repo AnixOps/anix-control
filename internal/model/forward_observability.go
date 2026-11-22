@@ -7,7 +7,7 @@ const (
 	LatencyTargetTypeForward     = "forward"      // forward -> remote_addr 目标
 	LatencyTargetTypeTunnelNode  = "tunnel_node"  // 隧道中继/出口节点端点
 	LatencyTargetTypeForwardNode = "forward_node" // ForwardNode 管理端点 (HealthCheck)
-	LatencyTargetTypeNode        = "node"         // 常规代理节点 v2_node (V2bX 注册)
+	LatencyTargetTypeNode        = "node"         // 常规代理节点 v2_node
 )
 
 // ForwardLatencyBucket 一个探测目标在一个时间桶内的预聚合 TCPing 结果。
