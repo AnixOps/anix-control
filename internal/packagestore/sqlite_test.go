@@ -141,9 +141,6 @@ func TestLeaseCacheSharesOneLeasePerGeneration(t *testing.T) {
 	next, err := store.Lease(ctx, holder, Grants{Storage: true})
 	require.NoError(t, err)
 	require.EqualValues(t, 2, next.LeaseGeneration, "a new generation leases again")
-
-	_, err = store.Lease(ctx, Holder{PackageID: "knowledge", Version: "4.1.0", Generation: 4, Remote: true}, Grants{Storage: true})
-	require.ErrorContains(t, err, "need PostgreSQL")
 }
 
 // The plan views show an order what it needs of a plan, and a view whose

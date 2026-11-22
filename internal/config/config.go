@@ -345,32 +345,20 @@ func effectiveControlHostPayloadLimit(value int64) int64 {
 	return value
 }
 
-// ModuleRuntimeConfig controls network modules: packages that run as
-// separate services and talk to the kernel over gRPC with mTLS.
+// ModuleRuntimeConfig holds the kernel CA's settings, which sign the Agent
+// and forward link certificates. The section keeps its name from the remote
+// module runtime, which was removed (slim audit 2d, 2026-11); its other keys
+// are ignored (deprecated_keys.yaml).
 type ModuleRuntimeConfig struct {
-	Enabled bool `yaml:"enabled"`
-	// Listen is the address of the kernel's mTLS module listener (ModulePKI
-	// and the remote package bridge).
-	Listen string `yaml:"listen"`
-	// Cluster names the deployment in every module SPIFFE ID.
+	// Cluster names the deployment in every Agent identity.
 	Cluster string `yaml:"cluster"`
-	// PKI is "builtin" (the kernel's own CA, with enrollment) or "external"
-	// (certificates issued elsewhere, for example by cert-manager).
+	// PKI is "builtin" (the kernel's own CA) or "external" (no built-in CA:
+	// the kernel runs without Agent enrollment).
 	PKI string `yaml:"pki"`
 	// CAKEK is the base64 or hex 32-byte key that seals the built-in CA key.
 	CAKEK string `yaml:"ca_kek"`
-	// CertLifetime bounds module and kernel certificates (default 24h).
+	// CertLifetime bounds the kernel CA's certificates (default 24h).
 	CertLifetime string `yaml:"cert_lifetime"`
-	// External PKI: the trust bundle and the kernel's own certificate.
-	TrustBundleFile string `yaml:"trust_bundle_file"`
-	CertFile        string `yaml:"cert_file"`
-	KeyFile         string `yaml:"key_file"`
-	// DatabaseHost ("host" or "host:port") is the PostgreSQL address in
-	// storage leases for remote modules, when it differs from the kernel's.
-	DatabaseHost string `yaml:"database_host"`
-	// BindTimeout bounds how long starting a remote package waits for a
-	// healthy instance (default 2m).
-	BindTimeout string `yaml:"bind_timeout"`
 }
 
 // Module runtime PKI modes.
@@ -621,55 +609,10 @@ func (c *Config) ValidateForServer() error {
 	if c == nil {
 		return fmt.Errorf("configuration is missing")
 	}
-	if err := c.ModuleRuntime.validate(); err != nil {
-		return err
-	}
 	if placeholderJWTSecrets[strings.TrimSpace(c.JWT.Secret)] {
 		return fmt.Errorf("jwt.secret still has the template value: remove it, and the root key derives the secret")
 	}
 	return nil
-}
-
-func (m ModuleRuntimeConfig) validate() error {
-	if !m.Enabled {
-		return nil
-	}
-	if _, err := time.ParseDuration(m.CertLifetimeOrDefault()); err != nil {
-		return fmt.Errorf("invalid module_runtime.cert_lifetime %q", m.CertLifetime)
-	}
-	if value := strings.TrimSpace(m.BindTimeout); value != "" {
-		if timeout, err := time.ParseDuration(value); err != nil || timeout <= 0 {
-			return fmt.Errorf("invalid module_runtime.bind_timeout %q", m.BindTimeout)
-		}
-	}
-	switch m.PKIOrDefault() {
-	case ModulePKIBuiltin:
-		// The built-in CA's key is the root key, which every server has.
-	case ModulePKIExternal:
-		if m.TrustBundleFile == "" || m.CertFile == "" || m.KeyFile == "" {
-			return fmt.Errorf("module_runtime.trust_bundle_file, cert_file and key_file are required for the external PKI")
-		}
-	default:
-		return fmt.Errorf("module_runtime.pki must be %q or %q", ModulePKIBuiltin, ModulePKIExternal)
-	}
-	return nil
-}
-
-// ListenOrDefault returns the module listener address, ":7443" when empty.
-func (m ModuleRuntimeConfig) ListenOrDefault() string {
-	if strings.TrimSpace(m.Listen) == "" {
-		return ":7443"
-	}
-	return strings.TrimSpace(m.Listen)
-}
-
-// BindTimeoutOrDefault returns the remote start timeout, 2m when empty or
-// invalid (validate rejects invalid values).
-func (m ModuleRuntimeConfig) BindTimeoutOrDefault() time.Duration {
-	if timeout, err := time.ParseDuration(strings.TrimSpace(m.BindTimeout)); err == nil && timeout > 0 {
-		return timeout
-	}
-	return 2 * time.Minute
 }
 
 // ClusterOrDefault returns the configured cluster name, "default" when empty.
@@ -689,11 +632,9 @@ func (m ModuleRuntimeConfig) PKIOrDefault() string {
 }
 
 // BuiltinCA reports whether the kernel runs its built-in CA: pki is builtin
-// and either the module runtime is enabled (which requires ca_kek) or
-// ca_kek is set. The CA does not depend on the module listener: agent
-// enrollment uses it with module_runtime.enabled false.
+// and ca_kek is set.
 func (m ModuleRuntimeConfig) BuiltinCA() bool {
-	return m.PKIOrDefault() == ModulePKIBuiltin && (m.Enabled || strings.TrimSpace(m.CAKEK) != "")
+	return m.PKIOrDefault() == ModulePKIBuiltin && strings.TrimSpace(m.CAKEK) != ""
 }
 
 // CertLifetimeOrDefault returns the configured certificate lifetime, 24h when

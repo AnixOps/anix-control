@@ -4,7 +4,7 @@ Status: in place. Phase 2 of the 2026-10 plan, item 5 ("cache invalidation
 events"). The contracts are `sdk/api/kerneltelemetry/v1` (new, served by
 `internal/kerneltelemetry`) and one new method of
 `sdk/api/kernelsubscriber/v1` (`internal/kernelsubscriber/summary.go`), on
-local package bridge sessions and on the mTLS module listener.
+local package bridge sessions.
 
 ## Why
 
@@ -98,8 +98,7 @@ bridge has no contract connection keeps both routes legacy.
   - With `refresh=true`, each side rebuilds, so the answers differ in
     `cached_at` (a counted mismatch) and the snapshot is built twice.
 - **Per process.** The caches live in the Control process that serves the
-  contract. A network module reads them through the module listener, the
-  same as a local host. Control runs as a single replica
+  contract. Control runs as a single replica
   (`container-deployment.md`), like KernelSettings' generations.
 - **Unchanged staleness.** No write invalidates either cache, legacy or
   contract. A change shows after 60 or 30 seconds, or on `refresh=true`, as
@@ -117,9 +116,9 @@ Two defects were fixed on the way:
 - **Network modules could not change memberships.** The module listener did
   not forward KernelSubscriber's membership methods (`GrantSubscriptionGroup`,
   `RevokeSubscriptionGroup`, `RemoveSubscriptionGroupMembers`). A network
-  module got `Unimplemented` where a local host was served.
-  `TestModuleContractServersForwardEveryMethod` now checks every method of
-  every contract the listener serves.
+  module got `Unimplemented` where a local host was served. (Historical: the
+  network module runtime and its listener were removed in 2026-11,
+  [`kernel-ca.md`](kernel-ca.md#history).)
 
 ## Parity
 

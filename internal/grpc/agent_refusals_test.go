@@ -106,11 +106,7 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertWrongNode}, trailer)
 
 	// A certificate that is no agent's: the kernel's own.
-	source, err := l.authority.KernelTLS(ctx, time.Minute)
-	require.NoError(t, err)
-	kernelCertificate, err := source.Certificate()
-	require.NoError(t, err)
-	code, trailer = openRefusedStream(t, ctx, l.dial(t, kernelCertificate), uint32(l.proxy.ID))
+	code, trailer = openRefusedStream(t, ctx, l.dial(t, l.kernelCertificate(t)), uint32(l.proxy.ID))
 	assert.Equal(t, codes.Unauthenticated, code)
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertInvalid}, trailer)
 

@@ -453,7 +453,7 @@ A package learns everything it needs and never a secret.
      route that creates its resource binds its target at the first
      resolution: every later one in the request must name the same resource.
    - **Bindings are verified.** `SubmitOperation` verifies a request
-     binding on the session the call arrived on, local or module listener
+     binding on the session the call arrived on
      (`packagebridge.BoundRequest`).
      - The capability must be live: minted for the calling generation, not
        consumed, revoked or expired.
@@ -625,9 +625,7 @@ This starts in report-only mode in NO-3. Enforcement is decision D7.
 
 The kernel serves the contract like KernelSettings and KernelOrder:
 
-- on local package bridge sessions;
-- on the mTLS module listener, where a call resolves to the bound
-  instance's generation.
+- on local package bridge sessions.
 
 A host without a contract connection keeps its node routes legacy.
 
@@ -674,8 +672,7 @@ Why:
 served it, its capabilities were not in the grammar, and the proto and Go
 package doc said DRAFT, UNRELEASED. NO-1 ended all three:
 
-- the kernel serves it on local bridge sessions and the module listener
-  (section 3.9);
+- the kernel serves it on local bridge sessions (section 3.9);
 - the grammar accepts the five `kernel.nodeops.*` capabilities (section
   3.2);
 - the proto and the Go package doc say the contract is binding.
@@ -707,8 +704,8 @@ what its kernel executes.
 - the watch stream, quotas, fan-out counting and cancellation;
 - the admin listing.
 
-One engine runs per kernel database (`kernelnodeops.EngineFor`). The local
-bridge and the module listener share it. Its dispatcher runs in the
+One engine runs per kernel database (`kernelnodeops.EngineFor`). Every local
+bridge session shares it. Its dispatcher runs in the
 process that holds the singleton-worker lease (`cmd/server`, R6).
 
 **Unexecuted kinds fail in a defined way.** No kind has an executor in
@@ -1476,7 +1473,7 @@ One mTLS stream per node carries everything:
   (`Enroll`, `Renew`, `GetTrustBundle`), in a new file of package
   `anix.agent.v1`. A new file leaves `agent.proto`'s descriptor as it is.
   - It is served on the agent listener (`internal/grpc/server.go`, port
-    50051), which faces the nodes. The module listener stays private.
+    50051), which faces the nodes.
   - The kernel ignores the CSR's subject and issues the SAN of the
     authenticated node.
 - **Bootstrap, in three ways:**
@@ -1511,8 +1508,7 @@ One mTLS stream per node carries everything:
     for a proxy node it can also replace the node's API key with the
     function the `IssueCredential` executor uses
     (`service.IssueProxyNodeCredentialsTx`).
-  - The listener refuses revoked serials, with a cache of at most 30 s, as
-    the module listener does.
+  - The listener refuses revoked serials, with a cache of at most 30 s.
 - **Forward link certificates (H28).** A node whose Agent negotiated
   `forward.v1` also gets a link certificate for its forward engines
   (`AgentEnrollment.IssueLinkCertificate`, `GetLinkTrustBundle`), from a

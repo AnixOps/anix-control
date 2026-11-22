@@ -328,17 +328,17 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `log.max_backups` | `ANIX_CONTROL_LOG_MAX_BACKUPS` | ignored | M2 (P8) | nothing reads it |
 | `log.max_size` | `ANIX_CONTROL_LOG_MAX_SIZE` | ignored | M2 (P8) | nothing reads it |
 | `log.output` | `ANIX_CONTROL_LOG_OUTPUT` | ignored | M2 (P8) | nothing reads it; Control logs to standard output |
-| `module_runtime.bind_timeout` | `ANIX_CONTROL_MODULE_RUNTIME_BIND_TIMEOUT` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.bind_timeout` | `ANIX_CONTROL_MODULE_RUNTIME_BIND_TIMEOUT` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
 | `module_runtime.ca_kek` | `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK` | still read | M5 | the root key; adopted into root.key in data_dir at the next start, after which it must match that file and can be removed |
-| `module_runtime.cert_file` | `ANIX_CONTROL_MODULE_RUNTIME_CERT_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.cert_file` | `ANIX_CONTROL_MODULE_RUNTIME_CERT_FILE` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
 | `module_runtime.cert_lifetime` | `ANIX_CONTROL_MODULE_RUNTIME_CERT_LIFETIME` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
 | `module_runtime.cluster` | `ANIX_CONTROL_MODULE_RUNTIME_CLUSTER` | still read | M2 (P4) | names the cluster in every module and Agent identity; ignoring a set value would change the identities of enrolled Agents |
-| `module_runtime.database_host` | `ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
-| `module_runtime.enabled` | `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
-| `module_runtime.key_file` | `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
-| `module_runtime.listen` | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.database_host` | `ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
+| `module_runtime.enabled` | `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
+| `module_runtime.key_file` | `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
+| `module_runtime.listen` | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
 | `module_runtime.pki` | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
-| `module_runtime.trust_bundle_file` | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.trust_bundle_file` | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | ignored | M5 | the remote module runtime was removed; every package runs inside Control |
 | `package_routes.default_mode` | `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | ignored | M2 (P7) | every package route runs natively; there are no route modes |
 | `plugins.control_execution_enabled` | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | ignored | M2 (P7) | the built-in packages always run; Control starts their hosts at every start |
 | `plugins.control_host_artifact_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | still read | M2 (P11) | where package hosts' files are kept, until the systemd unit gives Control its directories |
@@ -835,7 +835,7 @@ deleted from the configuration.
   `/metrics` has `anixops_agent_legacy_refused_total{path}`.
 - Enrollment credentials: `anix-control agent token create -node proxy-12`
   or `POST /api/v4/kernel/agents/enrollment-tokens`. Details in
-  [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki)
+  [`../architecture/kernel-ca.md`](../architecture/kernel-ca.md#agent-pki)
   and [`../architecture/node-ops-service.md`](../architecture/node-ops-service.md)
   section 5.6.
 

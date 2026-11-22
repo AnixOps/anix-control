@@ -118,7 +118,7 @@ type Options struct {
 	// Getenv reads the host environment (os.Getenv).
 	Getenv func(string) string
 	// Version resolves the release to serve when the kernel did not set
-	// VersionEnvironment (a network module started by an operator) and
+	// VersionEnvironment (the standalone binary started by hand) and
 	// checks the one it did set. Nil accepts the environment's version and
 	// fails without one.
 	Version func(id, requested string) (string, error)

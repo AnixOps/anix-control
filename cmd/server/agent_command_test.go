@@ -129,16 +129,15 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	require.NoError(t, runAgentCommand(ctx, cfg, db, []string{"token", "create", "-node", "proxy-" + strconv.FormatUint(uint64(node.ID), 10)}, &output))
 	require.Contains(t, output.String(), "anixagt_")
 
-	// The module listener stays off; the CA's maintenance runs anyway.
+	// The CA maintenance runs on the kernel.
 	rt := &serverRuntime{workers: newBackgroundWorkers(ctx)}
-	require.NoError(t, rt.startModuleRuntime(cfg, nil))
 	require.NoError(t, rt.startKernelCAMaintenance(cfg, db))
 	stopped, running := rt.workers.Stop(5 * time.Second)
 	require.True(t, stopped, running)
 
 	// An external PKI holds no CA key: the kernel runs without agent
 	// enrollment.
-	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}
+	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{PKI: config.ModulePKIExternal}}
 	pki, err = agentPKIForGRPC(external, db)
 	require.NoError(t, err)
 	require.Nil(t, pki)

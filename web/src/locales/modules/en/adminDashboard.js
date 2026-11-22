@@ -82,12 +82,6 @@ export default {
           endingHint: 'Ends {date}. It renews with the Agent certificate: check the Agent.',
           endedHint: 'Ended {date}. Bring the Agent back, or enroll it again.'
         },
-        moduleCertificate: {
-          ending: 'The certificate of module {name} is about to expire',
-          ended: 'The certificate of module {name} has expired',
-          endingHint: 'Ends {date}. Check that the module is running and reaches Control.',
-          endedHint: 'Ended {date}. Restart the module, enroll it again, or revoke its enrollment.'
-        },
         ca: {
           module: 'module',
           forwardLink: 'forward link',

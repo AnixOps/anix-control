@@ -69,35 +69,12 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 	}), nil
 }
 
-// NewKernelForward returns the ForwardControl provider for the module
-// listener; local sessions get the same one from NewFactory. Both answer
-// from the kernel's forwarding state (internal/kernelforward).
-func NewKernelForward(cfg *config.Config) (packagebridge.KernelForwardProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelForward(operations), nil
-}
-
 func kernelForward(operations service.PackageHostOperations) packagebridge.KernelForwardProvider {
 	forward := kernelforward.New(operations.DB)
 	// DiagnoseRoute's node probes ride the process's Agent Control streams.
 	forward.Checks = kernelnodeops.ForwardChecks{}
 	server := &kernelforward.Server{Service: forward, Authorizer: operations}
 	return server.For
-}
-
-// NewKernelNodeOps returns the KernelNodeOps provider for the module
-// listener; local sessions get one from NewFactory. Both serve the process's
-// engine for the kernel database (kernelnodeops.EngineFor), whose dispatcher
-// the kernel's singleton workers run.
-func NewKernelNodeOps(cfg *config.Config) (packagebridge.KernelNodeOpsProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelNodeOps(operations), nil
 }
 
 func kernelNodeOps(operations service.PackageHostOperations) packagebridge.KernelNodeOpsProvider {
@@ -107,29 +84,9 @@ func kernelNodeOps(operations service.PackageHostOperations) packagebridge.Kerne
 	return server.For
 }
 
-// NewKernelTelemetry returns the KernelTelemetry provider for the module
-// listener; local sessions get the same one from NewFactory.
-func NewKernelTelemetry(cfg *config.Config) (packagebridge.KernelTelemetryProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelTelemetry(operations), nil
-}
-
 func kernelTelemetry(operations service.PackageHostOperations) packagebridge.KernelTelemetryProvider {
 	server := &kerneltelemetry.Server{DB: operations.DB, Authorizer: operations}
 	return server.For
-}
-
-// NewKernelOrder returns the KernelOrder provider for the module listener;
-// local sessions get the same one from NewFactory.
-func NewKernelOrder(cfg *config.Config) (packagebridge.KernelOrderProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelOrder(operations), nil
 }
 
 // kernelOrderProvider builds the KernelOrder provider. Only a build with
@@ -144,44 +101,14 @@ func kernelOrder(operations service.PackageHostOperations) packagebridge.KernelO
 	return kernelOrderProvider(operations)
 }
 
-// NewKernelSettings returns the KernelSettings provider for the module
-// listener; local sessions get the same one from NewFactory.
-func NewKernelSettings(cfg *config.Config) (packagebridge.KernelSettingsProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelSettings(operations), nil
-}
-
 func kernelSettings(operations service.PackageHostOperations) packagebridge.KernelSettingsProvider {
 	server := &kernelsettings.Server{DB: operations.DB, Authorizer: operations}
 	return server.For
 }
 
-// NewKernelSubscriber returns the KernelSubscriber provider for the module
-// listener; local sessions get the same one from NewFactory.
-func NewKernelSubscriber(cfg *config.Config) (packagebridge.KernelSubscriberProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelSubscriber(operations), nil
-}
-
 func kernelSubscriber(operations service.PackageHostOperations) packagebridge.KernelSubscriberProvider {
 	server := &kernelsubscriber.Server{DB: operations.DB, Authorizer: operations, Config: config.Get}
 	return server.For
-}
-
-// NewKernelIdentity returns the KernelIdentity provider for the module
-// listener; local sessions get the same one from NewFactory.
-func NewKernelIdentity(cfg *config.Config) (packagebridge.KernelIdentityProvider, error) {
-	operations, err := newHostOperations(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return kernelIdentity(operations), nil
 }
 
 func kernelIdentity(operations service.PackageHostOperations) packagebridge.KernelIdentityProvider {
@@ -207,7 +134,7 @@ func newHostOperations(cfg *config.Config) (service.PackageHostOperations, error
 	}
 	operations.Storage = &packagestore.Store{
 		DB: db, Driver: cfg.Database.Driver, DSN: source,
-		RemoteDatabaseHost: cfg.ModuleRuntime.DatabaseHost, Leases: packagestore.NewLeaseCache(),
+		Leases: packagestore.NewLeaseCache(),
 	}
 	return operations, nil
 }

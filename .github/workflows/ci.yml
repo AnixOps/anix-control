@@ -50,7 +50,7 @@ jobs:
       code: ${{ steps.classify.outputs.code }}
       web: ${{ steps.classify.outputs.web }}
       db: ${{ steps.classify.outputs.db }}
-      modules: ${{ steps.classify.outputs.modules }}
+      deploy: ${{ steps.classify.outputs.deploy }}
       packages: ${{ steps.classify.outputs.packages }}
     steps:
       - name: Checkout code
@@ -613,16 +613,15 @@ jobs:
           name: gosec-report
           path: security-reports/gosec.json
 
-  # Builds the Control image (Dockerfile "source" target) and the
-  # identity-platform module image once, with a GitHub Actions layer cache per
-  # image, and hands both to the Docker and Kubernetes smokes as image
-  # archives. The smokes start as soon as the images exist; they do not wait
+  # Builds the Control image (Dockerfile "source" target) once, with a
+  # GitHub Actions layer cache, and hands it to the Docker and Kubernetes
+  # smokes as an image archive. The smokes start as soon as the images exist; they do not wait
   # for the Go gates.
   build-images:
     name: Build Smoke Images
     runs-on: ubuntu-24.04
     needs: [changes]
-    if: ${{ needs.changes.outputs.modules == 'true' }}
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -649,22 +648,8 @@ jobs:
           cache-from: type=gha,scope=docker-smoke
           cache-to: type=gha,scope=docker-smoke,mode=max
 
-      - name: Build the identity-platform module image archive
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.module
-          push: false
-          tags: anix-module-identity-platform:ci
-          outputs: type=docker,dest=${{ runner.temp }}/smoke-images/anix-module-identity-platform.tar
-          build-args: |
-            PACKAGE_ID=identity-platform
-            PACKAGE_VERSION=4.0.0
-          cache-from: type=gha,scope=module-image
-          cache-to: type=gha,scope=module-image,mode=max
-
-      # The archives' layers are already compressed.
-      - name: Upload the smoke image archives
+      # The archive's layers are already compressed.
+      - name: Upload the smoke image archive
         uses: actions/upload-artifact@v7
         with:
           name: smoke-images
@@ -677,7 +662,7 @@ jobs:
     name: Docker Build Smoke
     runs-on: ubuntu-24.04
     needs: [changes, build-images]
-    if: ${{ needs.changes.outputs.modules == 'true' }}
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
     services:
       postgres:
         image: postgres:16
@@ -708,13 +693,12 @@ jobs:
           name: smoke-images
           path: ${{ runner.temp }}/smoke-images
 
-      - name: Load the Control and identity-platform module images
+      - name: Load the Control image
         shell: bash
         run: |
           set -euo pipefail
           docker load -i "${RUNNER_TEMP}/smoke-images/anix-control.tar"
-          docker load -i "${RUNNER_TEMP}/smoke-images/anix-module-identity-platform.tar"
-          docker image inspect anix-control:ci anix-module-identity-platform:ci >/dev/null
+          docker image inspect anix-control:ci >/dev/null
 
       - name: Run the image as a container deployment would
         shell: bash
@@ -764,7 +748,7 @@ jobs:
           }
           # The source image embeds no identity-platform, which holds the
           # accounts: the claim waits for it, answers 503 and leaves the link
-          # unused. The network module step below claims for real.
+          # unused. internal/tests/builtinpackages claims for real.
           test "$(claim "${token}")" = 503
           curl -fsS http://127.0.0.1:8080/api/v5/claim/status | grep -F '"claimable":true' >/dev/null
           logs="$(docker logs control 2>&1)"
@@ -818,27 +802,17 @@ jobs:
             http://127.0.0.1:8080/api/v5/claim)"
           # The source image embeds no identity-platform, which holds the
           # accounts: the claim waits for it, answers 503 and leaves the link
-          # unused. The network module step below claims for real.
+          # unused. internal/tests/builtinpackages claims for real.
           test "${status}" = 503 || { echo "the claim answered ${status}"; exit 1; }
           "${compose[@]}" stop control
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down -v
 
-      - name: Run identity-platform as a network module with Compose
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
-            psql -h 127.0.0.1 -U postgres -d anix_control_smoke -c 'CREATE DATABASE anix_control_modules'
-          CONTROL_IMAGE=anix-control:ci IDENTITY_IMAGE=anix-module-identity-platform:ci \
-            DB_HOST=host.docker.internal DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=anix_control_modules \
-            config/scripts/modules_compose_smoke.sh
-
   helm-chart:
     name: Helm Chart Checks
     runs-on: ubuntu-24.04
     needs: [changes]
-    if: ${{ needs.changes.outputs.modules == 'true' }}
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -873,15 +847,6 @@ jobs:
           if helm template ci "${chart}" >/dev/null 2>&1; then
             echo "missing secrets must be rejected"; exit 1
           fi
-          modules=(--set secrets.files.module_ca_kek=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK --set secrets.values.module_ca_kek=z
-            --set moduleRuntime.enabled=true --set moduleRuntime.networkPolicy.enabled=true
-            --set modules.identity-platform.enabled=true --set modules.identity-platform.image.repository=anix-module-identity-platform
-            --set modules.identity-platform.trustBundleConfigMap=ca --set modules.identity-platform.enrollmentSecret=enrollment)
-          helm lint --strict "${chart}" "${secrets[@]}" "${modules[@]}"
-          helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" | kubeconform -strict -summary -kubernetes-version 1.30.0
-          if helm template ci "${chart}" "${secrets[@]}" --set caKek.generate=false --set moduleRuntime.enabled=true >/dev/null 2>&1; then
-            echo "moduleRuntime without a CA key must be rejected"; exit 1
-          fi
           # Fresh installs: the chart generates the CA key (an immutable Secret
           # kept on uninstall) and mounts it; gRPC TLS comes from a TLS Secret.
           rendered="$(helm template ci "${chart}" "${secrets[@]}" --set grpc.enabled=true --set grpc.tls.secretName=grpc-tls)"
@@ -901,15 +866,11 @@ jobs:
           if grep -q 'ca-kek-secret.yaml\|anix-control-ca-kek' <<<"${mapped}"; then
             echo "a secrets.files CA key must take precedence over the generated one"; exit 1
           fi
-          if helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" --set moduleRuntime.enabled=false >/dev/null 2>&1; then
-            echo "modules without moduleRuntime must be rejected"; exit 1
-          fi
-
   kubernetes-smoke:
     name: Kubernetes Smoke
     runs-on: ubuntu-24.04
     needs: [changes, helm-chart, build-images]
-    if: ${{ needs.changes.outputs.modules == 'true' }}
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -930,13 +891,12 @@ jobs:
           name: smoke-images
           path: ${{ runner.temp }}/smoke-images
 
-      - name: Load the Control and identity-platform module images
+      - name: Load the Control image
         shell: bash
         run: |
           set -euo pipefail
           docker load -i "${RUNNER_TEMP}/smoke-images/anix-control.tar"
-          docker load -i "${RUNNER_TEMP}/smoke-images/anix-module-identity-platform.tar"
-          docker image inspect anix-control:ci anix-module-identity-platform:ci >/dev/null
+          docker image inspect anix-control:ci >/dev/null
 
       - name: Setup Go for the package builder
         uses: actions/setup-go@v6
@@ -1015,22 +975,13 @@ jobs:
             http://127.0.0.1:18080/api/v5/claim)"
           # The source image embeds no identity-platform, which holds the
           # accounts: the claim waits for it, answers 503 and leaves the link
-          # unused. The network module step below claims for real.
+          # unused. internal/tests/builtinpackages claims for real.
           test "${status}" = 503 || { echo "the claim answered ${status}"; exit 1; }
           # A config change rolls the pod (Recreate) and it becomes ready again.
           helm upgrade control config/deploy/helm/anix-control --namespace anix --reuse-values \
             --set config.ANIX_CONTROL_LOG_FORMAT=text --wait --timeout 6m
           kubectl -n anix get pods
           helm uninstall control --namespace anix --wait
-
-      - name: Run identity-platform as a network module Deployment
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl -n anix exec deployment/postgresql -- psql -U anix_control -d anix_control -c 'CREATE DATABASE anix_modules'
-          CONTROL_IMAGE=anix-control:ci IDENTITY_IMAGE=anix-module-identity-platform:ci KIND_CLUSTER=anix-control \
-            NAMESPACE=anix DB_PASSWORD=ci-db-password DB_NAME=anix_modules \
-            config/scripts/modules_kind_smoke.sh
 
       - name: Dump cluster state on failure
         if: failure()
@@ -1039,7 +990,6 @@ jobs:
           kubectl -n anix get all || true
           kubectl -n anix describe pods || true
           kubectl -n anix logs deployment/control-anix-control --all-containers --tail=200 || true
-          kubectl -n anix logs -l app.kubernetes.io/name=anix-module --prefix --tail=200 || true
 
   # Three shards; config/scripts/plan_test_shards.py balances the packages by
   # measured time and every package lands in exactly one shard. Each shard
@@ -2373,40 +2323,6 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
-
-      - name: Read the identity-platform package version
-        id: identity
-        shell: bash
-        run: echo "version=$(jq -r .version packages/identity-platform/manifest.template.json)" >> "${GITHUB_OUTPUT}"
-
-      # The network module image (Dockerfile.module); see
-      # docs/architecture/module-runtime.md.
-      - name: Build and push the edge identity-platform module image
-        id: identity-image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.module
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: mode=max
-          sbom: true
-          tags: |
-            ghcr.io/anixops/anix-module-identity-platform:edge
-            ghcr.io/anixops/anix-module-identity-platform:sha-${{ github.sha }}
-          build-args: |
-            PACKAGE_ID=identity-platform
-            PACKAGE_VERSION=${{ steps.identity.outputs.version }}
-          cache-from: |
-            type=gha,scope=module-edge
-            type=gha,scope=module-image
-          cache-to: type=gha,scope=module-edge,mode=max
-
-      - name: Sign the edge module image digest
-        shell: bash
-        env:
-          DIGEST: ${{ steps.identity-image.outputs.digest }}
-        run: cosign sign --yes "ghcr.io/anixops/anix-module-identity-platform@${DIGEST}"
 
   release:
     name: Create Release

@@ -621,10 +621,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		}
 		rt.controlPluginHosts = hosts
 		pluginhost.SetDefaultManager(hosts)
-		// Remote packages must be known before reconciliation starts hosts.
-		if err := rt.startModuleRuntime(cfg, hosts); err != nil {
-			return err
-		}
 		// Read route modes and native counters from package hosts for metrics.
 		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
 			hosts.PollHealth(ctx, pluginHostHealthPollInterval)

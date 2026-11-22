@@ -7,10 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"net/url"
 	"path/filepath"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func openTestDB(t *testing.T) *gorm.DB {
 	path := filepath.Join(t.TempDir(), "kernel.db")
 	db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.ServiceCA{}, &model.ModuleEnrollment{}, &model.ModuleCertificate{}))
+	require.NoError(t, db.AutoMigrate(&model.ServiceCA{}))
 	t.Cleanup(func() {
 		if sqlDB, err := db.DB(); err == nil {
 			_ = sqlDB.Close()
@@ -76,11 +75,27 @@ func newCSR(t *testing.T) (*ecdsa.PrivateKey, []byte) {
 	return key, der
 }
 
-func verifyIssued(t *testing.T, authority *Authority, issued Issued) *x509.Certificate {
+func signLeaf(t *testing.T, authority *Authority, csr []byte) SignedLeaf {
 	t.Helper()
-	identity, leaf, err := moduletls.VerifyChainAt([][]byte{issued.CertificateDER}, mustRoots(t, authority), authority.now())
+	leaf, err := authority.SignLeaf(context.Background(), authority.db, kernelURI(t), DefaultCertificateLifetime, csr)
 	require.NoError(t, err)
-	require.Equal(t, issued.Identity, identity)
+	return leaf
+}
+
+func verifyAt(certificateDER []byte, roots *x509.CertPool, at time.Time) (*x509.Certificate, error) {
+	leaf, err := x509.ParseCertificate(certificateDER)
+	if err != nil {
+		return nil, err
+	}
+	_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, CurrentTime: at, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
+	return leaf, err
+}
+
+func verifyLeaf(t *testing.T, authority *Authority, signed SignedLeaf) *x509.Certificate {
+	t.Helper()
+	leaf, err := verifyAt(signed.CertificateDER, mustRoots(t, authority), authority.now())
+	require.NoError(t, err)
+	require.Equal(t, []*url.URL{kernelURI(t)}, leaf.URIs)
 	return leaf
 }
 
@@ -125,155 +140,31 @@ func TestEnsureCreatesOneSealedCA(t *testing.T) {
 	other := make([]byte, 32)
 	wrong, err := New(Options{DB: db, Cluster: "prod", KEK: other, Now: clock.Now})
 	require.NoError(t, err)
-	_, _, err = wrong.sign(context.Background(), db, Identity(t, "identity-platform"), mustPublicKey(t))
+	_, csr := newCSR(t)
+	_, err = wrong.SignLeaf(context.Background(), db, kernelURI(t), DefaultCertificateLifetime, csr)
 	require.ErrorContains(t, err, "wrong key-encryption key")
 }
 
-func Identity(t *testing.T, packageID string) moduletls.Identity {
+func kernelURI(t *testing.T) *url.URL {
 	t.Helper()
-	identity, err := moduletls.Module("prod", packageID)
+	identity, err := moduletls.Kernel("prod")
 	require.NoError(t, err)
-	return identity
+	return identity.URL()
 }
 
-func mustPublicKey(t *testing.T) *ecdsa.PublicKey {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	return &key.PublicKey
-}
-
-func TestOneTimeEnrollmentIssuesOnlyThePackageIdentity(t *testing.T) {
+func TestSignLeafIssuesOnlyTheRequestedIdentity(t *testing.T) {
 	db := openTestDB(t)
 	clock := &testClock{now: time.Unix(1_790_000_000, 0)}
 	authority := newTestAuthority(t, db, clock)
-	ctx := context.Background()
-	credential, enrollment, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: time.Hour, CreatedBy: 1})
-	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(credential, "anixenr_"))
-	require.NotContains(t, enrollment.CredentialHash, credential)
-
 	_, csr := newCSR(t)
-	issued, err := authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.NoError(t, err)
-	leaf := verifyIssued(t, authority, issued)
-	require.Empty(t, leaf.DNSNames, "requested SANs are ignored")
-	require.Equal(t, "spiffe://anixops/prod/module/identity-platform", leaf.URIs[0].String())
-	require.Equal(t, clock.Now().Add(DefaultCertificateLifetime).Unix(), leaf.NotAfter.Unix())
-	require.Equal(t, clock.Now().Add(16*time.Hour).Unix(), issued.RenewAfter.Unix())
-	var record model.ModuleCertificate
-	require.NoError(t, db.First(&record, "serial = ?", issued.Serial).Error)
-	require.Equal(t, enrollment.ID, record.EnrollmentID)
+	leaf := verifyLeaf(t, authority, signLeaf(t, authority, csr))
+	require.Empty(t, leaf.DNSNames, "the CSR's names are ignored")
+	require.Equal(t, []*url.URL{kernelURI(t)}, leaf.URIs)
 
-	_, err = authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.ErrorIs(t, err, ErrEnrollmentRejected, "a one-time credential works once")
-}
-
-func TestEnrollmentRejectsWithoutConsuming(t *testing.T) {
-	db := openTestDB(t)
-	clock := &testClock{now: time.Unix(1_790_000_000, 0)}
-	authority := newTestAuthority(t, db, clock)
-	ctx := context.Background()
-	credential, _, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: time.Hour})
-	require.NoError(t, err)
-	_, csr := newCSR(t)
-
-	for name, attempt := range map[string]func() error{
-		"other package": func() error { _, err := authority.Enroll(ctx, credential, "ticket", "prod", csr); return err },
-		"other cluster": func() error {
-			_, err := authority.Enroll(ctx, credential, "identity-platform", "staging", csr)
-			return err
-		},
-		"unknown": func() error {
-			_, err := authority.Enroll(ctx, "anixenr_unknown", "identity-platform", "prod", csr)
-			return err
-		},
-		"no prefix": func() error { _, err := authority.Enroll(ctx, "guess", "identity-platform", "prod", csr); return err },
-	} {
-		require.ErrorIs(t, attempt(), ErrEnrollmentRejected, name)
-	}
-	_, err = authority.Enroll(ctx, credential, "identity-platform", "prod", []byte("not a csr"))
+	_, err := authority.SignLeaf(context.Background(), db, &url.URL{Scheme: "https", Host: "evil.example"}, DefaultCertificateLifetime, csr)
 	require.ErrorIs(t, err, ErrInvalidRequest)
-
-	_, err = authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.NoError(t, err, "rejected attempts did not consume the credential")
-
-	expiring, _, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: time.Minute})
-	require.NoError(t, err)
-	clock.Advance(2 * time.Minute)
-	_, err = authority.Enroll(ctx, expiring, "identity-platform", "prod", csr)
-	require.ErrorIs(t, err, ErrEnrollmentRejected, "expired")
-
-	_, _, err = authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: 8 * 24 * time.Hour})
-	require.Error(t, err, "one-time credentials live at most a week")
-	_, _, err = authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "Bad_ID", TTL: time.Hour})
-	require.Error(t, err)
-}
-
-func TestOneTimeEnrollmentRaceHasOneWinner(t *testing.T) {
-	db := openTestDB(t)
-	clock := &testClock{now: time.Unix(1_790_000_000, 0)}
-	authority := newTestAuthority(t, db, clock)
-	ctx := context.Background()
-	credential, _, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: time.Hour})
-	require.NoError(t, err)
-
-	var successes atomic.Int32
-	var wg sync.WaitGroup
-	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, csr := newCSR(t)
-			if _, err := authority.Enroll(ctx, credential, "identity-platform", "prod", csr); err == nil {
-				successes.Add(1)
-			}
-		}()
-	}
-	wg.Wait()
-	require.EqualValues(t, 1, successes.Load())
-	var count int64
-	require.NoError(t, db.Model(&model.ModuleCertificate{}).Count(&count).Error)
-	require.EqualValues(t, 1, count)
-}
-
-func TestReusableEnrollmentRenewalAndRevocation(t *testing.T) {
-	db := openTestDB(t)
-	clock := &testClock{now: time.Unix(1_790_000_000, 0)}
-	authority := newTestAuthority(t, db, clock)
-	ctx := context.Background()
-	credential, enrollment, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: 30 * 24 * time.Hour, Reusable: true})
-	require.NoError(t, err)
-
-	_, csr := newCSR(t)
-	first, err := authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.NoError(t, err)
-	_, err = authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.NoError(t, err, "a restarted pod enrolls again")
-
-	peer := verifyIssued(t, authority, first)
-	renewed, err := authority.Renew(ctx, peer, csr)
-	require.NoError(t, err)
-	verifyIssued(t, authority, renewed)
-	require.NotEqual(t, first.Serial, renewed.Serial)
-
-	kernelSource, err := authority.KernelTLS(ctx, time.Minute)
-	require.NoError(t, err)
-	kernelCertificate, err := kernelSource.Certificate()
-	require.NoError(t, err)
-	_, err = authority.Renew(ctx, kernelCertificate.Leaf, csr)
-	require.ErrorIs(t, err, moduletls.ErrUnexpectedPeer, "the kernel identity cannot renew as a module")
-
-	require.NoError(t, authority.RevokeEnrollment(ctx, enrollment.ID))
-	_, err = authority.Renew(ctx, peer, csr)
-	require.ErrorIs(t, err, ErrCertificateRevoked)
-	revoked, err := authority.IsRevoked(ctx, renewed.Serial)
-	require.NoError(t, err)
-	require.True(t, revoked, "certificates issued through a revoked enrollment are revoked")
-	_, err = authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-	require.ErrorIs(t, err, ErrEnrollmentRejected)
-	require.ErrorIs(t, authority.RevokeEnrollment(ctx, "missing"), gorm.ErrRecordNotFound)
-	require.NoError(t, authority.RevokeEnrollment(ctx, enrollment.ID), "revoking twice is harmless")
+	_, err = authority.SignLeaf(context.Background(), db, kernelURI(t), time.Minute, csr)
+	require.Error(t, err, "lifetimes below the minimum are refused")
 }
 
 func TestRotationOverlapsTrust(t *testing.T) {
@@ -281,16 +172,10 @@ func TestRotationOverlapsTrust(t *testing.T) {
 	clock := &testClock{now: time.Unix(1_790_000_000, 0)}
 	authority := newTestAuthority(t, db, clock)
 	ctx := context.Background()
-	credential, _, err := authority.CreateEnrollment(ctx, EnrollmentRequest{PackageID: "identity-platform", TTL: 365 * 24 * time.Hour, Reusable: true})
-	require.NoError(t, err)
 	_, csr := newCSR(t)
-	enroll := func() Issued {
-		issued, err := authority.Enroll(ctx, credential, "identity-platform", "prod", csr)
-		require.NoError(t, err)
-		return issued
-	}
+	enroll := func() SignedLeaf { return signLeaf(t, authority, csr) }
 	old := enroll()
-	oldIssuer := verifyIssued(t, authority, old).AuthorityKeyId
+	oldIssuer := verifyLeaf(t, authority, old).AuthorityKeyId
 
 	next, err := authority.Rotate(ctx)
 	require.NoError(t, err)
@@ -300,23 +185,23 @@ func TestRotationOverlapsTrust(t *testing.T) {
 	bundle, err := authority.TrustBundle(ctx)
 	require.NoError(t, err)
 	require.Len(t, bundle, 2, "the next CA is trusted before it signs")
-	require.Equal(t, oldIssuer, verifyIssued(t, authority, enroll()).AuthorityKeyId, "the current CA keeps signing")
+	require.Equal(t, oldIssuer, verifyLeaf(t, authority, enroll()).AuthorityKeyId, "the current CA keeps signing")
 
 	require.NoError(t, authority.Maintain(ctx))
-	require.Equal(t, oldIssuer, verifyIssued(t, authority, enroll()).AuthorityKeyId, "promotion waits one lifetime")
+	require.Equal(t, oldIssuer, verifyLeaf(t, authority, enroll()).AuthorityKeyId, "promotion waits one lifetime")
 
 	clock.Advance(DefaultCertificateLifetime + time.Second)
 	lastOld := enroll()
-	require.Equal(t, oldIssuer, verifyIssued(t, authority, lastOld).AuthorityKeyId)
+	require.Equal(t, oldIssuer, verifyLeaf(t, authority, lastOld).AuthorityKeyId)
 	require.NoError(t, authority.Maintain(ctx))
-	verifyIssued(t, authority, lastOld)
+	verifyLeaf(t, authority, lastOld)
 	newer := enroll()
-	require.NotEqual(t, oldIssuer, verifyIssued(t, authority, newer).AuthorityKeyId)
-	_, _, err = moduletls.VerifyChainAt([][]byte{old.CertificateDER}, mustRoots(t, authority), clock.Now())
+	require.NotEqual(t, oldIssuer, verifyLeaf(t, authority, newer).AuthorityKeyId)
+	_, err = verifyAt(old.CertificateDER, mustRoots(t, authority), clock.Now())
 	require.Error(t, err, "the old leaf has expired by now")
 
 	clock.Advance(time.Hour)
-	verifyIssued(t, authority, lastOld)
+	verifyLeaf(t, authority, lastOld)
 	clock.Advance(DefaultCertificateLifetime + 2*time.Minute)
 	bundle, err = authority.TrustBundle(ctx)
 	require.NoError(t, err)

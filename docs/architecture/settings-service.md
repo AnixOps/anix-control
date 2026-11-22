@@ -1,8 +1,7 @@
 # Settings Service (KernelSettings)
 
 Status: in place. The contract is `sdk/api/kernelsettings/v1`, served by
-`internal/kernelsettings` on local package bridge sessions and on the mTLS
-module listener. Phase 2 of the 2026-10 plan.
+`internal/kernelsettings` on local package bridge sessions. Phase 2 of the 2026-10 plan.
 
 ## Why
 
@@ -175,8 +174,8 @@ and the kernel's in-memory copies:
 | `GET /api/v2/admin/forward/nodex/doctor` | gost-mesh | 21 |
 
 A host whose bridge has no contract connection keeps these routes legacy.
-The NodeX probe and the test e-mail now leave from the package host; with
-network modules that is the module's network, not Control's.
+The NodeX probe and the test e-mail now leave from the package host, which
+runs on the Control machine.
 
 **Kept bridged: the generic system configuration routes** (platform: list,
 get, put, delete `/api/v2/admin/system/configs[/:key]`). They work on any

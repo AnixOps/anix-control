@@ -3,8 +3,9 @@
 Status: DESIGN (2026-09-30). This supersedes the earlier decision in
 [`package-extraction.md`](package-extraction.md) that identity stays owned by
 the kernel. Login, registration, credentials, MFA and invite codes move into
-the identity module (`identity-platform`), the first network module on the
-[module runtime](module-runtime.md).
+the identity module (`identity-platform`). It was designed as the first
+network module; that runtime was removed in 2026-11
+([`kernel-ca.md`](kernel-ca.md#history)) and the module runs inside Control.
 
 Since the release after 5.0.3 the migration is complete: Control starts only
 on a finalized identity, the kernel's legacy handlers are gone, and the
@@ -140,8 +141,7 @@ lists that read the `v5_user` projection.
   seeded once from `GetIdentitySettings`.
 
 **Kernel side, in place since step 9** (`internal/kernelidentity`). It is
-served on the local package bridge and on the module listener to the bound
-instance's generation.
+served on the local package bridge.
 - **Authorization.** Every call must come from the current generation of an
   official AnixOps package whose signed release, verified again on every call,
   declares `kernel.identity.v1`.

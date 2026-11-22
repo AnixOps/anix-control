@@ -116,33 +116,6 @@ func TestLinkCertificatesAreScannedPerNode(t *testing.T) {
 	})
 }
 
-func TestModuleCertificatesAreScannedPerEnrollment(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		cert := func(serial, pkg, enrollment string, lifetime, issuedAgo time.Duration) {
-			issued := start.Add(-issuedAgo)
-			require.NoError(t, db.Create(&model.ModuleCertificate{
-				Serial: serial, PackageID: pkg, Cluster: "prod", EnrollmentID: enrollment, IssuerKeyID: "k", NotAfter: issued.Add(lifetime), CreatedAt: issued,
-			}).Error)
-		}
-		// 24-hour certificates renew at 16 hours; the window is 4 hours.
-		cert("m1", "identity-platform", "11111111-aaaa", hours(24), hours(10))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings)
-		cert("m2", "forward", "22222222-bbbb", hours(24), hours(21))
-		found := kinds(scan(t, db, defaultSettings(), start))
-		require.Len(t, found, 1)
-		finding := found[KindModuleCertificate+"/forward#22222222"]
-		assert.Equal(t, SubjectModule, finding.SubjectKind)
-		assert.Equal(t, model.KernelAlertWarning, finding.Severity)
-		// A second instance of the same package under another enrollment
-		// does not hide the stale one.
-		cert("m3", "forward", "33333333-cccc", hours(24), hours(1))
-		assert.Len(t, scan(t, db, defaultSettings(), start).Findings, 1)
-		// The expired one is critical.
-		found = kinds(scan(t, db, defaultSettings(), start.Add(hours(5))))
-		assert.Equal(t, model.KernelAlertCritical, found[KindModuleCertificate+"/forward#22222222"].Severity)
-	})
-}
-
 func TestCAExpiryUsesTheCurrentAuthorityOnly(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		ca := func(table any, keyID, state string, notAfter time.Time) {

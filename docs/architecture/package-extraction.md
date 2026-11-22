@@ -155,10 +155,10 @@ A domain counts as extracted only when all four hold:
 4. The kernel has no handler, service, model, or worker left for the domain.
 
 Identity is no longer exempt (decision of 2026-09-30). Login, credentials,
-MFA and invite codes move into the identity module, which runs as a network
-module and is the first domain extracted; see
-[`identity-service.md`](identity-service.md) and
-[`module-runtime.md`](module-runtime.md).
+MFA and invite codes move into the identity module, the first domain
+extracted; see [`identity-service.md`](identity-service.md). (It was first
+planned as a network module; that runtime was removed in 2026-11, see
+[`kernel-ca.md`](kernel-ca.md#history).)
 
 ## 3. Target Mechanism (M3 infrastructure CURRENT; no domain extracted yet)
 
@@ -1258,7 +1258,7 @@ Not yet repeated for M3: the Docker rehearsal of the v4.0.0 signed packages
 against the new kernel.
 
 Next (decision of 2026-09-30): the network module runtime and the identity
-module (N1–N2 in [`module-runtime.md`](module-runtime.md) and
+module (N1–N2 in [`kernel-ca.md`](kernel-ca.md#history) and
 [`identity-service.md`](identity-service.md)). The knowledge pilot (M4) moves
 after identity.
 
@@ -1300,7 +1300,7 @@ Next quarter, in dependency order:
 4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).
 5. wireguard / protocol-runtime: requires reviving anix-agent first.
 
-Identity goes first, ahead of the knowledge pilot, as a network module; see
+Identity goes first, ahead of the knowledge pilot; see
 [`identity-service.md`](identity-service.md).
 
 ## 11. Risks And Rollback

@@ -18,8 +18,7 @@ backs up anything.
 |------|---------|-------------|-------------|
 | `agent_certificate_expiring` | `proxy-<id>` / `forward-<id>` | the node's latest Agent client certificate is inside its [window](#thresholds) and the Agent did not renew it, or it ended and the node is still enabled | bringing the Agent back (it renews itself while its certificate is valid). After the certificate ended the Agent cannot connect: [enroll it again](../guide/agent-onboarding.md#when-an-agent-certificate-was-not-renewed) with a new install command (`--reset`) |
 | `link_certificate_expiring` | `forward-<id>` | the same for the forward link certificate (H28), which renews with the Agent certificate | the same: a connected Agent renews both |
-| `module_certificate_expiring` | `<package>#<enrollment>` | a module's latest certificate (per enrollment) is inside its window or ended | starting the module again or enrolling it again; revoking its enrollment ends the alert |
-| `ca_expiring` | `service_ca:<key id>` / `forward_link_ca:<key id>` | the **current** module (Agent and kernel) CA or forward link CA ends within `alerts.ca_expiry_days` | rotating the CA (`anix-control module ca rotate` or `POST /api/v4/kernel/modules/ca/rotate`; `anix-control agent link-ca rotate` for the link CA): the new CA is trusted at once and takes over signing by itself after one certificate lifetime |
+| `ca_expiring` | `service_ca:<key id>` / `forward_link_ca:<key id>` | the **current** kernel CA (Agent and kernel certificates) or forward link CA ends within `alerts.ca_expiry_days` | rotating the CA (`anix-control module ca rotate` or `POST /api/v4/kernel/modules/ca/rotate`; `anix-control agent link-ca rotate` for the link CA): the new CA is trusted at once and takes over signing by itself after one certificate lifetime |
 | `builtin_package_invalid` (critical) | the package id (`index` for an unreadable set) | an official package built into the binary does not verify against `plugins.official_public_key` (signature, digest or contents): it was not installed and its routes are unavailable | install a release binary verified against `SHA256SUMS.txt.sig` ([`../RELEASING.md`](../RELEASING.md#verifying-a-release)), or set `plugins.official_public_key` to the key that signed it (a development build: `make dev-package-key`); the start log names that key |
 | `builtin_package_failed` (critical) | the package id | a built-in package verified, but its installation is `failed` (its host does not start, a migration failed, the binary is older than the installed version) or is not enabled at the built-in version | read the reason in the alert and the Control log (`built-in package ... failed`), fix it, restart Control: the start installs and starts it again |
 | `panel_certificate_expiring` | the certificate's name (`panel.example.com`) | a certificate Control serves itself (the panel's, the gRPC listener's) is inside its [window](#thresholds): an ACME certificate that missed its renewal (renewed a third of its lifetime before the end), or certificate files due for replacement | for ACME, the cause in `anix-control tls status`, then `anix-control tls retry`; for files, replacing them (Control reloads them) |
@@ -39,14 +38,14 @@ disabled or deleted). Resolved alerts stay listed for 30 days.
 A certificate is only reported when its holder **missed** a renewal, because
 healthy holders renew at two thirds of the lifetime (`RenewAfter`). A fixed
 "14 days before the end" would fire for every fresh 7-day Agent certificate.
-So the window of a leaf certificate (Agent, link, module) is
+So the window of a leaf certificate (Agent, link) is
 
 ```text
 window = min(alerts.leaf_expiry_days, one sixth of the certificate's own lifetime)
 ```
 
 For the default lifetimes that is 28 hours for the 7-day Agent and link
-certificates, 4 hours for the 24-hour module certificates and 14 days for a
+certificates and 14 days for a
 90-day panel certificate;
 `leaf_expiry_days` (default 14) only matters when you lower it below that.
 The lifetime is `not_after - created_at` of the certificate record. Only a

@@ -22,23 +22,6 @@ app.kubernetes.io/name: {{ include "anix-control.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{/*
-Network module labels. They must not match the Control selector, which would
-put module pods behind the Control Service.
-*/}}
-{{- define "anix-control.moduleSelectorLabels" -}}
-app.kubernetes.io/name: anix-module
-app.kubernetes.io/instance: {{ .root.Release.Name }}
-app.kubernetes.io/component: {{ .id }}
-{{- end -}}
-
-{{- define "anix-control.moduleLabels" -}}
-helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" }}
-{{ include "anix-control.moduleSelectorLabels" . }}
-app.kubernetes.io/part-of: {{ include "anix-control.name" .root }}
-app.kubernetes.io/managed-by: {{ .root.Release.Service }}
-{{- end -}}
-
 {{- define "anix-control.image" -}}
 {{- if .Values.image.digest -}}
 {{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
@@ -101,29 +84,6 @@ false
   value: /run/secrets/anix-control-grpc-tls/tls.key
 {{- end }}
 {{- end }}
-{{- if .Values.moduleRuntime.enabled }}
-- name: ANIX_CONTROL_MODULE_RUNTIME_ENABLED
-  value: "true"
-- name: ANIX_CONTROL_MODULE_RUNTIME_LISTEN
-  value: {{ printf ":%d" (int .Values.moduleRuntime.port) | quote }}
-- name: ANIX_CONTROL_MODULE_RUNTIME_CLUSTER
-  value: {{ .Values.moduleRuntime.cluster | quote }}
-- name: ANIX_CONTROL_MODULE_RUNTIME_PKI
-  value: {{ .Values.moduleRuntime.pki | quote }}
-{{- with .Values.moduleRuntime.databaseHost }}
-- name: ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST
-  value: {{ . | quote }}
-{{- end }}
-{{- end }}
-{{- end -}}
-
-{{/* Fail early when the module runtime lacks its CA key. */}}
-{{- define "anix-control.validateModuleRuntime" -}}
-{{- if and .Values.moduleRuntime.enabled (eq .Values.moduleRuntime.pki "builtin") }}
-{{- if and (ne (include "anix-control.caKekMapped" .) "true") (ne (include "anix-control.caKekEnabled" .) "true") }}
-{{- fail "moduleRuntime.enabled with pki=builtin needs the CA key: caKek.generate, caKek.existingSecret, or secrets.files.<key>: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK" }}
-{{- end }}
-{{- end }}
 {{- end -}}
 
 {{/* Fail early without a lasting root key: the pod's data directory is
@@ -133,15 +93,6 @@ lost with the pod, so the CA key Secret is the root key's only lasting copy
 {{- if and (ne (include "anix-control.caKekMapped" .) "true") (ne (include "anix-control.caKekEnabled" .) "true") }}
 {{- fail "Control needs its root key from a Secret: keep caKek.generate, set caKek.existingSecret, or map secrets.files.<key>: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK (a key generated in the pod would be lost with it)" }}
 {{- end }}
-{{- end -}}
-
-{{- define "anix-control.moduleImage" -}}
-{{- $image := .image -}}
-{{- if $image.digest -}}
-{{- printf "%s@%s" $image.repository $image.digest -}}
-{{- else -}}
-{{- printf "%s:%s" $image.repository (default .appVersion $image.tag) -}}
-{{- end -}}
 {{- end -}}
 
 {{- define "anix-control.envFrom" -}}

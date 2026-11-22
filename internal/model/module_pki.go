@@ -27,6 +27,11 @@ type ServiceCA struct {
 
 func (ServiceCA) TableName() string { return "v4_kernel_service_ca" }
 
+// ModuleEnrollment, ModuleCertificate and PluginRuntime belong to the network
+// module runtime, removed in the 2026-11 slimming audit (PR 2d). Nothing
+// reads or writes them; they stay until a schema migration drops their
+// tables (docs/audit/slim-2026-11.md).
+
 // ModuleEnrollment is a credential a module presents once (or, when
 // Reusable, until revoked or expired) to obtain its first certificate. Only
 // the SHA-256 of the credential is stored.

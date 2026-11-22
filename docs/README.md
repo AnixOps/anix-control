@@ -32,7 +32,7 @@ Use this tree like NodeX:
 - Network model implementation plan and the draft `anixops.network.v1` contract (`sdk/network`, `contracts/network/v1`): [`design/network-model/implementation.md`](design/network-model/implementation.md)
 - AnixOps relay protocol: secure transport between forward nodes (design approved, H22): [`architecture/anixops-protocol.md`](architecture/anixops-protocol.md)
 - Package reports on the Agent Control stream, and the privacy of the systemd services report: [`architecture/package-reports.md`](architecture/package-reports.md)
-- Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
+- Kernel CA and Agent PKI: [`architecture/kernel-ca.md`](architecture/kernel-ca.md)
 - Identity service design (login and credentials as a module): [`architecture/identity-service.md`](architecture/identity-service.md)
 - Kernel contracts for modules: subscriber state [`architecture/subscriber-service.md`](architecture/subscriber-service.md), system settings [`architecture/settings-service.md`](architecture/settings-service.md), the kernel's cached answers [`architecture/kernel-caches.md`](architecture/kernel-caches.md)
 - Open backlog: [`../TODO.md`](../TODO.md)

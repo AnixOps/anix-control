@@ -29,7 +29,7 @@ var start = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 func migrate(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(
-		&model.KernelAlert{}, &model.AgentCertificate{}, &model.ForwardLinkCertificate{}, &model.ModuleCertificate{},
+		&model.KernelAlert{}, &model.AgentCertificate{}, &model.ForwardLinkCertificate{},
 		&model.ServiceCA{}, &model.ForwardLinkCA{}, &model.Node{}, &model.ForwardNode{},
 		&model.NodeExitPolicy{},
 	))
