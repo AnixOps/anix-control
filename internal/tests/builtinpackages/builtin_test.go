@@ -3,7 +3,7 @@
 // Package builtinpackages runs the real Control binary with the official
 // packages built in: the slim signed set build_package.py --builtin writes,
 // embedded with a go build overlay over internal/builtinpkg/dist, and the
-// hosts started by executing the binary again (package-host). It checks
+// hosts run inside the Control process. It checks
 // the start-up bootstrap of docs/architecture/plugin-kernel-contract.md
 // ("Built-in Packages"): a cold start installs every package, a restart
 // with the same binary changes nothing, a new version upgrades and runs the
@@ -417,12 +417,8 @@ func TestBuiltinPackagesInstallUpgradeAndSurviveAFailure(t *testing.T) {
 		"identity-platform", 1, model.PackageMigrationStateCompleted), "identity-platform migrates on its first start")
 	output := panel.output.String()
 	require.Contains(t, output, fmt.Sprintf("Built-in packages: %d embedded, 0 failed", packageCount))
-	// Every host is the Control binary itself, started as package-host.
-	hosts := panel.hostProcesses()
-	require.Len(t, hosts, packageCount)
-	for id, exe := range hosts {
-		require.Equal(t, controlV1, exe, id)
-	}
+	// Every host runs inside Control: no package-host child process.
+	require.Empty(t, panel.hostProcesses())
 	panel.stop()
 
 	// A restart with the same binary changes nothing.
