@@ -11,7 +11,6 @@ import { closeAgentUpgrade, openAgentUpgrade } from '@/composables/useAgentUpgra
 
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 const mockGetUserList = vi.hoisted(() => vi.fn())
-const mockAdminExtensionMenus = vi.hoisted(() => ({ value: [] }))
 const mockAdminCapabilities = vi.hoisted(() => ({ value: [] }))
 
 vi.mock('@/api/admin', () => ({
@@ -31,8 +30,7 @@ vi.mock('@/components/admin/AgentUpgradeSheet.vue', () => ({
   default: { name: 'AgentUpgradeSheetStub', template: '<div data-testid="upgrade-sheet-stub" />' }
 }))
 
-vi.mock('@/extensions/runtime', () => ({
-  adminExtensionMenus: mockAdminExtensionMenus,
+vi.mock('@/capabilities', () => ({
   adminCapabilities: mockAdminCapabilities
 }))
 
@@ -79,7 +77,6 @@ describe('AdminLayout.vue', () => {
     const userStore = useUserStore()
     userStore.getUserInfo = vi.fn()
     userStore.login('admin-token', { id: 1, email: 'admin@example.test', is_admin: true, permission_mode: 'legacy' })
-    mockAdminExtensionMenus.value = []
     mockGetSystemInfo.mockReset()
     mockGetSystemInfo.mockResolvedValue({ code: 0, data: { version: '4.1.0', build_code: '202610020001', commit: 'abc123' } })
     mockGetUserList.mockReset()
@@ -127,7 +124,6 @@ describe('AdminLayout.vue', () => {
     mounted = wrapper
     const network = wrapper.get('[data-nav-group="network"]')
     expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'lines', 'topology'])
-    expect(wrapper.find('[data-nav-group="extensions"]').exists()).toBe(false)
     expect(sidebarPaths(wrapper)).not.toContain('/admin/deployments')
   })
 
@@ -169,17 +165,15 @@ describe('AdminLayout.vue', () => {
   })
 
   // With the forward package's v4 API the forwarding pages are sections of
-  // 节点 (one network area, no 转发 item); the package's own menu entry is
-  // left out. The flux-clone pages were removed in F5d.
+  // 节点 (one network area, no 转发 item). The flux-clone pages were
+  // removed in F5d.
   it('keeps the v4 forwarding pages under 节点 when the forward package provides them', async () => {
     mockAdminCapabilities.value = ['forward.v4']
-    mockAdminExtensionMenus.value = [{ pluginID: 'forward', id: 'forward.main', parent: 'operations', label: 'Forward', icon: 'network', to: '/admin/extensions/forward', permission: 'forward.view', order: 150 }]
     try {
       const { wrapper, router } = await mountLayout('/admin/forward/routes/01J')
       mounted = wrapper
       const paths = sidebarPaths(wrapper)
       expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
-      expect(paths).not.toContain('/admin/extensions/forward')
       expect(wrapper.get('#admin-sidebar a[href="/admin/nodes"]').attributes('aria-current')).toBe('page')
       // A node's forwarding settings belong to 节点 too.
       await router.push('/admin/forward/inventory/forward-41')
@@ -187,7 +181,6 @@ describe('AdminLayout.vue', () => {
       expect(wrapper.get('#admin-sidebar a[href="/admin/nodes"]').attributes('aria-current')).toBe('page')
     } finally {
       mockAdminCapabilities.value = []
-      mockAdminExtensionMenus.value = []
     }
   })
 
@@ -341,22 +334,6 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.find('[data-nav-group="commerce"]').exists()).toBe(false)
     expect(sidebarPaths(wrapper)).not.toContain('/admin/orders')
     expect(wrapper.get('a[data-nav-item="templates"]').text()).toBe('Subscription templates')
-  })
-
-  it('adds plugin menus the admin may open and titles their pages', async () => {
-    const userStore = useUserStore()
-    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['example.view'] })
-    mockAdminExtensionMenus.value = [
-      { pluginID: 'example', id: 'example.main', parent: 'services', label: 'Example Service', icon: 'EX', to: '/admin/extensions/example', permission: 'example.view', order: 100 },
-      { pluginID: 'hidden', id: 'hidden.main', parent: 'services', label: 'Hidden', icon: 'EX', to: '/admin/extensions/hidden', permission: 'hidden.view', order: 100 }
-    ]
-    const { wrapper } = await mountLayout('/admin/extensions/example')
-    mounted = wrapper
-    const extensions = wrapper.get('[data-nav-group="extensions"]')
-    expect(extensions.find('a[data-nav-source="extension"]').attributes('href')).toBe('/admin/extensions/example')
-    expect(extensions.find('[data-admin-nav-icon="EX"]').exists()).toBe(true)
-    expect(sidebarPaths(wrapper)).not.toContain('/admin/extensions/hidden')
-    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Example Service')
   })
 
   it('titles pages from the page meta table, the route meta and the menu', async () => {

@@ -41,7 +41,7 @@ const API = {
   '/api/v2/user/profile': { code: 0, data: ADMIN },
   '/api/v2/user/info': { code: 0, data: ADMIN },
   '/api/v2/admin/system/info': { code: 0, data: { version: '4.2.0' } },
-  '/api/v3/extensions': [],
+  '/api/v3/capabilities': [],
   '/api/v2/admin/notifications/unread': { code: 0, data: { count: 0 } }
 }
 

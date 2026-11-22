@@ -37,7 +37,7 @@ These are job names from `.github/workflows/ci.yml` and must match exactly:
 - `Go Lint Gate`
 - `Backend Tests`
 - `Frontend Build`: passes when `Frontend Checks` (audit, lint, unit tests,
-  live Control WebUI gate, build, bundle budget) and every `Frontend E2E (n/3)`
+  live Control gate, build, bundle budget) and every `Frontend E2E (n/3)`
   shard passed; the shards are skipped on PRs that leave `web/` alone
 - `Documentation Sync Check`
 - `Release Workflow Policy Check`

@@ -914,56 +914,11 @@ func TestPluginManifestValidatesSafeWebUIMetadata(t *testing.T) {
 	}
 }
 
-func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *testing.T) {
-	db := newKernelTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	manifest := kernelTestWebUIManifest("example-ui")
-	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
-	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical))
-	release, err := RegisterPluginRelease(db, string(canonical), signature, publicKey)
-	require.NoError(t, err)
-	_, err = StorePluginArtifact(db, release.ID, artifact)
-	require.NoError(t, err)
-	installation := model.PluginInstallation{
-		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
-		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
-	}
-	require.NoError(t, db.Create(&installation).Error)
-
-	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	extension := extensions[0]
-	require.Equal(t, manifest.ID, extension.PluginID)
-	require.Equal(t, installation.ID, extension.InstallationID)
-	require.Equal(t, "webui/index.mjs", extension.Bundle.Path)
-	require.Equal(t, manifest.WebUI.Bundle.SHA256, extension.Bundle.SHA256)
-	require.Equal(t, PluginWebUIAssetURL(manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256, manifest.WebUI.Bundle.Path), extension.Bundle.URL)
-	require.Equal(t, manifest.WebUI.Menus, extension.Menus)
-	require.JSONEq(t, string(manifest.ConfigSchema), string(extension.ConfigSchema))
-
-	require.NoError(t, db.Model(&installation).Updates(map[string]any{"state": "pending"}).Error)
-	extensions, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.NoError(t, err)
-	require.Empty(t, extensions)
-	require.NoError(t, db.Model(&installation).Updates(map[string]any{"state": "healthy", "desired_version": "2.0.0"}).Error)
-	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
-
-	require.NoError(t, db.Model(&installation).Update("desired_version", manifest.Version).Error)
-	require.NoError(t, db.Model(release).Update("signature", "tampered").Error)
-	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
-}
-
 // A package may ship no WebUI (packages/shared/build_package.py): its signed
 // manifest has an empty frontend_sha256 and no webui key. It registers,
 // stores and verifies like any other release, stores no WebUI asset, and the
 // extension catalog leaves it out.
-func TestPluginReleaseWithoutWebUIInstallsAndStaysOutOfTheCatalog(t *testing.T) {
+func TestPluginReleaseInstallsWithOrWithoutWebUI(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -996,185 +951,14 @@ func TestPluginReleaseWithoutWebUIInstallsAndStaysOutOfTheCatalog(t *testing.T) 
 	require.NotContains(t, string(canonical), `"webui"`)
 	register(headless, headlessArtifact)
 
+	// A manifest that still declares a WebUI registers; Control serves none.
 	withUI := kernelTestWebUIManifest("example-ui")
 	register(withUI, kernelTestWebUIPackage(t, &withUI, `export const anixopsExtension = {}; export default {};`))
 
-	var assets []model.PluginWebUIAsset
-	require.NoError(t, db.Find(&assets).Error)
-	require.Len(t, assets, 1)
-	require.Equal(t, "example-ui", assets[0].PluginID)
-
-	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	require.Equal(t, "example-ui", extensions[0].PluginID)
-
-	_, err = ResolveActivePluginWebUIAsset(db, publicKey, 0, true, headless.ID, headless.Version, strings.Repeat("b", 64))
-	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	// Its control routes still resolve: the gateway does not need a WebUI.
 	resolution, err := ResolvePluginControlRoute(db, publicKey, headless.ID, "/api/v3/plugins/headless/status", 0, true)
 	require.NoError(t, err)
 	require.Equal(t, "/api/v3/plugins/headless/status", resolution.MatchedRoute)
-}
-
-func TestListEnabledWebUIExtensionsNormalizesUnknownMenuParent(t *testing.T) {
-	db := newKernelTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	manifest := kernelTestWebUIManifest("legacy-menu-ui")
-	manifest.WebUI.Menus[0].Parent = "legacy-forward"
-	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
-	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
-	require.NoError(t, err)
-	_, err = StorePluginArtifact(db, release.ID, artifact)
-	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.PluginInstallation{
-		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
-		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
-	}).Error)
-
-	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	require.Len(t, extensions[0].Menus, 1)
-	require.Equal(t, PluginWebUIMenuParentExtensions, extensions[0].Menus[0].Parent)
-}
-
-func TestListEnabledWebUIExtensionsFiltersCatalogToActorWebUIPermissions(t *testing.T) {
-	db := newKernelTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	manifest := kernelTestWebUIManifest("filtered-ui")
-	manifest.Permissions = append(manifest.Permissions, "filtered-ui.manage")
-	manifest.WebUI.Permissions = append(manifest.WebUI.Permissions, "filtered-ui.manage")
-	manifest.WebUI.Routes = append(manifest.WebUI.Routes, PluginWebUIRoute{
-		ID: "filtered-ui.manage", Path: "/admin/extensions/filtered-ui/manage", Export: "Manage", Permission: "filtered-ui.manage",
-	})
-	manifest.WebUI.Menus = append(manifest.WebUI.Menus, PluginWebUIMenu{
-		ID: "filtered-ui.manage", Parent: "services", Label: "Manage", Icon: "box",
-		Route: "/admin/extensions/filtered-ui/manage", Permission: "filtered-ui.manage", Order: 101,
-	})
-	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
-	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
-	require.NoError(t, err)
-	_, err = StorePluginArtifact(db, release.ID, artifact)
-	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.PluginInstallation{
-		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
-		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
-	}).Error)
-
-	group := model.AccessGroup{ScopeID: manifest.ID, Name: "viewers", Enabled: true}
-	require.NoError(t, db.Create(&group).Error)
-	require.NoError(t, db.Create(&model.ResourceGrant{
-		GroupID: group.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: manifest.ID,
-		Permissions: `["filtered-ui.view"]`,
-	}).Error)
-	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: 7}).Error)
-
-	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
-	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	require.Equal(t, []string{"filtered-ui.view"}, extensions[0].Permissions)
-	require.Len(t, extensions[0].Routes, 1)
-	require.Equal(t, "filtered-ui.main", extensions[0].Routes[0].ID)
-	require.Len(t, extensions[0].Menus, 1)
-	require.Equal(t, "filtered-ui.main", extensions[0].Menus[0].ID)
-
-	extensions, err = ListEnabledWebUIExtensionsForActor(db, publicKey, 8, true)
-	require.NoError(t, err)
-	require.Empty(t, extensions, "once grants exist an unassigned administrator must fail closed")
-}
-
-func TestListEnabledWebUIExtensionsForActorQuarantinesInvalidPlugin(t *testing.T) {
-	db := newKernelTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	for _, pluginID := range []string{"catalog-broken", "catalog-valid"} {
-		manifest := kernelTestWebUIManifest(pluginID)
-		artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
-		canonical, err := CanonicalPluginManifest(manifest)
-		require.NoError(t, err)
-		release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
-		require.NoError(t, err)
-		_, err = StorePluginArtifact(db, release.ID, artifact)
-		require.NoError(t, err)
-		require.NoError(t, db.Create(&model.PluginInstallation{
-			PluginID: pluginID, Target: "control", DesiredVersion: manifest.Version,
-			ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
-		}).Error)
-		if pluginID == "catalog-broken" {
-			require.NoError(t, db.Model(release).Update("signature", "tampered").Error)
-		}
-	}
-
-	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
-	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	require.Equal(t, "catalog-valid", extensions[0].PluginID)
-
-	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity, "strict diagnostics must still report quarantined catalog corruption")
-}
-
-func TestListEnabledWebUIExtensionsRequiresTrustRootOnlyForActiveCandidates(t *testing.T) {
-	db := newKernelTestDB(t)
-	extensions, err := listEnabledWebUIExtensions(db, nil, 0, true, false)
-	require.NoError(t, err)
-	require.NotNil(t, extensions)
-	require.Empty(t, extensions)
-
-	manifest := kernelTestWebUIManifest("trust-root-ui")
-	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.PluginRelease{
-		PluginID: manifest.ID, Version: manifest.Version, APIVersion: manifest.APIVersion,
-		ManifestJSON: string(canonical), ArtifactSHA256: manifest.ArtifactSHA256, Signature: "unverified",
-	}).Error)
-	require.NoError(t, db.Create(&model.Plugin{ID: manifest.ID, Name: manifest.Name, Publisher: "AnixOps", Official: true}).Error)
-	require.NoError(t, db.Create(&model.PluginInstallation{
-		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
-		ObservedVersion: manifest.Version, State: "enabled", Enabled: true,
-	}).Error)
-	_, err = listEnabledWebUIExtensions(db, nil, 0, true, false)
-	require.ErrorIs(t, err, ErrPluginTrustRootRequired)
-}
-
-func TestStorePluginArtifactExtractsVerifiedWebUIBundle(t *testing.T) {
-	db := newKernelTestDB(t)
-	manifest := kernelTestWebUIManifest("asset-ui")
-	source := `export const anixopsExtension = {}; export default {};`
-	artifact := kernelTestWebUIPackage(t, &manifest, source)
-	release := seedKernelTestManifestRelease(t, db, manifest)
-
-	_, err := StorePluginArtifact(db, release.ID, artifact)
-	require.NoError(t, err)
-	var asset model.PluginWebUIAsset
-	require.NoError(t, db.First(&asset, "plugin_id = ? AND version = ? AND bundle_sha256 = ?", manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256).Error)
-	require.NoError(t, validateStoredPluginWebUIAsset(asset))
-	require.Equal(t, release.ID, asset.ReleaseID)
-	require.Equal(t, manifest.WebUI.Bundle.Path, asset.BundlePath)
-	require.Equal(t, int64(len(source)), asset.SizeBytes)
-	require.Equal(t, []byte(source), asset.Data)
-	require.Equal(t, PluginWebUIAssetStorageKey(manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256, manifest.WebUI.Bundle.Path), asset.StorageKey)
-
-	manifest.Version = "1.0.1"
-	manifest.WebUI.Bundle.SHA256 = strings.Repeat("c", 64)
-	manifest.FrontendSHA256 = manifest.WebUI.Bundle.SHA256
-	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	rejected := model.PluginRelease{
-		PluginID: manifest.ID, Version: manifest.Version, APIVersion: manifest.APIVersion,
-		ManifestJSON: string(canonical), ArtifactSHA256: manifest.ArtifactSHA256, Signature: "test",
-	}
-	require.NoError(t, db.Create(&rejected).Error)
-	_, err = StorePluginArtifact(db, rejected.ID, artifact)
-	require.ErrorContains(t, err, "webui bundle hash mismatch")
 }
 
 func TestStorePluginArtifactVerifiesHashAndImmutability(t *testing.T) {
@@ -1523,32 +1307,52 @@ func TestUpdatePluginConfigurationChecksSystemdServicesSettings(t *testing.T) {
 	}
 }
 
-// The catalog lists a package's control routes to an actor who may call
-// them, so the web app can tell the forward package's v4 API is there
-// (F5b D1).
-func TestListEnabledWebUIExtensionsListsControlRoutes(t *testing.T) {
+func TestAdminCapabilitiesNeedTheEnabledRouteAndItsPermission(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	manifest := kernelTestWebUIManifest("routed-ui")
-	manifest.Permissions = append(manifest.Permissions, PluginAPIPermission("routed-ui"))
-	manifest.ControlRoutes = []string{"/api/v4/plugins/routed-ui/*"}
-	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
+	manifest := PluginManifest{
+		ID: "forward", Name: "Forward", Version: "4.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, Permissions: []string{"forward.view", PluginAPIPermission("forward")},
+		ControlRoutes: []string{"/api/v4/plugins/forward/*"},
+	}
+	artifact := kernelTestArtifact(manifest.ID)
+	manifest.ArtifactSHA256 = kernelTestArtifactSHA256(artifact)
 	canonical, err := CanonicalPluginManifest(manifest)
 	require.NoError(t, err)
 	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
 	require.NoError(t, err)
 	_, err = StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.PluginInstallation{
-		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
-		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
-	}).Error)
 
-	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
+	capabilities, err := AdminCapabilities(db, 7, true)
 	require.NoError(t, err)
-	require.Len(t, extensions, 1)
-	require.Equal(t, []string{"/api/v4/plugins/routed-ui/*"}, extensions[0].ControlRoutes)
+	require.Empty(t, capabilities, "no installation")
 
-	require.Nil(t, controlRoutesForActor("routed-ui", nil, ActorPluginAccess{}))
+	installation := model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true, LifecycleGeneration: 1,
+	}
+	require.NoError(t, db.Create(&installation).Error)
+	capabilities, err = AdminCapabilities(db, 7, true)
+	require.NoError(t, err)
+	require.Equal(t, []string{"forward.v4"}, capabilities)
+
+	// An administrator restricted to the package's view permission does not
+	// get the API capability.
+	group := model.AccessGroup{ScopeID: manifest.ID, Name: "viewers", Enabled: true}
+	require.NoError(t, db.Create(&group).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: manifest.ID,
+		Permissions: `["forward.view"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: 7}).Error)
+	capabilities, err = AdminCapabilities(db, 7, true)
+	require.NoError(t, err)
+	require.Empty(t, capabilities)
+
+	require.NoError(t, db.Model(&installation).Update("enabled", false).Error)
+	capabilities, err = AdminCapabilities(db, 8, true)
+	require.NoError(t, err)
+	require.Empty(t, capabilities, "disabled installation")
 }

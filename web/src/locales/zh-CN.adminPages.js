@@ -540,7 +540,6 @@ export default {
     }
   },
   control: {
-    extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     config: {
       title: '插件配置', loading: '正在加载配置...', revision: '配置 revision：{revision}', mode: '配置编辑模式', formMode: '表单', jsonMode: 'JSON',
       selectValue: '请选择', addItem: '添加项目', removeItem: '移除项目', emptyArray: '暂无项目', item: '项目', invalidJSON: 'JSON 无效',

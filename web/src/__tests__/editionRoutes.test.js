@@ -7,7 +7,7 @@ import { loadEdition, setEdition } from '@/composables/useEdition'
 
 // '@/api/public' is mocked in setup.js.
 vi.mock('@/api/kernel', () => ({
-  getKernelExtensions: vi.fn(async () => []),
+  getAdminCapabilities: vi.fn(async () => []),
 }))
 
 vi.mock('@/api/user', () => ({

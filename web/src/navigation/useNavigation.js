@@ -2,9 +2,8 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { editionAllows, extensionMenuAllowed } from '@/composables/useEdition'
-import { adminCapabilities, adminExtensionMenus } from '@/extensions/runtime'
-import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
+import { editionAllows } from '@/composables/useEdition'
+import { adminCapabilities } from '@/capabilities'
 import { activeMenuItem, buildAdminMenu, buildUserMenu } from './menu'
 
 // routeExists answers for `optional` menu items. Without a router that can
@@ -16,7 +15,7 @@ function createRouteExists(router) {
 }
 
 // useAdminMenu wires navigation/menu.js to the live edition, permissions
-// and plugin menus. The sidebar, the top bar and the palette share it.
+// and package capabilities. The sidebar, the top bar and the palette share it.
 export function useAdminMenu() {
   const { t } = useAppI18n()
   const userStore = useUserStore()
@@ -29,13 +28,7 @@ export function useAdminMenu() {
     editionAllows,
     hasPermission: permission => userStore.hasPermission(permission),
     routeExists,
-    hasCapability: name => adminCapabilities.value.includes(name),
-    extensionMenus: adminExtensionMenus.value,
-    // The forward package's own menu entry only links to the core pages
-    // (F5b D1): with them in the sidebar it is left out.
-    extensionMenuAllowed: menu => extensionMenuAllowed(menu) &&
-      !(menu?.pluginID === 'forward' && adminCapabilities.value.includes('forward.v4')),
-    normalizeParent: normalizeWebUIMenuParent
+    hasCapability: name => adminCapabilities.value.includes(name)
   }))
 
   const active = computed(() => activeMenuItem(groups.value, route.path))

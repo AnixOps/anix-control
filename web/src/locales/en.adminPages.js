@@ -540,7 +540,6 @@ export default {
     }
   },
   control: {
-    extensions: { errorsTitle: 'WebUI extension loading failed' },
     config: {
       title: 'Plugin configuration', loading: 'Loading configuration...', revision: 'Configuration revision: {revision}', mode: 'Configuration editor mode', formMode: 'Form', jsonMode: 'JSON',
       selectValue: 'Select a value', addItem: 'Add item', removeItem: 'Remove item', emptyArray: 'No items', item: 'Item', invalidJSON: 'Invalid JSON',

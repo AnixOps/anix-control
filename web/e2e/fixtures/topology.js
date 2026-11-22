@@ -4,7 +4,7 @@
 // and no line; 'empty' no device. The scenarios 'lines' and 'lines-empty'
 // open 线路 (/admin/lines) on the same network.
 import { FIXED_NOW_MS } from './clock.js'
-import { EXTENSION } from './forwardV4.js'
+import { CAPABILITIES } from './forwardV4.js'
 
 const NOW = FIXED_NOW_MS
 const SECONDS = Math.floor(NOW / 1000)
@@ -84,7 +84,7 @@ export default {
   api(path, { scenario }) {
     const empty = scenario === 'empty' || scenario === 'lines-empty'
     const lines = scenario !== 'direct' && !empty
-    if (path === '/api/v3/extensions') return [EXTENSION]
+    if (path === '/api/v3/capabilities') return CAPABILITIES
     if (path === '/api/v4/admin/nodes') return { data: { list: empty ? [] : NODES, total: NODES.length } }
     if (path === '/api/v4/kernel/network/lines') return { data: { snapshot: empty ? { ...NETWORK, devices: [], lines: [], skipped: [] } : NETWORK, forwards: 0, differences: [] } }
     if (path === '/api/v4/kernel/egress-routes') return { data: { routes: lines ? EGRESS : [] } }

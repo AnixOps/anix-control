@@ -34,7 +34,7 @@ env:
   GO_VERSION: '1.26.11'
   NODE_VERSION: '22'
   # The one anix-agent commit every checkout below builds and tests: the
-  # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
+  # signed Agent plugins, the cross-repository E2E and the live Control gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
   AGENT_REF: 'ebb2fc97d7ecfe19d9677918629d6730fb9ed37a'   # anix-agent v5.0.8
   # The networkcore_anixops commit whose anixcore the cross-repository E2E
@@ -1474,11 +1474,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
       # The Agent plugins ship inside the signed packages, so a vulnerable
       # dependency in them reaches every installation. govulncheck scans the
       # command that binary is built from and fails the step only for
@@ -1498,11 +1493,6 @@ jobs:
 
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
-
-      # The WebUI bundle is optional: the contract checks the packages whose
-      # manifest declares one and fails on a stray webui/ directory.
-      - name: Run v4 package WebUI contract
-        run: node packages/shared/tests/webui_contract.mjs
 
       - name: Run reproducible unsigned and signed package contract
         run: |
@@ -1838,7 +1828,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      # The live Control WebUI gate builds the signed built-in packages it
+      # The live Control gate builds the signed built-in packages it
       # needs and a temporary Control binary that embeds them before
       # Chromium opens the UI.
       - name: Setup Go
@@ -1899,7 +1889,7 @@ jobs:
         working-directory: web
         run: npx playwright install chromium
 
-      - name: Run live Control signed WebUI E2E gate
+      - name: Run live Control E2E gate
         working-directory: web
         run: npx playwright test --config playwright.live-control.config.js
 

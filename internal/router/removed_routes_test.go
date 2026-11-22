@@ -50,6 +50,8 @@ func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 		{http.MethodPost, "/api/v4/kernel/route-modes/rollback"},
 		{http.MethodGet, "/api/v4/kernel/route-modes/revisions"},
 		{http.MethodGet, "/api/v4/kernel/route-modes/mismatches"},
+		{http.MethodGet, "/api/v3/extensions"},
+		{http.MethodGet, "/api/v3/extensions/forward/4.0.0/webui/0/index.mjs"},
 	} {
 		for name, authorization := range map[string]string{"administrator": "Bearer " + session, "anonymous": ""} {
 			response := do(probe.method, probe.path, authorization)
@@ -58,7 +60,7 @@ func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 	}
 
 	// What stays: the status view, the package configuration, restart, the
-	// extension catalog and the operations list.
+	// admin capabilities and the operations list.
 	for _, probe := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v3/plugins"},
 		{http.MethodGet, "/api/v3/plugin-releases"},
@@ -66,7 +68,7 @@ func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 		{http.MethodGet, "/api/v3/plugin-installations/1/config"},
 		{http.MethodPut, "/api/v3/plugin-installations/1/config"},
 		{http.MethodPost, "/api/v3/plugin-installations/1/actions"},
-		{http.MethodGet, "/api/v3/extensions"},
+		{http.MethodGet, "/api/v3/capabilities"},
 		{http.MethodGet, "/api/v3/operations"},
 	} {
 		response := do(probe.method, probe.path, "Bearer "+session)

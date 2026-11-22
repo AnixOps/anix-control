@@ -147,7 +147,7 @@ const COMMON = {
   '/api/v4/public/config': fixture => ({ edition: fixture.edition || 'commercial', registration: { enabled: true } }),
   '/api/v2/user/profile': () => ({ code: 0, data: { id: 1, email: 'admin@example.com', is_admin: true } }),
   '/api/v2/admin/system/info': () => ({ code: 0, data: { version: '4.1.0' } }),
-  '/api/v3/extensions': () => [],
+  '/api/v3/capabilities': () => [],
   '/api/v2/admin/notifications/unread': () => ({ code: 0, data: { count: 0 } })
 }
 

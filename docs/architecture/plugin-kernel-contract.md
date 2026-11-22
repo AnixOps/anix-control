@@ -44,8 +44,8 @@ enables its own set at every start.
   Control links all of them: `anix-control package-host <id>` runs one.
 - **The slim signed packages.** `build_package.py --all --builtin` writes, for
   every package, the signed artifact without any host or Agent binary
-  (compatibility routes, migration index and scripts, configuration schema,
-  WebUI bundle), its canonical manifest and signature, and `index.json`
+  (compatibility routes, migration index and scripts, configuration schema),
+  its canonical manifest and signature, and `index.json`
   listing the set. The build embeds that directory
   (`internal/builtinpkg/dist`, `go:embed`) before it compiles Control: the
   release job builds and verifies the set with the official key first and
@@ -176,61 +176,23 @@ content-addressed by `plugins/<plugin>/<version>/<sha256>.artifact` metadata
 and immutable for a release. Re-uploading the same bytes is idempotent; changing
 the bytes for an existing release is rejected.
 
-The administrator WebUI is optional. A package without one leaves `webui`
-out of its manifest and keeps `frontend_sha256` empty (the signed canonical
-bytes are `"frontend_sha256":""` with no `webui` key, in Control and in the
-Agent). Its release registers, stores, verifies and installs like any other,
-stores no WebUI asset, and the extension catalog (`GET /api/v3/extensions`)
-leaves it out; its `control_routes` work as before. Of the official
-packages only `forward` ships a bundle: the others are served by the core admin pages
-(`packages/shared/build_package.py` builds both kinds and refuses a stray
-`webui/` directory).
+No package ships an administrator WebUI: every page is a core admin page
+(slim audit 2c, 2026-11). A manifest keeps `frontend_sha256` empty and has
+no `webui` key (the signed canonical bytes are `"frontend_sha256":""`, in
+Control and in the Agent); `packages/shared/build_package.py` refuses a
+template with a `webui` block. The manifest decoder still reads `webui`,
+because `contracts/plugin/v1` is shared with the Agent, but Control neither
+stores nor serves a bundle: the extension catalog `GET /api/v3/extensions`
+and its asset route are gone.
 
-If the signed manifest declares `webui`, the uploaded artifact must be a
-package archive containing the declared `webui/*.js` or `webui/*.mjs` bundle
-path. The kernel extracts that one file from zip, tar, or tar.gz packages,
-verifies the bundle SHA-256 from the signed manifest, and stores it as an
-immutable same-origin asset. The extension catalog exposes only the verified
-content-addressed URL:
-`/api/v3/extensions/<plugin>/<version>/webui/<sha256>/<filename>`. Browser
-runtime code fetches that same-origin asset, computes SHA-256 again, and only
-then imports the module. The production runtime rejects a catalog entry without
-that verified URL; a compiled local-module loader exists only as an explicit
-test harness option and is never a package WebUI fallback.
-
-Extension routes and menus carry the signed permission declared by the package.
-The admin frontend filters menus and blocks extension route navigation unless
-the current admin profile grants that permission. Existing admin profiles with
-no explicit permission list remain legacy-compatible as super-admins during the
-3.x transition.
-
-### WebUI CSS Classes
-
-A package WebUI bundle renders into the admin console and is styled by
-Control's global stylesheet (`web/src/style.css`), not by CSS of its own.
-These classes are a **stable contract** for plugin WebUIs:
-
-| Class | What it styles |
-|---|---|
-| `.btn` | a button (pill, 36 px; 44 px minimum on touch screens) |
-| `.btn-secondary` | the secondary button look, with `.btn` |
-| `.table-container` | the scrolling, rounded frame around a table |
-| `.data-table` | a table: cell padding, header row, separators, row hover |
-| `.empty-state` | the muted, centred "nothing here" text (a table cell) |
-
-Packages are signed separately from Control, and a package from another
-release may still be installed next to a newer Control, so a package keeps
-rendering these classes across Control upgrades: Control must not
-remove or rename them, nor change what they mean (it may restyle them with
-the design tokens). A change that has to break one is a WebUI contract
-change (`anixops.webui/v2`), not a Control refactor.
-`web/src/__tests__/pluginWebuiClasses.test.js` fails when one of them loses
-its rule in `style.css`, and checks that the bundled packages use them.
-Control gives any other class name no style and promises nothing about it.
-The official bundles therefore use only these classes, plus one class named
-after their package on their root element (`nftables-forward-extension`) as
-a hook; the same test fails on any other class, so a bundle cannot rely on
-an unstyled look-alike of a Control class (`page-header`, `stats-grid`).
+What the admin app reads from the packages is the capability list,
+`GET /api/v3/capabilities` (administrators only). It answers each
+capability whose package has an enabled, healthy Control installation whose
+signed release declares the capability's control route, and whose
+`<plugin-id>.api` permission the actor holds. Today there is one:
+`forward.v4` (the forward package's `/api/v4/plugins/forward/*`), which opens
+the forwarding pages. The router sends a page that needs a missing
+capability to 系统设置 → 内置包.
 
 Backend package APIs are admitted only through the kernel gateway namespace
 `/api/v3/plugins/<plugin-id>/...`. A signed manifest may register exact routes
@@ -324,7 +286,7 @@ closure were never queued and were removed in the 2026-11 slimming.)
 
 The kernel owns one revisioned configuration document per plugin installation.
 `GET` and `PUT /api/v3/plugin-installations/:id/config` expose that document to
-official package WebUI code. Writes are canonicalized, SHA-256 hashed, checked
+the admin app (系统设置 → 内置包). Writes are canonicalized, SHA-256 hashed, checked
 against the currently signed release's JSON Schema, and use an optional
 optimistic `expected_revision`; configuration is never written directly by a
 plugin process. A configuration document is package-level intent, not an

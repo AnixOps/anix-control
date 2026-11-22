@@ -7,9 +7,10 @@ route detail reflects only that route. F5b implements it.
 - **Where it is.** The pages are in the core app, lazy-loaded, under
   `/admin/forward/overview`, `/admin/forward/routes` (with `/new`, `/{id}`
   and `/{id}/edit`) and `/admin/forward/inventory` (with `/{node_ref}`).
-  - They open only when the forward package serves the v4 API: the
-    extension catalog (`GET /api/v3/extensions`) lists its control route
-    `/api/v4/plugins/forward/*`. Without it they lead to 插件中心.
+  - They open only when the forward package serves the v4 API:
+    `GET /api/v3/capabilities` answers `forward.v4` (until slim audit 2c,
+    2026-11, the extension catalog `GET /api/v3/extensions` listed the
+    control route). Without it they lead to 系统设置 → 内置包.
   - The sidebar shows 转发 for them. F5d removed the flux-clone pages
     (转发（旧版）, 转发节点（旧版）); `/admin/forward` and their paths open
     the overview.
@@ -291,6 +292,8 @@ The owner approved each recommendation on 2026-10-04 (H16).
     pages lazy-loaded behind the forward package being installed. Keep the
     package's WebUI entry as a link to it. Widening the WebUI host contract to
     expose `Ui*` is a larger, separate decision.
+  - *Later (slim audit 2c, 2026-11):* the package WebUI, its entry and the
+    whole extension runtime were removed; the core pages are the only UI.
 - **D2. Editor as a full page or a sheet.**
   - *Decision (approved):* a full page (as mocked). The hop chain, targets and
     live preview do not fit a 560–760 px sheet, and on phones the page with a
@@ -393,8 +396,8 @@ Where F5b differs from the screens above, and why.
 - **Paths.** The flux-clone pages already own `/admin/forward`,
   `/admin/forward/nodes` and `/admin/forward/nodes/{id}`, so the node
   inventory is `/admin/forward/inventory`. The package's own WebUI page
-  (`/admin/extensions/forward`) is a link to the overview, and its menu
-  entry is hidden while 转发 is shown.
+  (`/admin/extensions/forward`) was a link to the overview until slim audit
+  2c removed it.
 - **List status.** One list load reads `GET /routes`, `GET /nodes`, one
   `GET /stats` and `GET /observability/targets`, plus `GET /nodes/{ref}`
   for at most 20 nodes that report hop errors. 降级 therefore comes from the

@@ -516,11 +516,9 @@ function dnsApi(rest, { method, query, body }) {
 // The fixture
 // ---------------------------------------------------------------------------
 
-export const EXTENSION = {
-  plugin_id: 'forward', plugin_name: 'Forward', publisher: 'AnixOps', version: '4.2.0', api_version: 'v2', installation_id: 3, state: 'healthy',
-  bundle: { path: 'webui/index.mjs', sha256: 'a'.repeat(64), url: '' }, permissions: ['forward.view'], menus: [], routes: [], config_schema: {},
-  control_routes: ['/api/v4/plugins/forward/*']
-}
+// GET /api/v3/capabilities: the forward package's v4 API opens the
+// forwarding pages.
+export const CAPABILITIES = ['forward.v4']
 
 // The device network model (GET /api/v4/kernel/network) new routes run on
 // (ENGINE_NETWORK, ANX): a line per device, an ANX transport from Shanghai
@@ -626,7 +624,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
   // 诊断 of the node page: a connected Agent with the forward checks.
   const diagnostics = path.match(/^\/api\/v4\/kernel\/nodes\/((?:proxy|forward)-\d+)\/diagnostics$/)
   if (diagnostics) return nodeDiagnosticsAnswer(diagnostics[1], { method, scenario: '', body })
-  if (path === '/api/v3/extensions') return scenario === 'no-capability' ? [] : [EXTENSION]
+  if (path === '/api/v3/capabilities') return scenario === 'no-capability' ? [] : CAPABILITIES
   if (path === '/api/v4/kernel/network') return { data: { revision: '3', document: NETWORK_MODEL, pending: [], devices: [], nodes: [...new Set(NETWORK_MODEL.lines.map(line => line.node))].map(node => ({ node, name: node })) } }
   if (!path.startsWith('/api/v4/forward/')) return undefined
   const rest = path.slice('/api/v4/forward'.length)

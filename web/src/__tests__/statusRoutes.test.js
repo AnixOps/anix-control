@@ -8,7 +8,7 @@ import StatusPage from '@/views/StatusPage.vue'
 import { scrollBehavior, waitUntilReachable } from '@/router/scroll'
 
 vi.mock('@/api/kernel', () => ({
-  getKernelExtensions: vi.fn(async () => [])
+  getAdminCapabilities: vi.fn(async () => [])
 }))
 
 vi.mock('@/api/user', () => ({

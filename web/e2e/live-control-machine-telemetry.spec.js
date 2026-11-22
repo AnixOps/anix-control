@@ -1,34 +1,24 @@
 import { test, expect } from '@playwright/test'
 
 // The real Control carries three signed built-in packages, installed by its
-// start-up bootstrap: identity-platform and machine-telemetry ship no WebUI,
-// forward ships one.
+// start-up bootstrap: identity-platform, machine-telemetry and forward.
 const extensionID = 'forward'
-const extensionPath = `/admin/extensions/${extensionID}`
 
-async function installations(page) {
-  return page.evaluate(async () => {
+async function adminGet(page, url) {
+  return page.evaluate(async (target) => {
     const token = localStorage.getItem('token')
-    const response = await fetch('/api/v3/plugin-installations', { headers: { Authorization: `Bearer ${token}` } })
-    const payload = await response.json()
-    return Array.isArray(payload?.data) ? payload.data : []
-  })
+    const response = await fetch(target, { headers: { Authorization: `Bearer ${token}` } })
+    return { status: response.status, body: await response.json().catch(() => null) }
+  }, url)
 }
 
-test('lists only packages with a WebUI, then loads and serves a signed WebUI through real Control', async ({ page }) => {
+test('opens the forwarding pages through the forward.v4 capability of real Control', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))
 
-  // Extension discovery validates and preloads the signed bundle before the
-  // menu is clicked. Start observing before login so this stays a real fetch
-  // assertion instead of waiting for a second, cache-dependent request.
-  const bundleResponse = page.waitForResponse(response => {
+  // The guard reads the capabilities before it opens a forwarding page.
+  const capabilitiesResponse = page.waitForResponse(response => {
     const url = new URL(response.url())
-    return url.pathname.startsWith(`/api/v3/extensions/${extensionID}/4.0.0/webui/`) &&
-      response.request().method() === 'GET' && response.status() === 200
-  })
-  const catalogResponse = page.waitForResponse(response => {
-    const url = new URL(response.url())
-    return url.pathname === '/api/v3/extensions' && response.request().method() === 'GET' && response.status() === 200
+    return url.pathname === '/api/v3/capabilities' && response.request().method() === 'GET' && response.status() === 200
   })
 
   await page.goto('/login')
@@ -37,45 +27,23 @@ test('lists only packages with a WebUI, then loads and serves a signed WebUI thr
   await page.locator('form[data-auth-form="password"] button[type="submit"]').click()
   await page.waitForURL(/\/admin\/dashboard$/)
 
-  // The packages without a WebUI are installed and healthy, but the
-  // catalog leaves them out: only forward has an extension.
-  const installed = await installations(page)
+  const installed = await adminGet(page, '/api/v3/plugin-installations')
   for (const pluginID of ['identity-platform', 'machine-telemetry', extensionID]) {
-    expect(installed).toEqual(expect.arrayContaining([
+    expect(installed.body.data).toEqual(expect.arrayContaining([
       expect.objectContaining({ plugin_id: pluginID, target: 'control', observed_version: '4.0.0', state: 'healthy', enabled: true }),
     ]))
   }
-  const extensions = await (await catalogResponse).json()
-  expect(extensions).toEqual(expect.objectContaining({ data: expect.any(Array) }))
-  expect(extensions.data.map(item => item.plugin_id)).toEqual([extensionID])
-  const extension = extensions.data[0]
-  expect(extension).toEqual(expect.objectContaining({
-    plugin_id: extensionID,
-    version: '4.0.0',
-    state: 'healthy',
-    installation_id: expect.any(Number),
-    bundle: expect.objectContaining({
-      path: 'webui/index.mjs',
-      sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      url: expect.stringMatching(new RegExp(`^/api/v3/extensions/${extensionID}/4\\.0\\.0/webui/`)),
-    }),
-  }))
-  expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'Forward' })])
-  expect(extension.routes).toEqual([expect.objectContaining({ path: extensionPath, permission: `${extensionID}.view` })])
-  await expect(page.locator('a[href="/admin/extensions/machine-telemetry"]')).toHaveCount(0)
-  await expect(page.locator('a[href="/admin/extensions/identity-platform"]')).toHaveCount(0)
 
-  // The core forwarding pages replace the forward package's own menu entry
-  // (useNavigation), so the extension route is opened directly.
-  await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
-  await page.goto(extensionPath)
-  await expect(page).toHaveURL(new RegExp(`${extensionPath}$`))
+  // The healthy forward package declares its v4 API, so Control answers
+  // forward.v4, and the forwarding pages open.
+  expect(await (await capabilitiesResponse).json()).toEqual({ data: ['forward.v4'] })
+  await page.goto('/admin/forward/overview')
+  await expect(page).toHaveURL(/\/admin\/forward\/overview$/)
 
-  const bundle = await bundleResponse
-  expect(new URL(bundle.url()).pathname).toBe(extension.bundle.url)
-  expect(bundle.headers()['cache-control']).toBe('private, no-store')
-  await expect(page.locator('.forward-extension h1')).toHaveText('Forward')
-  expect(await bundle.text()).toContain('ForwardPackageExtension')
+  // The signed WebUI extension catalog and its asset route are gone.
+  const removed = await adminGet(page, `/api/v3/extensions`)
+  expect(removed.status).toBe(404)
+  await expect(page.locator(`a[href="/admin/extensions/${extensionID}"]`)).toHaveCount(0)
 })
 
 test('shows the built-in packages of the real Control process', async ({ page }) => {

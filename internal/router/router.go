@@ -419,8 +419,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// at every start, so there is no import, install, update, rollback,
 		// enable or disable route; an installation's only action is restart
 		// (single-binary design, section 4.3).
-		v3.GET("/extensions", kernel.ListExtensions)
-		v3.GET("/extensions/:plugin_id/:version/webui/:sha256/:filename", kernel.ServePluginWebUIAsset)
+		v3.GET("/capabilities", kernel.AdminCapabilities)
 		v3.GET("/plugins", kernel.ListPlugins)
 		v3.Any("/plugins/:plugin_id/*route", kernel.PluginRouteGateway)
 		v3.GET("/plugin-releases", kernel.ListPluginReleases)

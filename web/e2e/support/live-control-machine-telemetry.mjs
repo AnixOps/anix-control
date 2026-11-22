@@ -17,8 +17,8 @@ const adminEmail = 'live-control-webui@anixops.test'
 const adminPassword = 'LiveControlWebUI!2026'
 const goBinary = process.env.ANIXOPS_GO_BIN || 'go'
 // The packages the gate builds into Control: identity-platform (login),
-// machine-telemetry, which ships no WebUI (its data shows in the node
-// pages), and forward, which ships one.
+// machine-telemetry (its data shows in the node pages) and forward (the
+// forwarding pages, through the forward.v4 capability).
 const builtinPackages = ['identity-platform', 'machine-telemetry', 'forward']
 
 function trimOutput(output, maximum = 12_000) {

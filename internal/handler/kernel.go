@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -239,35 +237,15 @@ func (h *KernelHandler) ListPlugins(c *gin.Context) {
 	kernelData(c, http.StatusOK, rows)
 }
 
-func (h *KernelHandler) ListExtensions(c *gin.Context) {
-	var publicKey ed25519.PublicKey
-	cfg := config.Get()
-	if cfg != nil && strings.TrimSpace(cfg.Plugins.OfficialPublicKey) != "" {
-		parsed, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
-		if err != nil {
-			kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
-			return
-		}
-		publicKey = parsed
-	}
-	extensions, err := service.ListEnabledWebUIExtensionsForActor(
-		h.db,
-		publicKey,
-		kernelActorID(c),
-		kernelActorIsAdmin(c),
-	)
+// AdminCapabilities answers the package capabilities the admin app reads,
+// such as forward.v4 for the forwarding pages.
+func (h *KernelHandler) AdminCapabilities(c *gin.Context) {
+	capabilities, err := service.AdminCapabilities(h.db, kernelActorID(c), kernelActorIsAdmin(c))
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrPluginTrustRootRequired):
-			kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", err.Error())
-		case errors.Is(err, service.ErrExtensionCatalogIntegrity):
-			kernelError(c, http.StatusConflict, "extension_catalog_invalid", err.Error())
-		default:
-			kernelDBError(c, err)
-		}
+		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, extensions)
+	kernelData(c, http.StatusOK, capabilities)
 }
 
 func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
@@ -424,57 +402,6 @@ func (h *KernelHandler) GetPluginReleaseArtifact(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, artifact)
-}
-
-func (h *KernelHandler) ServePluginWebUIAsset(c *gin.Context) {
-	pluginID := strings.TrimSpace(c.Param("plugin_id"))
-	version := strings.TrimSpace(c.Param("version"))
-	bundleSHA256 := strings.ToLower(strings.TrimSpace(c.Param("sha256")))
-	filename := strings.TrimSpace(c.Param("filename"))
-	cfg := config.Get()
-	if cfg == nil || strings.TrimSpace(cfg.Plugins.OfficialPublicKey) == "" {
-		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", "official plugin public key is not configured")
-		return
-	}
-	publicKey, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
-	if err != nil {
-		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
-		return
-	}
-	asset, err := service.ResolveActivePluginWebUIAsset(
-		h.db,
-		publicKey,
-		kernelActorID(c),
-		kernelActorIsAdmin(c),
-		pluginID,
-		version,
-		bundleSHA256,
-	)
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrPluginRouteForbidden):
-			kernelError(c, http.StatusForbidden, "extension_asset_forbidden", err.Error())
-		case errors.Is(err, service.ErrPluginTrustRootRequired):
-			kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", err.Error())
-		case errors.Is(err, service.ErrExtensionCatalogIntegrity):
-			kernelError(c, http.StatusConflict, "extension_asset_integrity_failed", err.Error())
-		case errors.Is(err, service.ErrPluginArtifactRequired):
-			kernelError(c, http.StatusConflict, "plugin_artifact_missing", err.Error())
-		default:
-			kernelDBError(c, err)
-		}
-		return
-	}
-	if filename == "" || filename != path.Base(asset.BundlePath) {
-		kernelError(c, http.StatusNotFound, "not_found", "webui asset not found")
-		return
-	}
-	// Authorization and installation state are rechecked for every fetch. Do
-	// not let a browser reuse an immutable response after access is revoked or
-	// the installation is disabled.
-	c.Header("Cache-Control", "private, no-store")
-	c.Header("ETag", `"`+asset.BundleSHA256+`"`)
-	c.Data(http.StatusOK, asset.ContentType, asset.Data)
 }
 
 func (h *KernelHandler) ListPluginInstallations(c *gin.Context) {

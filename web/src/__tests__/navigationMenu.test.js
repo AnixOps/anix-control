@@ -8,7 +8,6 @@ import {
   matchesQuery,
   paletteEntries
 } from '@/navigation/menu'
-import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
 import { closeAgentUpgrade, useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import router from '@/router'
 
@@ -24,19 +23,9 @@ function groupOf(groups, itemId) {
   return groups.find(group => group.items.some(item => item.id === itemId))?.id
 }
 
-const extensionMenus = [
-  { pluginID: 'service-a', id: 'service-a.main', parent: 'services', label: 'Service A', icon: 'SV', to: '/admin/extensions/service-a', permission: 'service-a.view', order: 20 },
-  { pluginID: 'service-b', id: 'service-b.main', parent: 'services', label: 'Service B', icon: 'EX', to: '/admin/extensions/service-b', permission: 'service-b.view', order: 10 },
-  { pluginID: 'ops', id: 'ops.main', parent: 'operations', label: 'Ops', icon: 'GA', to: '/admin/extensions/ops', permission: 'ops.view', order: 30 },
-  { pluginID: 'sys', id: 'sys.main', parent: 'system', label: 'Sys', icon: 'ST', to: '/admin/extensions/sys', permission: 'sys.view', order: 40 },
-  { pluginID: 'legacy', id: 'legacy.main', parent: 'legacy-parent', label: 'Legacy', icon: 'zz', to: '/admin/extensions/legacy', permission: 'legacy.view', order: 50 },
-  { pluginID: 'payment', id: 'payment.main', parent: 'services', label: 'Payment', icon: 'PL', to: '/admin/extensions/payment', permission: 'payment.view', order: 5 }
-]
-
 describe('navigation/menu.js: buildAdminMenu', () => {
   it('orders the groups as plan §4.2 and keeps Node and the forwarding area apart', () => {
     const groups = buildAdminMenu({ t, editionAllows: commercial })
-    // 扩展 holds only the packages' WebUI menus, so without one it is hidden.
     expect(groups.map(group => group.id)).toEqual(['overview', 'users', 'network', 'system', 'commerce'])
     const network = groups.find(group => group.id === 'network').items
     // 转发 (the forwarding area) needs the forward package's v4 API; the
@@ -95,37 +84,6 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     const menu = [{ id: 'a', labelKey: 'a', items: [{ id: 'later', to: '/admin/later', labelKey: 'later', optional: true }] }]
     expect(buildAdminMenu({ t, menu, routeExists: () => false })).toEqual([])
     expect(ids(buildAdminMenu({ t, menu, routeExists: path => path === '/admin/later' }))).toEqual(['later'])
-  })
-
-  it('merges plugin menus by parent, sorted, after the built-in items', () => {
-    const groups = buildAdminMenu({
-      t,
-      extensionMenus,
-      normalizeParent: normalizeWebUIMenuParent
-    })
-    const extensions = groups.find(group => group.id === 'extensions').items
-    expect(extensions.map(item => item.id)).toEqual([
-      'payment.main', 'service-b.main', 'service-a.main', 'ops.main', 'legacy.main'
-    ])
-    expect(extensions.find(item => item.id === 'legacy.main').parent).toBe('extensions')
-    const system = groups.find(group => group.id === 'system').items
-    expect(system.at(-1)).toMatchObject({ id: 'sys.main', source: 'extension', to: '/admin/extensions/sys' })
-  })
-
-  it('drops plugin menus without the permission or from a package the edition hides', () => {
-    const granted = new Set(['service-a.view', 'payment.view'])
-    const groups = buildAdminMenu({
-      t,
-      extensionMenus,
-      hasPermission: permission => !permission || granted.has(permission),
-      extensionMenuAllowed: menu => menu.pluginID !== 'payment',
-      normalizeParent: normalizeWebUIMenuParent
-    })
-    const all = ids(groups)
-    expect(all).toContain('service-a.main')
-    expect(all).not.toContain('service-b.main')
-    expect(all).not.toContain('payment.main')
-    expect(all).not.toContain('sys.main')
   })
 
   it('drops built-in items that need a permission the admin lacks, and empty groups', () => {

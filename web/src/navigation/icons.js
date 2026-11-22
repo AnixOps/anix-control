@@ -87,17 +87,7 @@ export const NAV_ICONS = Object.freeze({
   home: House,
   subscribe: Link,
   help: LifeBuoy,
-  conversation: MessageSquare,
-  // plugin menus: the two-letter codes extensions/runtime.js derives from
-  // the package's icon name
-  AC: Activity,
-  EX: Box,
-  GA: Gauge,
-  NW: Network,
-  PL: Plug,
-  SV: Server,
-  ST: Settings,
-  SH: Shield
+  conversation: MessageSquare
 })
 
 export function navIcon(name) {

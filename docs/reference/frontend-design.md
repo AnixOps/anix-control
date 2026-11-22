@@ -76,15 +76,11 @@ Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
   backdrop), `--focus-ring` and `--z-popover` (see "Layer order").
 - **`style.css`**: what is left of the pre-redesign global layer (U9): the
   baseline for bare `<button>`, `<input>`, `<textarea>` and `<select>`, the
-  skip link, and the classes that signed plugin WebUI bundles (optional;
-  `packages/<name>/webui`, `anixops.webui/v1`) render: `.btn`,
-  `.btn-secondary`, `.table-container`, `.data-table`, `.empty-state`. The
-  plugin configuration forms also use `.btn-primary`, `.btn-sm`,
-  `.btn-danger`, `.form-group` and `.required`. Plugins ship separately, so
-  these classes stay while the WebUI contract does; nothing new goes there.
-  The five WebUI classes are a stable contract ("WebUI CSS Classes" in
-  `docs/architecture/plugin-kernel-contract.md`), guarded by
-  `src/__tests__/pluginWebuiClasses.test.js`.
+  skip link, and the classes the plugin configuration forms use (`.btn`,
+  `.btn-primary`, `.btn-sm`, `.btn-danger`, `.form-group`, `.required`);
+  nothing new goes there. The plugin WebUI class contract (`.btn-secondary`,
+  `.table-container`, `.data-table`, `.empty-state`) went with the package
+  WebUI in slim audit 2c (2026-11).
   On touch screens `.btn` and the bare fields keep a 44 px minimum height;
   bare buttons size themselves (the old rule that set every button to
   40 / 44 px on phones is gone).
@@ -609,18 +605,16 @@ router, so the login page loads neither.
 ### Menu config (`web/src/navigation/menu.js`)
 
 The one place that says what the shells show. `ADMIN_MENU` lists the groups
-(概览, 用户, 网络, 扩展, 系统, 商业) and their items; `buildAdminMenu()`
-merges, in this order:
+(概览, 用户, 网络, 系统, 商业) and their items; `buildAdminMenu()`
+filters them by:
 
 1. the built-in items (`id`, `to`, `icon`, `labelKey`, optional `match`
    paths that also select the item);
 2. the edition (`edition: 'commercial' | 'community'`; 商业 only in the
    commercial edition, 订阅模板 under 用户 only in the community edition);
 3. permissions (`permission`, checked with `userStore.hasPermission`);
-4. the plugin menus from `extensions/menuRegistry.js`: `services` and
-   `operations` go to 扩展, `system` to 系统, unknown parents to 扩展,
-   sorted by `order` then label; each needs its permission and must not
-   belong to a package the edition hides.
+4. package capabilities (`capability`, from `GET /api/v3/capabilities`
+   through `capabilities/index.js`; `forward.v4` for the forwarding pages).
 
 Items marked `optional` appear only when the router has their route (a page
 whose route lands in another pull request). Empty
@@ -628,9 +622,9 @@ groups are dropped. `activeMenuItem()` selects exactly one item per path (an
 exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
 `/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
 separate items. 网络 holds 节点 (the 部署编排 page, with its topologies and
-node roles, was removed); 扩展 holds only the plugin menus
-(hidden without one: 插件中心 became 系统设置 → 内置包). Only the packages with a WebUI bundle (today only forward) add a plugin menu, and the forward package's
-is left out while the core forwarding pages are there. `useAdminMenu()` / `useUserMenu()`
+node roles, was removed). The 扩展 group and the plugin menus went with
+the package WebUI (slim audit 2c); a package's status is 系统设置 → 内置包.
+`useAdminMenu()` / `useUserMenu()`
 (`navigation/useNavigation.js`) wire it to the stores; the sidebar,
 breadcrumb, palette and user navigation all render from it. Icons come from
 the closed map in `navigation/icons.js`.
@@ -906,8 +900,8 @@ Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
 - **内置包** (`system/SettingsPackages.vue`, a 系统设置 section that replaced
   插件中心 and its route-mode page): a grouped list of the built-in packages
   (name, id, version, a state badge, the last error), 重启 behind a
-  confirmation, 配置 for a package that declares settings, and the WebUI
-  extension load errors. `/admin/plugins` and `/admin/plugins/route-modes`
+  confirmation and 配置 for a package that declares settings.
+  `/admin/plugins` and `/admin/plugins/route-modes`
   redirect to it.
 - **Ansible 机器** (`AnsibleMachines.vue`,
   execution plane: visuals only), **邀请码** (`InviteCodes.vue`, bulk copy
