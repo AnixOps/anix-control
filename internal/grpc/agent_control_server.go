@@ -317,17 +317,6 @@ func (m *AgentControlManager) DispatchOperation(ctx context.Context, nodeID uint
 	return m.dispatchOperation(ctx, nodeID, operation, false)
 }
 
-// dispatchRecoveredOperation rehydrates one operation that the durable Kernel
-// had already dispatched before Control restarted. Recovery is deliberately a
-// separate entry point: ordinary callers may never reuse the Agent's observed
-// revision cursor for a different operation identity.
-func (m *AgentControlManager) dispatchRecoveredOperation(ctx context.Context, nodeID uint32, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
-	if operation == nil || operation.Revision == 0 {
-		return nil, fmt.Errorf("recovered desired operation requires an explicit revision")
-	}
-	return m.dispatchOperation(ctx, nodeID, operation, true)
-}
-
 func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint32, operation *agentv1pb.DesiredOperation, recovered bool) (*agentv1pb.OperationAck, error) {
 	if operation == nil {
 		return nil, fmt.Errorf("desired operation is nil")

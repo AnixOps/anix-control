@@ -3,7 +3,6 @@ package nodesecrets
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
@@ -147,24 +146,6 @@ func TestSyncRotatesChangesAndRemoves(t *testing.T) {
 		require.NoError(t, db.Delete(&model.WireGuardPeer{}, f.peers[0].ID).Error)
 		sync(TableWireGuardPeer, f.peers[0].ID)
 		require.Empty(t, secrets(t, db, ScopeWireGuardPeer, f.peers[0].ID))
-	})
-}
-
-func TestPruneRemovesOrphans(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		f := seedLegacy(t, db)
-		f.syncAll(t, db)
-		require.NoError(t, db.Create(&model.ProtocolSecret{
-			Scope: ScopeNodeRawConfig, OwnerID: 999, ColumnName: "raw_config", JSONPointer: "/wireguard/private_key", Version: 1,
-			Value: `"fake-orphan"`, UpdatedAt: time.Now(),
-		}).Error)
-		pruned, err := Prune(db, TableNode, TableNodeProtocol, TableWireGuardPeer)
-		require.NoError(t, err)
-		require.EqualValues(t, 1, pruned)
-		require.Empty(t, secrets(t, db, ScopeNodeRawConfig, 999))
-		require.NotEmpty(t, secrets(t, db, ScopeNodeRawConfig, f.nodes[0].ID))
-		_, err = Prune(db, "v5_user")
-		require.Error(t, err)
 	})
 }
 

@@ -51,7 +51,6 @@ jobs:
       web: ${{ steps.classify.outputs.web }}
       db: ${{ steps.classify.outputs.db }}
       modules: ${{ steps.classify.outputs.modules }}
-      agent: ${{ steps.classify.outputs.agent }}
       packages: ${{ steps.classify.outputs.packages }}
     steps:
       - name: Checkout code
@@ -1522,7 +1521,7 @@ jobs:
   plugin-package-publish:
     name: Sign the Built-in Official Packages
     runs-on: ubuntu-24.04
-    needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e, go-quality, go-security, backend-test]
+    needs: [tag-gate, plugin-package-release-test, go-quality, go-security, backend-test]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
       - name: Checkout Control
@@ -1613,42 +1612,6 @@ jobs:
           retention-days: 3
           name: signed-plugin-releases
           path: release-assets/
-
-  cross-repository-agent-e2e:
-    name: Control to Agent Process E2E
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.agent == 'true' }}
-    steps:
-      - name: Checkout Control
-        uses: actions/checkout@v7
-
-      - name: Checkout pinned Agent fixture source
-        uses: actions/checkout@v7
-        with:
-          repository: AnixOps/anix-agent
-          ref: ${{ env.AGENT_REF }}
-          path: anix-agent
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-
-      - name: Run real Control to Agent process E2E
-        env:
-          ANIXOPS_CROSS_REPO_E2E: '1'
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/anix-agent
-          GOWORK: 'off'
-        run: |
-          go test -v -count=1 ./internal/grpc \
-            -run '^Test(KernelOperationBridgeCrossRepositoryAgentProcess|AgentPluginPackageCrossRepositoryE2E)$'
 
   # The A2-7 suite (node-ops-service.md section 9, internal/tests/agente2e):
   # the real Control binary and the real Agent, built from the pinned
@@ -2100,7 +2063,7 @@ jobs:
   backend-build:
     name: Backend Build
     runs-on: ubuntu-24.04
-    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, cross-repository-agent-e2e]
+    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -2140,7 +2103,7 @@ jobs:
     # skipped need skips this job. E2E Tests is listed because Backend Tests
     # excludes internal/tests/e2e.
     # config/scripts/check_release_workflow.sh lists the same names.
-    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, cross-repository-agent-e2e, e2e-test, tag-gate, release-workflow-policy, deploy-script-test, package-storage-postgres, docker-smoke, kubernetes-smoke]
+    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, e2e-test, tag-gate, release-workflow-policy, deploy-script-test, package-storage-postgres, docker-smoke, kubernetes-smoke]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     # Control runs its built-in package hosts as Linux processes, so it is
     # released for linux/amd64 and linux/arm64 only.

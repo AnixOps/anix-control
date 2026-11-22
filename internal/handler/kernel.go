@@ -534,19 +534,13 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
 		return
 	}
-	var queuedAgentOperations []*model.KernelOperation
-	// Agent plugin dispatch is off until M4: the assignments record the new
-	// revision and no Agent operation is queued.
-	dispatchEnabled := agentPluginDispatchEnabled()
 	configuration, err := service.UpdatePluginConfigurationWithValidatorAndHook(
 		h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c), nil,
 		func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error {
 			if installation.Target != "agent" {
 				return nil
 			}
-			operations, err := service.SyncAgentInstallationAssignments(tx, installation, configuration.Revision, dispatchEnabled, time.Now())
-			queuedAgentOperations = operations
-			return err
+			return service.SyncAgentInstallationAssignments(tx, installation, configuration.Revision, time.Now())
 		},
 	)
 	if err != nil {
@@ -586,13 +580,6 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 			kernelDBError(c, err)
 			return
 		}
-	} else if len(queuedAgentOperations) > 0 {
-		ids := make([]string, 0, len(queuedAgentOperations))
-		for _, operation := range queuedAgentOperations {
-			ids = append(ids, operation.ID)
-		}
-		c.Header("X-AnixOps-Operation-ID", ids[0])
-		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
 	kernelData(c, http.StatusOK, configuration)
 }
@@ -1229,13 +1216,8 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 		return
 	}
 	var row model.NodeServiceAssignment
-	var queued []*model.KernelOperation
-	// Agent plugin dispatch is off until M4: the lifecycle records the
-	// desired state and no Agent operation is queued.
-	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		row = model.NodeServiceAssignment{}
-		queued = nil
 		var nodeCount, scopeCount, pluginCount int64
 		if err := tx.Model(&model.Node{}).Where("id = ?", nodeID).Count(&nodeCount).Error; err != nil {
 			return err
@@ -1310,23 +1292,8 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
-		lifecycle, _, err := service.SyncNodePluginLifecycle(tx, row.NodeID, row.PluginID, true, time.Now())
-		if err != nil {
-			return err
-		}
-		if !dispatchEnabled {
-			return nil
-		}
-		chain, err := service.QueueNodePluginLifecycle(tx, lifecycle, time.Now())
-		if err != nil {
-			return err
-		}
-		for _, operation := range []*model.KernelOperation{chain.Install, chain.Update, chain.Enable, chain.Disable} {
-			if operation != nil {
-				queued = append(queued, operation)
-			}
-		}
-		return nil
+		_, _, err := service.SyncNodePluginLifecycle(tx, row.NodeID, row.PluginID, true, time.Now())
+		return err
 	})
 	if err != nil {
 		switch {
@@ -1353,14 +1320,6 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	if len(queued) > 0 {
-		ids := make([]string, 0, len(queued))
-		for _, operation := range queued {
-			ids = append(ids, operation.ID)
-		}
-		c.Header("X-AnixOps-Operation-ID", ids[0])
-		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
-	}
 	kernelData(c, 200, row)
 }
 
@@ -1374,13 +1333,8 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 		return
 	}
 	var assignment model.NodeServiceAssignment
-	var queued []*model.KernelOperation
-	// Agent plugin dispatch is off until M4: the lifecycle records the
-	// desired state and no Agent operation is queued.
-	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		assignment = model.NodeServiceAssignment{}
-		queued = nil
 		var identity struct {
 			NodeID   uint
 			PluginID string
@@ -1407,19 +1361,7 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		if !dispatchEnabled {
-			return service.PurgeCompletedAssignmentDeletes(tx, lifecycle, nil)
-		}
-		chain, err := service.QueueNodePluginLifecycle(tx, lifecycle, time.Now())
-		if err != nil {
-			return err
-		}
-		for _, operation := range []*model.KernelOperation{chain.Install, chain.Update, chain.Enable, chain.Disable} {
-			if operation != nil {
-				queued = append(queued, operation)
-			}
-		}
-		return nil
+		return service.PurgeCompletedAssignmentDeletes(tx, lifecycle)
 	})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1432,14 +1374,6 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 	if err := service.RefreshAgentPluginInstallationObservedState(h.db, assignment.PluginID); err != nil {
 		kernelDBError(c, err)
 		return
-	}
-	if len(queued) > 0 {
-		ids := make([]string, 0, len(queued))
-		for _, operation := range queued {
-			ids = append(ids, operation.ID)
-		}
-		c.Header("X-AnixOps-Operation-ID", ids[0])
-		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
 	kernelData(c, http.StatusAccepted, assignment)
 }
@@ -1547,8 +1481,3 @@ func (h *KernelHandler) CancelOperation(c *gin.Context) {
 	}
 	kernelData(c, http.StatusAccepted, service.PublicKernelOperation(*operation))
 }
-
-// agentPluginDispatchEnabled reads service.AgentPluginDispatchEnabled (off
-// until M4, no setting); the tests replace it to keep the dispatch paths
-// covered.
-var agentPluginDispatchEnabled = func() bool { return service.AgentPluginDispatchEnabled }

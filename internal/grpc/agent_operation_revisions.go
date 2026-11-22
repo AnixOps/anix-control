@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -86,16 +85,6 @@ func (e *staleOperationRevisionError) Error() string {
 	return fmt.Sprintf("revision %d is not newer than %d", e.Revision, e.Latest)
 }
 
-// staleRevisionLatest returns the last revision sent when err is a stale
-// revision refusal.
-func staleRevisionLatest(err error) (uint64, bool) {
-	var stale *staleOperationRevisionError
-	if errors.As(err, &stale) {
-		return stale.Latest, true
-	}
-	return 0, false
-}
-
 // UseRevisionStore attaches the durable revision allocator. Only the proxy
 // node manager takes one: forward node ids overlap proxy node ids and have
 // no cursor of their own.
@@ -136,4 +125,21 @@ func (m *AgentControlManager) raiseStoredRevision(ctx context.Context, nodeID ui
 		return nil
 	}
 	return store.RaiseRevision(ctx, nodeID, revision)
+}
+
+// maxKernelObservedRevision is the largest revision the database stores.
+const maxKernelObservedRevision = uint64(1<<63 - 1)
+
+func kernelAgentRevision(revision int64) (uint64, error) {
+	if revision <= 0 {
+		return 0, fmt.Errorf("revision %d is not positive", revision)
+	}
+	return uint64(revision), nil // #nosec G115 -- non-positive values are rejected above.
+}
+
+func kernelObservedRevision(revision uint64) (int64, bool) {
+	if revision > maxKernelObservedRevision {
+		return 0, false
+	}
+	return int64(revision), true // #nosec G115 -- the value is bounded above.
 }

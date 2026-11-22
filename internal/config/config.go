@@ -284,9 +284,7 @@ type IdentityConfig struct {
 
 // PluginConfig controls the official plugin trust root and the package
 // hosts of the built-in packages, which always run. Third-party plugin
-// execution is intentionally unsupported by the control kernel. Agent plugin
-// dispatch and topology execution are off until M4 and have no setting
-// (service.AgentPluginDispatchEnabled).
+// execution is intentionally unsupported by the control kernel.
 type PluginConfig struct {
 	OfficialPublicKey                  string `yaml:"official_public_key"`
 	IdentityBootstrapPackageDir        string `yaml:"identity_bootstrap_package_dir"`

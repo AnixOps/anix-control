@@ -287,7 +287,8 @@ States are `PENDING`, `DISPATCHING`, `RUNNING`, then one of the terminal
 states: `SUCCEEDED`, `FAILED`, `CANCELLED`, `TIMED_OUT` or `SUPERSEDED`.
 
 - **Terminal is monotonic.** The transitions, and the rule that a terminal
-  state never changes, are those of `KernelOperationBridge.recordObserved`.
+  state never changes, are those of the operation engine
+  (`internal/kernelnodeops`, `Terminal`).
 - **A late result does not reverse a decision.** A result that arrives after
   a deadline is recorded as evidence and does not change the state. A later
   `SYNC` operation converges the node.
@@ -333,9 +334,8 @@ Four generations guard an operation.
    - After a reconnect, the kernel replays retained operations in revision
      order, and the agent's completed-operation cache answers terminal
      states without running them again.
-   - After a kernel restart, `KernelOperationBridge` recovers durable
-     operations, and NodeOps operations dispatched on the stream go through
-     the same bridge.
+   - After a kernel restart, the operation engine recovers the operations
+     it had started (`Engine.recoverStarted`).
 
 ### 3.7 Results without secrets
 
@@ -538,7 +538,7 @@ The kernel chooses the channel. The package never names one, except that
 | Channel | Used for | Code today |
 |---|---|---|
 | `KERNEL` | credential and secret operations, retirements | `internal/service` |
-| `AGENT_CONTROL` | `node.sync` and `agent.operation`; after A2, configuration, users, diagnostics | `AgentControlManager`, `KernelOperationBridge` (`v3_kernel_operation`) |
+| `AGENT_CONTROL` | `node.sync` and `agent.operation`; after A2, configuration, users, diagnostics | `AgentControlManager` |
 | `AGENT_WEBSOCKET` | `agent.diagnostic` until A2 | `AgentHandler.dispatchWithAckRetry` |
 | `LEGACY_PULL` | `node.sync` for nodes without a stream: nothing is pushed, and the node's next periodic UniProxy or v2board pull reads the rebuilt configuration | `NodeService.SyncProtocolToNode` (a no-op that logs today) |
 | `NODEX` | `forward.apply` (gost backend), `forward.legacy_rule` | `nodeXForwardRuntimeClient` |
@@ -546,15 +546,11 @@ The kernel chooses the channel. The package never names one, except that
 | `CLEAN_AGENT_JOB` | `forward.apply` (clean agent backend) | `v2_forward_runtime_job`, `ForwardAgentBridgeService` |
 | `CONTROL_DIAL` | `diagnose.*` with the Control vantage | `net.Dial` in the kernel |
 
-**The durable dispatcher.** Stream operations go through
-`KernelOperationBridge`. Two things change in NO-6:
-
-- the dispatchable kinds grow beyond `plugin.*`;
-- the dispatcher runs whenever KernelNodeOps is enabled, not only once Agent
-  plugin dispatch is on (off until M4, `service.AgentPluginDispatchEnabled`;
-  the `plugins.dispatch_enabled` switch is gone).
-
-The bridge's `recoverOnce` assumes one replica, which Control is today.
+**The durable dispatcher.** The plugin-lifecycle dispatcher
+(`KernelOperationBridge`) was removed in the 2026-11 slimming
+(`docs/audit/slim-2026-11.md`): it was never enabled in production. Stream
+operations are executed by the operation engine (`internal/kernelnodeops`),
+whose recovery assumes one replica, which Control is today.
 
 **An address is a credential.** A package that can write a forward node's
 `host` or `api_port` could point the kernel's next NodeX or gost call, which
@@ -2445,7 +2441,7 @@ it up to A2-3.
 | R3 | **New surfaces leak secrets**: results, logs, handles, views, errors | Echo scrubbing; tests that walk every `IsNodeSecretKey` key through every result type; handles single-request and in memory only; views created only after finalize; fail-closed substitution; gosec and the redaction gate |
 | R4 | **An address is a credential**: a forward node's address is written to steal its token | Endpoint pinning (`ENDPOINT_UNCONFIRMED`); the pin moves only to the address in the bound administrator request |
 | R5 | **Validate on build drops rows production relies on** | Report-only first (NO-3), with a scan of a staging copy; enforcement is a decision (D7) |
-| R6 | **Kernel memory and restarts**: sessions, handles and acknowledgement waiters live in one process | Durable operations through `KernelOperationBridge`; waits are bounded and answer the current state; handles expire with their request; HA stays out of scope |
+| R6 | **Kernel memory and restarts**: sessions, handles and acknowledgement waiters live in one process | Durable operations in the operation engine; waits are bounded and answer the current state; handles expire with their request; HA stays out of scope |
 | R7 | **Churn in the draft contract** | Reviewed before NO-1; binding and additive since NO-1 (section 3.10) |
 | R8 | **Size and half-way states**: 90 routes, about 29 PRs | Per-route modes; legacy stays the default; every PR keeps both sides working; parity on SQLite and PostgreSQL |
 | R9 | **Field agents not upgraded by 4.2** (H5) | The transport inventory and `anix-control agents transports --legacy-only`, deprecation signals from 4.1.0, automatic enrollment with the existing key, and `preferred` kept available as an override |
@@ -2577,11 +2573,6 @@ it up to A2-3.
     The main lane runs on PostgreSQL; the forward lane runs under sudo in
     a network namespace (H14). The job uploads its logs on failure and is
     not a required check yet.
-  - **The older process gates.** `internal/grpc/*cross_repo_e2e_test.go`
-    (`ANIXOPS_CROSS_REPO_E2E=1`, CI "Control to Agent Process E2E") drive
-    the agent-control-fixture and the plugin package lifecycle in process.
-    A v1.1.0-SDK agent keeps working on every legacy path, and on the
-    stream for operations only.
 - **Chaos**, in the fake-agent suite and in A2-7 with the real agent:
   - an agent disconnects mid-operation: before the acknowledgement, after
     it but before the terminal state, and during replay;

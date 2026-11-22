@@ -37,11 +37,6 @@ jobs:
         with:
           go-version: "1.26.11"
 
-      - name: Capture Agent Go binary
-        run: |
-          agent_go="$(readlink -f "$(command -v go)")"
-          echo "ANIXOPS_AGENT_GO=${agent_go}" >> "$GITHUB_ENV"
-
       - name: Detect the Agent contract source
         id: contract
         shell: bash
@@ -149,19 +144,3 @@ jobs:
           packages=(./api/agent ./node ./plugin ./cmd/agent-control-fixture)
           go vet "${packages[@]}"
           go test "${packages[@]}" -count=1
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26.11"
-
-      - name: Run real cross-repository E2E
-        working-directory: anix-control
-        env:
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/anix-agent
-          ANIXOPS_AGENT_GO: ${{ env.ANIXOPS_AGENT_GO }}
-          ANIXOPS_CROSS_REPO_E2E: "1"
-          GOWORK: ${{ github.workspace }}/go.work
-        run: >-
-          go test ./internal/grpc
-          -run '^(TestKernelOperationBridgeCrossRepositoryAgentProcess|TestAgentPluginPackageCrossRepositoryE2E)$'
-          -count=1 -timeout 10m

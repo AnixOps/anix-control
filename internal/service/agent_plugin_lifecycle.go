@@ -11,12 +11,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-const maxAgentPluginLifecycleAttempts = 3
 
 type nodePluginDesiredState struct {
 	Version        string
@@ -239,98 +236,6 @@ func resolveNodePluginActiveVersion(tx *gorm.DB, lifecycle *model.NodePluginLife
 	return uniform, nil
 }
 
-// QueueAgentAssignmentLifecycle remains the focused entry point used by tests
-// and callers that have already mutated one assignment transactionally.
-func QueueAgentAssignmentLifecycle(tx *gorm.DB, assignment model.NodeServiceAssignment, now time.Time) (*AgentAssignmentOperationChain, error) {
-	if assignment.NodeID == 0 || strings.TrimSpace(assignment.PluginID) == "" {
-		return &AgentAssignmentOperationChain{}, nil
-	}
-	lifecycle, _, err := SyncNodePluginLifecycle(tx, assignment.NodeID, assignment.PluginID, false, now)
-	if err != nil {
-		return nil, err
-	}
-	return QueueNodePluginLifecycle(tx, lifecycle, now)
-}
-
-// QueueNodePluginLifecycle reuses a valid current chain before touching signed
-// package metadata. Failed chains receive bounded retry epochs with backoff;
-// successful or in-flight chains are never duplicated on periodic reconcile.
-func QueueNodePluginLifecycle(tx *gorm.DB, lifecycle *model.NodePluginLifecycle, now time.Time) (*AgentAssignmentOperationChain, error) {
-	if lifecycle == nil || lifecycle.DesiredGeneration <= 0 {
-		return &AgentAssignmentOperationChain{}, nil
-	}
-	if now.IsZero() {
-		now = time.Now()
-	}
-	if lifecycle.RetryExhausted {
-		return &AgentAssignmentOperationChain{}, nil
-	}
-	if lifecycle.RetryAfter != nil && now.Before(*lifecycle.RetryAfter) {
-		return &AgentAssignmentOperationChain{}, nil
-	}
-	kinds := nodePluginLifecycleOperationKinds(*lifecycle)
-	if !lifecycle.DesiredEnabled {
-		if strings.TrimSpace(lifecycle.DesiredVersion) == "" || !lifecycle.ActiveEnabled {
-			return &AgentAssignmentOperationChain{}, nil
-		}
-	}
-	existing, complete, err := loadNodePluginOperationChain(tx, *lifecycle, kinds)
-	if err != nil {
-		return nil, err
-	}
-	if complete {
-		if chainSucceeded(existing) || chainInFlight(existing) {
-			return mapNodePluginChain(existing), nil
-		}
-		return mapNodePluginChain(existing), scheduleNodePluginRetry(tx, lifecycle, now, existing)
-	}
-	if len(existing) != 0 {
-		return nil, errors.New("node plugin lifecycle chain is incomplete")
-	}
-	if lifecycle.RetryAfter != nil {
-		lifecycle.RetryAfter = nil
-		if err := tx.Save(lifecycle).Error; err != nil {
-			return nil, err
-		}
-	}
-	if !lifecycle.DesiredEnabled {
-		disable, err := queueNodePluginOperation(tx, *lifecycle, "plugin.disable", `{}`, "", now.Add(5*time.Minute))
-		if err != nil {
-			return nil, err
-		}
-		return &AgentAssignmentOperationChain{Disable: disable}, nil
-	}
-
-	installConfig, err := BuildAgentPluginInstallConfig(tx, lifecycle.NodeID, lifecycle.PluginID, lifecycle.DesiredVersion)
-	if err != nil {
-		return nil, err
-	}
-	var installation model.PluginInstallation
-	if err := tx.First(&installation, "plugin_id = ? AND target = ? AND desired_version = ? AND enabled = ?", lifecycle.PluginID, "agent", lifecycle.DesiredVersion, true).Error; err != nil {
-		return nil, fmt.Errorf("%w: enabled agent plugin installation is missing", ErrAgentPluginReconcileNotReady)
-	}
-	configuration, err := GetPluginConfiguration(tx, installation.ID)
-	if err != nil {
-		return nil, err
-	}
-	if configuration.Revision != lifecycle.DesiredConfigRevision {
-		return nil, fmt.Errorf("%w: lifecycle config revision is stale", ErrAgentPluginReconcileNotReady)
-	}
-	install, err := queueNodePluginOperation(tx, *lifecycle, "plugin.install", installConfig, "", now.Add(10*time.Minute))
-	if err != nil {
-		return nil, err
-	}
-	update, err := queueNodePluginOperation(tx, *lifecycle, "plugin.update", configuration.ConfigJSON, install.ID, now.Add(15*time.Minute))
-	if err != nil {
-		return nil, err
-	}
-	enable, err := queueNodePluginOperation(tx, *lifecycle, "plugin.enable", `{}`, update.ID, now.Add(20*time.Minute))
-	if err != nil {
-		return nil, err
-	}
-	return &AgentAssignmentOperationChain{Install: install, Update: update, Enable: enable}, nil
-}
-
 func loadNodePluginOperationChain(tx *gorm.DB, lifecycle model.NodePluginLifecycle, kinds []string) ([]model.KernelOperation, bool, error) {
 	operations := make([]model.KernelOperation, 0, len(kinds))
 	for _, kind := range kinds {
@@ -356,40 +261,6 @@ func chainSucceeded(operations []model.KernelOperation) bool {
 	return len(operations) > 0
 }
 
-func chainInFlight(operations []model.KernelOperation) bool {
-	for _, operation := range operations {
-		switch operation.State {
-		case "pending", "dispatching", "running", "cancel_requested":
-			return true
-		}
-	}
-	return false
-}
-
-func scheduleNodePluginRetry(tx *gorm.DB, lifecycle *model.NodePluginLifecycle, now time.Time, operations []model.KernelOperation) error {
-	if lifecycle.RetryEpoch+1 >= maxAgentPluginLifecycleAttempts {
-		lifecycle.RetryExhausted = true
-		lifecycle.RetryAfter = nil
-		lifecycle.LastError = summarizeOperationChainFailure(operations)
-		if err := tx.Save(lifecycle).Error; err != nil {
-			return err
-		}
-		return nil
-	}
-	lifecycle.RetryEpoch++
-	delay := time.Duration(5*(1<<(lifecycle.RetryEpoch-1))) * time.Second
-	if delay > 2*time.Minute {
-		delay = 2 * time.Minute
-	}
-	retryAt := now.Add(delay)
-	lifecycle.RetryAfter = &retryAt
-	lifecycle.LastError = summarizeOperationChainFailure(operations)
-	if err := tx.Save(lifecycle).Error; err != nil {
-		return err
-	}
-	return nil
-}
-
 func nodePluginLifecycleOperationKinds(lifecycle model.NodePluginLifecycle) []string {
 	if lifecycle.DesiredEnabled {
 		return []string{"plugin.install", "plugin.update", "plugin.enable"}
@@ -408,48 +279,6 @@ func summarizeOperationChainFailure(operations []model.KernelOperation) string {
 		}
 	}
 	return "plugin lifecycle chain did not succeed"
-}
-
-func mapNodePluginChain(operations []model.KernelOperation) *AgentAssignmentOperationChain {
-	chain := &AgentAssignmentOperationChain{}
-	for index := range operations {
-		operation := operations[index]
-		switch operation.Kind {
-		case "plugin.install":
-			chain.Install = &operation
-		case "plugin.update":
-			chain.Update = &operation
-		case "plugin.enable":
-			chain.Enable = &operation
-		case "plugin.disable":
-			chain.Disable = &operation
-		}
-	}
-	return chain
-}
-
-func queueNodePluginOperation(tx *gorm.DB, lifecycle model.NodePluginLifecycle, kind, configJSON, dependsOn string, deadline time.Time) (*model.KernelOperation, error) {
-	idempotencyKey := nodePluginOperationKey(lifecycle, kind)
-	canonical, err := CanonicalKernelOperationConfig(configJSON)
-	if err != nil {
-		return nil, err
-	}
-	configHash, err := HashKernelOperationConfig(canonical)
-	if err != nil {
-		return nil, err
-	}
-	var existing model.KernelOperation
-	if err := tx.First(&existing, "idempotency_key = ?", idempotencyKey).Error; err == nil {
-		return &existing, nil
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	operation, _, err := CreateKernelOperation(tx, model.KernelOperation{
-		ID: uuid.NewString(), IdempotencyKey: idempotencyKey, NodeID: &lifecycle.NodeID,
-		PluginID: lifecycle.PluginID, TargetVersion: lifecycle.DesiredVersion, Kind: kind,
-		ConfigJSON: canonical, ConfigHash: configHash, DependsOnOperationID: dependsOn, DeadlineAt: &deadline,
-	})
-	return operation, err
 }
 
 func nodePluginOperationKey(lifecycle model.NodePluginLifecycle, kind string) string {
@@ -472,95 +301,42 @@ func supersedeOlderNodePluginOperations(tx *gorm.DB, lifecycle model.NodePluginL
 		Updates(map[string]any{"state": "superseded", "last_error": "superseded by newer node plugin lifecycle generation"}).Error
 }
 
-// ReconcileAgentAssignments resumes enrolled lifecycle rows. It does not scan
-// legacy generation-zero assignments, preserving the opt-in migration gate.
-func ReconcileAgentAssignments(db *gorm.DB, now time.Time) (int, error) {
-	if db == nil {
-		return 0, errors.New("database is not initialized")
-	}
-	var rows []model.NodePluginLifecycle
-	if err := db.Where("desired_generation > ?", 0).Order("node_id, plugin_id").Find(&rows).Error; err != nil {
-		return 0, err
-	}
-	reconciled := 0
-	var reconcileErrors []error
-	for _, row := range rows {
-		err := WithAgentLifecycleTransaction(db, func(tx *gorm.DB) error {
-			lifecycle, _, err := SyncNodePluginLifecycle(tx, row.NodeID, row.PluginID, false, now)
-			if err != nil {
-				return err
-			}
-			chain, err := QueueNodePluginLifecycle(tx, lifecycle, now)
-			if err != nil {
-				return err
-			}
-			return purgeCompletedAssignmentDeletes(tx, lifecycle, chain)
-		})
-		if err != nil {
-			reconcileErrors = append(reconcileErrors, fmt.Errorf("reconcile node %d plugin %s: %w", row.NodeID, row.PluginID, err))
-			continue
-		}
-		if err := RefreshAgentPluginInstallationObservedState(db, row.PluginID); err != nil {
-			reconcileErrors = append(reconcileErrors, fmt.Errorf("project plugin %s installation state: %w", row.PluginID, err))
-		}
-		reconciled++
-	}
-	return reconciled, errors.Join(reconcileErrors...)
-}
-
-func purgeCompletedAssignmentDeletes(tx *gorm.DB, lifecycle *model.NodePluginLifecycle, chain *AgentAssignmentOperationChain) error {
-	var pending int64
-	if err := tx.Model(&model.NodeServiceAssignment{}).
-		Where("node_id = ? AND plugin_id = ? AND delete_pending = ?", lifecycle.NodeID, lifecycle.PluginID, true).Count(&pending).Error; err != nil || pending == 0 {
-		return err
-	}
-	ready := false
-	if lifecycle.DesiredEnabled {
-		ready = chain != nil && chain.Enable != nil && (chain.Enable.State == "succeeded" || chain.Enable.State == "completed")
-	} else if strings.TrimSpace(lifecycle.DesiredVersion) == "" || !lifecycle.ActiveEnabled {
-		ready = true
-	} else {
-		ready = chain != nil && chain.Disable != nil && (chain.Disable.State == "succeeded" || chain.Disable.State == "completed")
-	}
-	if !ready {
+// PurgeCompletedAssignmentDeletes deletes the node's delete-pending
+// assignments of the plugin once the plugin is inactive on the node.
+func PurgeCompletedAssignmentDeletes(tx *gorm.DB, lifecycle *model.NodePluginLifecycle) error {
+	if lifecycle.DesiredEnabled || (strings.TrimSpace(lifecycle.DesiredVersion) != "" && lifecycle.ActiveEnabled) {
 		return nil
 	}
 	return tx.Where("node_id = ? AND plugin_id = ? AND delete_pending = ?", lifecycle.NodeID, lifecycle.PluginID, true).
 		Delete(&model.NodeServiceAssignment{}).Error
 }
 
-// PurgeCompletedAssignmentDeletes is used by handlers when dispatch is
-// explicitly disabled and the observed plugin is already inactive.
-func PurgeCompletedAssignmentDeletes(tx *gorm.DB, lifecycle *model.NodePluginLifecycle, chain *AgentAssignmentOperationChain) error {
-	return purgeCompletedAssignmentDeletes(tx, lifecycle, chain)
-}
-
 // SyncAgentInstallationAssignments updates every matching assignment revision
 // and aggregate generation in the caller's configuration transaction.
-func SyncAgentInstallationAssignments(tx *gorm.DB, installation model.PluginInstallation, configRevision int64, queue bool, now time.Time) ([]*model.KernelOperation, error) {
+func SyncAgentInstallationAssignments(tx *gorm.DB, installation model.PluginInstallation, configRevision int64, now time.Time) error {
 	if installation.Target != "agent" {
-		return nil, nil
+		return nil
 	}
 	if err := LockPluginInstallationTarget(tx, "agent"); err != nil {
-		return nil, err
+		return err
 	}
 	var nodeIDs []uint
 	if err := tx.Model(&model.NodeServiceAssignment{}).
 		Where("plugin_id = ?", installation.PluginID).Distinct("node_id").Order("node_id").Pluck("node_id", &nodeIDs).Error; err != nil {
-		return nil, err
+		return err
 	}
 	// Lock every aggregate in a deterministic order before taking assignment
 	// row locks. This is the same order used by per-node assignment mutations.
 	sort.Slice(nodeIDs, func(i, j int) bool { return nodeIDs[i] < nodeIDs[j] })
 	for _, nodeID := range nodeIDs {
 		if _, err := LockNodePluginLifecycleTx(tx, nodeID, installation.PluginID); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	var assignments []model.NodeServiceAssignment
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("plugin_id = ?", installation.PluginID).Order("node_id, id").Find(&assignments).Error; err != nil {
-		return nil, err
+		return err
 	}
 	for _, assignment := range assignments {
 		updates := map[string]any{}
@@ -579,81 +355,13 @@ func SyncAgentInstallationAssignments(tx *gorm.DB, installation model.PluginInst
 		}
 		if len(updates) > 0 {
 			if err := tx.Model(&model.NodeServiceAssignment{}).Where("id = ?", assignment.ID).Updates(updates).Error; err != nil {
-				return nil, err
-			}
-		}
-	}
-	var operations []*model.KernelOperation
-	for _, nodeID := range nodeIDs {
-		lifecycle, _, err := SyncNodePluginLifecycle(tx, nodeID, installation.PluginID, false, now)
-		if err != nil {
-			return nil, err
-		}
-		if !queue {
-			continue
-		}
-		chain, err := QueueNodePluginLifecycle(tx, lifecycle, now)
-		if err != nil {
-			return nil, err
-		}
-		for _, operation := range []*model.KernelOperation{chain.Install, chain.Update, chain.Enable, chain.Disable} {
-			if operation != nil {
-				operations = append(operations, operation)
-			}
-		}
-	}
-	return operations, nil
-}
-
-// RecordNodePluginOperationSuccessTx captures the version actually selected by
-// the Agent, so later disable/delete never guesses from a stale role row.
-func RecordNodePluginOperationSuccessTx(tx *gorm.DB, operation model.KernelOperation) error {
-	if tx == nil || operation.NodeID == nil {
-		return nil
-	}
-	var lifecycle model.NodePluginLifecycle
-	if err := tx.First(&lifecycle, "node_id = ? AND plugin_id = ?", *operation.NodeID, operation.PluginID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return err
-	}
-	if operation.Revision < lifecycle.ActiveRevision {
-		return nil
-	}
-	updates := map[string]any{}
-	switch operation.Kind {
-	case "plugin.update", "plugin.enable", "plugin.rollback":
-		updates["active_version"] = operation.TargetVersion
-		updates["active_revision"] = operation.Revision
-		if operation.Kind == "plugin.enable" || operation.Kind == "plugin.rollback" {
-			updates["active_enabled"] = true
-		}
-	case "plugin.disable":
-		updates["active_version"] = operation.TargetVersion
-		updates["active_enabled"] = false
-		updates["active_revision"] = operation.Revision
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-	if err := tx.Model(&lifecycle).Updates(updates).Error; err != nil {
-		return err
-	}
-	finalCurrentOperation := operation.IdempotencyKey == nodePluginOperationKey(lifecycle, operation.Kind) &&
-		((lifecycle.DesiredEnabled && operation.Kind == "plugin.enable") || (!lifecycle.DesiredEnabled && operation.Kind == "plugin.disable"))
-	if finalCurrentOperation {
-		operations, complete, err := loadNodePluginOperationChain(tx, lifecycle, nodePluginLifecycleOperationKinds(lifecycle))
-		if err != nil {
-			return err
-		}
-		if complete && chainSucceeded(operations) {
-			if err := tx.Model(&lifecycle).Updates(map[string]any{
-				"retry_after": nil, "retry_exhausted": false, "last_error": "",
-			}).Error; err != nil {
 				return err
 			}
-			lifecycle.RetryAfter, lifecycle.RetryExhausted, lifecycle.LastError = nil, false, ""
+		}
+	}
+	for _, nodeID := range nodeIDs {
+		if _, _, err := SyncNodePluginLifecycle(tx, nodeID, installation.PluginID, false, now); err != nil {
+			return err
 		}
 	}
 	return nil

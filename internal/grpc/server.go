@@ -221,11 +221,6 @@ func (s *Server) AgentPKI() *agentpki.Service {
 	return s.config.AgentPKI
 }
 
-// GetAgentControlManager returns the Agent-first desired/observed connection manager.
-func (s *Server) GetAgentControlManager() *AgentControlManager {
-	return GetAgentControlManager()
-}
-
 // interceptorChains returns the node-facing server's unary and stream
 // interceptor chains, outermost first.
 func (s *Server) interceptorChains() ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor) {

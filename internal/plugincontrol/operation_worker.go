@@ -24,8 +24,7 @@ var controlOperationKinds = []string{
 	"plugin.disable", "plugin.update", "plugin.rollback", "plugin.health",
 }
 
-// OperationWorker executes durable Control-target operations. Node-target
-// operations remain owned by KernelOperationBridge and the Agent stream.
+// OperationWorker executes durable Control-target operations.
 type OperationWorker struct {
 	db            *gorm.DB
 	dispatcher    LifecycleDispatcher

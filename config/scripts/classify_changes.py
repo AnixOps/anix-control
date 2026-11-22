@@ -18,7 +18,6 @@ Prints GitHub output lines (name=true|false):
   db       schemas, storage and migrations (the PostgreSQL jobs)
   modules  the module runtime, identity, images and deployment (Docker and
            Kubernetes smokes)
-  agent    the Agent channel (the cross-repository Agent E2E)
   packages official package sources (the package release contracts)
 """
 
@@ -31,7 +30,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CLASSES = ("code", "web", "db", "modules", "agent", "packages")
+CLASSES = ("code", "web", "db", "modules", "packages")
 
 # Any of these makes the change run the full lane.
 FULL_PATTERNS = (
@@ -108,20 +107,6 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "sdk/*",
         "packages/identity-platform/*",
         "packages/shared/*",
-    ),
-    "agent": (
-        "internal/grpc/*",
-        "internal/agentpki/*",
-        "api/*",
-        "contracts/agent/*",
-        "internal/handler/agent*",
-        # One-command onboarding: the install script and its metadata.
-        "internal/agentinstall/*",
-        # Staged Agent upgrades (O4).
-        "internal/agentupgrade/*",
-        "internal/service/agent*",
-        "internal/plugincontrol/*",
-        "packages/machine-telemetry/*",
     ),
     "packages": ("packages/*", "scripts/sign_plugin_release.sh"),
 }
@@ -282,7 +267,7 @@ def self_test() -> None:
     workflow = WORKFLOW
     check(["docs/RELEASING.md", "CHANGELOG.md"], set())
     check(["web/src/App.vue"], {"code", "web"})
-    check(["contracts/agent/v1/protocol-combinations.json"], {"code", "web", "agent"})
+    check(["contracts/agent/v1/protocol-combinations.json"], {"code", "web"})
     check(["internal/handler/ticket.go"], {"code", "db"})
     check(["internal/middleware/audit_log.go"], {"code"})
     check(["packages/plan/native/plans.go"], {"code", "db", "packages"})
@@ -295,9 +280,9 @@ def self_test() -> None:
     check(["internal/kernelforward/plan.go"], {"code", "db"})
     check(["internal/forwardddns/alidns.go"], {"code"})
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
-    check(["internal/grpc/node_server.go"], {"code", "agent"})
-    check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})
-    check(["internal/agentupgrade/worker.go"], {"code", "db", "agent"})
+    check(["internal/grpc/node_server.go"], {"code"})
+    check(["internal/agentpki/enrollment.go"], {"code", "db"})
+    check(["internal/agentupgrade/worker.go"], {"code", "db"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
     check(["packages/order/native/orders.go"], {"code", "db", "packages"})
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})
@@ -318,7 +303,7 @@ def self_test() -> None:
         assert on == expected, f"{paths} with {classes}: {sorted(on)} != {sorted(expected)}"
 
     wf_check([workflow], {"code", "modules"}, {"code", "modules"})
-    wf_check([workflow, "internal/grpc/node_server.go"], {"code", "db"}, {"code", "db", "agent"})
+    wf_check([workflow, "internal/grpc/node_server.go"], {"code", "db"}, {"code", "db"})
     wf_check([workflow, "go.sum"], {"code"}, everything)
     wf_check([workflow], None, everything)
 
