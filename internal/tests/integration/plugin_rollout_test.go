@@ -15,16 +15,16 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func TestPackageMigrationCohortRollbackSQLite(t *testing.T) {
+func TestPackageMigrationValidationSQLite(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(packageRolloutModels()...))
-	exercisePackageMigrationRollback(t, db)
+	exercisePackageMigrationValidation(t, db)
 }
 
-func TestPostgresPackageMigrationRollback(t *testing.T) {
+func TestPostgresPackageMigrationValidation(t *testing.T) {
 	db := newPostgresPackageRolloutTestDB(t)
-	exercisePackageMigrationRollback(t, db)
+	exercisePackageMigrationValidation(t, db)
 }
 
 func TestPostgresPackageMigrationSerializesRootRouteGeneration(t *testing.T) {
@@ -113,7 +113,7 @@ func packageRolloutModels() []any {
 	}
 }
 
-func exercisePackageMigrationRollback(t *testing.T, db *gorm.DB) {
+func exercisePackageMigrationValidation(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	run, err := service.BeginPackageMigration(db, model.PackageMigrationRun{
 		PackageID: "payment", PackageVersion: "4.0.0", Generation: 8,
@@ -132,18 +132,4 @@ func exercisePackageMigrationRollback(t *testing.T, db *gorm.DB) {
 	validation, err := service.RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: run.ID})
 	require.NoError(t, err)
 	require.NotNil(t, validation.RouteGenerationID)
-
-	var initial model.PackageRouteGeneration
-	require.NoError(t, db.First(&initial, *validation.RouteGenerationID).Error)
-	advanced, err := service.AdvancePackageCohort(db, initial.ID, 5)
-	require.NoError(t, err)
-	require.NotNil(t, advanced.BackupReferenceID)
-	restored, err := service.RollbackPackageGeneration(db, advanced.ID, "integration_host_crash")
-	require.NoError(t, err)
-	require.Equal(t, initial.ID, restored.ID)
-
-	var backup model.PackageBackupReference
-	require.NoError(t, db.First(&backup, *advanced.BackupReferenceID).Error)
-	require.NotNil(t, backup.RestoredAt)
-	require.Equal(t, "integration_host_crash", backup.RestoreReason)
 }

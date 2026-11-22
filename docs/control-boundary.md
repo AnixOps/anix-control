@@ -11,8 +11,8 @@ It owns:
   <id>`), and the start-up bootstrap installs, upgrades and enables the set
   (`docs/architecture/plugin-kernel-contract.md`, "Built-in Packages"). The
   hosts always run; an administrator sees and restarts them in 系统设置 →
-  内置包, and nothing imports, upgrades or switches route modes. Agent plugin
-  dispatch and topology execution are off until M4
+  内置包, and nothing imports, upgrades or switches route modes. Control does not
+  dispatch Agent plugins or execute topologies
 - user, plan, order, ticket, knowledge, and subscription data
 - public proxy-node inventory
 - the forwarding control plane: the v4.2 forwarding area (`/admin/forward/*`)

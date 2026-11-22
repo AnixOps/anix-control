@@ -138,7 +138,6 @@ Reusable pieces that already exist:
 | Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
 | Rollout/migration ledger models | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
 | Route answer harness (`RunRead`, `RunWrite`): compares a native route with its legacy handler, or, once that is deleted, with the answers recorded in `testdata` | `internal/tests/packagecompat` |
-| Lifecycle plan with reverse compensation | `internal/plugincontrol/lifecycle_plan.go` |
 | Compiling a real host inside a test | `internal/pluginhost/identity_platform_host_test.go` |
 | E2E fixture that installs a real signed package | `internal/tests/e2e/identity_package_fixture_test.go` |
 
@@ -1164,10 +1163,13 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 
 CURRENT: models exist in `internal/model/plugin_rollout.go` (registered in
 `KernelModels()` in `internal/model/kernel.go`), with services
-`BeginPackageMigration`, `MigratePackageHost`, `AdvancePackageCohort`, and
-`RollbackPackageGeneration` in `internal/service/plugin_rollout.go`, tested in
-`internal/tests/integration/plugin_rollout_test.go`. **Nothing in the running
-server calls them.**
+`BeginPackageMigration`, `RecordMigrationCheckpoint`, `MigratePackageHost` and
+`RecordPackageValidation` in `internal/service/plugin_rollout.go`, tested in
+`internal/tests/integration/plugin_rollout_test.go`; a storage package's host
+start runs them (`internal/service/package_host_migration.go`). Cohort
+advance and generation rollback (`AdvancePackageCohort`,
+`RollbackPackageGeneration`) were never wired and were removed in the
+2026-11 slimming.
 
 Semantics to keep when wiring:
 

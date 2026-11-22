@@ -576,10 +576,7 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		}
 	}
 	if queuedOperation != nil {
-		if err := setPluginOperationResponseHeaders(c, h.db, *queuedOperation); err != nil {
-			kernelDBError(c, err)
-			return
-		}
+		setPluginOperationResponseHeaders(c, *queuedOperation)
 	}
 	kernelData(c, http.StatusOK, configuration)
 }
@@ -669,40 +666,15 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		}
 		return
 	}
-	if err := setPluginOperationResponseHeaders(c, h.db, *operation); err != nil {
-		kernelDBError(c, err)
-		return
-	}
+	setPluginOperationResponseHeaders(c, *operation)
 	kernelData(c, http.StatusAccepted, gin.H{"installation": service.PublicPluginInstallation(installation), "operation": service.PublicKernelOperation(*operation)})
 }
 
-// setPluginOperationResponseHeaders exposes both the user-visible operation
-// and the complete apply chain for dependency-aware Control lifecycle plans.
-// A plain operation is represented as a one-item chain so clients can consume
-// the header without branching on the action implementation.
-func setPluginOperationResponseHeaders(c *gin.Context, db *gorm.DB, operation model.KernelOperation) error {
-	if strings.TrimSpace(operation.ID) == "" {
-		return errors.New("plugin operation id is missing")
-	}
+// setPluginOperationResponseHeaders exposes the queued operation, also as a
+// one-item chain (clients read X-AnixOps-Operation-Chain).
+func setPluginOperationResponseHeaders(c *gin.Context, operation model.KernelOperation) {
 	c.Header("X-AnixOps-Operation-ID", operation.ID)
-	ids := []string{operation.ID}
-	if planID := strings.TrimSpace(operation.LifecyclePlanID); planID != "" {
-		var chain []model.KernelOperation
-		if err := db.Select("id").Where("lifecycle_plan_id = ? AND lifecycle_plan_phase = ?", planID, "apply").
-			Order("lifecycle_plan_sequence ASC").Find(&chain).Error; err != nil {
-			return fmt.Errorf("load plugin lifecycle operation chain: %w", err)
-		}
-		if len(chain) > 0 {
-			ids = ids[:0]
-			for _, item := range chain {
-				if strings.TrimSpace(item.ID) != "" {
-					ids = append(ids, item.ID)
-				}
-			}
-		}
-	}
-	c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
-	return nil
+	c.Header("X-AnixOps-Operation-Chain", operation.ID)
 }
 
 func (h *KernelHandler) ListServiceScopes(c *gin.Context) {
@@ -1389,41 +1361,8 @@ func (h *KernelHandler) ListOperations(c *gin.Context) {
 		return
 	}
 	response := make([]service.KernelOperationStatus, 0, len(rows))
-	planIDs := make([]string, 0)
-	seenPlans := make(map[string]struct{})
 	for _, row := range rows {
-		if planID := strings.TrimSpace(row.LifecyclePlanID); planID != "" {
-			if _, seen := seenPlans[planID]; !seen {
-				seenPlans[planID] = struct{}{}
-				planIDs = append(planIDs, planID)
-			}
-		}
-	}
-	chains := make(map[string]string, len(planIDs))
-	if len(planIDs) > 0 {
-		var chainRows []model.KernelOperation
-		if err := h.db.Select("id", "lifecycle_plan_id", "lifecycle_plan_phase", "lifecycle_plan_sequence").
-			Where("lifecycle_plan_id IN ? AND lifecycle_plan_phase = ?", planIDs, "apply").
-			Order("lifecycle_plan_id, lifecycle_plan_sequence ASC").Find(&chainRows).Error; err != nil {
-			kernelDBError(c, err)
-			return
-		}
-		chainIDs := make(map[string][]string, len(planIDs))
-		for _, row := range chainRows {
-			if strings.TrimSpace(row.ID) != "" {
-				chainIDs[row.LifecyclePlanID] = append(chainIDs[row.LifecyclePlanID], row.ID)
-			}
-		}
-		for planID, ids := range chainIDs {
-			chains[planID] = strings.Join(ids, ",")
-		}
-	}
-	for _, row := range rows {
-		view := service.PublicKernelOperation(row)
-		if chain := chains[strings.TrimSpace(row.LifecyclePlanID)]; chain != "" {
-			view.OperationChain = chain
-		}
-		response = append(response, view)
+		response = append(response, service.PublicKernelOperation(row))
 	}
 	kernelData(c, 200, response)
 }
@@ -1475,9 +1414,6 @@ func (h *KernelHandler) CancelOperation(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	if err := setPluginOperationResponseHeaders(c, h.db, *operation); err != nil {
-		kernelDBError(c, err)
-		return
-	}
+	setPluginOperationResponseHeaders(c, *operation)
 	kernelData(c, http.StatusAccepted, service.PublicKernelOperation(*operation))
 }
