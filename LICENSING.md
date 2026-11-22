@@ -10,7 +10,7 @@
 | 5.0.x 及以前 | MIT | 已经发布的版本永久保持 MIT，任何人都可以按 MIT 继续使用或 fork |
 | 5.1 起 | AGPL-3.0 | 切换时 `LICENSE` 换成 AGPL-3.0 原文，V2Board 原作者的 MIT 声明保留在 [`NOTICE`](NOTICE) |
 
-切换之前本仓库仍是 MIT，以 [`LICENSE`](LICENSE) 为准。进度见 [`ROADMAP.md`](ROADMAP.md) 的 5.1 节。
+切换之前本仓库仍是 MIT，以 [`LICENSE`](LICENSE) 为准。进度见 [`ROADMAP.md`](ROADMAP.md) 的 5.1 节；每项决定、每一步的证据和每条承诺的保证方式记录在 [`docs/audit/commercial-5.1.md`](docs/audit/commercial-5.1.md)。
 
 ## 社区版和商业版
 

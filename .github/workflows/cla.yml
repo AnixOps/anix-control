@@ -1,9 +1,10 @@
 name: CLA
 
-# Checks that the author of a pull request signed the Contributor License
-# Agreement (CLA.md): their GitHub login starts a line of
-# .github/cla-signatures.txt in the pull request's merge result. The
-# repository owner and bot accounts are exempt.
+# Checks the Contributor License Agreement (CLA.md) on every pull request with
+# .github/scripts/check_cla.py: every commit author has a line in
+# .github/cla-signatures.txt (the repository owner and bot accounts are
+# exempt), a pull request adds signature lines only for its own author, and no
+# existing signature is removed or changed. Read-only; no third-party action.
 
 on:
   pull_request:
@@ -11,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   cla:
@@ -23,20 +25,26 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check the author signed the CLA
+      - name: Self-test the checker
+        run: python3 .github/scripts/check_cla.py --self-test
+
+      - name: Collect the commit authors and the signature changes
         env:
-          AUTHOR: ${{ github.event.pull_request.user.login }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         shell: bash
         run: |
-          case "${AUTHOR}" in
-            kalijerry|*'[bot]')
-              echo "${AUTHOR} is exempt."
-              exit 0
-              ;;
-          esac
-          if grep -qiE "^${AUTHOR}[[:space:]]*\|" .github/cla-signatures.txt; then
-            echo "${AUTHOR} signed the CLA."
-            exit 0
-          fi
-          echo "::error::${AUTHOR} has not signed the CLA. Read CLA.md and add your line to .github/cla-signatures.txt in this pull request."
-          exit 1
+          gh api "repos/${REPO}/pulls/${PR}/commits" --paginate \
+            --jq '.[] | (.author.login // ("UNLINKED:" + .sha[0:7]))' > "${RUNNER_TEMP}/commits.txt"
+          gh api "repos/${REPO}/pulls/${PR}/files" --paginate \
+            --jq '.[] | select(.filename == ".github/cla-signatures.txt") | .patch // ""' > "${RUNNER_TEMP}/patch.txt"
+          echo "Commit authors:"; sort -u "${RUNNER_TEMP}/commits.txt"
+
+      - name: Check the CLA
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          python3 .github/scripts/check_cla.py --author "${AUTHOR}" \
+            --commits "${RUNNER_TEMP}/commits.txt" --patch "${RUNNER_TEMP}/patch.txt" \
+            --signatures .github/cla-signatures.txt
