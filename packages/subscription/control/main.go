@@ -1,13 +1,9 @@
 // Package control is the subscription package's Control host. Control links it
-// and starts it as `anix-control package-host subscription` (packages/builtin);
-// packages/builtin/cmd/package-host builds it as a standalone binary.
+// (packages/builtin) and runs it inside its own process.
 package control
 
 import (
 	"context"
-	// Embed the zone database so the TZ passed by the kernel resolves even
-	// without system zoneinfo.
-	_ "time/tzdata"
 
 	"github.com/AnixOps/anix-control/sdk/modulesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"

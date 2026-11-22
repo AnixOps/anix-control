@@ -207,20 +207,25 @@ func TestServerLimitsResponseBodyNotEnvelope(t *testing.T) {
 	require.Equal(t, codes.ResourceExhausted, status.Code(err))
 }
 
-func TestMaxResponseBytesFromEnvironment(t *testing.T) {
-	t.Setenv(MaxResponseBytesEnvironment, "")
-	value, err := MaxResponseBytesFromEnvironment()
+func TestMaxResponseBytesFrom(t *testing.T) {
+	setting := func(value string) func(string) string {
+		return func(name string) string {
+			if name == MaxResponseBytesEnvironment {
+				return value
+			}
+			return ""
+		}
+	}
+	value, err := MaxResponseBytesFrom(setting(""))
 	require.NoError(t, err)
 	require.Zero(t, value)
 
-	t.Setenv(MaxResponseBytesEnvironment, "3145728")
-	value, err = MaxResponseBytesFromEnvironment()
+	value, err = MaxResponseBytesFrom(setting("3145728"))
 	require.NoError(t, err)
 	require.Equal(t, 3<<20, value)
 
 	for _, invalid := range []string{"-1", "0", "abc", "67108865"} {
-		t.Setenv(MaxResponseBytesEnvironment, invalid)
-		_, err = MaxResponseBytesFromEnvironment()
+		_, err = MaxResponseBytesFrom(setting(invalid))
 		require.Error(t, err, invalid)
 	}
 }

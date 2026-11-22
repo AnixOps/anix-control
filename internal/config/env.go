@@ -31,15 +31,11 @@ const ACMEDirectoryEnv = EnvPrefix + "ACME_DIRECTORY_URL"
 const ACMECAFileEnv = EnvPrefix + "ACME_CA_FILE"
 
 // reservedEnvNames are ANIX_CONTROL_* variables that are not configuration
-// keys: the config path, and the variables the kernel passes to package hosts.
+// keys.
 var reservedEnvNames = map[string]bool{
-	ConfigPathEnv:                          true,
-	ACMEDirectoryEnv:                       true,
-	ACMECAFileEnv:                          true,
-	"ANIX_CONTROL_HOST_SOCKET":             true,
-	"ANIX_CONTROL_HOST_DIR_FD":             true,
-	"ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES": true,
-	"ANIX_CONTROL_PACKAGE_BRIDGE_FD":       true,
+	ConfigPathEnv:    true,
+	ACMEDirectoryEnv: true,
+	ACMECAFileEnv:    true,
 }
 
 // EnvVar describes one operator key and its variable.

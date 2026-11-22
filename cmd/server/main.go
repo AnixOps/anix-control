@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -320,11 +321,6 @@ func serveAssetFiles(frontendPath string) gin.HandlerFunc {
 }
 
 func main() {
-	// A package host started by the kernel runs before anything else: it
-	// loads no configuration and prints no banner.
-	if code, handled := runPackageHostCommand(os.Args[1:]); handled {
-		os.Exit(code)
-	}
 	if code := run(); code != 0 {
 		os.Exit(code)
 	}
@@ -853,13 +849,7 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	if err != nil {
 		return nil, fmt.Errorf("configure package bridge: %w", err)
 	}
-	// The start log names the running binary's digest, which operators
-	// compare with the verified release archive (docs/RELEASING.md).
-	if self, err := pluginhost.Self(); err != nil {
-		log.Printf("WARNING: the Control executable cannot be recorded: %v", err)
-	} else {
-		log.Printf("Control executable %s (SHA-256 %s)", self.Path, self.SHA256)
-	}
+	logExecutable()
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
 		BridgeFactory: bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
@@ -870,14 +860,36 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	})
 }
 
-// runBuiltinHost serves one release of a built-in package inside Control,
-// after the same version check `package-host` makes.
+// runBuiltinHost serves one release of a built-in package inside Control. The
+// kernel admits a built-in host only for the release this binary embeds.
 func runBuiltinHost(ctx context.Context, packageID, version string) error {
 	version, err := builtinpkg.HostVersion(packageID, version)
 	if err != nil {
 		return err
 	}
 	return builtin.Run(ctx, packageID, version)
+}
+
+// logExecutable names the running binary's digest, which operators compare
+// with the verified release archive (docs/RELEASING.md).
+func logExecutable() {
+	path, err := os.Executable()
+	if err != nil {
+		log.Printf("WARNING: the Control executable cannot be located: %v", err)
+		return
+	}
+	file, err := os.Open(path) // #nosec G304 -- the running binary.
+	if err != nil {
+		log.Printf("WARNING: the Control executable cannot be read: %v", err)
+		return
+	}
+	defer func() { _ = file.Close() }()
+	digest := sha256.New()
+	if _, err := io.Copy(digest, file); err != nil {
+		log.Printf("WARNING: the Control executable cannot be read: %v", err)
+		return
+	}
+	log.Printf("Control executable %s (SHA-256 %x)", path, digest.Sum(nil))
 }
 
 // identityHostEnvironment gives the local identity-platform host its signing

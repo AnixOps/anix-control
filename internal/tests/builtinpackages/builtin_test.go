@@ -13,7 +13,6 @@ package builtinpackages
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -350,39 +349,6 @@ func (c *control) login() {
 	})
 }
 
-// hostProcesses maps the package id of every child process that runs
-// `anix-control package-host <id>` to the executable it runs.
-func (c *control) hostProcesses() map[string]string {
-	c.t.Helper()
-	entries, err := os.ReadDir("/proc")
-	require.NoError(c.t, err)
-	hosts := map[string]string{}
-	parent := fmt.Sprint(c.cmd.Process.Pid)
-	for _, entry := range entries {
-		stat, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
-		if err != nil {
-			continue
-		}
-		// pid (comm) state ppid ...
-		fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
-		if len(fields) < 2 || fields[1] != parent {
-			continue
-		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil {
-			continue
-		}
-		args := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
-		if len(args) != 3 || args[0] != "anix-control" || args[1] != "package-host" {
-			continue
-		}
-		exe, err := os.Readlink(filepath.Join("/proc", entry.Name(), "exe"))
-		require.NoError(c.t, err)
-		hosts[args[2]] = exe
-	}
-	return hosts
-}
-
 func (c *control) count(value any, query string, args ...any) int64 {
 	c.t.Helper()
 	var count int64
@@ -417,8 +383,6 @@ func TestBuiltinPackagesInstallUpgradeAndSurviveAFailure(t *testing.T) {
 		"identity-platform", 1, model.PackageMigrationStateCompleted), "identity-platform migrates on its first start")
 	output := panel.output.String()
 	require.Contains(t, output, fmt.Sprintf("Built-in packages: %d embedded, 0 failed", packageCount))
-	// Every host runs inside Control: no package-host child process.
-	require.Empty(t, panel.hostProcesses())
 	panel.stop()
 
 	// A restart with the same binary changes nothing.
@@ -474,41 +438,4 @@ func TestBuiltinPackageThatDoesNotVerifyLeavesTheOthersAndControlAvailable(t *te
 	require.Contains(t, output, "built-in package plan 9.1.0 invalid")
 	require.Contains(t, output, fmt.Sprintf("Built-in packages: %d embedded, 1 failed", packageCount))
 	panel.stop()
-}
-
-// The package-host command runs only hosts this binary links, at the
-// version it embeds.
-func TestPackageHostCommandChecksTheEmbeddedVersion(t *testing.T) {
-	if testing.Short() {
-		t.Skip("builds the Control binary")
-	}
-	requireTools(t)
-	work := t.TempDir()
-	key := newSigningKey(t, work)
-	binary := buildControl(t, work, buildPackageSet(t, work, key, "9.1.0"), "anix-control")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	for _, test := range []struct {
-		args    []string
-		version string
-		code    int
-		message string
-	}{
-		{[]string{"package-host"}, "", 2, "usage"},
-		{[]string{"package-host", "no-such-package"}, "", 2, "no built-in host"},
-		{[]string{"package-host", "plan"}, "9.0.0", 1, "embeds plan 9.1.0, not 9.0.0"},
-		{[]string{"package-host", "plan"}, "9.1.0", 1, "control host socket is required"},
-	} {
-		command := exec.CommandContext(ctx, binary, test.args...)
-		command.Env = []string{"PATH=" + os.Getenv("PATH")}
-		if test.version != "" {
-			command.Env = append(command.Env, "ANIX_CONTROL_HOST_PACKAGE_VERSION="+test.version)
-		}
-		output, err := command.CombinedOutput()
-		exitErr, ok := err.(*exec.ExitError)
-		require.True(t, ok, "%v: %v %s", test.args, err, output)
-		require.Equal(t, test.code, exitErr.ExitCode(), "%v: %s", test.args, output)
-		require.Contains(t, string(output), test.message, test.args)
-		require.NotContains(t, string(output), "Loading config", "a package host reads no configuration")
-	}
 }

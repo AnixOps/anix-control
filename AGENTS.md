@@ -26,7 +26,7 @@ file short and enforceable; put explanations in `docs/`.
   `/api/v3` (catalog, releases, installations, operations, deployments).
   Since M2 the official packages are built in: every host
   (`packages/<id>/control`) is a library Control links (`packages/builtin`)
-  and runs as `anix-control package-host <id>`, and the signed slim packages
+  and runs inside the Control process, and the signed slim packages
   are embedded (`internal/builtinpkg`) and installed at every start
   (`docs/architecture/plugin-kernel-contract.md`, "Built-in Packages").
 - Reality check: every `/api/v2` business route is registered through

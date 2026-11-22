@@ -259,11 +259,9 @@ func SetDefault(set *Set) (restore func()) {
 	}
 }
 
-// HostVersion resolves the release a `package-host <id>` process serves.
-// The kernel passes the version it verified; when this binary embeds the
-// package, that version must be the embedded one (the kernel admits a
-// built-in host only for the release this binary carries). Without a
-// version, a host started by hand serves the embedded one.
+// HostVersion checks the release version the kernel verified for a built-in
+// host: when this binary embeds the package, it must be the embedded one (the
+// kernel admits a built-in host only for the release this binary carries).
 func HostVersion(id, requested string) (string, error) {
 	set, err := Embedded()
 	if err != nil {
@@ -273,8 +271,6 @@ func HostVersion(id, requested string) (string, error) {
 	switch {
 	case !ok:
 		return requested, nil
-	case requested == "":
-		return embeddedPackage.Version, nil
 	case requested != embeddedPackage.Version:
 		return "", fmt.Errorf("this binary embeds %s %s, not %s", id, embeddedPackage.Version, requested)
 	default:

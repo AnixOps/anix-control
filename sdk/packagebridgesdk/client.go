@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -19,8 +18,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
-
-const BridgeFDEnvironment = "ANIX_CONTROL_PACKAGE_BRIDGE_FD"
 
 // maxBridgeMessageBytes is the receive limit for bridge responses: the
 // largest configurable response body (64 MiB) plus a fixed envelope. The
@@ -88,15 +85,6 @@ type WebSocketStream interface {
 	Recv() (WebSocketFrame, error)
 	Send(WebSocketFrame) error
 	CloseSend() error
-}
-
-func DialFromEnvironment(ctx context.Context) (*Client, error) {
-	rawFD := os.Getenv(BridgeFDEnvironment)
-	fd, err := strconv.Atoi(rawFD)
-	if err != nil || fd < 3 {
-		return nil, fmt.Errorf("%w: inherited bridge descriptor is required", ErrBridgeUnavailable)
-	}
-	return DialFile(ctx, os.NewFile(uintptr(fd), "anix-package-bridge-child"))
 }
 
 // DialFile consumes a duplicate of file and leaves no filesystem-addressable

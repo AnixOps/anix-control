@@ -360,7 +360,6 @@ func TestLoadEnvironment(t *testing.T) {
 		"ANIX_CONTROL_FORWARD_RUNTIME_NODEX_TOKEN=nodex-token",
 		"ANIX_CONTROL_DATABSE_PASSWORD=typo",
 		"ANIX_CONTROL_CONFIG=/etc/anix-control/config.yaml",
-		"ANIX_CONTROL_HOST_SOCKET=/proc/self/fd/3/host.sock",
 		"ANIX_CONTROL_ALERTS_CHECK_INTERVAL_FILE=/nonexistent/is/never/read",
 		"UNRELATED=1",
 	})

@@ -38,15 +38,12 @@ type MigrationStep struct {
 }
 
 type ArtifactRef struct {
-	PackageID        string
-	Version          string
-	ArtifactPath     string
-	ArtifactSHA256   string
-	Builtin          bool
-	EntrypointPath   string
-	EntrypointSHA256 string
-	ManifestPath     string
-	ManifestSHA256   string
+	PackageID      string
+	Version        string
+	ArtifactPath   string
+	ArtifactSHA256 string
+	ManifestPath   string
+	ManifestSHA256 string
 	// MigrationIndexSHA256 and Migrations describe the verified migration
 	// index of the release; Migrations is empty when it declares no steps.
 	MigrationIndexSHA256 string
@@ -313,22 +310,4 @@ var _ HostStatsProvider = (*Supervisor)(nil)
 // PackageConn has no host to reach without Unix package hosts.
 func (m *Supervisor) PackageConn(string) (grpc.ClientConnInterface, error) {
 	return nil, ErrHostUnavailable
-}
-
-// BuiltinHostCommand and BuiltinHostVersionEnvironment match the Unix build.
-const (
-	BuiltinHostCommand            = "package-host"
-	BuiltinHostVersionEnvironment = "ANIX_CONTROL_HOST_PACKAGE_VERSION"
-)
-
-// SelfExecutable matches the Unix build; built-in hosts need Unix.
-type SelfExecutable struct {
-	Path   string
-	SHA256 string
-	Pinned bool
-}
-
-// Self fails closed: package hosts need Unix sockets and descriptors.
-func Self() (SelfExecutable, error) {
-	return SelfExecutable{}, fmt.Errorf("%w: built-in package hosts need a Unix system", ErrHostUnavailable)
 }

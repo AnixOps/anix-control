@@ -52,6 +52,14 @@
   seven `topology_*` and `lifecycle_plan_*` columns of `v3_kernel_operation`.
   Irreversible: back the database up first. Upgrade notes in
   [`docs/UPGRADE.md`](docs/UPGRADE.md#the-tables-of-the-removed-features-are-dropped).
+- The standalone package host (2026-11 slimming, class C1c-1b):
+  `anix-control package-host <id>`, `packages/builtin/cmd/package-host`, the
+  subprocess launcher, the full package format with host binaries (the
+  builder makes the slim built-in set only) and the import of
+  `identity-platform` from `plugins.identity_bootstrap_package_dir`, which
+  every binary now ignores. A plain `go build` without `make build` installs
+  no package and logs a warning. Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#the-standalone-package-host-and-the-full-package-format-are-gone).
 
 ### Changed
 

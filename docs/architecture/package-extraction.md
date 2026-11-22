@@ -60,7 +60,7 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   (`packages/<id>/control`, `packages/shared/controlhost`) linked into the
   Control binary through `packages/builtin`, and runs inside the Control
   process (slim audit C1a; earlier releases ran it as a child process,
-  `anix-control package-host <id>`). Every official package,
+  `anix-control package-host <id>`, removed in C1c-1b). Every official package,
   `order`, `payment` and `affiliate` included (the editions are gone), is
   embedded as a slim signed package and installed, upgraded and enabled at
   every start ([`plugin-kernel-contract.md`](plugin-kernel-contract.md#built-in-packages)).
@@ -135,7 +135,7 @@ Reusable pieces that already exist:
 
 | Piece | Where |
 |-------|-------|
-| Signed package build: the slim built-in set (`--builtin`) or the full format with the standalone host `packages/builtin/cmd/package-host` | `packages/shared/build_package.py` |
+| Signed package build: the slim built-in set (the only format since slim audit C1c-1b) | `packages/shared/build_package.py` |
 | Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
 | Rollout/migration ledger models | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
 | Route answer harness (`RunRead`, `RunWrite`): compares a native route with its legacy handler, or, once that is deleted, with the answers recorded in `testdata` | `internal/tests/packagecompat` |

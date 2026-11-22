@@ -3,20 +3,14 @@ package pluginhost
 import (
 	"context"
 	"io"
-	"net"
-	"os"
-	"strconv"
 	"testing"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
-	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
+	"github.com/AnixOps/anix-control/sdk/modulesdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
-
-const hostTestBridgeChildEnvironment = "ANIX_PLUGINHOST_TEST_BRIDGE_CHILD"
 
 func TestManagerDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 	payloads := make(chan []byte, 1)
@@ -28,18 +22,16 @@ func TestManagerDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	manager, err := NewManager(ManagerConfig{
-		RuntimeDir: shortHostTempDir(t), BridgeFactory: packagebridge.NewFactory(allowlist),
-	})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{BridgeFactory: packagebridge.NewFactory(allowlist), InProcess: serveBridgePackage})
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
-	ref := writeBridgeHostArtifactRef(t, "identity-platform", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "identity-platform", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 
 	response, err := manager.Dispatch(context.Background(), DispatchInput{
 		PackageID: "identity-platform", Version: "4.0.0", Generation: 7,
 		RequestID: "request-bridge-1", RouteID: "identity.auth.login", Method: "POST",
 		Body: []byte(`{"email":"u@example.test","password":"secret"}`), Deadline: time.Now().Add(time.Second),
+		PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"identity-platform"}`),
 	})
 	require.NoError(t, err)
 	require.EqualValues(t, 200, response.StatusCode)
@@ -62,12 +54,9 @@ func TestManagerMigrateDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	manager, err := NewManager(ManagerConfig{
-		RuntimeDir: shortHostTempDir(t), BridgeFactory: packagebridge.NewFactory(allowlist),
-	})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{BridgeFactory: packagebridge.NewFactory(allowlist), InProcess: serveBridgePackage})
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
-	ref := writeBridgeHostArtifactRef(t, "identity-platform", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "identity-platform", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 
 	response, err := manager.Migrate(context.Background(), MigrationInput{
@@ -160,70 +149,48 @@ func (bridgeCapabilityTransport) Recv() (WebSocketFrame, error) { return WebSock
 
 func (bridgeCapabilityTransport) CloseSend() error { return nil }
 
-func TestPluginHostBridgeProcess(t *testing.T) {
-	if os.Getenv(hostTestBridgeChildEnvironment) != "1" {
-		return
-	}
-	bridge, err := packagebridgesdk.DialFromEnvironment(context.Background())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, bridge.Close()) })
-	serveBridgeHost(t, bridge)
+// serveBridgePackage serves bridgePackage: it answers through the package
+// bridge with the capability each request carries.
+func serveBridgePackage(ctx context.Context, packageID, version string) error {
+	return modulesdk.Run(ctx, modulesdk.Options{
+		PackageID: packageID, PackageVersion: version,
+		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
+			return bridgePackage{bridge: host.Bridge, leaseID: host.LeaseID}, nil
+		},
+	})
 }
 
-func serveBridgeHost(t *testing.T, bridge *packagebridgesdk.Client) {
-	t.Helper()
-	socketPath := os.Getenv(hostSocketEnvironment)
-	require.NotEmpty(t, socketPath)
-	listener, err := net.Listen("unix", socketPath)
-	require.NoError(t, err)
-	require.NoError(t, os.Chmod(socketPath, 0o600))
-	server := grpc.NewServer()
-	pluginhostv1.RegisterControlPackageHostServer(server, bridgeHostServer{bridge: bridge})
-	require.NoError(t, server.Serve(listener))
+type bridgePackage struct {
+	bridge  modulesdk.Bridge
+	leaseID string
 }
 
-type bridgeHostServer struct {
-	pluginhostv1.UnimplementedControlPackageHostServer
-	bridge *packagebridgesdk.Client
-}
-
-func (s bridgeHostServer) Dispatch(ctx context.Context, request *pluginhostv1.DispatchRequest) (*pluginhostv1.DispatchResponse, error) {
-	response, err := s.bridge.Invoke(ctx, request.GetBridgeCapability(), "identity.auth.login", request.GetRequestBody())
+func (p bridgePackage) Dispatch(ctx context.Context, request pluginhostsdk.DispatchRequest) (pluginhostsdk.DispatchResponse, error) {
+	response, err := p.bridge.Invoke(ctx, request.BridgeCapability, "identity.auth.login", request.RequestBody)
 	if err != nil {
-		return nil, err
+		return pluginhostsdk.DispatchResponse{}, err
 	}
-	headers := make([]*pluginhostv1.Header, len(response.Headers))
+	headers := make([]pluginhostsdk.Header, len(response.Headers))
 	for index, header := range response.Headers {
-		headers[index] = &pluginhostv1.Header{Name: header.Name, Value: header.Value}
+		headers[index] = pluginhostsdk.Header{Name: header.Name, Value: header.Value}
 	}
-	return &pluginhostv1.DispatchResponse{StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: headers}, nil
+	return pluginhostsdk.DispatchResponse{StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: headers}, nil
 }
 
-func (s bridgeHostServer) Migrate(ctx context.Context, request *pluginhostv1.MigrationRequest) (*pluginhostv1.MigrationResponse, error) {
-	response, err := s.bridge.Invoke(ctx, request.GetBridgeCapability(), "migration.identity-platform.001_identity_platform", nil)
+func (p bridgePackage) Migrate(ctx context.Context, request pluginhostsdk.MigrationRequest) (pluginhostsdk.MigrationResponse, error) {
+	response, err := p.bridge.Invoke(ctx, request.BridgeCapability, "migration.identity-platform.001_identity_platform", nil)
 	if err != nil {
-		return nil, err
+		return pluginhostsdk.MigrationResponse{}, err
 	}
-	return &pluginhostv1.MigrationResponse{
-		Checkpoint: "identity-platform/001", ValidationDigest: string(response.Body), Complete: true,
-	}, nil
+	return pluginhostsdk.MigrationResponse{Checkpoint: "identity-platform/001", ValidationDigest: string(response.Body), Complete: true}, nil
 }
 
-func (bridgeHostServer) Health(context.Context, *pluginhostv1.HealthRequest) (*pluginhostv1.HealthResponse, error) {
-	return &pluginhostv1.HealthResponse{Healthy: true, LeaseId: "bridge-lease"}, nil
+func (p bridgePackage) Health(context.Context) (pluginhostsdk.HealthResponse, error) {
+	return pluginhostsdk.HealthResponse{Healthy: true, LeaseID: p.leaseID}, nil
 }
 
-func (bridgeHostServer) Drain(context.Context, *pluginhostv1.DrainRequest) (*pluginhostv1.DrainResponse, error) {
-	return &pluginhostv1.DrainResponse{Drained: true}, nil
-}
-
-func writeBridgeHostArtifactRef(t *testing.T, packageID, version string) ArtifactRef {
-	t.Helper()
-	ref := writeVerifiedArtifactRef(t, packageID, version)
-	entrypoint := []byte("#!/bin/sh\n" + hostTestBridgeChildEnvironment + "=1 exec " + strconv.Quote(os.Args[0]) + " -test.run=^TestPluginHostBridgeProcess$ --\n")
-	require.NoError(t, os.WriteFile(ref.EntrypointPath, entrypoint, 0o700))
-	ref.EntrypointSHA256 = testDigest(entrypoint)
-	return ref
+func (bridgePackage) Drain(context.Context) (pluginhostsdk.DrainResponse, error) {
+	return pluginhostsdk.DrainResponse{Drained: true}, nil
 }
 
 // The bridge capability keeps the request as the client sent it for the
@@ -240,15 +207,15 @@ func TestManagerKeepsTheOriginalBodyForTheLegacyHandler(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t), BridgeFactory: packagebridge.NewFactory(allowlist)})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{BridgeFactory: packagebridge.NewFactory(allowlist), InProcess: serveBridgePackage})
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
-	ref := writeBridgeHostArtifactRef(t, "identity-platform", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "identity-platform", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	original, sealed := []byte(`{"password":"typed"}`), []byte(`{"password":"anix-sealed:v1:handle"}`)
 	input := DispatchInput{
 		PackageID: "identity-platform", Version: "4.0.0", Generation: 7, RequestID: "request-sealed-1", RouteID: "identity.auth.login",
 		Method: "POST", Body: sealed, BridgeBody: original, SealedRequest: "sealed-key", Deadline: time.Now().Add(5 * time.Second),
+		PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"identity-platform"}`),
 	}
 
 	_, err = manager.Dispatch(context.Background(), input)

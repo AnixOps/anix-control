@@ -1,12 +1,18 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // The plugin telemetry and observed-state upserts keep the newest
@@ -44,4 +50,39 @@ func TestPluginStateUpsertsKeepTheNewestObservation(t *testing.T) {
 			require.Equal(t, int64(3), observed.ObservedRevision, "an older observation does not replace a newer one")
 		})
 	}
+}
+
+// openServicePostgres opens a fresh schema of the test PostgreSQL database,
+// or skips without one.
+func openServicePostgres(t *testing.T) *gorm.DB {
+	t.Helper()
+	base := strings.TrimSpace(os.Getenv("ANIX_TEST_POSTGRES_DSN"))
+	if base == "" {
+		base = strings.TrimSpace(os.Getenv("POSTGRES_TEST_DSN"))
+	}
+	if base == "" {
+		t.Skip("ANIX_TEST_POSTGRES_DSN and POSTGRES_TEST_DSN are not set")
+	}
+	admin, err := gorm.Open(postgres.Open(base), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	adminDB, err := admin.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = adminDB.Close() })
+	var databaseName string
+	require.NoError(t, admin.Raw("SELECT current_database()").Scan(&databaseName).Error)
+	if !strings.Contains(strings.ToLower(databaseName), "test") {
+		t.Skipf("refusing to run destructive postgres test against database %q", databaseName)
+	}
+	suffix := make([]byte, 4)
+	_, err = rand.Read(suffix)
+	require.NoError(t, err)
+	schema := "service_test_" + hex.EncodeToString(suffix)
+	require.NoError(t, admin.Exec(`CREATE SCHEMA "`+schema+`"`).Error)
+	t.Cleanup(func() { _ = admin.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error })
+	db, err := gorm.Open(postgres.Open(base+" search_path="+schema), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
 }

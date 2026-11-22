@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	childRuntimeDirectoryFD   = 3
-	childRuntimeDirectoryPath = "/proc/self/fd/3"
 	maxHostRuntimeDirAttempts = 16
 )
 
@@ -32,7 +30,7 @@ type runtimeRoot struct {
 }
 
 // hostRuntimeDir is a private child directory created relative to a pinned
-// runtimeRoot descriptor. The child process receives directory as FD 3.
+// runtimeRoot descriptor; it holds the host's socket.
 type hostRuntimeDir struct {
 	root      *runtimeRoot
 	directory *os.File
@@ -269,13 +267,6 @@ func (directory *hostRuntimeDir) path(name string) string {
 		return base
 	}
 	return base + "/" + name
-}
-
-func childRuntimePath(name string) string {
-	if name == "" || name == "." {
-		return childRuntimeDirectoryPath
-	}
-	return childRuntimeDirectoryPath + "/" + name
 }
 
 func (directory *hostRuntimeDir) remove() error {

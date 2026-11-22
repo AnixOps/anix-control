@@ -2,20 +2,19 @@ package pluginhost
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
+
+	identityplatform "github.com/AnixOps/anix-control/v5/packages/identity-platform/control"
 
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/stretchr/testify/require"
 )
 
-func TestIdentityPlatformCompiledHostUsesTheCapabilityBridge(t *testing.T) {
+// The real identity-platform host, run as Control runs it, reaches the
+// kernel only through the capability bridge, and Stop ends it.
+func TestIdentityPlatformHostUsesTheCapabilityBridge(t *testing.T) {
 	calls := make(chan packagebridge.Call, 1)
 	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
@@ -25,12 +24,11 @@ func TestIdentityPlatformCompiledHostUsesTheCapabilityBridge(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	manager, err := NewManager(ManagerConfig{
-		RuntimeDir: shortHostTempDir(t), BridgeFactory: packagebridge.NewFactory(allowlist), StartupTimeout: 10 * time.Second,
+	manager := newHostTestManager(t, ManagerConfig{
+		BridgeFactory: packagebridge.NewFactory(allowlist), StartupTimeout: 10 * time.Second, InProcess: serveIdentityPlatform,
 	})
-	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
-	ref := buildIdentityPlatformArtifactRef(t)
+	ref := writeVerifiedArtifactRef(t, "identity-platform", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 
 	response, err := manager.Dispatch(context.Background(), DispatchInput{
@@ -54,41 +52,16 @@ func TestIdentityPlatformCompiledHostUsesTheCapabilityBridge(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("identity host did not invoke the package bridge")
 	}
+
+	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
+	require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
+	require.Empty(t, manager.hosts)
+	require.True(t, hostExited(host))
 }
 
-func buildIdentityPlatformArtifactRef(t *testing.T) ArtifactRef {
-	t.Helper()
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
-	require.NoError(t, err)
-	directory := t.TempDir()
-	entrypointPath := filepath.Join(directory, "identity-control-host")
-	command := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.packageID=identity-platform -X main.packageVersion=4.0.0", "-o", entrypointPath, "./packages/builtin/cmd/package-host")
-	command.Dir = repoRoot
-	command.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
-	output, err := command.CombinedOutput()
-	require.NoError(t, err, string(output))
-	entrypoint, err := os.ReadFile(entrypointPath)
-	require.NoError(t, err)
-	artifact := []byte("identity-platform compiled test artifact")
-	artifactPath := filepath.Join(directory, "package.anxp")
-	require.NoError(t, os.WriteFile(artifactPath, artifact, 0o600))
-	manifest, err := json.Marshal(struct {
-		ID      string   `json:"id"`
-		Version string   `json:"version"`
-		Targets []string `json:"targets"`
-	}{ID: "identity-platform", Version: "4.0.0", Targets: []string{"control"}})
-	require.NoError(t, err)
-	manifestPath := filepath.Join(directory, "manifest.json")
-	require.NoError(t, os.WriteFile(manifestPath, manifest, 0o600))
-	return ArtifactRef{
-		PackageID: "identity-platform", Version: "4.0.0",
-		ArtifactPath: artifactPath, ArtifactSHA256: digestBytes(artifact),
-		EntrypointPath: entrypointPath, EntrypointSHA256: digestBytes(entrypoint),
-		ManifestPath: manifestPath, ManifestSHA256: digestBytes(manifest),
+func serveIdentityPlatform(ctx context.Context, packageID, version string) error {
+	if packageID != identityplatform.PackageID {
+		return ErrHostIncompatible
 	}
-}
-
-func digestBytes(value []byte) string {
-	digest := sha256.Sum256(value)
-	return hex.EncodeToString(digest[:])
+	return identityplatform.Run(ctx, version)
 }
