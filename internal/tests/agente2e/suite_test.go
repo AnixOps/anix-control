@@ -41,7 +41,6 @@ type suite struct {
 	logDir  string
 	keys    testPKI
 	bins    binaries
-	pkgs    map[string]signedPackage
 	control *control
 	proxy   *tcpProxy
 	agent   *agentNode
@@ -112,12 +111,8 @@ func newSuite(t *testing.T) *suite {
 	t.Cleanup(s.writeSummary)
 
 	s.keys = newTestPKI(t, filepath.Join(s.dir, "pki"))
-	s.bins = buildBinaries(t, filepath.Join(s.dir, "bin"))
+	s.bins = buildBinaries(t, filepath.Join(s.dir, "bin"), s.keys)
 	t.Logf("Agent %s at %s (commit %s)", s.bins.AgentVersion, s.bins.AgentRoot, s.bins.AgentCommit)
-	s.pkgs = map[string]signedPackage{}
-	for _, id := range []string{"identity-platform", "protocol-runtime", "forward", "machine-telemetry"} {
-		s.pkgs[id] = buildSignedPackage(t, s.bins, s.keys, filepath.Join(s.dir, "packages"), id)
-	}
 
 	postgresDSN := strings.TrimSpace(os.Getenv("ANIXOPS_AGENT_E2E_POSTGRES_DSN"))
 	if postgresDSN != "" {
@@ -131,7 +126,7 @@ func newSuite(t *testing.T) *suite {
 	}
 	controlDir := filepath.Join(s.dir, "control")
 	require.NoError(t, os.MkdirAll(controlDir, 0o700))
-	c.configPath, c.sqlitePath = writeControlConfig(t, controlDir, s.keys, s.pkgs["identity-platform"].Dir, c.apiPort, c.grpcPort, postgresDSN)
+	c.configPath, c.sqlitePath = writeControlConfig(t, controlDir, s.keys, c.apiPort, c.grpcPort, postgresDSN)
 	controlEnv := append(os.Environ(), "ANIX_CONTROL_CONFIG="+c.configPath, "TMPDIR="+controlDir)
 	c.proc = newProcess("control", s.bins.Control, controlDir, filepath.Join(s.logDir, "control.log"), controlEnv, "-config", c.configPath)
 	s.control = c
@@ -139,7 +134,9 @@ func newSuite(t *testing.T) *suite {
 	t.Cleanup(func() { c.proc.Stop(t, 10*time.Second) })
 	c.db = openTestDB(t, postgresDSN, c.sqlitePath)
 	c.Login(t)
-	c.InstallPackages(t, s.keys.SigningPublicKey, s.pkgs["protocol-runtime"], s.pkgs["forward"], s.pkgs["machine-telemetry"])
+	for _, id := range []string{"identity-platform", "protocol-runtime", "forward", "machine-telemetry"} {
+		c.WaitInstallation(t, id, "control", packageVersion)
+	}
 	s.sink = newTrafficSink(t)
 	s.proxy = newTCPProxy(t, c.GRPCAddr())
 	t.Logf("environment ready in %s (database %s, netns %t)", time.Since(started).Round(time.Second), c.dbDriver, s.netns)

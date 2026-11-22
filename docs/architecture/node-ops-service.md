@@ -2509,10 +2509,14 @@ it up to A2-3.
     `unshare --net`, which the test checks, with the real nftables driver.
   - **Set-up.** A test CA for the gRPC listener (the Agent trusts it
     through `SSL_CERT_FILE`); the built-in CA for agent certificates; an
-    Ed25519 test key that signs the official packages
-    (`packages/shared/build_package.py --formal-release`) and is Control's
-    and the Agent's official key. The installed packages are
-    identity-platform, protocol-runtime, forward and machine-telemetry.
+    Ed25519 test key that is Control's and the Agent's official key. The
+    suite builds the built-in package set signed with it
+    (`packages/shared/build_package.py --all --builtin`, as the release does
+    with the real key) and compiles Control with that set embedded
+    (`go build -overlay` over `internal/builtinpkg/dist`), so Control
+    installs and runs the packages as a release binary does; the suite
+    waits until identity-platform, protocol-runtime, forward and
+    machine-telemetry are healthy.
   - **The Agent.** The credential-only node Control's installer writes: no
     API key, a one-time `anixagt_` credential, every compiled-in core. It
     runs the plugin supervisor and the forward component of a proxy node.
@@ -2526,22 +2530,11 @@ it up to A2-3.
       `v4_kernel_node_config_status` and the VLESS inbound serving;
     - a users delta on the open stream;
     - the NodeStatus heartbeat and runtime health;
-    - machine-telemetry installed with `plugin.install` over AgentArtifacts
-      (the client certificate);
-    - the systemd services PackageReport and
-      `GET /api/v3/plugins/machine-telemetry/nodes/:id/services`, with
-      units on a host with systemd and cgroup v2;
     - the link certificate (H28);
-    - forward.v1: a route is planned, pushed, applied and reported at the
-      same generation, and traffic flows through gost;
     - user traffic through the inbound counted once in `v5_user` and the
       report ledger;
     - the alive list;
     - `agent.diagnostic` on the stream;
-    - the route diagnosis with the node's checks;
-    - a durable plugin operation after stream-only operations (a known
-      issue, below);
-    - maintenance events from a tampered plugin signature;
     - chaos (next item);
     - clock-skew bounds on Control's side: reports observed at most a
       minute ahead, none refused as `future`;
@@ -2555,9 +2548,6 @@ it up to A2-3.
     - A partition, then an Agent crash while it lasts: the Agent runs from
       its stored configuration and users and keeps the spool; when the
       partition heals the spool is replayed and counted once.
-    - The #179 reset: the node's stored generation falls behind the
-      Agent's. Control recovers it from the report, and the next plan
-      stamps above it and is applied.
     - A revoked certificate: `agent_cert_revoked`; the Agent re-enrolls
       with a new credential.
   - **Known issues the suite found**, reported as skips with the evidence
@@ -2566,8 +2556,8 @@ it up to A2-3.
       forwarding state reloads the proxy core. A reload can fail with
       `address already in use` and leave the node without its inbound.
   - **CI.** The "Cross-Repo E2E" job runs in the full lane and nightly.
-    The main lane runs on PostgreSQL; the forward lane runs under sudo in
-    a network namespace (H14). The job uploads its logs on failure and is
+    It runs on PostgreSQL as the runner user (the nftables engine is gone,
+    so there is no privileged lane in CI). The job uploads its logs on failure and is
     not a required check yet.
 - **Chaos**, in the fake-agent suite and in A2-7 with the real agent:
   - an agent disconnects mid-operation: before the acknowledgement, after

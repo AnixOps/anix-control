@@ -1,6 +1,7 @@
 package agente2e
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,21 +12,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The suite's binaries: Control (./cmd/server) from this checkout, the real
-// Agent and its machine-telemetry plugin from the pinned anix-agent
-// checkout (ANIXOPS_AGENT_ROOT), and the signed packages Control installs.
-// ANIXOPS_AGENT_E2E_BIN_DIR reuses binaries built before (the CI job builds
-// them once as the runner user and runs the privileged lane under sudo).
+// The suite's binaries: Control (./cmd/server) from this checkout with the
+// built-in package set signed by the suite's key, and the real Agent from
+// the pinned anix-agent checkout (ANIXOPS_AGENT_ROOT).
+// ANIXOPS_AGENT_E2E_BIN_DIR supplies an Agent and anixcore built before
+// (the CI job builds them once); Control is always built here, because its
+// embedded packages are signed with the key this run generates.
 type binaries struct {
-	Control        string
-	Agent          string
-	Anixcore       string
-	TelemetryAMD64 string
-	TelemetryARM64 string
-	AgentVersion   string
-	AgentCommit    string
-	ControlRoot    string
-	AgentRoot      string
+	Control      string
+	Agent        string
+	Anixcore     string
+	AgentVersion string
+	AgentCommit  string
+	ControlRoot  string
+	AgentRoot    string
 }
 
 // agentBuildTags are the cores compiled into the Agent under test: anixcore
@@ -47,7 +47,6 @@ func agentRoot(t *testing.T, control string) string {
 	}
 	for _, candidate := range []string{
 		filepath.Join(control, "anix-agent"),
-		filepath.Join(filepath.Dir(control), "anix-agent"),
 		filepath.Join(filepath.Dir(control), "anix-agent"),
 	} {
 		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
@@ -71,43 +70,60 @@ func buildEnv(extra ...string) []string {
 	return append(env, extra...)
 }
 
-func buildBinaries(t *testing.T, dir string) binaries {
+func buildBinaries(t *testing.T, dir string, keys testPKI) binaries {
 	t.Helper()
 	out := binaries{ControlRoot: controlRoot(t)}
 	out.AgentRoot = agentRoot(t, out.ControlRoot)
 	out.AgentCommit = gitHead(out.AgentRoot)
-	prebuilt := strings.TrimSpace(os.Getenv("ANIXOPS_AGENT_E2E_BIN_DIR"))
-	binDir := dir
-	if prebuilt != "" {
-		binDir = prebuilt
-	}
-	out.Control = filepath.Join(binDir, "anix-control")
-	out.Agent = filepath.Join(binDir, "anix-agent")
-	out.Anixcore = filepath.Join(binDir, "anixcore")
-	out.TelemetryAMD64 = filepath.Join(binDir, "machine-telemetry-linux-amd64")
-	out.TelemetryARM64 = filepath.Join(binDir, "machine-telemetry-linux-arm64")
-	if prebuilt != "" {
-		for _, path := range []string{out.Control, out.Agent, out.Anixcore, out.TelemetryAMD64, out.TelemetryARM64} {
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	out.Control = buildControl(t, out.ControlRoot, dir, keys)
+	if prebuilt := strings.TrimSpace(os.Getenv("ANIXOPS_AGENT_E2E_BIN_DIR")); prebuilt != "" {
+		out.Agent = filepath.Join(prebuilt, "anix-agent")
+		out.Anixcore = filepath.Join(prebuilt, "anixcore")
+		for _, path := range []string{out.Agent, out.Anixcore} {
 			_, err := os.Stat(path)
 			require.NoError(t, err, "ANIXOPS_AGENT_E2E_BIN_DIR lacks %s", filepath.Base(path))
 		}
 	} else {
-		require.NoError(t, os.MkdirAll(binDir, 0o755))
 		// anixcore is built from networkcore_anixops (cargo build -p
 		// anixcore), not here: point at a build of it.
-		configured := strings.TrimSpace(os.Getenv("ANIXOPS_ANIXCORE_BIN"))
-		if configured == "" {
+		out.Anixcore = strings.TrimSpace(os.Getenv("ANIXOPS_ANIXCORE_BIN"))
+		if out.Anixcore == "" {
 			t.Skip("no anixcore binary: set ANIXOPS_ANIXCORE_BIN (cargo build -p anixcore in networkcore_anixops)")
 		}
-		out.Anixcore = configured
-		goBuild(t, "go", out.ControlRoot, out.Control, buildEnv(), "./cmd/server")
+		out.Agent = filepath.Join(dir, "anix-agent")
 		version := "-X github.com/AnixOps/anix-agent/v5/cmd.version=" + agentE2EVersion
 		goBuild(t, agentGo(), out.AgentRoot, out.Agent, buildEnv(), "-trimpath", "-tags", agentBuildTags, "-ldflags", version, ".")
-		goBuild(t, agentGo(), out.AgentRoot, out.TelemetryAMD64, buildEnv("GOOS=linux", "GOARCH=amd64"), "-trimpath", "-buildvcs=false", "./cmd/machine-telemetry")
-		goBuild(t, agentGo(), out.AgentRoot, out.TelemetryARM64, buildEnv("GOOS=linux", "GOARCH=arm64"), "-trimpath", "-buildvcs=false", "./cmd/machine-telemetry")
 	}
 	out.AgentVersion = agentE2EVersion
 	return out
+}
+
+// buildControl builds the built-in package set signed with the suite's key
+// (packages/shared/build_package.py --builtin, as the release does with the
+// real key) and compiles ./cmd/server with it in place of
+// internal/builtinpkg/dist, without touching the checkout.
+func buildControl(t *testing.T, root, dir string, keys testPKI) string {
+	t.Helper()
+	set := filepath.Join(dir, "builtin-packages")
+	cmd := exec.Command("python3", "packages/shared/build_package.py", "--all", "--builtin",
+		"--version", packageVersion, "--out", set, "--signing-key", keys.SigningPrivateKeyPath)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "build the built-in package set: %s", output)
+	entries, err := os.ReadDir(set)
+	require.NoError(t, err)
+	replace := map[string]string{}
+	for _, entry := range entries {
+		replace[filepath.Join(root, "internal", "builtinpkg", "dist", entry.Name())] = filepath.Join(set, entry.Name())
+	}
+	overlay, err := json.Marshal(map[string]any{"Replace": replace})
+	require.NoError(t, err)
+	overlayPath := filepath.Join(dir, "builtin-packages.overlay.json")
+	require.NoError(t, os.WriteFile(overlayPath, overlay, 0o600))
+	binary := filepath.Join(dir, "anix-control")
+	goBuild(t, "go", root, binary, buildEnv(), "-overlay", overlayPath, "./cmd/server")
+	return binary
 }
 
 // agentE2EVersion is the version the suite's Agent build reports.
@@ -121,51 +137,6 @@ func gitHead(dir string) string {
 	return strings.TrimSpace(string(output))
 }
 
-// signedPackage is one official package built and signed with the suite's
-// test key by packages/shared/build_package.py (as the release does with
-// the real key).
-type signedPackage struct {
-	ID        string
-	Version   string
-	Dir       string
-	Artifact  []byte
-	Manifest  []byte
-	Signature string
-}
-
-// packageVersion is the version of every package the suite installs.
+// packageVersion is the version of the built-in packages the suite's
+// Control embeds.
 const packageVersion = "4.0.0"
-
-func buildSignedPackage(t *testing.T, bins binaries, keys testPKI, dir, id string) signedPackage {
-	t.Helper()
-	out := filepath.Join(dir, id)
-	args := []string{
-		"packages/shared/build_package.py",
-		"--package", id,
-		"--version", packageVersion,
-		"--out", out,
-		"--signing-key", keys.SigningPrivateKeyPath,
-		"--formal-release",
-		"--official-public-key", keys.SigningPublicKeyPath,
-		"--platform", "linux/amd64",
-		"--platform", "linux/arm64",
-	}
-	if id == "machine-telemetry" {
-		args = append(args,
-			"--agent-binary", "machine-telemetry@linux/amd64="+bins.TelemetryAMD64,
-			"--agent-binary", "machine-telemetry@linux/arm64="+bins.TelemetryARM64)
-	}
-	cmd := exec.Command("python3", args...)
-	cmd.Dir = bins.ControlRoot
-	cmd.Env = buildEnv()
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "build signed %s: %s", id, output)
-	stem := filepath.Join(out, id+"-"+packageVersion)
-	artifact, err := os.ReadFile(stem + ".anxp")
-	require.NoError(t, err)
-	manifest, err := os.ReadFile(stem + ".manifest.json")
-	require.NoError(t, err)
-	signature, err := os.ReadFile(stem + ".manifest.sig")
-	require.NoError(t, err)
-	return signedPackage{ID: id, Version: packageVersion, Dir: out, Artifact: artifact, Manifest: manifest, Signature: strings.TrimSpace(string(signature))}
-}
