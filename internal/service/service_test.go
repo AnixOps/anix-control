@@ -380,7 +380,7 @@ func (s *NodeServiceTestSuite) linkedProtocol(name string) (*model.Node, *model.
 
 func (s *NodeServiceTestSuite) protocolLinks(protocolID uint) int64 {
 	var links int64
-	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", protocolID).Count(&links).Error)
+	s.Require().NoError(database.GetDB().Table("v5_subscription_group_node_protocols").Where("node_protocol_id = ?", protocolID).Count(&links).Error)
 	return links
 }
 
@@ -625,7 +625,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
 	assert.Equal(s.T(), "无套餐", sub.PlanName)
 }
 
-// TestTodayTraffic_SumsTodayLogsWithRate 验证今日流量从 v2_server_log 按倍率累计,
+// TestTodayTraffic_SumsTodayLogsWithRate 验证今日流量从 v5_server_log 按倍率累计,
 // 仅统计本地零点之后的日志, 排除昨日数据
 func (s *StatsServiceTestSuite) TestTodayTraffic_SumsTodayLogsWithRate() {
 	db := database.Get()
@@ -1074,7 +1074,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_LegacyGroupIDFall
 	}
 	assert.NoError(s.T(), database.Get().Create(protocol).Error)
 	assert.NoError(s.T(), database.Get().Exec(
-		"INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
+		"INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
 		group.ID,
 		protocol.ID,
 	).Error)
@@ -1144,7 +1144,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_ExcludesNodeWitho
 	}
 	assert.NoError(s.T(), database.Get().Create(protocol).Error)
 	assert.NoError(s.T(), database.Get().Exec(
-		"INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
+		"INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
 		group.ID,
 		protocol.ID,
 	).Error)
@@ -2397,7 +2397,7 @@ func (s *SubscriptionServiceTestSuite) TestNodeProtocolToParsedNode() {
 	database.Get().Create(group)
 
 	// Link protocol to group (via junction table)
-	database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID)
+	database.Get().Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID)
 
 	// Assign group to user
 	assert.NoError(s.T(), s.grantGroup(group.ID))
@@ -2425,7 +2425,7 @@ func (s *SubscriptionServiceTestSuite) TestInternalNodesLeaveOutNodesAwaitingApp
 		s.Require().NoError(database.Get().Create(node).Error)
 		protocol := &model.NodeProtocol{NodeID: node.ID, Name: "VMess", Type: model.ProtocolVMess, Port: 8080, Enable: 1, Show: 1}
 		s.Require().NoError(database.Get().Create(protocol).Error)
-		s.Require().NoError(database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+		s.Require().NoError(database.Get().Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
 	}
 	parsed, err := s.svc.getInternalNodes(s.testUser, &model.TemplateRenderContext{UUID: "uuid"}, []*model.SubscriptionGroup{group})
 	s.Require().NoError(err)
@@ -2558,7 +2558,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscriptionOffersTheStoredSS2
 		s.Require().NoError(database.Get().Create(node).Error)
 		protocol := &model.NodeProtocol{NodeID: node.ID, Name: host, Type: model.ProtocolShadowsocks, Port: 8388, Enable: 1, Show: 1, Settings: &settings}
 		s.Require().NoError(database.Get().Create(protocol).Error)
-		s.Require().NoError(database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+		s.Require().NoError(database.Get().Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
 		if host == "served.example.com" {
 			s.Require().NoError(database.Get().Create(&model.AgentTransport{NodeKind: agentcontrol.NodeKindProxy, NodeID: node.ID,
 				Transport: model.AgentTransportMTLSStream, ProtocolRevision: agentcontrol.ProtocolRevisionUserKeys}).Error)

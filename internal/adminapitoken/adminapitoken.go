@@ -10,7 +10,7 @@
 // token's preimage.
 //
 // A token carries no rights of its own beyond a scope (read or admin). The
-// owner's rights are read from v2_user on every use, so banning, demoting or
+// owner's rights are read from v5_user on every use, so banning, demoting or
 // deleting an administrator ends their tokens at once, and a token used while
 // its owner is not an administrator is revoked for good (it does not come
 // back when the owner is restored).
@@ -74,7 +74,7 @@ const (
 	AuthMethodAPIToken = "api_token"
 )
 
-// Audit entries (v2_operation_log). Entries carry a token's id, name, scope,
+// Audit entries (v5_operation_log). Entries carry a token's id, name, scope,
 // hint and expiry, never the token or its hash.
 const (
 	AuditModule       = "admin_api_token"
@@ -298,7 +298,7 @@ func (s *Service) List(ctx context.Context, filter ListFilter) ([]model.AdminAPI
 	return rows, nil
 }
 
-// fillOwnerEmails sets each row's OwnerEmail from v2_user in one query. An
+// fillOwnerEmails sets each row's OwnerEmail from v5_user in one query. An
 // owner who no longer exists leaves it empty.
 func (s *Service) fillOwnerEmails(ctx context.Context, rows []model.AdminAPIToken) error {
 	if len(rows) == 0 {

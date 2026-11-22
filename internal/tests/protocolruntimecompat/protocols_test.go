@@ -24,7 +24,7 @@ import (
 // The node protocol routes run through the whole path a deployment runs
 // (packagecompat.RunKernelRead and RunKernelWrite): the kernel's gateway
 // seals the secrets an administrator types into handles, the package host
-// reads v2_node_protocol, which its lease adopts once the node credential
+// reads v5_node_protocol, which its lease adopts once the node credential
 // split finalized it, and writes the rows; the kernel validates and stores
 // the secrets (PutSecretDocument) and retires a deleted protocol's peers,
 // links and secrets (RetireProtocol). Each case starts from the same rows,
@@ -107,11 +107,11 @@ func seedNodes(t testing.TB, db *gorm.DB) {
 		{ID: 1, Name: "default", Enable: 1, CreatedAt: seeded, UpdatedAt: seeded},
 		{ID: 2, Name: "premium", Enable: 1, CreatedAt: seeded, UpdatedAt: seeded},
 	}).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 2), (2, 2), (2, 4)").Error)
-	syncSequences(t, db, "v2_node", "v2_user", "v2_node_protocol", "v2_wireguard_peer", "v2_subscription_group")
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 2), (2, 2), (2, 4)").Error)
+	syncSequences(t, db, "v5_node", "v5_user", "v5_node_protocol", "v5_wireguard_peer", "v5_subscription_group")
 }
 
-// seedFinalized is seedNodes with v2_node_protocol (and the WireGuard
+// seedFinalized is seedNodes with v5_node_protocol (and the WireGuard
 // peers, whose keys it holds) finalized.
 func seedFinalized(t testing.TB, db *gorm.DB) {
 	seedNodes(t, db)
@@ -152,7 +152,7 @@ func protocolState(t testing.TB, db *gorm.DB) any {
 	}
 	require.NoError(t, db.Model(&model.WireGuardPeer{}).Order("id").Find(&peers).Error)
 	var links []struct{ SubscriptionGroupID, NodeProtocolID uint }
-	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Order("subscription_group_id, node_protocol_id").Find(&links).Error)
+	require.NoError(t, db.Table("v5_subscription_group_node_protocols").Order("subscription_group_id, node_protocol_id").Find(&links).Error)
 	return map[string]any{"protocols": rows, "secrets": secrets, "peers": peers, "links": links}
 }
 
@@ -342,7 +342,7 @@ func TestTypedSecretsNeverReachThePackage(t *testing.T) {
 }
 
 // The package's model mirrors the kernel's: the same type names, fields,
-// JSON tags, and for the adopted v2_node_protocol the same gorm tags, so it
+// JSON tags, and for the adopted v5_node_protocol the same gorm tags, so it
 // writes what the kernel writes and binds what the kernel binds.
 func TestModelMirrorsTheKernelModel(t *testing.T) {
 	pairs := []struct {

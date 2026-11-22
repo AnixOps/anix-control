@@ -19,7 +19,7 @@ type planBridge interface {
 }
 
 // newPlanService returns the plan host's router. The routes in planRoutes
-// have a native handler on the adopted v2_plan and v2_event tables and serve
+// have a native handler on the adopted v5_plan and v5_event tables and serve
 // natively from the start: the kernel keeps no legacy handler for them. The
 // assignment calls the kernel's KernelSubscriber over the bridge connection
 // (local socket or module listener).

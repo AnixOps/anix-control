@@ -72,7 +72,7 @@ func TestGetPackageConfigIsUnsupportedWithoutKernelOperations(t *testing.T) {
 func TestLeaseStorageIsAuthorizedByTheSessionIdentity(t *testing.T) {
 	operations := &recordingHostOperations{lease: packagebridge.StorageLease{
 		Driver: "postgres", DSN: "host='db' user='anix_pkg_knowledge' password='p'", Schema: "pkg_knowledge",
-		LeaseGeneration: 4, AdoptedTables: []string{"v2_knowledge"}, Views: []string{"kapi_user_directory_v1"},
+		LeaseGeneration: 4, AdoptedTables: []string{"v5_knowledge"}, Views: []string{"kapi_user_directory_v1"},
 	}}
 	client := dialSessionWithOperations(t, operations)
 
@@ -80,7 +80,7 @@ func TestLeaseStorageIsAuthorizedByTheSessionIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, packagebridgesdk.StorageLease{
 		Driver: "postgres", DSN: "host='db' user='anix_pkg_knowledge' password='p'", Schema: "pkg_knowledge",
-		LeaseGeneration: 4, AdoptedTables: []string{"v2_knowledge"}, Views: []string{"kapi_user_directory_v1"},
+		LeaseGeneration: 4, AdoptedTables: []string{"v5_knowledge"}, Views: []string{"kapi_user_directory_v1"},
 	}, lease)
 	require.Equal(t, []packagebridge.HostIdentity{{PackageID: "knowledge", Version: "4.0.1", Generation: 7}}, operations.seen)
 }

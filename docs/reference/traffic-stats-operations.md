@@ -1,11 +1,11 @@
 # Traffic Stats Operations
 
 This document is the operator reference for raw traffic logs and the admin
-traffic pages backed by `v2_server_log`.
+traffic pages backed by `v5_server_log`.
 
 ## Runtime Tables
 
-`v2_server_log` stores node traffic in hourly buckets: one row per node,
+`v5_server_log` stores node traffic in hourly buckets: one row per node,
 UTC hour, user, server type and rate, to which every report of that hour
 adds its bytes (see [Hourly Buckets](#hourly-buckets)). It is used by:
 
@@ -15,21 +15,21 @@ adds its bytes (see [Hourly Buckets](#hourly-buckets)). It is used by:
 - `/api/v4/kernel/nodes/:id/traffic` with `granularity=hour` (one node's hourly series)
 - diagnostics for the admin hourly traffic page
 
-`v2_stat_server` keeps one row per node, server type and day (`record_type`
+`v5_stat_server` keeps one row per node, server type and day (`record_type`
 `d`) and per month (`m`), written in the transaction of each traffic report
 with the node's traffic rate applied. `/api/v4/kernel/nodes/:id/traffic` with
 `granularity=day` reads its day rows. Nothing purges it: a node adds about 365
 rows a year per server type, so it needs no maintenance.
 
-Quota counters are stored separately on `v2_user.u` and `v2_user.d`. Purging old
-`v2_server_log` rows removes historical charts and rankings for that period, but
+Quota counters are stored separately on `v5_user.u` and `v5_user.d`. Purging old
+`v5_server_log` rows removes historical charts and rankings for that period, but
 it does not reset user quota counters.
 
 ## Hourly Buckets
 
 A traffic report no longer inserts a row per user. It adds to the row of its
 bucket key, `(server_id, log_at, user_id, server_type, rate)`, with an upsert
-on the unique index `idx_v2_server_log_bucket`:
+on the unique index `idx_v5_server_log_bucket`:
 
 - `log_at` is the start of the UTC hour that holds the report, so a node's
   reports of one hour are one row per user instead of one per report. With 50
@@ -54,7 +54,7 @@ on the unique index `idx_v2_server_log_bucket`:
   their `u` and `d`, in the same transaction that creates the unique index;
   rows with an empty value in the key are never merged.
 
-The upsert needs `idx_v2_server_log_bucket`, which is created at startup by
+The upsert needs `idx_v5_server_log_bucket`, which is created at startup by
 `EnsureTrafficLogBuckets` (before `EnsureStatsSchema`). A table that has no
 such index, for instance one restored from an older backup, gets it at the next
 start.
@@ -68,7 +68,7 @@ the Agent Control traffic report (`reports.v1`), which also carries the
 online list. Traffic
 that passes through a forwarding route is not counted.
 
-Why a table of its own: Control kept no durable value for it. `v2_user` has
+Why a table of its own: Control kept no durable value for it. `v5_user` has
 no `t` column (v2board's last report time; Control never wrote it), `u` and
 `d` carry no time, `last_login_at` is the last sign-in, the online set the
 alive reports fill is a five minute cache, and the traffic log above holds
@@ -91,8 +91,8 @@ hourly buckets and is pruned after its retention.
 
   ```sql
   INSERT INTO v4_kernel_user_activity (user_id, last_online_at)
-  SELECT l.user_id, MAX(l.log_at) FROM v2_server_log l
-  JOIN v2_user u ON u.id = l.user_id WHERE l.log_at > 0 GROUP BY l.user_id
+  SELECT l.user_id, MAX(l.log_at) FROM v5_server_log l
+  JOIN v5_user u ON u.id = l.user_id WHERE l.log_at > 0 GROUP BY l.user_id
   ON CONFLICT (user_id) DO UPDATE SET last_online_at = excluded.last_online_at
   WHERE excluded.last_online_at > v4_kernel_user_activity.last_online_at;
   ```
@@ -124,8 +124,8 @@ reports already fill both tables it reads.
 
 | `granularity` | Reads | Bounds | Buckets |
 | --- | --- | --- | --- |
-| `hour` (default) | `v2_server_log` rows of the node, `(u * rate)` up and `(d * rate)` down | 24 hours by default, at most 720 hourly buckets | UTC hours |
-| `day` | `v2_stat_server` day rows of the node (already rate-applied) | 30 days by default, at most 366 daily buckets | local calendar days of the Control host, where the rows are recorded |
+| `hour` (default) | `v5_server_log` rows of the node, `(u * rate)` up and `(d * rate)` down | 24 hours by default, at most 720 hourly buckets | UTC hours |
+| `day` | `v5_stat_server` day rows of the node (already rate-applied) | 30 days by default, at most 366 daily buckets | local calendar days of the Control host, where the rows are recorded |
 
 - `since` and `until` are Unix milliseconds; the window is rounded out to
   whole buckets and a longer one is `400 invalid_request`, not clamped.
@@ -139,7 +139,7 @@ reports already fill both tables it reads.
   early hours of the window are zeros, not data; the daily series is not
   affected by a purge.
 - **Cost.** The hourly query reads one node's rows in the window, through
-  `idx_v2_server_log_bucket`, which starts with `(server_id, log_at)`: its
+  `idx_v5_server_log_bucket`, which starts with `(server_id, log_at)`: its
   cost follows the node's retained rows, so the retention below also bounds
   it. The measurement that follows predates the hourly buckets and the
   composite index, and counted a row per report. On a throwaway
@@ -160,32 +160,32 @@ The `TrafficLog` model defines these indexes:
 
 | Index | Columns | Purpose |
 | --- | --- | --- |
-| `idx_v2_server_log_user_id` | `user_id` | user-scoped diagnostics and joins |
-| `idx_v2_server_log_server_id` | `server_id` | node-scoped investigation |
-| `idx_v2_server_log_log_at` | `log_at` | time-window scans |
+| `idx_v5_server_log_user_id` | `user_id` | user-scoped diagnostics and joins |
+| `idx_v5_server_log_server_id` | `server_id` | node-scoped investigation |
+| `idx_v5_server_log_log_at` | `log_at` | time-window scans |
 | `idx_server_log_log_at_user_id` | `log_at`, `user_id` | hourly and ranking windows, including optional user filter |
-| `idx_v2_server_log_bucket` (unique) | `server_id`, `log_at`, `user_id`, `server_type`, `rate` | the key of an hourly bucket, the conflict target of the upsert, and a node's hourly window |
+| `idx_v5_server_log_bucket` (unique) | `server_id`, `log_at`, `user_id`, `server_type`, `rate` | the key of an hourly bucket, the conflict target of the upsert, and a node's hourly window |
 
 The schema baseline (`internal/database/migrations`) creates the stats tables
 and these indexes. Adopting a database an earlier Control created adds the
-`v2_server_log` columns and indexes it lacks (`rate`, `log_at`,
+`v5_server_log` columns and indexes it lacks (`rate`, `log_at`,
 `idx_server_log_log_at_user_id`, ...); the adoption tests
 (`TestAdoptionCompletesADatabaseAnOlderReleaseLeft`) cover a legacy
-`v2_server_log` without them. See
+`v5_server_log` without them. See
 [database-migrations.md](database-migrations.md).
 
 ## Retention Policy
 
-Control prunes `v2_server_log` itself. A singleton worker (`internal/retention`,
+Control prunes `v5_server_log` itself. A singleton worker (`internal/retention`,
 run by the process that holds the `control.singleton-workers` lease) wakes
 every hour and deletes, oldest first, in batches of 5000 rows with a pause
 between batches:
 
 | Table | Kept | Dated by |
 | --- | --- | --- |
-| `v2_server_log` | 400 days | `log_at` |
-| `v2_node_log` | 30 days | `created_at` |
-| `v2_audit_log` | 400 days | `created_at` |
+| `v5_server_log` | 400 days | `log_at` |
+| `v5_node_log` | 30 days | `created_at` |
+| `v5_audit_log` | 400 days | `created_at` |
 
 One run deletes at most 2000 batches per table, so a large backlog is cleared
 over the following hours. On SQLite the run then returns up to 5000 free pages
@@ -196,7 +196,7 @@ version creates is (an existing file keeps its setting and is compacted by
 
 The periods are built in. Raw rows older than 400 days therefore do not
 survive: the daily series of `/api/v4/kernel/nodes/:id/traffic` reads
-`v2_stat_server`, which is not pruned, and the 30 day admin page needs 31 days.
+`v5_stat_server`, which is not pruned, and the 30 day admin page needs 31 days.
 Archive before the retention if older traffic details matter, with the
 commands below.
 
@@ -211,14 +211,14 @@ PostgreSQL archive and purge example for rows older than 90 days:
 ```sql
 \copy (
   SELECT *
-  FROM v2_server_log
+  FROM v5_server_log
   WHERE log_at < EXTRACT(EPOCH FROM now() - interval '90 days')::bigint
 ) TO 'traffic-log-archive-before-90d.csv' CSV HEADER;
 
-DELETE FROM v2_server_log
+DELETE FROM v5_server_log
 WHERE log_at < EXTRACT(EPOCH FROM now() - interval '90 days')::bigint;
 
-VACUUM (ANALYZE) v2_server_log;
+VACUUM (ANALYZE) v5_server_log;
 ```
 
 SQLite archive and purge example for rows older than 90 days:
@@ -228,10 +228,10 @@ SQLite archive and purge example for rows older than 90 days:
 .headers on
 .once traffic-log-archive-before-90d.csv
 SELECT *
-FROM v2_server_log
+FROM v5_server_log
 WHERE log_at < CAST(strftime('%s', 'now', '-90 days') AS INTEGER);
 
-DELETE FROM v2_server_log
+DELETE FROM v5_server_log
 WHERE log_at < CAST(strftime('%s', 'now', '-90 days') AS INTEGER);
 
 VACUUM;
@@ -241,7 +241,7 @@ After purging, verify that recent windows still have data:
 
 ```sql
 SELECT COUNT(*) AS last_24h_rows
-FROM v2_server_log
+FROM v5_server_log
 WHERE log_at >= EXTRACT(EPOCH FROM now() - interval '24 hours')::bigint;
 ```
 
@@ -249,7 +249,7 @@ For SQLite, use:
 
 ```sql
 SELECT COUNT(*) AS last_24h_rows
-FROM v2_server_log
+FROM v5_server_log
 WHERE log_at >= CAST(strftime('%s', 'now', '-24 hours') AS INTEGER);
 ```
 

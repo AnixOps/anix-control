@@ -6,10 +6,10 @@ module listener. Phase 2 of the 2026-10 plan.
 
 ## Why
 
-System settings live in `v2_system_config`, a protected kernel table no
+System settings live in `v5_system_config`, a protected kernel table no
 package may adopt: its values include secrets (the NodeX token, the SMTP
 password), and its writes record audit entries in the protected
-`v2_operation_log`. (The backup configuration row, `v2_backup_config`, was
+`v5_operation_log`. (The backup configuration row, `v5_backup_config`, was
 a namespace too until 5.0 removed the backup settings nothing executed; see
 below.)
 
@@ -30,17 +30,17 @@ through no call.
 
 | Namespace | Keys | Storage | Audit entry per write | Declared secrets |
 |---|---|---|---|---|
-| `mail` | `notification.email.*` | `v2_system_config` | `system_config`, as the e-mail configuration handler | `notification.email.config` (its JSON holds the SMTP password) |
-| `invite` | `invite.*` | `v2_system_config` | `system_config`, as the invite configuration handler | none |
-| `nodex` | `forward.runtime.nodex.*` | `v2_system_config` | `system_config`, as the system configuration handler | none (the token is caught by name) |
-| `forward-runtime` | `forward.runtime_backend`, `forward.runtime.nodex_mode`, `forward.runtime.ansible.*`, `forward.runtime.iptables_ansible.*`, `forward.ansible.*` | `v2_system_config` | `system_config` | none |
+| `mail` | `notification.email.*` | `v5_system_config` | `system_config`, as the e-mail configuration handler | `notification.email.config` (its JSON holds the SMTP password) |
+| `invite` | `invite.*` | `v5_system_config` | `system_config`, as the invite configuration handler | none |
+| `nodex` | `forward.runtime.nodex.*` | `v5_system_config` | `system_config`, as the system configuration handler | none (the token is caught by name) |
+| `forward-runtime` | `forward.runtime_backend`, `forward.runtime.nodex_mode`, `forward.runtime.ansible.*`, `forward.runtime.iptables_ansible.*`, `forward.ansible.*` | `v5_system_config` | `system_config` | none |
 
 Everything else (`security.mfa.config`, the `scheduler.*` markers, site and
 subscription settings, any key an administrator creates) is in no namespace.
 `forward-runtime` has no holder yet; it fixes who owns the runtime keys next
 to `nodex`.
 
-The `backup` namespace (the fields of the first `v2_backup_config` row: the
+The `backup` namespace (the fields of the first `v5_backup_config` row: the
 schedule, retention, contents and S3 settings) is gone since 5.0 (M2 P10):
 nothing ever executed those settings. Control's backups are built in and
 have no settings ([`../reference/backups.md`](../reference/backups.md));
@@ -149,7 +149,7 @@ write came between (`BumpSettingsGenerationAfter`).
 
 | Copy | Namespace | Readers |
 |---|---|---|
-| `InviteService.config` (the admin and user invite handlers) | `invite` | invite code expiry, commission computation. The affiliate module writes the adopted `v2_invite_config` first, then the frontend settings through `invite`, which bumps it |
+| `InviteService.config` (the admin and user invite handlers) | `invite` | invite code expiry, commission computation. The affiliate module writes the adopted `v5_invite_config` first, then the frontend settings through `invite`, which bumps it |
 | `NotificationService.emailConfig` (the notification handler) | `mail` | only the test send, which reloads it first: nothing to refresh |
 
 The generic system configuration handler bumps the namespace of the key it
@@ -162,7 +162,7 @@ Generations are per process: Control runs as a single replica
 
 Moved to native handlers over the contract (`native-flagged`), with byte
 parity on SQLite and PostgreSQL against the real KernelSettings server in
-process; the parity tests also compare `v2_system_config`, the audit rows
+process; the parity tests also compare `v5_system_config`, the audit rows
 and the kernel's in-memory copies:
 
 | Route | Package | Parity cases |
@@ -180,7 +180,7 @@ network modules that is the module's network, not Control's.
 
 **Kept bridged: the generic system configuration routes** (platform: list,
 get, put, delete `/api/v2/admin/system/configs[/:key]`). They work on any
-key of `v2_system_config`. A native version needs a grant over every key,
+key of `v5_system_config`. A native version needs a grant over every key,
 and that grant amounts to every secret, held at all times:
 
 - the answers mask secrets (`********`, the single-key answer as the list,

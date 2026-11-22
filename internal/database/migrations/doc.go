@@ -160,4 +160,9 @@
 //   - 0039_reach_probes: the reachability probe's vantages and their
 //     latest answers (v5_reach_vantage, v5_reach_probe,
 //     internal/reachprobe).
+//   - 0040_table_prefix: the 51 tables Control kept from V2Board (v2_*)
+//     take the v5_ prefix, with their idx_ indexes and, on PostgreSQL, the
+//     primary key and foreign key constraints and id sequences named after
+//     them (table_prefix.go); the node secret split's records follow. The
+//     steps above name the tables as they were when they ran.
 package migrations

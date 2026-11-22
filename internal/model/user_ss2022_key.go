@@ -3,7 +3,7 @@ package model
 import "time"
 
 // UserSS2022Key is a user's random Shadowsocks 2022 key: std base64 of 32
-// bytes (the first 16 for the 128-bit ciphers). Like v2_user.uuid it is a
+// bytes (the first 16 for the 128-bit ciphers). Like v5_user.uuid it is a
 // credential every node must receive, so it is stored in plain text. A user
 // gets one at the first subscription pull; the legacy key derived from the
 // UUID keeps working next to it.

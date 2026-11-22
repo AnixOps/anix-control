@@ -20,14 +20,14 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// The node protocol routes work on v2_node_protocol, which the package
+// The node protocol routes work on v5_node_protocol, which the package
 // adopts once the node credential split finalized it
-// (kernel.storage.adopt:v2_node_protocol): its secret positions then hold
+// (kernel.storage.adopt:v5_node_protocol): its secret positions then hold
 // the placeholder, and the secrets are the kernel's. The package writes the
 // rows; the secrets an administrator types reach the kernel only, as sealed
 // handles the package passes to PutSecretDocument
 // (docs/architecture/node-ops-service.md section 6.3).
-const protocolTable = "v2_node_protocol"
+const protocolTable = "v5_node_protocol"
 
 // nodeStatusView shows whether a node exists, without its credentials.
 const nodeStatusView = "kapi_node_status_v1"
@@ -36,7 +36,7 @@ const nodeStatusView = "kapi_node_status_v1"
 const invalidNodeProtocol = "invalid node protocol"
 
 // protocolsReady reports whether the package's lease adopts
-// v2_node_protocol: false until the kernel finalized it, and the routes then
+// v5_node_protocol: false until the kernel finalized it, and the routes then
 // answer from the legacy handler.
 func (s *Service) protocolsReady(ctx context.Context) bool {
 	return s.Leased != nil && s.Leased(ctx, protocolTable)
@@ -498,7 +498,7 @@ func normalizeProtocolUpdates(updates map[string]any) (map[string]any, error) {
 }
 
 // columnUpdates is the kernel's: an update's keys resolved to the columns
-// of v2_node_protocol, whatever spelling names them (column, field name,
+// of v5_node_protocol, whatever spelling names them (column, field name,
 // any case, underscores or not), associations left out, refused columns
 // dropped, and a column named twice refused.
 func columnUpdates(db *gorm.DB, updates map[string]any, refused ...string) (map[string]any, error) {

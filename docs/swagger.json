@@ -3169,7 +3169,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页列出被直接授予该订阅分组的用户 (v2_user_subscription_group), 与分组统计的 user_count / enabled_users 同口径; 通过套餐或主分组到达该分组的用户不在其中。按授予时间倒序。不含订阅 token 与 uuid。",
+                "description": "分页列出被直接授予该订阅分组的用户 (v5_user_subscription_group), 与分组统计的 user_count / enabled_users 同口径; 通过套餐或主分组到达该分组的用户不在其中。按授予时间倒序。不含订阅 token 与 uuid。",
                 "produces": [
                     "application/json"
                 ],
@@ -3290,7 +3290,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序: 已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 \"\u003c节点\u003e - \u003c协议\u003e\"。",
+                "description": "列出关联到该分组的全部节点协议 (v5_subscription_group_node_protocols), 按分组顺序: 已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 \"\u003c节点\u003e - \u003c协议\u003e\"。",
                 "produces": [
                     "application/json"
                 ],
@@ -9175,7 +9175,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "One proxy node's traffic over time for the admin charts, ascending, buckets without traffic as zeros. granularity=hour (the default) sums the node's rows of the raw traffic log v2_server_log in UTC hours: the last 24 hours by default, at most 720 hourly buckets, and only as far back as the operator keeps the raw log (docs/reference/traffic-stats-operations.md). granularity=day reads the node's daily server statistics (v2_stat_server): the last 30 days by default, at most 366 daily buckets, aligned to the Control host's local midnight, kept regardless of the raw log's retention. since and until are Unix milliseconds (since inclusive, until exclusive); they are rounded out to whole buckets, and the answer's since_unix_ms and until_unix_ms are the window actually returned. Bytes are the panel's metered bytes: up and down with the node's traffic rate applied, as /api/v2/admin/traffic/hourly counts them, summed over every protocol the node reported under. This is the proxy node's user traffic; forwarding traffic is /api/v4/forward/stats and /api/v4/forward/routes/{id}/stats.",
+                "description": "One proxy node's traffic over time for the admin charts, ascending, buckets without traffic as zeros. granularity=hour (the default) sums the node's rows of the raw traffic log v5_server_log in UTC hours: the last 24 hours by default, at most 720 hourly buckets, and only as far back as the operator keeps the raw log (docs/reference/traffic-stats-operations.md). granularity=day reads the node's daily server statistics (v5_stat_server): the last 30 days by default, at most 366 daily buckets, aligned to the Control host's local midnight, kept regardless of the raw log's retention. since and until are Unix milliseconds (since inclusive, until exclusive); they are rounded out to whole buckets, and the answer's since_unix_ms and until_unix_ms are the window actually returned. Bytes are the panel's metered bytes: up and down with the node's traffic rate applied, as /api/v2/admin/traffic/hourly counts them, summed over every protocol the node reported under. This is the proxy node's user traffic; forwarding traffic is /api/v4/forward/stats and /api/v4/forward/routes/{id}/stats.",
                 "produces": [
                     "application/json"
                 ],
@@ -9242,7 +9242,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sends one fixed test message through the bot configured in the Telegram bot settings (the v2_telegram_bot row) and answers the result class: ok, invalid_token, chat_not_found, bot_blocked, rate_limited, not_configured, network_error (with a reason: timeout, dns, tls, connect, canceled, other) or unknown. The answer never carries the bot token, a URL or Telegram's own text. The message goes to the calling administrator's own bound Telegram chat; an explicit chat_id is accepted only when it is that chat or one of the bot's admin_ids. An administrator without a bound Telegram account gets 409. At most 5 tests a minute per administrator and 20 in ten minutes for all of them (429 with Retry-After). Every attempt is recorded in the operation log (module notification, action telegram_test) with its class only.",
+                "description": "Sends one fixed test message through the bot configured in the Telegram bot settings (the v5_telegram_bot row) and answers the result class: ok, invalid_token, chat_not_found, bot_blocked, rate_limited, not_configured, network_error (with a reason: timeout, dns, tls, connect, canceled, other) or unknown. The answer never carries the bot token, a URL or Telegram's own text. The message goes to the calling administrator's own bound Telegram chat; an explicit chat_id is accepted only when it is that chat or one of the bot's admin_ids. An administrator without a bound Telegram account gets 409. At most 5 tests a minute per administrator and 20 in ten minutes for all of them (429 with Retry-After). Every attempt is recorded in the operation log (module notification, action telegram_test) with its class only.",
                 "consumes": [
                     "application/json"
                 ],

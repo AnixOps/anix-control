@@ -21,12 +21,12 @@ import (
 )
 
 const (
-	// DefaultServerLogRetention is how long v2_server_log (the hourly
+	// DefaultServerLogRetention is how long v5_server_log (the hourly
 	// traffic buckets) keeps a row, by its hour.
 	DefaultServerLogRetention = 400 * 24 * time.Hour
-	// DefaultNodeLogRetention is how long v2_node_log keeps a row.
+	// DefaultNodeLogRetention is how long v5_node_log keeps a row.
 	DefaultNodeLogRetention = 30 * 24 * time.Hour
-	// DefaultAuditLogRetention is how long v2_audit_log keeps a row.
+	// DefaultAuditLogRetention is how long v5_audit_log keeps a row.
 	DefaultAuditLogRetention = 400 * 24 * time.Hour
 
 	// DefaultInterval is the time between two runs.
@@ -72,7 +72,7 @@ func (p Policy) Resolved() Policy {
 }
 
 // target is a table the worker prunes: the column that dates a row, and
-// whether it holds Unix seconds (v2_server_log's log_at) or a timestamp.
+// whether it holds Unix seconds (v5_server_log's log_at) or a timestamp.
 type target struct {
 	table     string
 	column    string

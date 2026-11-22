@@ -5,13 +5,13 @@
 // are byte-compatible with the legacy handlers
 // (internal/tests/proxynodecompat).
 //
-//   - A node's runtime logs come from the adopted v2_node_log table, which
+//   - A node's runtime logs come from the adopted v5_node_log table, which
 //     the kernel's agent control writes when nodes report logs.
 //   - The node statistics, and whether a node exists, come from the kernel
 //     view kapi_node_status_v1: each node's id, status, last check and
 //     traffic counters.
 //   - The node list, detail, deletion and raw configuration work on
-//     v2_node, which the package adopts once the node credential split
+//     v5_node, which the package adopts once the node credential split
 //     finalized it (a grant the kernel honours only then): its API key, key
 //     hash and shared secret hold tombstones, and its raw configuration the
 //     placeholder at every secret position. A node's protocols are read
@@ -22,7 +22,7 @@
 //     answer from the legacy handler.
 //
 // The package never reads a node's credentials, and never reads or writes
-// v2_node_protocol, which is protocol-runtime's. The other routes stay in
+// v5_node_protocol, which is protocol-runtime's. The other routes stay in
 // the kernel; packages/proxy-node/control lists why for each.
 package native
 

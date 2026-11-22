@@ -141,7 +141,7 @@ func TestPlanHostRoutesAreThePackageRoutes(t *testing.T) {
 }
 
 // The package adopts its two tables and may apply entitlements; it neither
-// adopts nor reads v2_user.
+// adopts nor reads v5_user.
 func TestPlanManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -150,14 +150,14 @@ func TestPlanManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.storage.v1", "kernel.storage.adopt:v2_plan", "kernel.storage.adopt:v2_event",
+		"kernel.storage.v1", "kernel.storage.adopt:v5_plan", "kernel.storage.adopt:v5_event",
 		"kernel.subscriber.entitlements.v1",
 	}, manifest.Capabilities)
 }
 
 // A native assignment reads the plan from the package's storage and grants
 // it through KernelSubscriber on the bridge connection; the plan's event
-// goes to the adopted v2_event.
+// goes to the adopted v5_event.
 func TestPlanHostAssignsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "control.db")
 	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -184,7 +184,7 @@ func TestPlanHostAssignsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 
 	stub := &bridgeStub{
 		modes: map[string]string{native.AssignRouteID: "native"},
-		lease: packagebridgesdk.StorageLease{Driver: "sqlite", DSN: path, TablePrefix: "pkg_plan_", AdoptedTables: []string{"v2_event", "v2_plan"}},
+		lease: packagebridgesdk.StorageLease{Driver: "sqlite", DSN: path, TablePrefix: "pkg_plan_", AdoptedTables: []string{"v5_event", "v5_plan"}},
 	}
 	service, err := newPlanService(connectedBridge{bridgeStub: stub, conn: conn}, "lease-1")
 	require.NoError(t, err)

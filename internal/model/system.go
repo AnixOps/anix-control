@@ -19,11 +19,11 @@ type SystemConfig struct {
 
 // TableName 指定表名
 func (SystemConfig) TableName() string {
-	return "v2_system_config"
+	return "v5_system_config"
 }
 
-// The former BackupRecord (v2_backup_record) and BackupConfig
-// (v2_backup_config) models went with the backup settings nothing executed
+// The former BackupRecord (v5_backup_record) and BackupConfig
+// (v5_backup_config) models went with the backup settings nothing executed
 // and the online restore: Control's backups are Backup (v5_backup,
 // internal/backup). Both tables stay in the schema, unused, until a cleanup
 // migration drops them; the migration tests keep frozen copies of the two
@@ -48,5 +48,5 @@ type OperationLog struct {
 
 // TableName 指定表名
 func (OperationLog) TableName() string {
-	return "v2_operation_log"
+	return "v5_operation_log"
 }

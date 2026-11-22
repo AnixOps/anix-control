@@ -56,7 +56,7 @@ func TestWriteBundleContentsAndManifest(t *testing.T) {
 	assert.Equal(t, "panel.example.com", manifest.Domain)
 	assert.Equal(t, p.key.Fingerprint(), manifest.RootKeyFingerprint)
 	assert.NotContains(t, string(members[0].data), p.key.Base64(), "the manifest never holds the key")
-	assert.Equal(t, map[string]int64{"v2_user": 2, "v2_node": 0, "v2_order": 0}, manifest.RowCounts)
+	assert.Equal(t, map[string]int64{"v5_user": 2, "v5_node": 0, "v5_order": 0}, manifest.RowCounts)
 	require.Len(t, manifest.Members, 3)
 	for i, member := range manifest.Members {
 		data := members[i+1].data

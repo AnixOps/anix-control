@@ -4,12 +4,12 @@
 //
 //   - The protocol templates (static data), and the administrator's
 //     diagnostic task history and task detail on the kernel's
-//     v2_agent_diagnostic_task table, adopted in place
-//     (kernel.storage.adopt:v2_agent_diagnostic_task). The kernel keeps
+//     v5_agent_diagnostic_task table, adopted in place
+//     (kernel.storage.adopt:v5_agent_diagnostic_task). The kernel keeps
 //     writing that table (creating a task, the agents' polls and results).
 //   - A node's protocols, their creation, update and deletion, on
-//     v2_node_protocol, adopted once the node credential split finalized it
-//     (kernel.storage.adopt:v2_node_protocol, a grant the kernel honours only
+//     v5_node_protocol, adopted once the node credential split finalized it
+//     (kernel.storage.adopt:v5_node_protocol, a grant the kernel honours only
 //     then): its secret positions hold the placeholder and the secrets are
 //     the kernel's. The secrets an administrator types reach the package as
 //     sealed handles, which it passes to the kernel (PutSecretDocument);

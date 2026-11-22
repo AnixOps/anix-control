@@ -19,8 +19,8 @@ func setupSystemConfigSecurityTest(t *testing.T) (*gorm.DB, *SystemHandler, *gin
 	t.Helper()
 	db := initTestDB()
 	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.OperationLog{}))
-	require.NoError(t, db.Exec("DELETE FROM v2_system_config").Error)
-	require.NoError(t, db.Exec("DELETE FROM v2_operation_log").Error)
+	require.NoError(t, db.Exec("DELETE FROM v5_system_config").Error)
+	require.NoError(t, db.Exec("DELETE FROM v5_operation_log").Error)
 
 	router := gin.New()
 	handler := NewSystemHandler()

@@ -54,11 +54,15 @@ func newBackupFixture(t *testing.T, prepare func(t *testing.T, db *gorm.DB)) *ba
 	authority, err := modulepki.New(modulepki.Options{DB: db, Cluster: "default", KEK: key.Bytes()})
 	require.NoError(t, err)
 	require.NoError(t, authority.Ensure(context.Background()))
-	require.NoError(t, db.Exec("INSERT INTO v2_user (email, password, uuid, token, is_admin, created_at, updated_at) VALUES ('admin@example.com', 'x', 'u-1', 't-1', 1, datetime('now'), datetime('now')), ('user@example.com', 'x', 'u-2', 't-2', 0, datetime('now'), datetime('now'))").Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_node (name, host, port) VALUES ('hk-01', 'hk-01.example.com', 443)").Error)
+	// An older release's tables still have their v2_ names.
+	require.NoError(t, db.Exec("INSERT INTO "+migrations.TableIn(db, "v5_user")+" (email, password, uuid, token, is_admin, created_at, updated_at) VALUES ('admin@example.com', 'x', 'u-1', 't-1', 1, datetime('now'), datetime('now')), ('user@example.com', 'x', 'u-2', 't-2', 0, datetime('now'), datetime('now'))").Error)
+	require.NoError(t, db.Exec("INSERT INTO "+migrations.TableIn(db, "v5_node")+" (name, host, port) VALUES ('hk-01', 'hk-01.example.com', 443)").Error)
 	// Its node secret split and identity are finalized, as Control requires
 	// to start.
 	require.NoError(t, nodesecrets.EnsureStateRows(db))
+	for _, table := range nodesecrets.Tables() {
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", table).Update("table_name", migrations.TableIn(db, table)).Error)
+	}
 	require.NoError(t, service.EnsureIdentityFinalized(db))
 	return f
 }
@@ -291,8 +295,8 @@ func TestRestoreThenStartMigrates(t *testing.T) {
 	steps, err := migrations.Steps()
 	require.NoError(t, err)
 	assert.Equal(t, int64(len(steps)), countRows(t, db, migrations.MigrationTable), "every migration ran")
-	assert.Equal(t, int64(2), countRows(t, db, "v2_user"))
-	assert.Equal(t, int64(1), countRows(t, db, "v2_node"))
+	assert.Equal(t, int64(2), countRows(t, db, "v5_user"))
+	assert.Equal(t, int64(1), countRows(t, db, "v5_node"))
 
 	// The start took a pre-migration bundle of the restored database; it
 	// verifies.

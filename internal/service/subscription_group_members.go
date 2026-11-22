@@ -23,11 +23,11 @@ type GroupMembersParams struct {
 }
 
 // GroupMember is a user the administrator granted the subscription group
-// directly (a v2_user_subscription_group row, what POST
+// directly (a v5_user_subscription_group row, what POST
 // /admin/subscription/users/:user_id/groups creates), with the grant's own
 // fields and the user's e-mail, ban flag and plan. It carries no credential:
 // never the subscription token or proxy uuid. The users the group reaches
-// through their plan or their primary group (v2_user.group_id) are not
+// through their plan or their primary group (v5_user.group_id) are not
 // members here, as the stats' user_count does not count them.
 type GroupMember struct {
 	UserID uint   `json:"user_id"`
@@ -66,8 +66,8 @@ func (s *SubscriptionService) ListGroupMembers(groupID uint, params GroupMembers
 		return nil, err
 	}
 	now := time.Now().Unix()
-	query := s.db.Table("v2_user_subscription_group AS m").
-		Joins("JOIN v2_user AS u ON u.id = m.user_id").
+	query := s.db.Table("v5_user_subscription_group AS m").
+		Joins("JOIN v5_user AS u ON u.id = m.user_id").
 		Where("m.group_id = ?", groupID)
 	if params.Email != "" {
 		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(params.Email)

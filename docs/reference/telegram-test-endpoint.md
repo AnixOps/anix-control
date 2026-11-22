@@ -31,7 +31,7 @@ The body and `chat_id` are optional.
 
 | Field | Meaning |
 |---|---|
-| `chat_id` | The chat to send to. Omitted: the calling administrator's own bound Telegram chat (`v2_telegram_user`, a banned binding does not count). Given: it must be that chat or one of the bot's `admin_ids`; any other value is refused with 403 and nothing is sent. The bot cannot be used to message anybody else. |
+| `chat_id` | The chat to send to. Omitted: the calling administrator's own bound Telegram chat (`v5_telegram_user`, a banned binding does not count). Given: it must be that chat or one of the bot's `admin_ids`; any other value is refused with 403 and nothing is sent. The bot cannot be used to message anybody else. |
 
 The text is fixed (`<product> test message: ...`). No caller text, secret or
 user data goes into it.
@@ -85,7 +85,7 @@ Other answers:
   when Telegram refuses it. A request refused by the limiter is logged at
   warning level and not written to the operation log, so a client hammering
   the route cannot fill the table.
-- Every attempt that is not rate limited writes one `v2_operation_log` row:
+- Every attempt that is not rate limited writes one `v5_operation_log` row:
   module `notification`, action `telegram_test`, target type `telegram_bot`,
   the administrator, the client address, status 1 (ok) or 2, and content
   `{"class": "...", "target": "self|bot_admin|none"}`. Refusals have the class
@@ -112,7 +112,7 @@ no route sets it. The test follows what delivery does and does not stop on it.
 The existing `SendMessage` and the notification package's copy
 (`packages/notification/native/botapi.go`) return the HTTP client's error
 as it is. Their error text, which contains the token, reaches
-`v2_notification_log.error` and some administrator answers. That is outside
+`v5_notification_log.error` and some administrator answers. That is outside
 this endpoint and is tracked as a follow-up: it needs the kernel's and the
 package's copy changed together, because the route-mode shadow comparison
 checks that both answer alike.

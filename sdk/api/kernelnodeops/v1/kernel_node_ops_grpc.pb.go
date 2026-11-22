@@ -44,7 +44,7 @@ const (
 // legacy until its kernel serves the kind.
 //
 // KernelNodeOps is the kernel's contract for operations on nodes: proxy
-// nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
+// nodes (v5_node), forward nodes and Ansible machines (v5_forward_node) and
 // clean agents (v2_forward_clean_agent). The kernel holds every node
 // credential and secret and every agent connection; a package asks it for a
 // typed operation (apply a forward, sync a node's configuration, check an
@@ -261,7 +261,7 @@ func (c *kernelNodeOpsClient) GetCapabilities(ctx context.Context, in *GetCapabi
 // legacy until its kernel serves the kind.
 //
 // KernelNodeOps is the kernel's contract for operations on nodes: proxy
-// nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
+// nodes (v5_node), forward nodes and Ansible machines (v5_forward_node) and
 // clean agents (v2_forward_clean_agent). The kernel holds every node
 // credential and secret and every agent connection; a package asks it for a
 // typed operation (apply a forward, sync a node's configuration, check an

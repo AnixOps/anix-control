@@ -82,9 +82,9 @@ func (OrderPaymentOutcome) EnumDescriptor() ([]byte, []int) {
 type CompleteOrderPaymentRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// trade_no is the payment record's trade number
-	// (v2_payment_record.trade_no), at most 120 bytes.
+	// (v5_payment_record.trade_no), at most 120 bytes.
 	TradeNo string `protobuf:"bytes,1,opt,name=trade_no,json=tradeNo,proto3" json:"trade_no,omitempty"`
-	// order_id is the order the record names (v2_payment_record.order_id).
+	// order_id is the order the record names (v5_payment_record.order_id).
 	OrderId       uint64 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

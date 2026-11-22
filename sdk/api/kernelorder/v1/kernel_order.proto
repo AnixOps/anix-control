@@ -6,8 +6,8 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1;kern
 
 // KernelOrder is the kernel's contract for the order writes that span
 // domains (docs/architecture/order-service.md). Completing a paid order
-// changes the order (v2_order, the order module's table) and grants its
-// plan (v2_user, the kernel's subscriber state) in one transaction; no
+// changes the order (v5_order, the order module's table) and grants its
+// plan (v5_user, the kernel's subscriber state) in one transaction; no
 // single module may write both, so the kernel does it for the module that
 // took the payment.
 //
@@ -43,9 +43,9 @@ service KernelOrder {
 
 message CompleteOrderPaymentRequest {
   // trade_no is the payment record's trade number
-  // (v2_payment_record.trade_no), at most 120 bytes.
+  // (v5_payment_record.trade_no), at most 120 bytes.
   string trade_no = 1;
-  // order_id is the order the record names (v2_payment_record.order_id).
+  // order_id is the order the record names (v5_payment_record.order_id).
   uint64 order_id = 2;
 }
 

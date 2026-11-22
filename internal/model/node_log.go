@@ -17,5 +17,5 @@ type NodeLog struct {
 }
 
 func (NodeLog) TableName() string {
-	return "v2_node_log"
+	return "v5_node_log"
 }

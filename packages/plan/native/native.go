@@ -1,8 +1,8 @@
 // Package native implements the plan package's v2 routes in the package
-// itself, on the kernel's v2_plan and v2_event tables adopted in place
+// itself, on the kernel's v5_plan and v5_event tables adopted in place
 // (kernel.storage.adopt). An administrator's plan assignment changes the
 // subscriber through the kernel's KernelSubscriber contract
-// (kernel.subscriber.entitlements.v1): the package never writes v2_user.
+// (kernel.subscriber.entitlements.v1): the package never writes v5_user.
 // The routes are native only: the kernel keeps no legacy handler for them.
 //
 // The five /api/v2/speed-limit routes are Flux forward limits, whose rows
@@ -23,7 +23,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Plan is a v2_plan row. Its fields, tags and type name match the kernel
+// Plan is a v5_plan row. Its fields, tags and type name match the kernel
 // model, so answers and JSON binding errors are the same.
 type Plan struct {
 	ID                 uint    `gorm:"primaryKey" json:"id"`
@@ -54,9 +54,9 @@ type Plan struct {
 }
 
 // TableName is the adopted kernel table.
-func (Plan) TableName() string { return "v2_plan" }
+func (Plan) TableName() string { return "v5_plan" }
 
-// Event is a v2_event row: the plan domain's event log (plan.created,
+// Event is a v5_event row: the plan domain's event log (plan.created,
 // plan.updated, plan.deleted, plan.assigned). Nothing else writes it.
 type Event struct {
 	ID          uint       `gorm:"primaryKey" json:"id"`
@@ -68,7 +68,7 @@ type Event struct {
 }
 
 // TableName is the adopted kernel table.
-func (Event) TableName() string { return "v2_event" }
+func (Event) TableName() string { return "v5_event" }
 
 // Subscriber is the part of KernelSubscriber the native routes call.
 type Subscriber interface {

@@ -21,7 +21,7 @@ are removed (they ran on 5.0.3; [UPGRADE.md](../UPGRADE.md)).
   keys). The kernel verifies them in one place, `internal/authn`, refuses
   every other algorithm and enforces revocations (see below). The kernel
   signs no user tokens.
-- **Data.** `v2_user` mixes identity columns (email, password, is_admin,
+- **Data.** `v5_user` mixes identity columns (email, password, is_admin,
   is_staff, banned) with subscriber and entitlement columns (plan, traffic,
   expiry, limits, balance). About 20 other kernel files read those identity
   columns.
@@ -32,8 +32,8 @@ are removed (they ran on 5.0.3; [UPGRADE.md](../UPGRADE.md)).
 |---------|-------|----------|
 | Accounts, password hashes, MFA, login attempts, invite codes, sessions, signing keys | identity module, own schema | `IdentityService` |
 | Access tokens | issued by identity (Ed25519 JWT), verified by the kernel gateway | JWT/JWKS, `GetTokenKeys` |
-| Subscriber rows (id, uuid, subscription token) and entitlements | kernel (`v2_user`) until a subscriber module exists | `KernelIdentity.CreateSubscriber` / `UpdateSubscriber` |
-| Identity columns of `v2_user` (email, is_admin, is_staff, banned) | read projection written only by `ApplyAccountProjection` | versioned, monotonic |
+| Subscriber rows (id, uuid, subscription token) and entitlements | kernel (`v5_user`) until a subscriber module exists | `KernelIdentity.CreateSubscriber` / `UpdateSubscriber` |
+| Identity columns of `v5_user` (email, is_admin, is_staff, banned) | read projection written only by `ApplyAccountProjection` | versioned, monotonic |
 | Plugin permissions in login and profile responses | kernel access groups | `KernelIdentity.ResolveActorAccess` |
 | Revocation | identity decides; kernel enforces | `KernelIdentity.PublishRevocation` |
 
@@ -84,7 +84,7 @@ on:
 
 Restrictive changes are projected to the kernel before identity commits them.
 A banned user is therefore rejected within seconds, including by node user
-lists that read the `v2_user` projection.
+lists that read the `v5_user` projection.
 
 **In place since step 8** (`internal/authn`):
 - **Kernel-side triggers.**
@@ -115,21 +115,21 @@ lists that read the `v2_user` projection.
 
 - **Identity schema.** Tables `account`, `mfa`, `mfa_attempt`, `invite_code`,
   `signing_key`, `outbox`, `throttle` and `session`.
-  - `account.id` equals `v2_user.id`.
+  - `account.id` equals `v5_user.id`.
   - TOTP secrets are encrypted at rest.
   - The login throttle is a table, so identity replicas share it.
 - **Registration.** Identity calls `CreateSubscriber`, which is idempotent on
-  the account UUID. The kernel allocates the `v2_user` id, uuid and
+  the account UUID. The kernel allocates the `v5_user` id, uuid and
   subscription token, so logging in right after registering works.
 - **Import.** The kernel reads the legacy identity columns, MFA and invite
   codes and pushes them with `ImportAccounts`. The import is checkpointed and
-  can repeat as `updated_at` deltas. Identity never reads `v2_user.password`.
+  can repeat as `updated_at` deltas. Identity never reads `v5_user.password`.
 - **Authority state machine.** `kernel → importing → identity → finalized`.
   - **Before finalize,** identity mirrored credentials back into the legacy
     tables (`LegacyCredentialMirror`), so switching the routes back to
     `legacy` was an instant rollback.
-  - **Finalize** stops the mirror, sets `v2_user.password` to a sentinel,
-    deletes `v2_user_mfa` rows and disables HS256.
+  - **Finalize** stops the mirror, sets `v5_user.password` to a sentinel,
+    deletes `v5_user_mfa` rows and disables HS256.
   - **Since the release after 5.0.3** Control starts only on a finalized
     database (`service.RequireIdentityFinalized`; one without users is
     recorded as finalized at start), and the cutover API is removed: the
@@ -146,7 +146,7 @@ instance's generation.
   official AnixOps package whose signed release, verified again on every call,
   declares `kernel.identity.v1`.
 - **Links.** `v4_kernel_identity_account` links an account UUID to its
-  `v2_user` id and records the last projection version applied.
+  `v5_user` id and records the last projection version applied.
   - `CreateSubscriber` creates the row with a fresh node UUID and
     subscription token, and a password (`!identity`) that never matches.
   - A repeated call for the same account returns the same user.
@@ -209,7 +209,7 @@ while CI still proved them equal to the kernel's legacy handlers.
   - commissions, withdrawals and invite statistics and configuration (8) →
     new package `affiliate`;
   - the user's invite codes and their generation (2) → `affiliate`, which
-    serves them natively on the adopted `v2_invite_code`
+    serves them natively on the adopted `v5_invite_code`
     ([package-extraction.md](package-extraction.md#34-in-place-adoption-and-kernel-views)).
 
   The HTTP paths are unchanged; only the owner and route id changed
@@ -332,7 +332,7 @@ expired (Control).
         commission data. Registration will validate and consume a code
         through `CreateSubscriber`, so `/user/invite` and
         `/user/invite/generate` leave group A. They moved to the affiliate
-        package, which reads and writes `v2_invite_code` in place.
+        package, which reads and writes `v5_invite_code` in place.
 11. Group A native handlers with parity tests, in three steps:
     - 11a (in place): login and registration in identity.
       - Accounts, bcrypt passwords, the ban flag and MFA come from identity;
@@ -398,7 +398,7 @@ expired (Control).
         If the host does not confirm within 30 seconds, both switch back
         (`cutover_aborted`).
       - **Complete deltas.** A delta also carries users whose
-        `v2_user_mfa` row changed. Disabling MFA in legacy touches the
+        `v5_user_mfa` row changed. Disabling MFA in legacy touches the
         user. Every import ends by deleting the identity accounts of deleted
         subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
       - **Consistency.** Group A's 16 routes are native together, exactly
@@ -414,7 +414,7 @@ expired (Control).
       - **Finalize.** `POST /api/v4/kernel/identity/finalize`
         (`{"force": true}` skips the day). One day after the latest
         cutover, when pre-cutover tokens have expired:
-        - legacy passwords become unusable and `v2_user_mfa` is emptied;
+        - legacy passwords become unusable and `v5_user_mfa` is emptied;
         - the authority becomes `finalized`, so identity stops mirroring;
         - Control refuses HS256 tokens, from then on and after restarts.
 

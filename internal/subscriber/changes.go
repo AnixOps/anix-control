@@ -11,13 +11,13 @@ import (
 // cursor is older lists again.
 const ChangeRetention = 7 * 24 * time.Hour
 
-// nodeFields are the v2_user columns whose change can alter what a node
+// nodeFields are the v5_user columns whose change can alter what a node
 // serves.
 var nodeFields = []string{
 	"banned", "uuid", "plan_id", "group_id", "expired_at", "transfer_enable", "speed_limit", "device_limit", "u", "d",
 }
 
-// TouchesNodeFields reports whether a v2_user update changes a column that
+// TouchesNodeFields reports whether a v5_user update changes a column that
 // node user lists depend on.
 func TouchesNodeFields(updates map[string]any) bool {
 	for _, field := range nodeFields {
@@ -138,7 +138,7 @@ func PruneRequests(db *gorm.DB, now time.Time) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-// Active restricts a v2_user query to the subscribers a node serves: not
+// Active restricts a v5_user query to the subscribers a node serves: not
 // banned, not expired, and within their traffic (a zero transfer limit
 // serves nothing), as node user lists always have.
 func Active(db *gorm.DB, now time.Time) *gorm.DB {

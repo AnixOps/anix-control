@@ -154,7 +154,7 @@ stream equivalent.
   to the stream's node: the list is the intersection, so it is the
   session's negotiated set. What Control serves, by node kind:
   - `config.v1`: proxy and forward nodes;
-  - `users.v1`: proxy nodes (`v2_node`; a forward node has no user list);
+  - `users.v1`: proxy nodes (`v5_node`; a forward node has no user list);
   - `reports.v1`: proxy nodes (a forward node's stream is not offered it
     yet; its reports join with the forward plugins);
   - `package-reports.v1`: proxy nodes, and forward nodes served `forward.v1`
@@ -516,7 +516,7 @@ stream equivalent.
     consistent) and that its `node_id` is the stream's node. Fields the
     schema does not know are dropped.
   - **Stored once.** Control stores each event once per node and
-    `event_id`, as a row of the node's log (`v2_node_log`, source
+    `event_id`, as a row of the node's log (`v5_node_log`, source
     `maintenance`, `trace_id` the event id when it fits, `fields_json` the
     event, `logged_at` its `occurred_at`; level `error` for P0 and P1,
     `warning` for P2, `info` for P3 and recoveries), in the transaction that

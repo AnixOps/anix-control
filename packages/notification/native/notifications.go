@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 )
 
-// Template is a v2_notification_template row. Its JSON matches the kernel
+// Template is a v5_notification_template row. Its JSON matches the kernel
 // model, which the template answers return as is.
 type Template struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -26,9 +26,9 @@ type Template struct {
 }
 
 // TableName is the adopted kernel table.
-func (Template) TableName() string { return "v2_notification_template" }
+func (Template) TableName() string { return "v5_notification_template" }
 
-// Log is a v2_notification_log row. Its JSON matches the kernel model, which
+// Log is a v5_notification_log row. Its JSON matches the kernel model, which
 // the member's notification list returns as is.
 type Log struct {
 	ID        uint       `gorm:"primaryKey" json:"id"`
@@ -45,7 +45,7 @@ type Log struct {
 }
 
 // TableName is the adopted kernel table.
-func (Log) TableName() string { return "v2_notification_log" }
+func (Log) TableName() string { return "v5_notification_log" }
 
 func notificationStatusToText(status int) string {
 	switch status {

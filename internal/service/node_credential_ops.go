@@ -123,10 +123,10 @@ func deleteWireGuardPeersCounted(tx *gorm.DB, query string, args ...any) (int64,
 // protocol: PostgreSQL refused to delete a linked protocol (or its node),
 // and SQLite kept orphan links.
 func deleteProtocolGroupLinksCounted(tx *gorm.DB, protocolIDs ...uint) (int64, error) {
-	if !tx.Migrator().HasTable("v2_subscription_group_node_protocols") {
+	if !tx.Migrator().HasTable("v5_subscription_group_node_protocols") {
 		return 0, nil
 	}
-	result := tx.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE node_protocol_id IN ?", protocolIDs)
+	result := tx.Exec("DELETE FROM v5_subscription_group_node_protocols WHERE node_protocol_id IN ?", protocolIDs)
 	return result.RowsAffected, result.Error
 }
 

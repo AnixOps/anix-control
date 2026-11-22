@@ -101,7 +101,7 @@ func TestDropRouteModesRemovesTheStoredModes(t *testing.T) {
 			Content    string
 		}
 		var audits []audit
-		require.NoError(t, db.Raw("SELECT username, action, module, target_type, target_id, content FROM v2_operation_log ORDER BY id").Scan(&audits).Error)
+		require.NoError(t, db.Raw("SELECT username, action, module, target_type, target_id, content FROM v5_operation_log ORDER BY id").Scan(&audits).Error)
 		require.Len(t, audits, 2)
 		assert.Equal(t, audit{Username: "system/migration", Action: "route_modes_removed", Module: "kernel", TargetType: "plugin_installation", TargetID: 1, Content: audits[0].Content}, audits[0])
 		var content struct {

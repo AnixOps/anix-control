@@ -201,7 +201,7 @@ func withEdgeHeader(certificate *tls.Certificate) []grpc.DialOption {
 	}
 }
 
-// APIKeyHash hashes a node API key as v2_node.api_key_hash stores it.
+// APIKeyHash hashes a node API key as v5_node.api_key_hash stores it.
 func APIKeyHash(apiKey string) string {
 	sum := sha256.Sum256([]byte(apiKey))
 	return hex.EncodeToString(sum[:])

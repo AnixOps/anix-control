@@ -1,7 +1,7 @@
 // Package protocolruntimecompat tests the protocol-runtime package's native
 // routes on SQLite and PostgreSQL. The protocol templates, and the
 // administrator's diagnostic task history and task detail on
-// v2_agent_diagnostic_task, which the package adopts in place, have no
+// v5_agent_diagnostic_task, which the package adopts in place, have no
 // legacy handler any more and are pinned to the answers recorded in testdata
 // while they still matched it byte for byte (packagecompat's golden
 // answers). The other routes are compared with the kernel's legacy handlers.

@@ -1,14 +1,14 @@
 // Package native implements the subscription package's v2 administrator
-// routes in the package itself, on the kernel's v2_subscription_group,
-// v2_subscription_template, v2_plan_subscription_group and
-// v2_subscription_group_node_protocols tables adopted in place
+// routes in the package itself, on the kernel's v5_subscription_group,
+// v5_subscription_template, v5_plan_subscription_group and
+// v5_subscription_group_node_protocols tables adopted in place
 // (kernel.storage.adopt). Legacy handlers and native routes share the
 // tables, so a route can switch between them at any time. Responses are
 // byte-compatible with the legacy handlers
 // (internal/tests/subscriptioncompat); the bound and answered types mirror
 // the kernel model (package model).
 //
-// Subscription group membership (v2_user_subscription_group) is subscriber
+// Subscription group membership (v5_user_subscription_group) is subscriber
 // state, which only the kernel writes: granting a user a group, taking it
 // away and deleting a group's members go through KernelSubscriber
 // (kernel.subscriber.groups.v1), and without it those routes stay legacy.
@@ -25,7 +25,7 @@
 //     protocol belongs to and when it last reported;
 //   - kapi_node_protocol_public_v1 and kapi_node_public_v1 for a group's
 //     protocols and the protocol pool, once the kernel grants them: only
-//     after the node credential split of v2_node_protocol and v2_node is
+//     after the node credential split of v5_node_protocol and v5_node is
 //     finalized, when they show the redacted documents (pool.go).
 //
 // Two routes have no native handler and stay bridged; see bridgedRoutes in
@@ -127,7 +127,7 @@ func pathUint(request pluginhostsdk.NativeRequest, name string) (uint, bool) {
 
 // UserGroup is a row of kapi_user_subscription_group_v1: a subscription
 // group a user holds, until expire_at (null: no expiry). The kernel is the
-// only writer of v2_user_subscription_group.
+// only writer of v5_user_subscription_group.
 type UserGroup struct {
 	UserID   uint
 	GroupID  uint

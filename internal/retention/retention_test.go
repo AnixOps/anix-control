@@ -91,19 +91,19 @@ func TestRunOnceDeletesExpiredRowsInBatches(t *testing.T) {
 
 	// 149 traffic rows are older than 400 days: 4 batches of 40, the last
 	// one short (29), which ends the table.
-	require.Equal(t, int64(149), result.Deleted["v2_server_log"])
-	require.Equal(t, int64(101), count(t, db, "v2_server_log"))
+	require.Equal(t, int64(149), result.Deleted["v5_server_log"])
+	require.Equal(t, int64(101), count(t, db, "v5_server_log"))
 	// node log: rows aged 0..39 days, 30 days kept: the row at the cutoff
 	// stays, the 9 older ones (31..39 days) go.
-	require.Equal(t, int64(9), result.Deleted["v2_node_log"])
-	require.Equal(t, int64(31), count(t, db, "v2_node_log"))
-	require.Equal(t, int64(2), result.Deleted["v2_audit_log"])
-	require.Equal(t, int64(2), count(t, db, "v2_audit_log"))
+	require.Equal(t, int64(9), result.Deleted["v5_node_log"])
+	require.Equal(t, int64(31), count(t, db, "v5_node_log"))
+	require.Equal(t, int64(2), result.Deleted["v5_audit_log"])
+	require.Equal(t, int64(2), count(t, db, "v5_audit_log"))
 	require.Equal(t, 4+1+1, deletes, "149 rows in batches of 40, 9 and 2 rows in one each")
 
 	again, err := worker.RunOnce(context.Background())
 	require.NoError(t, err)
-	require.Zero(t, again.Deleted["v2_server_log"]+again.Deleted["v2_node_log"]+again.Deleted["v2_audit_log"])
+	require.Zero(t, again.Deleted["v5_server_log"]+again.Deleted["v5_node_log"]+again.Deleted["v5_audit_log"])
 }
 
 // v5_destination_stat keeps the administrator's retention, 30 days by
@@ -144,9 +144,9 @@ func TestRunOnceKeepsATableWithANegativeRetentionAndHonoursMaxBatches(t *testing
 	}
 	result, err := worker.RunOnce(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, int64(80), result.Deleted["v2_server_log"], "two batches of 40, the rest is for the next run")
-	require.Equal(t, int64(170), count(t, db, "v2_server_log"))
-	require.Equal(t, int64(40), count(t, db, "v2_node_log"), "a negative retention deletes nothing")
+	require.Equal(t, int64(80), result.Deleted["v5_server_log"], "two batches of 40, the rest is for the next run")
+	require.Equal(t, int64(170), count(t, db, "v5_server_log"))
+	require.Equal(t, int64(40), count(t, db, "v5_node_log"), "a negative retention deletes nothing")
 }
 
 func TestRunOnceStopsWhenTheContextEnds(t *testing.T) {
@@ -162,7 +162,7 @@ func TestRunOnceStopsWhenTheContextEnds(t *testing.T) {
 	result, err := worker.RunOnce(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Less(t, time.Since(started), 5*time.Second, "the pause between batches does not outlive the context")
-	require.Equal(t, int64(10), result.Deleted["v2_server_log"], "one batch ran")
+	require.Equal(t, int64(10), result.Deleted["v5_server_log"], "one batch ran")
 }
 
 // After a delete the freed pages go back to the file, which a database with
@@ -182,7 +182,7 @@ func TestRunOnceReturnsFreedPagesToTheFile(t *testing.T) {
 	worker := &Worker{DB: db, BatchSize: 500, BatchPause: time.Millisecond, Now: func() time.Time { return testNow }}
 	result, err := worker.RunOnce(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, int64(2000), result.Deleted["v2_node_log"])
+	require.Equal(t, int64(2000), result.Deleted["v5_node_log"])
 	require.NoError(t, db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error)
 
 	var free int64
@@ -213,10 +213,10 @@ func TestRunRunsAgainAfterTheInterval(t *testing.T) {
 		worker.Run(ctx)
 		close(done)
 	}()
-	require.Eventually(t, func() bool { return count(t, db, "v2_server_log") == 101 }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return count(t, db, "v5_server_log") == 101 }, 5*time.Second, 10*time.Millisecond)
 	// A row that expires later is taken by a later run.
 	require.NoError(t, db.Create(&model.AuditLog{Method: "GET", Path: "/old", CreatedAt: testNow.Add(-1000 * 24 * time.Hour)}).Error)
-	require.Eventually(t, func() bool { return count(t, db, "v2_audit_log") == 2 }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return count(t, db, "v5_audit_log") == 2 }, 5*time.Second, 10*time.Millisecond)
 	cancel()
 	select {
 	case <-done:

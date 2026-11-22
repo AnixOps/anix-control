@@ -17,7 +17,7 @@ type ticketBridge interface {
 }
 
 // newTicketService returns the ticket host's router. Every route has a
-// native handler on the adopted v2_ticket and v2_ticket_message tables and
+// native handler on the adopted v5_ticket and v5_ticket_message tables and
 // serves natively from the start: the kernel keeps no legacy handler for
 // them.
 func newTicketService(bridge ticketBridge, leaseID string) (*pluginhostsdk.Router, error) {

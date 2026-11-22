@@ -46,7 +46,7 @@ func planExists(db *gorm.DB, planID uint) error {
 }
 
 // userExists is the kernel's subscriptionUserExists, on
-// kapi_subscriber_entitlement_v1 (a row per v2_user row).
+// kapi_subscriber_entitlement_v1 (a row per v5_user row).
 func userExists(db *gorm.DB, userID uint) error {
 	var user Entitlement
 	if err := db.Select("id").First(&user, userID).Error; err != nil {
@@ -72,8 +72,8 @@ func (s *Service) PlanGroups(ctx context.Context, request pluginhostsdk.NativeRe
 		return s.bindingError("获取失败", err)
 	}
 	var groups []*model.SubscriptionGroup
-	if err := db.Joins("JOIN v2_plan_subscription_group ON v2_subscription_group.id = v2_plan_subscription_group.group_id").
-		Where("v2_plan_subscription_group.plan_id = ?", planID).
+	if err := db.Joins("JOIN v5_plan_subscription_group ON v5_subscription_group.id = v5_plan_subscription_group.group_id").
+		Where("v5_plan_subscription_group.plan_id = ?", planID).
 		Find(&groups).Error; err != nil {
 		return s.bindingError("获取失败", err)
 	}
@@ -167,7 +167,7 @@ func (s *Service) UserGroups(ctx context.Context, request pluginhostsdk.NativeRe
 	}
 	var groups []*model.SubscriptionGroup
 	members := UserGroup{}.TableName()
-	if err := db.Joins("JOIN "+members+" ON v2_subscription_group.id = "+members+".group_id").
+	if err := db.Joins("JOIN "+members+" ON v5_subscription_group.id = "+members+".group_id").
 		Where(members+".user_id = ? AND ("+members+".expire_at IS NULL OR "+members+".expire_at > ?)", userID, s.now().Unix()).
 		Find(&groups).Error; err != nil {
 		return s.bindingError("获取失败", err)
@@ -178,7 +178,7 @@ func (s *Service) UserGroups(ctx context.Context, request pluginhostsdk.NativeRe
 // LinkProtocols is POST /api/v2/admin/subscription/groups/:id/protocols:
 // the group's node protocols become exactly the listed ones. A protocol is
 // known by kapi_node_protocol_v1; the link rows are the adopted
-// v2_subscription_group_node_protocols. The kernel's association replace
+// v5_subscription_group_node_protocols. The kernel's association replace
 // also touches the group's updated_at, and so does this.
 func (s *Service) LinkProtocols(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	groupID, ok := pathUint(request, "id")

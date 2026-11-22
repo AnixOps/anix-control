@@ -45,7 +45,7 @@ type ForwardNode struct {
 	MaxConn int    `json:"max_conn"`                // 最大连接数
 	Enabled bool   `gorm:"default:true" json:"enabled"`
 
-	// Node groups (internal/nodegroup), as on v2_node: the group whose join
+	// Node groups (internal/nodegroup), as on v5_node: the group whose join
 	// token created the node, the machine fingerprint it joined with, its
 	// approval (NodeApproval*) and the public address it joined from.
 	// Adoption (internal/database/migrations) adds them to tables an older
@@ -66,7 +66,7 @@ type ForwardNode struct {
 
 // TableName 指定表名
 func (ForwardNode) TableName() string {
-	return "v2_forward_node"
+	return "v5_forward_node"
 }
 
 // ForwardRule 转发规则

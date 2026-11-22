@@ -5,7 +5,7 @@
 // routes; their answers are pinned by internal/tests/notificationcompat.
 //
 // The e-mail configuration (GET and PUT) and the test send read and write
-// the notification.email.config key of the kernel's v2_system_config
+// the notification.email.config key of the kernel's v5_system_config
 // through KernelSettings, namespace mail. Its value holds the SMTP password,
 // a secret: the package reads it in clear (kernel.settings.mail.secrets.v1)
 // because it sends the test e-mail itself. Administrators see it masked, as

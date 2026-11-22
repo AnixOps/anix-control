@@ -20,7 +20,7 @@ type Coupon struct {
 }
 
 func (Coupon) TableName() string {
-	return "v2_coupon"
+	return "v5_coupon"
 }
 
 // CouponUsage 优惠券使用记录
@@ -33,5 +33,5 @@ type CouponUsage struct {
 }
 
 func (CouponUsage) TableName() string {
-	return "v2_coupon_usage"
+	return "v5_coupon_usage"
 }

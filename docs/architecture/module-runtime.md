@@ -129,8 +129,8 @@ Agents get them from `anix.agent.v1.AgentEnrollment` on the node-facing
 gRPC listener (`grpc.*`, port 50051), not on the module listener.
 
 - **Identity.** One URI SAN names the node:
-  `spiffe://anixops/<cluster>/agent/proxy-<id>` for a `v2_node` row or
-  `.../agent/forward-<id>` for a `v2_forward_node` row. Proxy and forward
+  `spiffe://anixops/<cluster>/agent/proxy-<id>` for a `v5_node` row or
+  `.../agent/forward-<id>` for a `v5_forward_node` row. Proxy and forward
   ids overlap, so the kind is part of the name. The kernel ignores the
   CSR's subject and SANs and issues the identity of the node the bootstrap
   credential authenticated.
@@ -171,7 +171,7 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
     most 604800).
   - CLI: `anix-control agent token create -node proxy-12 [-ttl 24h]`.
   - Every credential issue and every enrollment writes an operation log
-    entry (`v2_operation_log`, module `agent_pki`, actions
+    entry (`v5_operation_log`, module `agent_pki`, actions
     `agent_enrollment_token_issue` and `agent_enroll`) without the
     credential.
 - **Listener.** The listener keeps its public TLS certificate

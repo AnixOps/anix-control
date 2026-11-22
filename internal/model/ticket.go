@@ -18,7 +18,7 @@ type Ticket struct {
 }
 
 func (Ticket) TableName() string {
-	return "v2_ticket"
+	return "v5_ticket"
 }
 
 // TicketMessage 工单消息模型
@@ -32,5 +32,5 @@ type TicketMessage struct {
 }
 
 func (TicketMessage) TableName() string {
-	return "v2_ticket_message"
+	return "v5_ticket_message"
 }

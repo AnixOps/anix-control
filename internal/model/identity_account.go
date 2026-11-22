@@ -3,8 +3,8 @@ package model
 import "time"
 
 // IdentityAccountLink ties an identity-module account to the kernel
-// subscriber (v2_user row) it owns. ProjectionVersion is the last account
-// version applied to the v2_user identity columns; older ones are ignored.
+// subscriber (v5_user row) it owns. ProjectionVersion is the last account
+// version applied to the v5_user identity columns; older ones are ignored.
 type IdentityAccountLink struct {
 	UserID            uint   `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
 	AccountUUID       string `gorm:"size:36;not null;uniqueIndex" json:"account_uuid"`
@@ -43,6 +43,6 @@ type IdentityAuthority struct {
 
 func (IdentityAuthority) TableName() string { return "v4_kernel_identity_authority" }
 
-// UnusableLegacyPassword is stored in v2_user.password for accounts whose
+// UnusableLegacyPassword is stored in v5_user.password for accounts whose
 // credentials live in identity. It never matches a password.
 const UnusableLegacyPassword = "!identity"

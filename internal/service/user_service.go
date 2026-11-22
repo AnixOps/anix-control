@@ -45,7 +45,7 @@ func (s *UserService) GetByID(id uint) (*model.User, error) {
 	return &user, nil
 }
 
-// ActiveUsersForNodeQuery restricts a v2_user query to the users a node
+// ActiveUsersForNodeQuery restricts a v5_user query to the users a node
 // serves: the active subscribers (subscriber.Active) of the node's plan
 // group, or every active subscriber when groupID is nil. The Agent Control
 // user deltas read it.

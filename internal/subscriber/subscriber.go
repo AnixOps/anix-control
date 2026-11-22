@@ -1,6 +1,6 @@
 // Package subscriber is the kernel's single writer of shared subscriber
 // state: entitlements, traffic counters, subscription credentials and
-// balances in v2_user and v2_user_subscription_group
+// balances in v5_user and v5_user_subscription_group
 // (docs/architecture/subscriber-service.md). The kernel's own callers and
 // the KernelSubscriber contract use the same functions, so both behave
 // alike. Every retryable write carries a request id, applied once.
@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ErrSubscriberNotFound means no v2_user row has the id.
+// ErrSubscriberNotFound means no v5_user row has the id.
 var ErrSubscriberNotFound = errors.New("subscriber not found")
 
 // bytesPerGiB converts a plan's transfer (GiB) to bytes.

@@ -14,7 +14,7 @@ package model
 
 import "time"
 
-// SubscriptionGroup is a v2_subscription_group row.
+// SubscriptionGroup is a v5_subscription_group row.
 type SubscriptionGroup struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"size:100;uniqueIndex" json:"name"`
@@ -31,9 +31,9 @@ type SubscriptionGroup struct {
 }
 
 // TableName is the adopted kernel table.
-func (SubscriptionGroup) TableName() string { return "v2_subscription_group" }
+func (SubscriptionGroup) TableName() string { return "v5_subscription_group" }
 
-// SubscriptionTemplate is a v2_subscription_template row.
+// SubscriptionTemplate is a v5_subscription_template row.
 type SubscriptionTemplate struct {
 	ID      uint    `gorm:"primaryKey" json:"id"`
 	GroupID uint    `gorm:"index" json:"group_id"`
@@ -79,9 +79,9 @@ type SubscriptionTemplate struct {
 }
 
 // TableName is the adopted kernel table.
-func (SubscriptionTemplate) TableName() string { return "v2_subscription_template" }
+func (SubscriptionTemplate) TableName() string { return "v5_subscription_template" }
 
-// PlanSubscriptionGroup is a v2_plan_subscription_group row: a subscription
+// PlanSubscriptionGroup is a v5_plan_subscription_group row: a subscription
 // group a plan grants.
 type PlanSubscriptionGroup struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -91,9 +91,9 @@ type PlanSubscriptionGroup struct {
 }
 
 // TableName is the adopted kernel table.
-func (PlanSubscriptionGroup) TableName() string { return "v2_plan_subscription_group" }
+func (PlanSubscriptionGroup) TableName() string { return "v5_plan_subscription_group" }
 
-// GroupProtocol is a v2_subscription_group_node_protocols row, the kernel's
+// GroupProtocol is a v5_subscription_group_node_protocols row, the kernel's
 // many-to-many join of subscription groups and node protocols.
 type GroupProtocol struct {
 	SubscriptionGroupID uint `gorm:"primaryKey"`
@@ -101,7 +101,7 @@ type GroupProtocol struct {
 }
 
 // TableName is the adopted kernel table.
-func (GroupProtocol) TableName() string { return "v2_subscription_group_node_protocols" }
+func (GroupProtocol) TableName() string { return "v5_subscription_group_node_protocols" }
 
 // ProtocolType is the kernel's node protocol type.
 type ProtocolType string

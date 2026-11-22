@@ -20,7 +20,7 @@ func newSession(db *gorm.DB) *gorm.DB {
 	return db.Session(&gorm.Session{NewDB: true})
 }
 
-// --- Protocol secrets (v2_node_protocol, v2_node.raw_config, v2_wireguard_peer) ---
+// --- Protocol secrets (v5_node_protocol, v5_node.raw_config, v5_wireguard_peer) ---
 
 // ResolveProtocols gives the secret positions of the protocols' JSON
 // columns their values from the new table, in place, where the kernel

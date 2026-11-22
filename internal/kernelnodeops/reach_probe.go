@@ -32,7 +32,7 @@ type ReachTarget struct {
 
 // ReachProbes runs reach.probe on the Agent Control stream of a proxy node.
 // It is not an administrator task: it is not recorded in
-// v2_agent_diagnostic_task.
+// v5_agent_diagnostic_task.
 type ReachProbes struct {
 	// Sources are the live sessions; DefaultAgentSources when nil.
 	Sources SourcesFunc

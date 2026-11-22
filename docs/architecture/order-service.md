@@ -9,11 +9,11 @@ transactions: "支付回调完成订单").
 
 A paid payment callback changes three domains in one kernel transaction:
 
-- the payment record and its gateway's statistics (`v2_payment_record`,
-  `v2_payment_gateway`), which the payment module adopted;
-- the order (`v2_order`: paid, then completed), which the order module
+- the payment record and its gateway's statistics (`v5_payment_record`,
+  `v5_payment_gateway`), which the payment module adopted;
+- the order (`v5_order`: paid, then completed), which the order module
   adopted;
-- the buyer's plan (`v2_user`, `v2_user_subscription_group`), which only
+- the buyer's plan (`v5_user`, `v5_user_subscription_group`), which only
   the kernel writes (`subscriber-service.md`), with request id
   `order:<order id>` and the change log.
 
@@ -30,7 +30,7 @@ asks the kernel to apply the paid record to the order.
 
 - **KernelSubscriber is about subscriber state.** Its callers send the
   change (a plan snapshot, a traffic batch) and the kernel applies it to
-  `v2_user`. Completing a paid order is a decision the kernel makes from two
+  `v5_user`. Completing a paid order is a decision the kernel makes from two
   other modules' rows: whether a payment record pays an order, then the
   order's status and the plan it grants. Putting it into KernelSubscriber
   would make that contract know orders and payments.
@@ -153,8 +153,8 @@ the kernel workers.
 A run reads, in batches of 100 by record id and at most 10 batches, the
 records that:
 
-- are paid (`v2_payment_record.status = 1`);
-- name an order that exists and is pending (`v2_order.status = 0`);
+- are paid (`v5_payment_record.status = 1`);
+- name an order that exists and is pending (`v5_order.status = 0`);
 - were paid more than two minutes ago (the grace: the live callback runs
   step 2 right after step 1 commits, and the reconciler stays out of it);
 - were paid within the request ledger's 90 days;
@@ -194,7 +194,7 @@ A larger backlog continues on the next run.
   query (the kernel's gateway registry serves EPay only), Stripe's
   HMAC-SHA256 with a five-minute tolerance, x402's HMAC-SHA256 over the
   canonical fields, and PayPal's `verify-webhook-signature` API. The secrets
-  come from the adopted `v2_payment_gateway`: the first enabled gateway of
+  come from the adopted `v5_payment_gateway`: the first enabled gateway of
   the type, as the kernel's `GetByType`. The PayPal webhook needs outbound
   HTTPS from the payment host to `api-m.paypal.com` (or the sandbox), which
   only the kernel needed before.
@@ -213,7 +213,7 @@ A larger backlog continues on the next run.
 
 `internal/tests/paymentcompat` runs the real KernelOrder server in process
 over gRPC on the native side's database and compares, after each request,
-`v2_payment_record`, the gateway statistics, `v2_order`, the subscribers'
+`v5_payment_record`, the gateway statistics, `v5_order`, the subscribers'
 entitlements and subscription groups, the request ledger and the change log,
 on SQLite and PostgreSQL: 78 callback cases on each (EPay 18, x402 22,
 Stripe 18, PayPal 20), including repeats, the state a failure between the

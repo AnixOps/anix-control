@@ -14,7 +14,7 @@ import "time"
 // is protected (service.protectedTables), and no contract call answers it.
 type KernelNodeDesiredConfig struct {
 	ID uint64 `gorm:"primaryKey;autoIncrement" json:"-"`
-	// NodeKind is proxy (v2_node) or forward (v2_forward_node); ids of the
+	// NodeKind is proxy (v5_node) or forward (v5_forward_node); ids of the
 	// two tables overlap.
 	NodeKind string `gorm:"size:16;not null;uniqueIndex:idx_kernel_node_desired_config_node,priority:1" json:"node_kind"`
 	NodeID   uint64 `gorm:"not null;uniqueIndex:idx_kernel_node_desired_config_node,priority:2" json:"node_id"`

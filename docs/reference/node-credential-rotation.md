@@ -90,7 +90,7 @@ If any step fails, nothing changes.
 
 ## Audit
 
-Two entries in `v2_operation_log` (module `agent_pki`), in the
+Two entries in `v5_operation_log` (module `agent_pki`), in the
 administrator's name and with the client address, without any credential:
 
 - `agent_credentials_rotate`: `node`, `enrollment_id`,

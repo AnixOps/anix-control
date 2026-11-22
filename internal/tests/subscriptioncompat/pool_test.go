@@ -13,8 +13,8 @@ import (
 )
 
 // A group's protocols and the protocol pool read kapi_node_protocol_public_v1
-// and kapi_node_public_v1, the views of the finalized v2_node_protocol and
-// v2_node (docs/architecture/node-ops-service.md section 4.6). The native
+// and kapi_node_public_v1, the views of the finalized v5_node_protocol and
+// v5_node (docs/architecture/node-ops-service.md section 4.6). The native
 // side's lease is what the kernel grants the package's manifest
 // (packagecompat.Lease), so these cases also prove the grant.
 
@@ -62,8 +62,8 @@ func seedPool(t testing.TB, db *gorm.DB) {
 	// seed's report times are relative to its clock, which the two sides
 	// read a moment apart.
 	require.NoError(t, db.Model(&model.Node{}).Where("last_check_at IS NOT NULL").UpdateColumn("last_check_at", seeded.Unix()).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (3, 4)").Error)
-	packagecompat.FinalizeNodeSplit(t, db, "v2_node", "v2_node_protocol")
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (3, 4)").Error)
+	packagecompat.FinalizeNodeSplit(t, db, "v5_node", "v5_node_protocol")
 	syncSequences(t, db)
 }
 
@@ -87,7 +87,7 @@ func TestAvailableProtocols(t *testing.T) {
 		[]packagecompat.Case{
 			{Name: "shown protocols by node and sort, with nodes and groups", Path: path, Seed: seedPool},
 			{Name: "no protocols", Path: path, Seed: func(t testing.TB, db *gorm.DB) {
-				packagecompat.FinalizeNodeSplit(t, db, "v2_node", "v2_node_protocol")
+				packagecompat.FinalizeNodeSplit(t, db, "v5_node", "v5_node_protocol")
 			}},
 		})
 }

@@ -560,8 +560,8 @@ func (s *NodeService) GetProtocols(nodeID uint) ([]model.NodeProtocol, error) {
 func (s *NodeService) GetProtocolsByGroup(groupID uint) ([]model.NodeProtocol, error) {
 	var protocols []model.NodeProtocol
 	if err := s.db.Preload("Node").
-		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = v2_node_protocol.id").
-		Where("v2_subscription_group_node_protocols.subscription_group_id = ?", groupID).
+		Joins("JOIN v5_subscription_group_node_protocols ON v5_subscription_group_node_protocols.node_protocol_id = v5_node_protocol.id").
+		Where("v5_subscription_group_node_protocols.subscription_group_id = ?", groupID).
 		Find(&protocols).Error; err != nil {
 		return nil, err
 	}

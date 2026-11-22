@@ -71,7 +71,7 @@ func seedUsers(change func(*config.Config), mutate func(t testing.TB, db *gorm.D
 		require.NoError(t, db.Create(&users).Error)
 		if db.Name() == "postgres" {
 			// Explicit ids do not advance the sequence new rows draw from.
-			require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v2_user', 'id'), (SELECT MAX(id) FROM v2_user))").Error)
+			require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v5_user', 'id'), (SELECT MAX(id) FROM v5_user))").Error)
 		}
 		require.NoError(t, db.Create(&model.UserMFA{UserID: 5, Enabled: true, TOTPSecret: totpSecret, BackupCodes: `["AAAA-BBBB","CCCC-DDDD"]`}).Error)
 		if mutate != nil {

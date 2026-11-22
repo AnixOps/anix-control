@@ -15,7 +15,7 @@ const (
 
 // AdminAPIToken is an administrator's personal access token for automation.
 // Only the SHA-256 of the token is stored: the token itself is shown once, in
-// the answer that creates it. The owner's rights are read from v2_user on
+// the answer that creates it. The owner's rights are read from v5_user on
 // every use, so a banned, demoted or deleted administrator's tokens stop
 // working at once.
 type AdminAPIToken struct {

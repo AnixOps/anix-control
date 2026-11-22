@@ -68,7 +68,7 @@ func seedBucketRows(t *testing.T, db *gorm.DB) {
 func requireMergedBucketRows(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	var rows []serverLogRow
-	require.NoError(t, db.Table("v2_server_log").Order("id").Find(&rows).Error)
+	require.NoError(t, db.Table("v5_server_log").Order("id").Find(&rows).Error)
 	ids := make([]uint, len(rows))
 	for i, row := range rows {
 		ids[i] = row.ID
@@ -82,9 +82,9 @@ func requireMergedBucketRows(t *testing.T, db *gorm.DB) {
 	assert.Equal(t, int64(3), *rows[4].U)
 	assert.Equal(t, int64(4), *rows[5].U)
 
-	assert.True(t, db.Migrator().HasIndex("v2_server_log", "idx_v2_server_log_bucket"))
+	assert.True(t, db.Migrator().HasIndex("v5_server_log", "idx_v5_server_log_bucket"))
 	// The unique index is enforced: a row of an existing key is refused.
-	err := db.Exec("INSERT INTO v2_server_log (user_id, server_id, server_type, u, d, rate, log_at) VALUES (1, 7, 'vmess', 1, 1, 1, 3600)").Error
+	err := db.Exec("INSERT INTO v5_server_log (user_id, server_id, server_type, u, d, rate, log_at) VALUES (1, 7, 'vmess', 1, 1, 1, 3600)").Error
 	require.Error(t, err)
 }
 
@@ -169,13 +169,13 @@ func TestAdoptedDatabaseOfAnOlderReleaseGetsTheKeyColumnBeforeTheBucketsStep(t *
 
 		// The added column's default (1) gave the three rows one key.
 		var rows []serverLogRow
-		require.NoError(t, db.Table("v2_server_log").Order("id").Find(&rows).Error)
+		require.NoError(t, db.Table("v5_server_log").Order("id").Find(&rows).Error)
 		require.Len(t, rows, 2)
 		assert.Equal(t, int64(30), *rows[0].U)
 		assert.Equal(t, int64(60), *rows[0].D)
 		assert.InDelta(t, 1.0, *rows[0].Rate, 0)
 		assert.Equal(t, int64(1), *rows[1].U)
-		assert.True(t, db.Migrator().HasIndex("v2_server_log", "idx_v2_server_log_bucket"))
+		assert.True(t, db.Migrator().HasIndex("v5_server_log", "idx_v5_server_log_bucket"))
 	})
 }
 
@@ -199,7 +199,7 @@ func TestReleasedDatabasesWithDuplicateServerLogRowsGetTheBucketsStep(t *testing
 			if hasTable {
 				requireMergedBucketRows(t, db)
 			} else {
-				assert.True(t, db.Migrator().HasIndex("v2_server_log", "idx_v2_server_log_bucket"),
+				assert.True(t, db.Migrator().HasIndex("v5_server_log", "idx_v5_server_log_bucket"),
 					"a partial schema gets the table from the adoption and the index from the step")
 			}
 		})
@@ -213,13 +213,13 @@ func TestServerLogBucketIndexIsTheUpsertTarget(t *testing.T) {
 		_, err := migrations.Migrate(context.Background(), db, migrateOptions())
 		require.NoError(t, err)
 		upsert := func(u int64) error {
-			return db.Exec(fmt.Sprintf("INSERT INTO v2_server_log (user_id, server_id, server_type, u, d, rate, log_at) VALUES (1, 7, 'node', %d, 0, 1, 7200) "+
-				"ON CONFLICT (server_id, log_at, user_id, server_type, rate) DO UPDATE SET u = v2_server_log.u + excluded.u", u)).Error
+			return db.Exec(fmt.Sprintf("INSERT INTO v5_server_log (user_id, server_id, server_type, u, d, rate, log_at) VALUES (1, 7, 'node', %d, 0, 1, 7200) "+
+				"ON CONFLICT (server_id, log_at, user_id, server_type, rate) DO UPDATE SET u = v5_server_log.u + excluded.u", u)).Error
 		}
 		require.NoError(t, upsert(5))
 		require.NoError(t, upsert(6))
 		var u int64
-		require.NoError(t, db.Raw("SELECT u FROM v2_server_log WHERE log_at = 7200").Scan(&u).Error)
+		require.NoError(t, db.Raw("SELECT u FROM v5_server_log WHERE log_at = 7200").Scan(&u).Error)
 		assert.Equal(t, int64(11), u)
 	})
 }

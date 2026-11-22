@@ -13,7 +13,7 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1;ke
 // legacy until its kernel serves the kind.
 //
 // KernelNodeOps is the kernel's contract for operations on nodes: proxy
-// nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
+// nodes (v5_node), forward nodes and Ansible machines (v5_forward_node) and
 // clean agents (v2_forward_clean_agent). The kernel holds every node
 // credential and secret and every agent connection; a package asks it for a
 // typed operation (apply a forward, sync a node's configuration, check an
@@ -102,9 +102,9 @@ service KernelNodeOps {
 // NodeKind names the table a node lives in.
 enum NodeKind {
   NODE_KIND_UNSPECIFIED = 0;
-  // A proxy node, a row of v2_node.
+  // A proxy node, a row of v5_node.
   NODE_KIND_PROXY = 1;
-  // A forward node or Ansible machine, a row of v2_forward_node.
+  // A forward node or Ansible machine, a row of v5_forward_node.
   NODE_KIND_FORWARD = 2;
   // A clean agent, a row of v2_forward_clean_agent.
   NODE_KIND_CLEAN_AGENT = 3;
@@ -280,10 +280,10 @@ message RetireProtocol {
 // SecretScope names what a secret document belongs to.
 enum SecretScope {
   SECRET_SCOPE_UNSPECIFIED = 0;
-  // A column of a node protocol (v2_node_protocol): settings, tls_settings,
+  // A column of a node protocol (v5_node_protocol): settings, tls_settings,
   // transport_settings, reality_settings or custom_config.
   SECRET_SCOPE_NODE_PROTOCOL = 1;
-  // A proxy node's raw configuration (v2_node.raw_config).
+  // A proxy node's raw configuration (v5_node.raw_config).
   SECRET_SCOPE_NODE_RAW_CONFIG = 2;
 }
 
@@ -302,7 +302,7 @@ message PutSecretDocument {
   string column = 3;
   bytes document_json = 4;
   // protocol_json, for a node protocol's settings column, is the protocol
-  // as the package writes it (the v2_node_protocol columns, as the row's
+  // as the package writes it (the v5_node_protocol columns, as the row's
   // JSON). The kernel then validates the protocol with the settings it
   // stores, as the protocol routes validate a write
   // (service.ValidateNodeProtocol), and fails the operation
@@ -366,7 +366,7 @@ message TestForwardBackend {
 
 // RunAgentDiagnostic sends one whitelisted diagnostic action to a node's
 // agent (the kernel's diagnostic whitelist normalizes the parameters),
-// records the task in v2_agent_diagnostic_task and waits for the agent's
+// records the task in v5_agent_diagnostic_task and waits for the agent's
 // acknowledgement, as the administrator's task and execute routes do.
 message RunAgentDiagnostic {
   uint64 node_id = 1;
@@ -774,7 +774,7 @@ message AgentDiagnosticResult {
   // task routes show it (the WebSocket's ack message, or the stream's
   // OperationAck), scrubbed like a result; empty without one.
   bytes ack_json = 7;
-  // task_json is the task's row (v2_agent_diagnostic_task) as the
+  // task_json is the task's row (v5_agent_diagnostic_task) as the
   // administrator's task routes show it ("data"): as recorded after the
   // dispatch, or as created when the task could not be sent; scrubbed like
   // a result.

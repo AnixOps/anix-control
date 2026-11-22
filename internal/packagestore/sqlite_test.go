@@ -32,17 +32,17 @@ func openSQLiteKernel(t *testing.T) (*gorm.DB, string) {
 
 func TestSQLiteLeaseSharesTheKernelFileWithATablePrefix(t *testing.T) {
 	db, path := openSQLiteKernel(t)
-	require.NoError(t, db.Exec("CREATE TABLE v2_knowledge (id INTEGER PRIMARY KEY)").Error)
+	require.NoError(t, db.Exec("CREATE TABLE v5_knowledge (id INTEGER PRIMARY KEY)").Error)
 	now := time.Unix(1_790_000_000, 0)
 	store := Store{DB: db, Driver: "sqlite3", DSN: path, Now: func() time.Time { return now }}
 	holder := Holder{PackageID: "knowledge", Version: "4.1.0", Generation: 7}
-	grants := Grants{Storage: true, AdoptTables: []string{"v2_knowledge", "v2_knowledge"}, Views: []string{"kapi_user_directory_v1"}}
+	grants := Grants{Storage: true, AdoptTables: []string{"v5_knowledge", "v5_knowledge"}, Views: []string{"kapi_user_directory_v1"}}
 
 	lease, err := store.Lease(context.Background(), holder, grants)
 	require.NoError(t, err)
 	require.Equal(t, Lease{
 		Driver: DriverSQLite, DSN: path, TablePrefix: "pkg_knowledge_", LeaseGeneration: 1,
-		AdoptedTables: []string{"v2_knowledge"}, Views: []string{"kapi_user_directory_v1"},
+		AdoptedTables: []string{"v5_knowledge"}, Views: []string{"kapi_user_directory_v1"},
 	}, lease)
 
 	lease, err = store.Lease(context.Background(), holder, grants)
@@ -53,7 +53,7 @@ func TestSQLiteLeaseSharesTheKernelFileWithATablePrefix(t *testing.T) {
 	require.Equal(t, DriverSQLite, row.Driver)
 	require.Equal(t, "4.1.0", row.PackageVersion)
 	require.EqualValues(t, 7, row.HostGeneration)
-	require.JSONEq(t, `{"adopt_tables":["v2_knowledge"],"views":["kapi_user_directory_v1"]}`, row.GrantsJSON)
+	require.JSONEq(t, `{"adopt_tables":["v5_knowledge"],"views":["kapi_user_directory_v1"]}`, row.GrantsJSON)
 
 	var columns []string
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_user_directory_v1') ORDER BY cid").Scan(&columns).Error)
@@ -66,7 +66,7 @@ func TestSystemAuditLogViewShowsOnlyTheSystemModule(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_system_audit_log_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_operation_log")
+	require.False(t, exists, "no view without v5_operation_log")
 
 	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
 	require.NoError(t, db.Create(&[]model.OperationLog{
@@ -152,7 +152,7 @@ func TestPlanViewsShowWhatAnOrderNeeds(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_plan_subscription_group_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_plan_subscription_group")
+	require.False(t, exists, "no view without v5_plan_subscription_group")
 	require.NoError(t, db.AutoMigrate(&model.Plan{}, &model.PlanSubscriptionGroup{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 
@@ -169,12 +169,12 @@ func TestPlanViewsShowWhatAnOrderNeeds(t *testing.T) {
 }
 
 // kapi_order_billing_v1 shows a payment whose order it is, what it costs
-// and its status, and nothing else of v2_order.
+// and its status, and nothing else of v5_order.
 func TestOrderBillingViewShowsWhatAPaymentNeeds(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_order_billing_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_order")
+	require.False(t, exists, "no view without v5_order")
 	require.NoError(t, db.AutoMigrate(&model.Order{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 	var columns []string
@@ -183,12 +183,12 @@ func TestOrderBillingViewShowsWhatAPaymentNeeds(t *testing.T) {
 }
 
 // kapi_traffic_log_v1 shows each traffic report's user, bytes, rate and
-// time, and nothing else of v2_server_log.
+// time, and nothing else of v5_server_log.
 func TestTrafficLogViewShowsTheTrafficCharts(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_traffic_log_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_server_log")
+	require.False(t, exists, "no view without v5_server_log")
 	require.NoError(t, db.AutoMigrate(&model.TrafficLog{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 	var columns []string
@@ -196,7 +196,7 @@ func TestTrafficLogViewShowsTheTrafficCharts(t *testing.T) {
 	require.Equal(t, []string{"user_id", "u", "d", "rate", "log_at"}, columns)
 }
 
-// kapi_user_referral_v1 shows who invited whom, and nothing else of v2_user.
+// kapi_user_referral_v1 shows who invited whom, and nothing else of v5_user.
 func TestReferralViewShowsWhoInvitedWhom(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	var columns []string
@@ -210,7 +210,7 @@ func TestAffiliateSettingsViewShowsOneKey(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_affiliate_settings_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_system_config")
+	require.False(t, exists, "no view without v5_system_config")
 	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 	require.NoError(t, db.Create(&[]model.SystemConfig{
@@ -255,7 +255,7 @@ func TestNodeStatusViewShowsNoCredentials(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_node_status_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_node")
+	require.False(t, exists, "no view without v5_node")
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 	var columns []string
@@ -270,13 +270,13 @@ func TestForwardNodeViewKeepsItsPublishedColumns(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_forward_node_v1")
 	require.NoError(t, err)
-	require.False(t, exists, "no view without v2_forward_node")
+	require.False(t, exists, "no view without v5_forward_node")
 	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
 	require.NoError(t, db.Create(&model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.1", Port: 443}).Error)
 
 	var tableColumns, viewColumns []string
-	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('v2_forward_node') ORDER BY cid").Scan(&tableColumns).Error)
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('v5_forward_node') ORDER BY cid").Scan(&tableColumns).Error)
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_forward_node_v1') ORDER BY cid").Scan(&viewColumns).Error)
 	later := map[string]bool{"node_group_id": true, "machine_fingerprint": true, "approval": true, "last_public_address": true}
 	var published []string

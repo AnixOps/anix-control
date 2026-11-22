@@ -80,7 +80,7 @@ func userCount(t *testing.T, path string) int64 {
 	require.NoError(t, err)
 	defer closeDB()
 	var count int64
-	require.NoError(t, db.Raw("SELECT count(*) FROM v2_user").Scan(&count).Error)
+	require.NoError(t, db.Raw("SELECT count(*) FROM v5_user").Scan(&count).Error)
 	return count
 }
 

@@ -59,7 +59,7 @@ func newPanel(t *testing.T) *panel {
 	authority, err := modulepki.New(modulepki.Options{DB: p.db, Cluster: "default", KEK: key.Bytes()})
 	require.NoError(t, err)
 	require.NoError(t, authority.Ensure(ctx))
-	require.NoError(t, p.db.Exec("INSERT INTO v2_user (email, password, uuid, token, created_at, updated_at) VALUES ('a@example.com', 'x', 'u-1', 't-1', datetime('now'), datetime('now')), ('b@example.com', 'x', 'u-2', 't-2', datetime('now'), datetime('now'))").Error)
+	require.NoError(t, p.db.Exec("INSERT INTO v5_user (email, password, uuid, token, created_at, updated_at) VALUES ('a@example.com', 'x', 'u-1', 't-1', datetime('now'), datetime('now')), ('b@example.com', 'x', 'u-2', 't-2', datetime('now'), datetime('now'))").Error)
 	return p
 }
 

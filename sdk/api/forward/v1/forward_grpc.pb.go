@@ -110,7 +110,7 @@ type ForwardControlClient interface {
 	// nodes that cannot probe. Bounded in time; answers a recent diagnosis of
 	// the same route again (cached) and RESOURCE_EXHAUSTED when too many run.
 	DiagnoseRoute(ctx context.Context, in *DiagnoseRouteRequest, opts ...grpc.CallOption) (*DiagnoseRouteResponse, error)
-	// ListNodes answers every forward node (v2_forward_node) and every proxy
+	// ListNodes answers every forward node (v5_forward_node) and every proxy
 	// node in the forwarding inventory, by node_ref, with its settings, the
 	// planner's view and its desired and reported generations.
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
@@ -522,7 +522,7 @@ type ForwardControlServer interface {
 	// nodes that cannot probe. Bounded in time; answers a recent diagnosis of
 	// the same route again (cached) and RESOURCE_EXHAUSTED when too many run.
 	DiagnoseRoute(context.Context, *DiagnoseRouteRequest) (*DiagnoseRouteResponse, error)
-	// ListNodes answers every forward node (v2_forward_node) and every proxy
+	// ListNodes answers every forward node (v5_forward_node) and every proxy
 	// node in the forwarding inventory, by node_ref, with its settings, the
 	// planner's view and its desired and reported generations.
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)

@@ -3,8 +3,8 @@
 // testdata while the routes still matched the kernel's legacy handlers byte
 // for byte (packagecompat's golden answers): the hourly traffic series, the
 // user traffic ranking and the dashboard. The traffic routes read the kernel
-// views kapi_traffic_log_v1 and kapi_user_directory_v1 over v2_server_log
-// and v2_user, so every case also proves the views show what the routes
+// views kapi_traffic_log_v1 and kapi_user_directory_v1 over v5_server_log
+// and v5_user, so every case also proves the views show what the routes
 // read.
 package machinetelemetrycompat
 
@@ -62,7 +62,7 @@ func seedUsers(t testing.TB, db *gorm.DB) {
 // hour: in it, in the next hour (counted nowhere), in earlier hours of the
 // day, a day ago, weeks ago and beyond the 30-day window, with rates of 1,
 // 1.5, 0 and -2 (both counted as 1) and 2, negative bytes (counted as 0), a
-// sum beyond int64 (clamped), and reports of a user without a v2_user row
+// sum beyond int64 (clamped), and reports of a user without a v5_user row
 // (id 9). Each user's total differs in every window, so the ranking, which
 // has no tie-break, is well defined.
 func seedTraffic(t testing.TB, db *gorm.DB) {

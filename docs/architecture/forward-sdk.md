@@ -1674,7 +1674,7 @@ and `forward.udp_probe`. There is no `forward.probe` operation kind.
 - Control sends them only to a session that advertises `agent.diagnostic`
   and `diag.v1`, from `kernelnodeops.ForwardChecks` directly on the stream.
   They are probes, not administrator tasks: neither
-  `v2_agent_diagnostic_task` nor the KernelNodeOps ledger records them. The
+  `v5_agent_diagnostic_task` nor the KernelNodeOps ledger records them. The
   diagnosis endpoint is audited.
 - The administrator diagnostic routes and the KernelNodeOps
   `agent.diagnostic` kind refuse the forward actions
@@ -1746,7 +1746,7 @@ on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
   - `SetNodeSettings` is `Service.SetNodeSettings`. A replan the settings
     make impossible stores them anyway and answers the violations.
   - `CreateForwardNode`, `UpdateForwardNode` and `DeleteForwardNode` write
-    the forward node registry (`v2_forward_node`, the Agent identity
+    the forward node registry (`v5_forward_node`, the Agent identity
     `forward-<id>`).
     - They go through `service.ForwardNodeService`, so the credential split
       and Agent certificate revocation follow, and they use the plan lock
@@ -2006,7 +2006,7 @@ Agent never upgrades on its own. H25: the Agent release is Control's.
   `batches`, `exclude {nodes, tags}`, `reason`), `GET` (list) and
   `GET /:id` (with every node), `POST /:id/pause`, `/resume`, `/abort`
   (`{"rollback": true}` rolls the current batch back first); audited in
-  `v2_operation_log` as module `agent_upgrade`.
+  `v5_operation_log` as module `agent_upgrade`.
   `anix-control agent upgrade start|status|pause|resume|abort`. The Agent
   transports page shows the latest campaign with its batches.
 
@@ -2055,7 +2055,7 @@ one is **IRREVERSIBLE** and is gate **H15**, confirmed on its own.
    the F5 audit) to one JSON file, readable only by administrators (file
    mode 0600 under the data directory, and a super-administrator download).
    Node tokens and other secrets are left out. Forward nodes
-   (`v2_forward_node`) are not dropped: they are node inventory and the
+   (`v5_forward_node`) are not dropped: they are node inventory and the
    Agent identity (`forward-<id>`).
 2. **Check the nodes are clean.** Agent nodes cleaned themselves in step 1
    of the order above; F5c only verifies them, from the Agent's report.
@@ -2082,12 +2082,12 @@ Drop The Old Tables").
   `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward`,
   `v2_forward_tunnel`, `v2_forward_rule`, and the pre-flux
   `v2_forward_route`, `v2_forward_log` and `v2_forward_stats`, which
-  nothing reads any more. It keeps `v2_forward_node` (inventory and Agent
+  nothing reads any more. It keeps `v5_forward_node` (inventory and Agent
   identity) and `v2_forward_clean_agent`: the latter is a table of the
   node credential split (`internal/nodesecrets`) and the source of
   `kapi_forward_clean_agent_v1`, so it goes with the clean agent's code,
   not with the flux data. Both kept tables are archived too, without their
-  tokens. `v2_forward_latency_bucket` is not flux data: its probes also
+  tokens. `v5_forward_latency_bucket` is not flux data: its probes also
   cover proxy nodes.
 - **Archive.** One JSON file, schema
   `anixops.forward.legacy-archive.v1`, mode 0600 in a 0700 directory: by
@@ -2613,7 +2613,7 @@ Smaller questions raised by this design:
 - Global quota across several entries, Control-authoritative with a local
   remainder (section 5.3): decided by default with F3a, the owner may
   revisit; the local remainder's rendering is deferred.
-- Forward nodes (`v2_forward_node`) kept through the v4.2 upgrade as node
+- Forward nodes (`v5_forward_node`) kept through the v4.2 upgrade as node
   inventory (section 10; H15)? Kept, as section 10 records: F5c never
   drops it, and F3a's inventory uses it.
 

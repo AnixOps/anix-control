@@ -99,7 +99,7 @@ const (
 
 // RowCountTables are the tables whose row counts a manifest records and a
 // verification compares.
-var RowCountTables = []string{"v2_user", "v2_node", "v2_order"}
+var RowCountTables = []string{"v5_user", "v5_node", "v5_order"}
 
 // ErrNeedsSQLite answers every backup operation on PostgreSQL.
 var ErrNeedsSQLite = errors.New("backups need SQLite or PostgreSQL: this Control's database driver is not covered by Control's backups. Back the database up yourself and keep root.key with it")

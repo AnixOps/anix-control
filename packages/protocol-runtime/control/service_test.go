@@ -81,7 +81,7 @@ func TestProtocolRuntimeHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// The package adopts the diagnostic task table, and v2_node_protocol,
+// The package adopts the diagnostic task table, and v5_node_protocol,
 // which the kernel grants only once the node credential split finalized it
 // (its secret positions then hold the placeholder). It never adopts the
 // WireGuard peers or the node credentials, which stay protected kernel
@@ -98,7 +98,7 @@ func TestProtocolRuntimeManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task", "kernel.storage.adopt:v2_node_protocol",
+		"kernel.storage.v1", "kernel.storage.adopt:v5_agent_diagnostic_task", "kernel.storage.adopt:v5_node_protocol",
 		"kernel.view:kapi_node_status_v1", "kernel.nodeops.nodeconfig.v1", "kernel.nodeops.agents.v1", "kernel.nodeops.diagnose.v1",
 	}, manifest.Capabilities)
 }

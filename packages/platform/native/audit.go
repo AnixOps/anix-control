@@ -12,7 +12,7 @@ import (
 )
 
 // AuditLog is a row of kapi_system_audit_log_v1, the kernel's read-only view
-// of the v2_operation_log rows of module "system". Its fields and tags are
+// of the v5_operation_log rows of module "system". Its fields and tags are
 // the kernel model's.
 type AuditLog struct {
 	ID         uint   `gorm:"primaryKey" json:"id"`

@@ -52,6 +52,10 @@ func main() {
 	}
 	defer logClose("postgres target", pgSQL.Close)
 
+	if err := requireSourceSchema(src); err != nil {
+		log.Fatal(err)
+	}
+
 	tables, err := sqliteTables(src)
 	if err != nil {
 		log.Fatalf("list sqlite tables: %v", err)
@@ -166,6 +170,22 @@ func migrateSchema(db *gorm.DB) error {
 	return err
 }
 
+// requireSourceSchema refuses a source an earlier Control left behind this
+// program's schema: the import copies tables by name, so a table a later
+// migration renamed or created would be skipped. A source without migration
+// records predates the runner and is copied as before.
+func requireSourceSchema(src *gorm.DB) error {
+	status, err := migrations.Check(context.Background(), src, branding.DefaultVersion)
+	if err != nil {
+		return fmt.Errorf("check the source schema: %w", err)
+	}
+	if status.SchemaVersion > 0 && len(status.Pending) > 0 {
+		return fmt.Errorf("the source database is at migration %04d and this program would still apply %s: "+
+			"start this release of Control on the SQLite database once, stop it, then import", status.SchemaVersion, strings.Join(status.Pending, ", "))
+	}
+	return nil
+}
+
 // runnerTable reports whether table is one of the migration runner's own
 // tables. The target's records describe the target's schema (their
 // checksums are those of its dialect), so the source's are not copied.
@@ -192,7 +212,7 @@ func tableCounts(db *gorm.DB, tables []string) (map[string]int64, error) {
 }
 
 func printImportantCounts(counts map[string]int64) {
-	for _, table := range []string{"v2_user", "v2_plan", "v2_node", "v2_node_protocol", "v2_subscription_group", "v2_forward", "v2_system_config"} {
+	for _, table := range []string{"v5_user", "v5_plan", "v5_node", "v5_node_protocol", "v5_subscription_group", "v2_forward", "v5_system_config"} {
 		if count, ok := counts[table]; ok {
 			fmt.Printf("  %-28s %d\n", table, count)
 		}

@@ -75,11 +75,11 @@ func withDirectory(t testing.TB, db *gorm.DB) {
 		// subscriber's plan can be gone there; PostgreSQL refuses to delete
 		// a plan in use, so the throwaway schema drops the key to hold the
 		// same row.
-		require.NoError(t, db.Exec("ALTER TABLE v2_user DROP CONSTRAINT IF EXISTS fk_v2_user_plan").Error)
+		require.NoError(t, db.Exec("ALTER TABLE v5_user DROP CONSTRAINT IF EXISTS fk_v5_user_plan").Error)
 	}
 	require.NoError(t, db.Create(&users).Error)
 	if db.Name() == "postgres" {
-		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v2_user', 'id'), (SELECT MAX(id) FROM v2_user))").Error)
+		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v5_user', 'id'), (SELECT MAX(id) FROM v5_user))").Error)
 	}
 	// seedUsers' five: the administrator first, the member and the banned
 	// user created in the same instant.
@@ -177,7 +177,7 @@ func TestAdminUserListParity(t *testing.T) {
 		{Name: "order without sort keeps the default order", Path: list("?order=asc")},
 		{Name: "a column that is not sortable", Path: list("?sort=password")},
 		{Name: "a column that is an expression", Path: list("?sort=u%2Bd")},
-		{Name: "a column that is an injection", Path: list("?sort=email%3B%20DROP%20TABLE%20v2_user")},
+		{Name: "a column that is an injection", Path: list("?sort=email%3B%20DROP%20TABLE%20v5_user")},
 		{Name: "a direction that is not asc or desc", Path: list("?sort=email&order=up")},
 		{Name: "sorted many users, a full page", Path: list("?sort=email&order=desc&page_size=100&page=2"), Seed: seedUsers(nil, withManyUsers)},
 		{Name: "many users, first page", Path: list(""), Seed: seedUsers(nil, withManyUsers)},

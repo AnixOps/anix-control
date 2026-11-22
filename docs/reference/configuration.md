@@ -13,7 +13,7 @@ data directory, and the keys earlier releases read.
 | built-in values ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)) | every default | the file and the variables are overlaid on them key by key |
 | `ANIX_CONTROL_*` environment variables | per-key overrides | applied last; see [Environment Variables](#environment-variables) |
 | `data_dir/root.key` | the root key | not configuration: see [The Root Key](#the-root-key) |
-| `v2_system_config` | persisted runtime snapshot | written on startup from the loaded config and consumed by runtime services and `/admin/system` |
+| `v5_system_config` | persisted runtime snapshot | written on startup from the loaded config and consumed by runtime services and `/admin/system` |
 
 The file holds no secret. The root key seals what Control stores and
 derives the JWT secret and the identity signing key KEK.
@@ -643,7 +643,7 @@ Startup behavior:
 
 1. backend loads `config/config.yaml`
 2. `forward_runtime` is parsed
-3. merged values from `forward_runtime` are persisted into `v2_system_config`
+3. merged values from `forward_runtime` are persisted into `v5_system_config`
 4. `/admin/system` and forward runtime services consume the persisted values
 
 Optional worker tuning now also stays inside `forward_runtime`:

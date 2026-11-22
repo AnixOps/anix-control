@@ -265,7 +265,7 @@ const assignUserError = ref('')
 const groupError = ref('')
 const togglingGroupId = ref(null)
 
-// `show` is the plan's sale state (v2_plan.show): the user's purchase list
+// `show` is the plan's sale state (v5_plan.show): the user's purchase list
 // holds only plans with show = 1. A new plan starts on sale; the form keeps
 // the stored state when it edits one.
 const form = reactive({

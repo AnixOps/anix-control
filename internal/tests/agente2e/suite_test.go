@@ -260,7 +260,7 @@ func (s *suite) createUser(t *testing.T, email string) testUser {
 		ID   uint
 		UUID string
 	}
-	require.NoError(t, s.control.db.Raw("SELECT id, uuid FROM v2_user WHERE email = ?", email).Scan(&row).Error)
+	require.NoError(t, s.control.db.Raw("SELECT id, uuid FROM v5_user WHERE email = ?", email).Scan(&row).Error)
 	require.NotZero(t, row.ID)
 	require.NotEmpty(t, row.UUID)
 	user := testUser{ID: row.ID, UUID: row.UUID}
@@ -292,7 +292,7 @@ func (s *suite) startAgent(t *testing.T) {
 func (s *suite) userTraffic(t *testing.T, user testUser) int64 {
 	t.Helper()
 	var total int64
-	require.NoError(t, s.control.db.Raw("SELECT u + d FROM v2_user WHERE id = ?", user.ID).Scan(&total).Error)
+	require.NoError(t, s.control.db.Raw("SELECT u + d FROM v5_user WHERE id = ?", user.ID).Scan(&total).Error)
 	return total
 }
 

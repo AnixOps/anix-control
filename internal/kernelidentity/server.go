@@ -1,7 +1,7 @@
 // Package kernelidentity serves the KernelIdentity contract: the kernel side
 // of the identity module. Identity owns accounts and credentials; the kernel
-// owns subscribers (v2_user rows and their entitlements), keeps the identity
-// columns of v2_user as a versioned read projection, and enforces
+// owns subscribers (v5_user rows and their entitlements), keeps the identity
+// columns of v5_user as a versioned read projection, and enforces
 // revocations. Only the official identity package, whose signed release
 // declares kernel.identity.v1, may call it.
 package kernelidentity
@@ -30,7 +30,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// UnusableLegacyPassword is stored in v2_user.password for accounts whose
+// UnusableLegacyPassword is stored in v5_user.password for accounts whose
 // credentials live in identity. It never matches a password.
 const UnusableLegacyPassword = model.UnusableLegacyPassword
 
@@ -368,7 +368,7 @@ func (h *hostServer) ResolveActorAccess(ctx context.Context, request *kerneliden
 }
 
 // GetSubscriber returns one subscriber as the v2 admin API shows it, with
-// its plan: the v2_user row without its password columns, subscription token
+// its plan: the v5_user row without its password columns, subscription token
 // and proxy uuid included. Identity answers administration, the account's
 // own profile and its dashboard with it.
 func (h *hostServer) GetSubscriber(ctx context.Context, request *kernelidentityv1.GetSubscriberRequest) (*kernelidentityv1.GetSubscriberResponse, error) {

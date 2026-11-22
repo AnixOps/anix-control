@@ -7,7 +7,7 @@ const (
 	LatencyTargetTypeForward     = "forward"      // forward -> remote_addr 目标
 	LatencyTargetTypeTunnelNode  = "tunnel_node"  // 隧道中继/出口节点端点
 	LatencyTargetTypeForwardNode = "forward_node" // ForwardNode 管理端点 (HealthCheck)
-	LatencyTargetTypeNode        = "node"         // 常规代理节点 v2_node
+	LatencyTargetTypeNode        = "node"         // 常规代理节点 v5_node
 )
 
 // ForwardLatencyBucket 一个探测目标在一个时间桶内的预聚合 TCPing 结果。
@@ -40,5 +40,5 @@ type ForwardLatencyBucket struct {
 
 // TableName 指定表名
 func (ForwardLatencyBucket) TableName() string {
-	return "v2_forward_latency_bucket"
+	return "v5_forward_latency_bucket"
 }

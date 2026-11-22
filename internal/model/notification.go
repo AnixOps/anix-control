@@ -19,7 +19,7 @@ type NotificationTemplate struct {
 
 // TableName 指定表名
 func (NotificationTemplate) TableName() string {
-	return "v2_notification_template"
+	return "v5_notification_template"
 }
 
 // NotificationLog 通知日志
@@ -39,7 +39,7 @@ type NotificationLog struct {
 
 // TableName 指定表名
 func (NotificationLog) TableName() string {
-	return "v2_notification_log"
+	return "v5_notification_log"
 }
 
 // NotificationEvent 通知事件

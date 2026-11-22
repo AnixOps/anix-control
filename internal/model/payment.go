@@ -45,7 +45,7 @@ type Payment struct {
 }
 
 func (Payment) TableName() string {
-	return "v2_payment"
+	return "v5_payment"
 }
 
 // PaymentLog 支付日志
@@ -69,7 +69,7 @@ type PaymentLog struct {
 }
 
 func (PaymentLog) TableName() string {
-	return "v2_payment_log"
+	return "v5_payment_log"
 }
 
 // X402Config X402 虚拟货币支付配置

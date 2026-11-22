@@ -7,8 +7,8 @@
 // handlers take from their clock masked) and, where a route writes, the same
 // resulting rows.
 //
-// The node logs read the adopted v2_node_log table. The node statistics, and whether
-// a node exists, come from the kernel view kapi_node_status_v1 over v2_node
+// The node logs read the adopted v5_node_log table. The node statistics, and whether
+// a node exists, come from the kernel view kapi_node_status_v1 over v5_node
 // (packagestore.EnsureKernelAPIViews), so every node case also proves the
 // view shows what the handlers count.
 package proxynodecompat
@@ -48,7 +48,7 @@ func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
 	}
-	for _, table := range []string{"v2_node", "v2_node_log"} {
+	for _, table := range []string{"v5_node", "v5_node_log"} {
 		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
 	}
 }

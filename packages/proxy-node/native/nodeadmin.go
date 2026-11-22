@@ -15,15 +15,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// The node routes work on v2_node, which the package adopts once the node
-// credential split finalized it (kernel.storage.adopt:v2_node, a grant the
+// The node routes work on v5_node, which the package adopts once the node
+// credential split finalized it (kernel.storage.adopt:v5_node, a grant the
 // kernel honours only then): its credential columns hold tombstones and its
 // raw configuration the placeholder at every secret position. A node's
 // protocols come from kapi_node_protocol_public_v1, which the kernel grants
-// once v2_node_protocol is finalized. Until the lease grants them, these
+// once v5_node_protocol is finalized. Until the lease grants them, these
 // routes answer from the legacy handler.
 const (
-	nodeTable           = "v2_node"
+	nodeTable           = "v5_node"
 	nodeProtocolView    = "kapi_node_protocol_public_v1"
 	kernelOperationWait = 30 * time.Second
 	invalidNodeID       = "无效的节点ID"

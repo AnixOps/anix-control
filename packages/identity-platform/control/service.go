@@ -56,7 +56,7 @@ var identityRoutes = map[string]struct{}{
 // handler; they always relay to the kernel's legacy handler. The
 // administrator's invite codes (list, generate, revoke) are registration
 // control, served in every edition: the codes live in Control's
-// v2_invite_code, which registration consumes inside Control, and no kernel
+// v5_invite_code, which registration consumes inside Control, and no kernel
 // contract lets the package read or write them yet. The user's own invite
 // codes, with their commissions, are the affiliate package's.
 var bridgedRoutes = map[string]struct{}{

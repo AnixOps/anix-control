@@ -38,9 +38,37 @@ This release removes the names it kept from it. Check these before the upgrade:
 - **Browser theme.** The admin and user pages keep the theme choice under
   `app.theme`; each browser falls back to the system theme once.
 
-Nothing changes in the database, the API or the Agent protocol. Roll back by
-installing the previous release; a SQLite configuration that the update wrote
-`database.database` into keeps working with it.
+### Table Names Lose The v2_ Prefix
+
+The migration `0040_table_prefix` renames the 51 tables Control kept from
+V2Board, `v2_user` to `v5_user`, `v2_node` to `v5_node` and so on, with
+their `idx_v2_*` indexes and, on PostgreSQL, the primary key and foreign key
+constraints (`v2_user_pkey`, `fk_v2_order_user`, ...) and id sequences
+(`v2_user_id_seq`, ...) named after them
+([`reference/database-migrations.md`](reference/database-migrations.md)).
+Rows, columns, grants and the kernel API views stay as they are. On
+PostgreSQL every rename is a catalog change; SQLite cannot rename an index,
+so it builds the 86 renamed indexes again, which takes longer on a large
+`v5_server_log`.
+
+- **Anything that queries the database by table name** must use the new
+  names from this release on: SQL in scripts, reports, `psql` sessions,
+  dashboards that read PostgreSQL directly. The packages and the commercial
+  build follow in the same release.
+- **`sqlite2postgres`** refuses a SQLite source an earlier Control left
+  behind this release's schema: start this release on the SQLite file once,
+  stop it, then import.
+- **Backups.** The start takes its pre-migration backup as usual. A bundle
+  taken before this release has no row counts under the new names, so its
+  verification checks everything but the row counts.
+- The label `table` of `anixops_node_secrets_invalid_total` reads `v5_node`,
+  `v5_node_protocol` and `v5_wireguard_peer`.
+
+**Rollback.** The previous release refuses a database this one migrated
+(the runner records `0040_table_prefix`). Roll back by restoring the
+pre-migration backup with the previous release, as for every migration; a
+SQLite configuration that the update wrote `database.database` into keeps
+working with it. Nothing changes in the API or the Agent protocol.
 
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 

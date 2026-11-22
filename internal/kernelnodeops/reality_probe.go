@@ -35,7 +35,7 @@ var ErrRealityProbeUnavailable = errors.New("the node's Agent does not run reali
 
 // RealityProbes runs reality.probe on the Agent Control stream of a proxy
 // node. Like the forward checks, a probe is not an administrator task: it
-// is not recorded in v2_agent_diagnostic_task; the caller audits the call.
+// is not recorded in v5_agent_diagnostic_task; the caller audits the call.
 type RealityProbes struct {
 	// Sources are the live sessions; DefaultAgentSources when nil.
 	Sources SourcesFunc

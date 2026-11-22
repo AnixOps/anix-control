@@ -3,7 +3,7 @@
 // traffic ranking, and the dashboard. The traffic routes read the kernel's
 // traffic log through the read-only kernel view kapi_traffic_log_v1 (the
 // user, bytes, rate and hour of each node's hourly traffic bucket in
-// v2_server_log),
+// v5_server_log),
 // and users' e-mail addresses through kapi_user_directory_v1. The kernel
 // writes the log when a node reports traffic; the package never writes it.
 // The dashboard is the snapshot the kernel caches, read through

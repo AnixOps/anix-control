@@ -101,7 +101,7 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   nftables-forward, which have no v2 routes, have their own host.
 - The 4.0 stage exit condition "production requests no longer reach coupled
   legacy handlers" was **not** met. Handlers, services and workers stay in
-  the kernel; packages adopt business tables (`v2_*`) in place
+  the kernel; packages adopt business tables (`v5_*`) in place
   (section 3.4).
 - Production (per the operator, 2026-09) still runs a pre-v4 Control on
   PostgreSQL. Moving it to v4 is a database migration plus host move (M2).
@@ -174,8 +174,8 @@ legacy route.
   a PostgreSQL role `anix_pkg_<id>` and schema `pkg_<id>`.
 - Grants come only from signed capabilities in the package manifest:
   `kernel.storage.v1` (own schema) and `kernel.storage.adopt:<table>` (for
-  example `kernel.storage.adopt:v2_knowledge`). Column-level grants are allowed
-  for shared tables (for example `v2_order(status, paid_at)`).
+  example `kernel.storage.adopt:v5_knowledge`). Column-level grants are allowed
+  for shared tables (for example `v5_order(status, paid_at)`).
 - New bridge RPC `LeaseStorage` returns connection parameters for that role
   only; the host opens it through `sdk/packagestoresdk.Open` and uses GORM.
   Each lease is capped at 2–4 connections and requested only by packages that
@@ -271,14 +271,14 @@ What unblocks the `bridged` routes:
 | Unblocked by | Routes | Count |
 |---|---|---|
 | KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs | 49 |
-| A kernel operation that creates a node's default protocol (in protocol-runtime's `v2_node_protocol`) | proxy-node: node creation | 1 |
+| A kernel operation that creates a node's default protocol (in protocol-runtime's `v5_node_protocol`) | proxy-node: node creation | 1 |
 | A kernel operation that records a node's group change in the subscriber change log, with the agent revocation of a disabled node | proxy-node: node update | 1 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
 | A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
-| A contract (or a storage adoption by identity-platform) for `v2_invite_code`, which registration consumes inside Control | identity-platform: the administrator's invite codes (list, generate, revoke) | 3 |
+| A contract (or a storage adoption by identity-platform) for `v5_invite_code`, which registration consumes inside Control | identity-platform: the administrator's invite codes (list, generate, revoke) | 3 |
 | Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
 
 **Request address** (CURRENT). Hosts receive the original request's scheme
@@ -324,18 +324,18 @@ The planned `kernel.entitlement.apply.v1` became
 `KernelSubscriber.ApplyEntitlement`.
 
 - **Protected tables.** No manifest may adopt a table that holds credentials
-  or kernel state (`service.protectedTables`): `v2_system_config`,
-  `v2_audit_log`, `v2_operation_log`; the node credentials `v2_node`; the
-  node secrets `v2_node_protocol` and
-  `v2_wireguard_peer`; the forward credentials `v2_forward_node`,
+  or kernel state (`service.protectedTables`): `v5_system_config`,
+  `v5_audit_log`, `v5_operation_log`; the node credentials `v5_node`; the
+  node secrets `v5_node_protocol` and
+  `v5_wireguard_peer`; the forward credentials `v5_forward_node`,
   `v2_forward_clean_agent` and `v2_forward_runtime_job`; the node
   credential split's `v4_kernel_node_credential`,
   `v4_kernel_protocol_secret` and `v4_kernel_node_secret_split`, named as
-  well as covered by their prefix; and every `v2_user*`, `v3_kernel_*`,
+  well as covered by their prefix; and every `v5_user*`, `v3_kernel_*`,
   `v4_kernel_*`, `identity_*`, `kapi_*` and `pg_*` table.
 - **Node credential split, phase P1 (dual-write).** The node credentials
-  and protocol secrets of `v2_node`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_node_protocol` and
-  `v2_wireguard_peer` are also kept in `v4_kernel_node_credential` and
+  and protocol secrets of `v5_node`, `v5_forward_node`, `v2_forward_clean_agent`, `v5_node_protocol` and
+  `v5_wireguard_peer` are also kept in `v4_kernel_node_credential` and
   `v4_kernel_protocol_secret`, in clear like the legacy columns.
   `internal/nodesecrets` is their one writer: every kernel writer of a
   moved column calls it in the transaction of its legacy write.
@@ -405,7 +405,7 @@ The planned `kernel.entitlement.apply.v1` became
 
     The details are in `node-ops-service.md` section 3.7.
   - **What comes next.** Node credentials move to a protected table of
-    their own (NO-2), so a package can adopt the rest of `v2_node`.
+    their own (NO-2), so a package can adopt the rest of `v5_node`.
 
 ### 3.4 In-place adoption and kernel views
 
@@ -416,7 +416,7 @@ The planned `kernel.entitlement.apply.v1` became
 - **Knowledge pilot (in place).** It is the pattern for self-contained
   domains.
   - `packages/knowledge` declares `kernel.storage.v1` and
-    `kernel.storage.adopt:v2_knowledge`.
+    `kernel.storage.adopt:v5_knowledge`.
   - Its host (`packages/knowledge/control`) serves all 6 routes natively on
     the adopted table (`packages/knowledge/native`), and
     `internal/tests/knowledgecompat` proves byte parity on SQLite and
@@ -427,13 +427,13 @@ The planned `kernel.entitlement.apply.v1` became
     finalize.
   - Deleting the legacy handlers (mode `native`) follows once the operator
     has run natively for a release.
-- **Ticket (in place).** The same pattern on `v2_ticket` and
-  `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
+- **Ticket (in place).** The same pattern on `v5_ticket` and
+  `v5_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
 - **Notification (in place).** 23 of 24 routes on the adopted
-  `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
-  `v2_telegram_user` tables and the kernel's KernelSettings, natively only
+  `v5_notification_template`, `v5_notification_log`, `v5_telegram_bot` and
+  `v5_telegram_user` tables and the kernel's KernelSettings, natively only
   (the kernel keeps no legacy handler); their answers are pinned by
   `internal/tests/notificationcompat`. Binding e-mails come from
   `kapi_user_directory_v1`.
@@ -457,7 +457,7 @@ The planned `kernel.entitlement.apply.v1` became
   `kapi_system_audit_log_v1`, natively only (the kernel keeps no legacy
   handler); its answers are pinned by `internal/tests/platformcompat`.
   - Four are `kernel-owned`: the system configuration routes reach every
-    key of the protected `v2_system_config`, and a grant over every key
+    key of the protected `v5_system_config`, and a grant over every key
     holds every secret ([`settings-service.md`](settings-service.md#routes)).
   - The seven backup routes it served or relayed until 5.0 (the list, the
     statistics, the configuration read and update, creation, deletion and
@@ -466,25 +466,25 @@ The planned `kernel.entitlement.apply.v1` became
     `anix-control backup` ([`../reference/backups.md`](../reference/backups.md)).
     The package adopts no table any more and holds no settings capability.
 - **Plan (in place).** The first module that changes shared subscriber
-  state. All 7 routes run on the adopted `v2_plan` and `v2_event` tables,
+  state. All 7 routes run on the adopted `v5_plan` and `v5_event` tables,
   natively only: the kernel keeps no legacy handler for them.
-  - `v2_event` is the plan domain's event log: only the plan routes write
+  - `v5_event` is the plan domain's event log: only the plan routes write
     it, and nothing reads it.
   - An administrator's assignment calls `KernelSubscriber.ApplyEntitlement`
     (`kernel.subscriber.entitlements.v1`) over the bridge connection instead
-    of writing `v2_user`.
+    of writing `v5_user`.
   - Its request id is `plan.assign:<plan>:<user>:<digest>`, a digest of the
     request's `Idempotency-Key` (else its request id) and the expiry. The
     legacy handler derives the same id, so a retry applies once whichever
     side serves it. The parity test runs the real KernelSubscriber server
-    and compares `v2_user`, the request ledger and the change log.
+    and compares `v5_user`, the request ledger and the change log.
   - The five `/speed-limit/*` routes moved to forward: they are Flux
     forward limits, whose rows name forward tunnels (see Forward).
   - The subscription module checks a plan through `kapi_plan_catalog_v1`;
     the kernel's subscription renderer, which stays in the kernel, still
-    reads `v2_plan` directly.
-- **Order (in place).** All 13 routes run on the adopted `v2_order` and
-  `v2_coupon` tables, proved by `internal/tests/ordercompat`: the coupon
+    reads `v5_plan` directly.
+- **Order (in place).** All 13 routes run on the adopted `v5_order` and
+  `v5_coupon` tables, proved by `internal/tests/ordercompat`: the coupon
   routes, order statistics, status changes, cancellation, "mark paid", the
   user's order creation, and the administrator's and user's order lists and
   details.
@@ -508,13 +508,13 @@ The planned `kernel.entitlement.apply.v1` became
     the kernel as in the module: `InviteService.AddCommission` and
     `NotifyOrderPaid` have no caller. Paying commission on completion needs
     an affiliate contract first.
-  - The kernel keeps writing `v2_order`: it marks orders paid and completes
+  - The kernel keeps writing `v5_order`: it marks orders paid and completes
     them for the payment callbacks, legacy or through `KernelOrder`
     (`order-service.md`), and the dashboard and invite statistics read it.
   - The order list and detail answers carry the order, its plan's `id` and
     `name` and, for an administrator, its buyer's `id` and `email`. They
-    embedded the buyer's whole `v2_user` row, subscription token and proxy
-    UUID included, which no kernel view may expose, and the whole `v2_plan`
+    embedded the buyer's whole `v5_user` row, subscription token and proxy
+    UUID included, which no kernel view may expose, and the whole `v5_plan`
     row; the routes stayed bridged until the kernel's answers were slimmed to
     what the frontend reads (`docs/UPGRADE.md` lists the dropped fields).
     A user's list and detail are the caller's own orders: the owner is part
@@ -522,13 +522,13 @@ The planned `kernel.entitlement.apply.v1` became
     one. The parity cases include other users' orders, orders whose plan or
     buyer was deleted, and every list filter and paging edge.
 - **Payment (in place).** All 20 routes run on the adopted
-  `v2_payment_gateway`, `v2_payment_record` and `v2_payment` tables, proved
+  `v5_payment_gateway`, `v5_payment_record` and `v5_payment` tables, proved
   by `internal/tests/paymentcompat`: gateway administration, payment records
   and statistics, the user's channels, payments and their status, the method
   list, the x402 and fiat payment creation (stubs that call no provider, on
   both sides), and the four provider callbacks.
   - Payment owns the gateways and so holds their secrets (merchant keys,
-    webhook secrets) through the adopted `v2_payment_gateway`. Its
+    webhook secrets) through the adopted `v5_payment_gateway`. Its
     administrator answers show them as `********`, as the kernel's do.
   - An order is read only through `kapi_order_billing_v1` (its buyer, total
     and status): a payment is created for the caller's own pending order and
@@ -553,8 +553,8 @@ The planned `kernel.entitlement.apply.v1` became
     error. The parity test runs the real KernelOrder server: 78 callback
     cases on SQLite and PostgreSQL each.
 - **Affiliate (in place).** All 10 routes run on the adopted
-  `v2_commission_record`, `v2_commission_withdraw`, `v2_invite_config` and
-  `v2_invite_code` tables, proved by `internal/tests/affiliatecompat`: the
+  `v5_commission_record`, `v5_commission_withdraw`, `v5_invite_config` and
+  `v5_invite_code` tables, proved by `internal/tests/affiliatecompat`: the
   user's invite codes, code generation, commissions, withdrawals and
   withdrawal request, and the administrator's withdrawal list and
   decisions, invite statistics and configuration.
@@ -566,14 +566,14 @@ The planned `kernel.entitlement.apply.v1` became
     and length, withdrawal fee and methods).
   - **Invite codes.** The user's invite codes and their generation moved
     from identity-platform (`affiliate.user.invite.get`,
-    `affiliate.user.invite.generate.post`). `v2_invite_code` is not a
+    `affiliate.user.invite.generate.post`). `v5_invite_code` is not a
     protected table: a code admits a registration and attributes the
     referral, and holds no credential of an existing account. Control's
     registration (the kernel's, and the identity module's through
     `CreateSubscriber`) still consumes a code inside the transaction that
     creates the user.
     - A user holds at most `code_count` (default 5) unused codes. The
-      kernel used to count them under a row lock on the user's `v2_user`
+      kernel used to count them under a row lock on the user's `v5_user`
       row, which no package may read or write. Both sides now count and
       create under one PostgreSQL advisory lock keyed by the user,
       `pg_advisory_xact_lock(class, user)` with the class `0x696e7663`
@@ -587,12 +587,12 @@ The planned `kernel.entitlement.apply.v1` became
       concurrently on one database: they never pass the limit. With the
       kernel's old row lock they did.
   - `kapi_affiliate_settings_v1` shows one row of the protected
-    `v2_system_config`: the value of `invite.frontend.config`, a key the
+    `v5_system_config`: the value of `invite.frontend.config`, a key the
     kernel does not treat as sensitive and shows its administrators in
     clear. On PostgreSQL it is a `security_barrier` view, so a function in
     the package's own query cannot see the rows its filter hides; a test
     shows a secret leaking without the barrier.
-  - The commission balance is the kernel's (`v2_user.commission_balance`).
+  - The commission balance is the kernel's (`v5_user.commission_balance`).
     A withdrawal debits it and a rejection refunds it through
     `KernelSubscriber.AdjustBalance` (`kernel.subscriber.balance.v1`, kind
     `COMMISSION`; no contract change), with the ledger ids the kernel's
@@ -607,7 +607,7 @@ The planned `kernel.entitlement.apply.v1` became
     refund puts it back to pending, and an unknown outcome leaves it
     rejected with a failed answer. No path pays out or refunds an amount
     that was not debited.
-  - Updating the configuration writes the adopted `v2_invite_config`, then
+  - Updating the configuration writes the adopted `v5_invite_config`, then
     `invite.frontend.config` through KernelSettings (namespace `invite`),
     which makes the kernel's invite services reload the configuration they
     keep in memory. Neither path records an audit
@@ -662,7 +662,7 @@ The planned `kernel.entitlement.apply.v1` became
       that does not exist (`NotFound`) instead of recording an empty change.
   - **Stay bridged:** the user's invite codes and their generation. They
     are affiliate data, not identity's. Control keeps the codes
-    (`v2_invite_code`, which registration consumes inside Control), and the
+    (`v5_invite_code`, which registration consumes inside Control), and the
     answer adds the commission balance and invite statistics that join the
     order and affiliate packages' tables. They belong with the affiliate
     package.
@@ -678,7 +678,7 @@ The planned `kernel.entitlement.apply.v1` became
     withdrawals and statistics. They are new routes, not moves, so no
     parity test applies: the host relays them (`bridgedRoutes`) to
     `handler.InviteCodeAdminHandler` until identity-platform can read
-    `v2_invite_code`. An administrator's codes belong to no user and do not
+    `v5_invite_code`. An administrator's codes belong to no user and do not
     count toward a user's `code_count`; the user's generation, its limit
     and advisory lock are unchanged.
   - **User's own subscription reset (group A, every edition).**
@@ -696,8 +696,8 @@ The planned `kernel.entitlement.apply.v1` became
     middleware records it as `user` / `reset_subscribe` in every mode.
     Proved by `internal/tests/identitycompat/subscription_reset_test.go`.
 - **Subscription (in place).** 23 of 25 routes run on the adopted
-  `v2_subscription_group`, `v2_subscription_template`,
-  `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
+  `v5_subscription_group`, `v5_subscription_template`,
+  `v5_plan_subscription_group` and `v5_subscription_group_node_protocols`
   tables, proved by `internal/tests/subscriptioncompat` (natively only: the kernel
   keeps no legacy handler for them, and the suite pins their recorded
   answers): groups (list, read,
@@ -730,9 +730,9 @@ The planned `kernel.entitlement.apply.v1` became
   - Group and template writes no longer save the associations nested in a
     body (a security fix made in the kernel first): a group's `protocols`
     upserted proxy-node rows and nodes, which the module may not write.
-  - **Memberships go through the kernel.** `v2_user_subscription_group` is
+  - **Memberships go through the kernel.** `v5_user_subscription_group` is
     subscriber state: only the kernel writes it, and no package may adopt a
-    `v2_user*` table. Granting a user a group, taking it away and deleting
+    `v5_user*` table. Granting a user a group, taking it away and deleting
     a group call `KernelSubscriber` (`kernel.subscriber.groups.v1`,
     [`subscriber-service.md`](subscriber-service.md)):
     - a grant is `GrantSubscriptionGroup`, a removal
@@ -767,7 +767,7 @@ The planned `kernel.entitlement.apply.v1` became
     column but the node's API key, key hash and shared secret, the JSON
     columns in the redacted form a finalized table keeps. The kernel
     creates both views, and grants them to the package's lease, only once
-    `v2_node_protocol` and `v2_node` are finalized. Until the lease grants
+    `v5_node_protocol` and `v5_node` are finalized. Until the lease grants
     both, the routes answer from the legacy handler in every mode, also on
     SQLite, where the package shares the database file that holds the
     tables. The lease is taken when the host first opens its storage: a
@@ -782,12 +782,12 @@ The planned `kernel.entitlement.apply.v1` became
       stays in the kernel is an open decision);
     - the subscription link settings: `app.subscribe_path` is process
       configuration and `app.subscribe_domains` lives in the protected
-      `v2_system_config`. A KernelSettings namespace can carry only
-      `v2_system_config` and `v2_backup_config` keys, so this needs a new
+      `v5_system_config`. A KernelSettings namespace can carry only
+      `v5_system_config` and `v5_backup_config` keys, so this needs a new
       kind of namespace with the process configuration.
 - **Proxy node (in place).** 7 of proxy-node's 11 routes run natively,
   proved by `internal/tests/proxynodecompat`: a node's runtime logs on the
-  adopted `v2_node_log` (the kernel's agent control writes it), the node
+  adopted `v5_node_log` (the kernel's agent control writes it), the node
   statistics, and since M3-2 the node list, detail and deletion (all
   natively only: the kernel keeps no legacy handler, and the suite pins
   their recorded answers; the raw configuration routes were removed)
@@ -799,7 +799,7 @@ The planned `kernel.entitlement.apply.v1` became
     domain, but a node's API key, key hash and shared secret authenticate
     it to the kernel: the node API, UniProxy, the agent WebSocket and gRPC
     control stream, and agent package downloads. The package adopts
-    `v2_node` (`kernel.storage.adopt:v2_node`) only as the kernel grants
+    `v5_node` (`kernel.storage.adopt:v5_node`) only as the kernel grants
     it, once the node credential split finalized it: its credential
     columns then hold tombstones, the credentials live in the kernel's
     protected split tables, and its raw configuration holds the placeholder
@@ -807,7 +807,7 @@ The planned `kernel.entitlement.apply.v1` became
     answer from the legacy handler in every mode, SQLite included.
   - The statistics, and whether a node exists for its logs, come from
     `kapi_node_status_v1`; a node's protocols from
-    `kapi_node_protocol_public_v1` (`v2_node_protocol` is
+    `kapi_node_protocol_public_v1` (`v5_node_protocol` is
     protocol-runtime's).
   - **Through KernelNodeOps.** A deletion retires what the kernel holds for
     the node (`RetireNode`: its protocols with their peers, links and
@@ -819,7 +819,7 @@ The planned `kernel.entitlement.apply.v1` became
   - **Stay bridged** (7) or **kernel-owned** (6), with the reason in the
     host's route map:
     - node creation (bridged): it also creates the node's default protocol
-      in `v2_node_protocol`, protocol-runtime's table, and no contract call
+      in `v5_node_protocol`, protocol-runtime's table, and no contract call
       creates a protocol;
     - node update (bridged): it also records a group change in the
       subscriber change log and revokes a disabled node's agent
@@ -837,7 +837,7 @@ The planned `kernel.entitlement.apply.v1` became
 - **Forward (withdrawn in v4.2, F5d).** Until v4.1, 21 of 85 routes ran
   natively on the adopted `v2_forward`, `v2_forward_tunnel`,
   `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward_rule` and
-  `v2_forward_latency_bucket` tables, proved by
+  `v5_forward_latency_bucket` tables, proved by
   `internal/tests/forwardcompat`. F5d withdrew them: the forward package
   adopts no table and reads no view (its manifest declares only
   `kernel.forward.v1`, for the v4 API), so the legacy cleanup (F5c) can drop
@@ -870,10 +870,10 @@ The planned `kernel.entitlement.apply.v1` became
   - Forward nodes are read through `kapi_forward_node_v1` (every column but
     `api_token`), the runtime backend through
     `kapi_forward_runtime_settings_v1` (three keys of the protected
-    `v2_system_config`, a security barrier), users through
+    `v5_system_config`, a security barrier), users through
     `kapi_user_directory_v1` and their speed limit through
     `kapi_subscriber_entitlement_v1`.
-  - `v2_forward_node`, `v2_forward_clean_agent` and
+  - `v5_forward_node`, `v2_forward_clean_agent` and
     `v2_forward_runtime_job` are protected kernel tables no manifest may
     adopt. A forward node's API token authenticates its agent (WebSocket,
     gRPC and REST), a clean agent's token authenticates it, and clean agent
@@ -903,19 +903,19 @@ The planned `kernel.entitlement.apply.v1` became
 - **Protocol runtime (in place).** 14 of protocol-runtime's 20 routes run
   natively, proved by `internal/tests/protocolruntimecompat`: the protocol
   templates (static data), the administrator's diagnostic task history and
-  detail on the adopted `v2_agent_diagnostic_task`, and since M3-1 the node
+  detail on the adopted `v5_agent_diagnostic_task`, and since M3-1 the node
   protocols and every administrator route of the agents
   ([`node-ops-service.md`](node-ops-service.md) section 6.3). All 14 run
   natively only: the kernel keeps no legacy handler, and the suite pins
   their recorded answers.
-  - The kernel keeps writing `v2_agent_diagnostic_task`: creating a task,
+  - The kernel keeps writing `v5_agent_diagnostic_task`: creating a task,
     the agents' polls and results. Since a package may write it too, the
     agents' HTTP poll checks every pending task against the diagnostic
     whitelist again before an agent gets it
     (`AgentDiagnosticTaskService.PullPendingTasks`); a task off the
     whitelist fails.
   - **Node protocols, once the split is finalized.** The package declares
-    `kernel.storage.adopt:v2_node_protocol`, which the kernel honours only
+    `kernel.storage.adopt:v5_node_protocol`, which the kernel honours only
     once the node credential split finalized the table: its secret
     positions then hold the placeholder, and the Reality, TLS and WireGuard
     keys are the kernel's (`v4_kernel_protocol_secret`). The kernel starts
@@ -946,7 +946,7 @@ The planned `kernel.entitlement.apply.v1` became
   - **Kernel-owned** (the 6 agent routes), with the reason in the host's
     route map: registration, heartbeat, task poll, result, monitor and the
     WebSocket authenticate node credentials in the kernel, mark nodes
-    online in `v2_node` and `v2_forward_node`, keep connections in the
+    online in `v5_node` and `v5_forward_node`, keep connections in the
     kernel's memory, and hand out the forward package's bridge tasks and
     runtime jobs.
 - **Machine telemetry (in place).** 3 of machine-telemetry's 5 routes run
@@ -956,7 +956,7 @@ The planned `kernel.entitlement.apply.v1` became
   dashboard.
   - The package adopts no table. It reads the traffic log through the new
     `kapi_traffic_log_v1` (the user, bytes, rate and time of each node
-    traffic report in `v2_server_log`, no node or credential) and e-mail
+    traffic report in `v5_server_log`, no node or credential) and e-mail
     addresses through `kapi_user_directory_v1`. The kernel writes the log
     when a node reports traffic, in the transaction that counts the
     subscriber's traffic; a package that could write it would change the
@@ -964,7 +964,7 @@ The planned `kernel.entitlement.apply.v1` became
   - The hourly buckets are local hours, as the kernel's; the kernel passes
     its time zone to the host.
   - **The dashboard comes from the kernel's cache.** The snapshot counts
-    users (the protected `v2_user`), orders, revenue and the legacy server
+    users (the protected `v5_user`), orders, revenue and the legacy server
     tables, and takes the online users from the alive set in the kernel's
     memory. The kernel caches it for 60 seconds. The module reads it
     through `KernelTelemetry.GetDashboard` (`kernel.telemetry.dashboard.v1`,
@@ -976,7 +976,7 @@ The planned `kernel.entitlement.apply.v1` became
     map:
     - the system information: the kernel binary's own build metadata;
     - the monitoring WebSocket: the kernel's node list from the protected
-      `v2_node`; WebSocket routes always relay to the kernel.
+      `v5_node`; WebSocket routes always relay to the kernel.
 - **Gost mesh (in place).** All 3 of gost-mesh's routes run natively,
   proved by `internal/tests/gostmeshcompat`.
   - The administrator's gost API connection test reads no table. Since
@@ -994,14 +994,14 @@ The planned `kernel.entitlement.apply.v1` became
   kernel keeps no legacy handler): the administrator's server keypair for
   the protocol form. It reads and stores nothing; the administrator saves
   the private key into a protocol through protocol-runtime's bridged routes
-  on the protected `v2_node_protocol`. The answer carries a private key
+  on the protected `v5_node_protocol`. The answer carries a private key
   either way: a bridged answer passes through the package host too, so
   generating it in the package gives the package nothing it did not see.
   The parity test masks the random keys and checks on both sides that each
   answer is a fresh X25519 pair.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews`: `kapi_user_directory_v1`,
-  `kapi_system_audit_log_v1` (the `v2_operation_log` rows of module
+  `kapi_system_audit_log_v1` (the `v5_operation_log` rows of module
   `system`), `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
   `kapi_plan_name_v1`, `kapi_plan_subscription_group_v1`,
   `kapi_order_billing_v1`, `kapi_user_referral_v1`, `kapi_traffic_log_v1`,
@@ -1144,9 +1144,9 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 
 | Domain (task) | Routes | Planned interfaces | Planned tables | Notes |
 |---------------|-------:|--------------------|----------------|-------|
-| knowledge (T7) | 6 | `knowledge.article.list/read`, `knowledge.admin.write` | `v4_knowledge_article`, `v4_knowledge_category` | Pilot; adopts `v2_knowledge` |
+| knowledge (T7) | 6 | `knowledge.article.list/read`, `knowledge.admin.write` | `v4_knowledge_article`, `v4_knowledge_category` | Pilot; adopts `v5_knowledge` |
 | notification (T7) | 24 | `notification.notice.list`, `notification.delivery.enqueue/retry` | `v4_notification_notice`, `_delivery`, `_outbox` | Retry idempotent, one outbox row; SMTP/Telegram send moves to host |
-| ticket (T8) | 8 | `ticket.list`, `ticket.message.create`, `ticket.status.transition` | `v4_ticket_ticket`, `v4_ticket_message` | Generation-fenced transitions; adopts `v2_ticket`, `v2_ticket_message` |
+| ticket (T8) | 8 | `ticket.list`, `ticket.message.create`, `ticket.status.transition` | `v4_ticket_ticket`, `v4_ticket_message` | Generation-fenced transitions; adopts `v5_ticket`, `v5_ticket_message` |
 | plan (T8) | 7 | `plan.catalog.list`, `plan.assignment.read`, `plan.entitlement.read` | `v4_plan_catalog`, `_assignment`, `_quota` | Publishes versioned `EntitlementReader`; the 5 `/speed-limit/*` routes, Flux forward limits, moved to forward |
 | order (T9) | 13 | `order.create`, `order.apply_coupon`, `order.transition`, `order.request_entitlement` | `v4_order_order`, `_promotion`, `_coupon_redemption` | Owns coupons; entitlement requests are durable messages |
 | payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
@@ -1270,7 +1270,7 @@ after identity.
 
 Pilot: **knowledge** (6 routes, ~240 lines in `internal/handler/knowledge.go`
 and `admin_knowledge.go`). Capabilities `kernel.storage.v1` +
-`kernel.storage.adopt:v2_knowledge`; migration `001` validates only (tables,
+`kernel.storage.adopt:v5_knowledge`; migration `001` validates only (tables,
 columns, row count, digest). Sequence: all `legacy` -> GET routes `shadow` for
 3 days with zero mismatches -> all `native` for 7 days -> delete the legacy
 handler and model, unwrap `router.go`, mark `native`. Byte-compat quirks to
@@ -1288,7 +1288,7 @@ Next quarter, in dependency order:
 
 1. notification (24 routes): SMTP/Telegram sending moves into the host.
 2. order + payment together (33 routes): keep one transaction, column-level
-   grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
+   grant on `v5_order(status, paid_at)`, replay payment-callback fixtures.
    A successful callback marks the payment and order paid and completes the
    order (owner decision, 2026-09-30, `subscriber-service.md`). Order (13 of
    13 routes) and payment (20 of 20) are in place (section 3.4); the

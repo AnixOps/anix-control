@@ -81,7 +81,7 @@ type Node struct {
 }
 
 func (Node) TableName() string {
-	return "v2_node"
+	return "v5_node"
 }
 
 // IsOnline 检查节点是否在线 (5分钟内有心跳)
@@ -154,11 +154,11 @@ type NodeProtocol struct {
 
 	// 关联
 	Node               *Node               `gorm:"foreignKey:NodeID" json:"node,omitempty"`
-	SubscriptionGroups []SubscriptionGroup `gorm:"many2many:v2_subscription_group_node_protocols;" json:"subscription_groups,omitempty"`
+	SubscriptionGroups []SubscriptionGroup `gorm:"many2many:v5_subscription_group_node_protocols;" json:"subscription_groups,omitempty"`
 }
 
 func (NodeProtocol) TableName() string {
-	return "v2_node_protocol"
+	return "v5_node_protocol"
 }
 
 // WireGuardPeer stores the panel-managed per-user WireGuard credentials for a
@@ -180,7 +180,7 @@ type WireGuardPeer struct {
 }
 
 func (WireGuardPeer) TableName() string {
-	return "v2_wireguard_peer"
+	return "v5_wireguard_peer"
 }
 
 // ProtocolTemplate 协议模板 (快速添加)

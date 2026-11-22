@@ -15,7 +15,7 @@ import (
 // see the placeholder.
 const NodeSecretPlaceholder = SensitiveSystemConfigPlaceholder
 
-// nodeProtocolSecretColumns are the JSON columns of v2_node_protocol that can
+// nodeProtocolSecretColumns are the JSON columns of v5_node_protocol that can
 // hold secrets. A protocol keeps no secret in a column of its own.
 var nodeProtocolSecretColumns = []string{"settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"}
 

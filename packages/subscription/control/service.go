@@ -21,15 +21,15 @@ type subscriptionBridge interface {
 
 // newSubscriptionService returns the subscription host's router. The routes
 // in subscriptionRoutes have a native handler on the adopted
-// v2_subscription_group, v2_subscription_template,
-// v2_plan_subscription_group and v2_subscription_group_node_protocols tables
+// v5_subscription_group, v5_subscription_template,
+// v5_plan_subscription_group and v5_subscription_group_node_protocols tables
 // and the plan, user, membership, entitlement and node views, and are served
 // by it alone: the kernel has no handler for them. Deleting a group, granting
 // or taking away a user's group and the user's subscription summary call the
 // kernel's KernelSubscriber over the bridge connection (local socket or
 // module listener). A group's protocols and the protocol pool read
 // kapi_node_protocol_public_v1 and kapi_node_public_v1, the views of the
-// finalized v2_node_protocol and v2_node. The routes in bridgedRoutes relay
+// finalized v5_node_protocol and v5_node. The routes in bridgedRoutes relay
 // to the kernel's handler.
 func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
@@ -101,7 +101,7 @@ var bridgedRoutes = map[string]struct{}{
 	"subscription.admin.subscription.preview.post": {},
 	// The subscription link settings combine the kernel's process
 	// configuration (app.subscribe_path) with app.subscribe_domains in the
-	// protected v2_system_config; a package can see neither. A KernelSettings
+	// protected v5_system_config; a package can see neither. A KernelSettings
 	// namespace for the subscription link, carrying the process
 	// configuration too, would unblock it.
 	"subscription.admin.system.subscription_settings.get": {},

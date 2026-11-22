@@ -25,7 +25,7 @@ func TestGroupNodeOverridesEditAndReset(t *testing.T) {
 	require.NoError(t, db.Create(node).Error)
 	protocol := model.NodeProtocol{NodeID: node.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 10000, Enable: 1, Show: 1}
 	require.NoError(t, db.Create(&protocol).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
 
 	first := func() *model.ParsedNode {
 		nodes, err := svc.getInternalNodes(nil, &model.TemplateRenderContext{UUID: "u"}, []*model.SubscriptionGroup{group})

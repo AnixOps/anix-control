@@ -20,7 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// The v2_system_config keys of the settings.
+// The v5_system_config keys of the settings.
 const (
 	EnabledKey       = "traffic.destinations.enabled"
 	RetentionDaysKey = "traffic.destinations.retention_days"

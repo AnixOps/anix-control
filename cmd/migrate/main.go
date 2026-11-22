@@ -25,15 +25,15 @@ import (
 // be reused verbatim without colliding with whatever is already in the
 // target database.
 var tablesWrittenByMigration = []string{
-	"v2_user_subscription_group",
-	"v2_subscription_group_node_protocols",
-	"v2_node_protocol",
-	"v2_node",
-	"v2_subscription_group",
-	"v2_invite_code",
-	"v2_system_config",
-	"v2_user",
-	"v2_plan",
+	"v5_user_subscription_group",
+	"v5_subscription_group_node_protocols",
+	"v5_node_protocol",
+	"v5_node",
+	"v5_subscription_group",
+	"v5_invite_code",
+	"v5_system_config",
+	"v5_user",
+	"v5_plan",
 }
 
 // skippedTables are present in the old dump but intentionally not migrated

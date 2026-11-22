@@ -6,7 +6,7 @@
 // stay in the seed as data.
 //
 // The route reads the kernel view kapi_system_audit_log_v1 over
-// v2_operation_log, so every case also proves the view shows the rows the
+// v5_operation_log, so every case also proves the view shows the rows the
 // route filters on.
 package platformcompat
 
@@ -78,7 +78,7 @@ func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
 	}
-	for _, table := range []string{"v2_operation_log"} {
+	for _, table := range []string{"v5_operation_log"} {
 		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
 	}
 }

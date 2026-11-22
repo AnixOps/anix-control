@@ -1,6 +1,6 @@
 package service
 
-// SubscriberEntitlements are the v2_user fields an administrator edits
+// SubscriberEntitlements are the v5_user fields an administrator edits
 // besides the identity fields. The JSON keys are those of the v2 admin user
 // update request; an absent or null field is left unchanged.
 type SubscriberEntitlements struct {
@@ -15,7 +15,7 @@ type SubscriberEntitlements struct {
 	RemarkContent  *string `json:"remark_content"`
 }
 
-// Updates returns the v2_user column updates. A new plan also sets the group
+// Updates returns the v5_user column updates. A new plan also sets the group
 // and, unless given explicitly, the traffic and limits from the plan, as the
 // v2 admin API does.
 func (e SubscriberEntitlements) Updates(plans *PlanService) map[string]any {

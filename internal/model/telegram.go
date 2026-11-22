@@ -37,7 +37,7 @@ type TelegramBot struct {
 
 // TableName 指定表名
 func (TelegramBot) TableName() string {
-	return "v2_telegram_bot"
+	return "v5_telegram_bot"
 }
 
 // TelegramUser Telegram用户绑定
@@ -70,7 +70,7 @@ type TelegramUser struct {
 
 // TableName 指定表名
 func (TelegramUser) TableName() string {
-	return "v2_telegram_user"
+	return "v5_telegram_user"
 }
 
 // TelegramChat Telegram聊天记录
@@ -93,7 +93,7 @@ type TelegramChat struct {
 
 // TableName 指定表名
 func (TelegramChat) TableName() string {
-	return "v2_telegram_chat"
+	return "v5_telegram_chat"
 }
 
 // TelegramCommand Bot命令定义
@@ -110,7 +110,7 @@ type TelegramCommand struct {
 
 // TableName 指定表名
 func (TelegramCommand) TableName() string {
-	return "v2_telegram_command"
+	return "v5_telegram_command"
 }
 
 // TelegramNotification Telegram通知记录
@@ -134,7 +134,7 @@ type TelegramNotification struct {
 
 // TableName 指定表名
 func (TelegramNotification) TableName() string {
-	return "v2_telegram_notification"
+	return "v5_telegram_notification"
 }
 
 // NotificationType 通知类型

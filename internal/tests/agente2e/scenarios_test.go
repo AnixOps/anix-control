@@ -98,7 +98,7 @@ func (s *suite) scenarioNodeStatus(t *testing.T) string {
 		Uptime           int64
 	}
 	eventually(t, 45*time.Second, func() (bool, string) {
-		require.NoError(t, s.control.db.Raw("SELECT last_check_at, runtime_healthy, runtime_checked_at, memory_usage, uptime FROM v2_node WHERE id = ?", s.nodeID).Scan(&node).Error)
+		require.NoError(t, s.control.db.Raw("SELECT last_check_at, runtime_healthy, runtime_checked_at, memory_usage, uptime FROM v5_node WHERE id = ?", s.nodeID).Scan(&node).Error)
 		fresh := node.LastCheckAt != nil && time.Now().Unix()-*node.LastCheckAt < 60
 		return fresh && node.RuntimeCheckedAt != nil && node.RuntimeHealthy && node.MemoryUsage > 0, fmt.Sprintf("%+v", node)
 	}, s.agent.proc)

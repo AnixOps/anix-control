@@ -54,7 +54,7 @@ func TestPostgresPackageStoreSDKRunsMigrationsInThePackageSchema(t *testing.T) {
 
 	bad := fstest.MapFS{
 		"migrations/index.json": {Data: []byte(`{"format":"anixops.migrations/v1","migrations":[{"id":"003_escape","path":"migrations/003.sql"}]}`)},
-		"migrations/003.sql":    {Data: []byte("DELETE FROM v2_user;")},
+		"migrations/003.sql":    {Data: []byte("DELETE FROM v5_user;")},
 	}
 	_, err = packagestoresdk.RunEmbeddedMigrations(ctx, pkg, bad, "migrations/index.json")
 	requirePermissionDenied(t, err)

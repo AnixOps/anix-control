@@ -130,7 +130,7 @@ test.describe('kernel alerts in the dashboard', () => {
     await expect(card.locator('[data-alert="kernel-32"]')).toContainText('The Agent certificate of hk-01 is about to expire')
     await expect(card.locator('[data-alert="kernel-32"]')).toContainText('Ends 2026-10-03 04:00')
     await expect(card.locator('[data-alert="kernel-33"]')).toContainText('The forward link certificate of edge-sg-1 is about to expire')
-    await expect(card.locator('[data-alert="kernel-34"]')).toContainText('The credential split of v2_node has stalled in dual_write')
+    await expect(card.locator('[data-alert="kernel-34"]')).toContainText('The credential split of v5_node has stalled in dual_write')
     // Node subjects link to the node; others are plain text.
     await expect(card.locator('[data-alert="kernel-32"] a')).toHaveAttribute('href', '/admin/nodes/1')
     await expect(card.locator('[data-alert="kernel-33"] a')).toHaveAttribute('href', '/admin/forward/inventory/forward-4')

@@ -1,6 +1,6 @@
 // Package native implements the knowledge package's v2 routes in the
-// package itself. The package adopts the kernel's v2_knowledge table
-// (kernel.storage.adopt:v2_knowledge), so the native routes and the kernel's
+// package itself. The package adopts the kernel's v5_knowledge table
+// (kernel.storage.adopt:v5_knowledge), so the native routes and the kernel's
 // legacy handlers read and write the same rows: switching a route between
 // legacy and native needs no data move and can be undone at any time.
 // Responses are byte-compatible with the legacy handlers
@@ -20,7 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Article is a v2_knowledge row. Its JSON matches the kernel model, which
+// Article is a v5_knowledge row. Its JSON matches the kernel model, which
 // the admin create answer returns as is.
 type Article struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -34,12 +34,12 @@ type Article struct {
 }
 
 // TableName is the adopted kernel table.
-func (Article) TableName() string { return "v2_knowledge" }
+func (Article) TableName() string { return "v5_knowledge" }
 
 // Service holds what the native routes need.
 type Service struct {
 	// Open returns the package's storage connection, on which the adopted
-	// v2_knowledge table is visible.
+	// v5_knowledge table is visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
 	// Now defaults to time.Now.
 	Now func() time.Time

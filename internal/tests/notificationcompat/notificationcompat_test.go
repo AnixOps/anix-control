@@ -83,7 +83,7 @@ func seed(t testing.TB, db *gorm.DB) {
 }
 
 // seedUsers writes the members (PostgreSQL enforces the kernel's foreign key
-// from v2_telegram_user) and the kernel view the package reads them through.
+// from v5_telegram_user) and the kernel view the package reads them through.
 func seedUsers(t testing.TB, db *gorm.DB) {
 	for id := uint(1); id <= 5; id++ {
 		require.NoError(t, db.Create(&model.User{ID: id, Email: fmt.Sprintf("u%d@example.test", id), Token: fmt.Sprintf("t%d", id), UUID: fmt.Sprintf("u%d", id)}).Error)
@@ -112,7 +112,7 @@ func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
 	}
-	for _, table := range []string{"v2_user", "v2_notification_template", "v2_notification_log", "v2_telegram_bot", "v2_telegram_user"} {
+	for _, table := range []string{"v5_user", "v5_notification_template", "v5_notification_log", "v5_telegram_bot", "v5_telegram_user"} {
 		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
 	}
 }

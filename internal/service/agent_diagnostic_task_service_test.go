@@ -18,7 +18,7 @@ func openDiagnosticTaskDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// The protocol-runtime package adopts v2_agent_diagnostic_task, so the
+// The protocol-runtime package adopts v5_agent_diagnostic_task, so the
 // agents' poll checks a pending task against the whitelist again: an action
 // off it fails instead of going out, and only the action's own params go
 // out, normalized.

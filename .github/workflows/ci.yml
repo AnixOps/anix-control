@@ -1366,12 +1366,12 @@ jobs:
 
           db_path = "/tmp/control-migration-source.db"
           conn = sqlite3.connect(db_path)
-          conn.execute("CREATE TABLE v2_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT)")
-          conn.execute("CREATE TABLE v2_plan (id INTEGER PRIMARY KEY, name TEXT)")
-          conn.execute("CREATE TABLE v2_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT)")
-          conn.execute("INSERT INTO v2_user (id, email, token) VALUES (1, 'migration@example.com', 'migration-token')")
-          conn.execute("INSERT INTO v2_plan (id, name) VALUES (1, 'Migration Plan')")
-          conn.execute("INSERT INTO v2_system_config (id, key, value) VALUES (1, 'migration.fixture', 'true')")
+          conn.execute("CREATE TABLE v5_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT)")
+          conn.execute("CREATE TABLE v5_plan (id INTEGER PRIMARY KEY, name TEXT)")
+          conn.execute("CREATE TABLE v5_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT)")
+          conn.execute("INSERT INTO v5_user (id, email, token) VALUES (1, 'migration@example.com', 'migration-token')")
+          conn.execute("INSERT INTO v5_plan (id, name) VALUES (1, 'Migration Plan')")
+          conn.execute("INSERT INTO v5_system_config (id, key, value) VALUES (1, 'migration.fixture', 'true')")
           conn.commit()
           conn.close()
           print(db_path)
@@ -1387,8 +1387,8 @@ jobs:
             -target-dsn "$POSTGRES_TEST_DSN" \
             -dry-run | tee migration-dry-run.txt
           grep -q "dry-run: no PostgreSQL data changed" migration-dry-run.txt
-          grep -q "v2_user" migration-dry-run.txt
-          grep -q "v2_plan" migration-dry-run.txt
+          grep -q "v5_user" migration-dry-run.txt
+          grep -q "v5_plan" migration-dry-run.txt
 
       - name: Upload migration dry-run report
         uses: actions/upload-artifact@v7

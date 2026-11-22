@@ -42,7 +42,7 @@ type User struct {
 }
 
 func (User) TableName() string {
-	return "v2_user"
+	return "v5_user"
 }
 
 // IsValid 检查用户是否有效

@@ -13,7 +13,7 @@ cache in its own memory (`internal/cache`, one per Control process):
 
 | Route | Package | Cache | Answer |
 |---|---|---|---|
-| `GET /api/v2/admin/dashboard` | machine-telemetry | `stats:dashboard`, 60 seconds | counts over `v2_user` (protected), `v2_order`, the four legacy `v2_server_*` tables and `v2_server_log`, the online users (the size of the alive set `alive:users`, kernel memory), and `cached_at` |
+| `GET /api/v2/admin/dashboard` | machine-telemetry | `stats:dashboard`, 60 seconds | counts over `v5_user` (protected), `v5_order`, the four legacy `v5_server_*` tables and `v5_server_log`, the online users (the size of the alive set `alive:users`, kernel memory), and `cached_at` |
 | `GET /api/v2/user/subscription` | subscription | `user:subscription:<id>`, 30 seconds, also read by the legacy `GET /api/v2/user/dashboard` | the caller's e-mail, plan, traffic and expiry, the subscription link settings (read on every request, not cached), and `cached_at` |
 
 Both routes take `refresh=true` to rebuild the cached answer. `cached_at` is
@@ -33,7 +33,7 @@ Three designs were weighed per route:
 | `refresh=true` | rebuilds one cache of two; the other side stays stale | rebuilds the one cache | rebuilds one cache of two |
 | Summary entry shared with the legacy user dashboard | split in two | shared | split in two |
 | Online users | needs a contract read of the count anyway | a count in the answer | needs a contract read of the count anyway |
-| Data access | the dashboard needs new views over `v2_user`, the order rows and the legacy server tables | none | as (a) |
+| Data access | the dashboard needs new views over `v5_user`, the order rows and the legacy server tables | none | as (a) |
 
 Both routes use **(b)**. The kernel keeps its cache. The module reads the
 cached answer through a typed contract method that calls the function the

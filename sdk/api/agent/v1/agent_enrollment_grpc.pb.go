@@ -38,8 +38,8 @@ const (
 //
 // A certificate carries exactly one URI SAN naming the node:
 //
-//	spiffe://anixops/<cluster>/agent/proxy-<id>     a proxy node (v2_node)
-//	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
+//	spiffe://anixops/<cluster>/agent/proxy-<id>     a proxy node (v5_node)
+//	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v5_forward_node)
 //
 // Control ignores the subject and SANs of the CSR and issues the identity of
 // the node the bootstrap credential names. The node credential and a
@@ -162,8 +162,8 @@ func (c *agentEnrollmentClient) GetLinkTrustBundle(ctx context.Context, in *GetL
 //
 // A certificate carries exactly one URI SAN naming the node:
 //
-//	spiffe://anixops/<cluster>/agent/proxy-<id>     a proxy node (v2_node)
-//	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
+//	spiffe://anixops/<cluster>/agent/proxy-<id>     a proxy node (v5_node)
+//	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v5_forward_node)
 //
 // Control ignores the subject and SANs of the CSR and issues the identity of
 // the node the bootstrap credential names. The node credential and a

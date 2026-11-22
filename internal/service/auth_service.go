@@ -5,7 +5,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// NewSubscriberUser returns a new v2_user row with fresh node UUID and
+// NewSubscriberUser returns a new v5_user row with fresh node UUID and
 // subscription token, as registration creates it.
 func NewSubscriberUser(email, passwordHash string) *model.User {
 	return &model.User{

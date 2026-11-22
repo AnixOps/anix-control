@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Bot is a v2_telegram_bot row.
+// Bot is a v5_telegram_bot row.
 type Bot struct {
 	ID      uint   `gorm:"primaryKey" json:"id"`
 	Name    string `gorm:"size:100;not null" json:"name"`
@@ -43,9 +43,9 @@ type Bot struct {
 }
 
 // TableName is the adopted kernel table.
-func (Bot) TableName() string { return "v2_telegram_bot" }
+func (Bot) TableName() string { return "v5_telegram_bot" }
 
-// Binding is a v2_telegram_user row: a member's Telegram account. The
+// Binding is a v5_telegram_user row: a member's Telegram account. The
 // kernel model's User relation is not loaded; the answers that show the
 // member's e-mail read it from kapi_user_directory_v1.
 type Binding struct {
@@ -72,7 +72,7 @@ type Binding struct {
 }
 
 // TableName is the adopted kernel table.
-func (Binding) TableName() string { return "v2_telegram_user" }
+func (Binding) TableName() string { return "v5_telegram_user" }
 
 // UpdateBotRequest is the bot update body. Its name is part of the
 // validation messages, so it matches the kernel's handler.UpdateBotRequest.

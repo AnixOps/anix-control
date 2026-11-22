@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const linksTable = "v2_subscription_group_node_protocols"
+const linksTable = "v5_subscription_group_node_protocols"
 
 func retireNodeSpec(kind kernelnodeopsv1.NodeKind, id uint64) *kernelnodeopsv1.OperationSpec {
 	return &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_RetireNode{RetireNode: &kernelnodeopsv1.RetireNode{Node: nodeRef(kind, id)}}}

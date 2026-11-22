@@ -152,7 +152,7 @@ func (s *Store) Table(name string) string {
 
 // Leased reports whether the lease adopts the kernel table, or grants the
 // kernel view, called name. Some grants are conditional: the kernel honours
-// an adoption of v2_node, v2_node_protocol or v2_forward_node, and grants
+// an adoption of v5_node, v5_node_protocol or v5_forward_node, and grants
 // the views of the node credential split, only once that split is
 // finalized (docs/architecture/node-ops-service.md section 4.3). On SQLite
 // the package shares the kernel's database file, where such a table is

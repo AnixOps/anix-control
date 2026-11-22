@@ -26,9 +26,9 @@ type NodeKind int32
 
 const (
 	NodeKind_NODE_KIND_UNSPECIFIED NodeKind = 0
-	// A proxy node, a row of v2_node.
+	// A proxy node, a row of v5_node.
 	NodeKind_NODE_KIND_PROXY NodeKind = 1
-	// A forward node or Ansible machine, a row of v2_forward_node.
+	// A forward node or Ansible machine, a row of v5_forward_node.
 	NodeKind_NODE_KIND_FORWARD NodeKind = 2
 	// A clean agent, a row of v2_forward_clean_agent.
 	NodeKind_NODE_KIND_CLEAN_AGENT NodeKind = 3
@@ -216,10 +216,10 @@ type SecretScope int32
 
 const (
 	SecretScope_SECRET_SCOPE_UNSPECIFIED SecretScope = 0
-	// A column of a node protocol (v2_node_protocol): settings, tls_settings,
+	// A column of a node protocol (v5_node_protocol): settings, tls_settings,
 	// transport_settings, reality_settings or custom_config.
 	SecretScope_SECRET_SCOPE_NODE_PROTOCOL SecretScope = 1
-	// A proxy node's raw configuration (v2_node.raw_config).
+	// A proxy node's raw configuration (v5_node.raw_config).
 	SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG SecretScope = 2
 )
 
@@ -1870,7 +1870,7 @@ type PutSecretDocument struct {
 	Column       string `protobuf:"bytes,3,opt,name=column,proto3" json:"column,omitempty"`
 	DocumentJson []byte `protobuf:"bytes,4,opt,name=document_json,json=documentJson,proto3" json:"document_json,omitempty"`
 	// protocol_json, for a node protocol's settings column, is the protocol
-	// as the package writes it (the v2_node_protocol columns, as the row's
+	// as the package writes it (the v5_node_protocol columns, as the row's
 	// JSON). The kernel then validates the protocol with the settings it
 	// stores, as the protocol routes validate a write
 	// (service.ValidateNodeProtocol), and fails the operation
@@ -2234,7 +2234,7 @@ func (x *TestForwardBackend) GetToken() *SecretRef {
 
 // RunAgentDiagnostic sends one whitelisted diagnostic action to a node's
 // agent (the kernel's diagnostic whitelist normalizes the parameters),
-// records the task in v2_agent_diagnostic_task and waits for the agent's
+// records the task in v5_agent_diagnostic_task and waits for the agent's
 // acknowledgement, as the administrator's task and execute routes do.
 type RunAgentDiagnostic struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -4492,7 +4492,7 @@ type AgentDiagnosticResult struct {
 	// task routes show it (the WebSocket's ack message, or the stream's
 	// OperationAck), scrubbed like a result; empty without one.
 	AckJson []byte `protobuf:"bytes,7,opt,name=ack_json,json=ackJson,proto3" json:"ack_json,omitempty"`
-	// task_json is the task's row (v2_agent_diagnostic_task) as the
+	// task_json is the task's row (v5_agent_diagnostic_task) as the
 	// administrator's task routes show it ("data"): as recorded after the
 	// dispatch, or as created when the task could not be sent; scrubbed like
 	// a result.

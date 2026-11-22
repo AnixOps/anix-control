@@ -118,7 +118,7 @@ type SubscriptionGroup struct {
 套餐 C (尊享版) ──关联──▶ 分组: default, vip, premium
 ```
 
-用户的购买页只列出已上架的套餐（`v2_plan.show = 1`）。后台新建套餐默认上架；
+用户的购买页只列出已上架的套餐（`v5_plan.show = 1`）。后台新建套餐默认上架；
 请求体没有 `show` 时服务端按 `show = 1` 保存，显式写 `show: 0` 才保存为下架。
 套餐表单有「上架」开关，套餐列表用「在售 / 已下架」标识。
 
@@ -381,11 +381,11 @@ GET /api/v4/admin/subscription-groups/:id/members?page=1&page_size=20&q=&status=
 ```
 
 **分组成员列表.** `GET /api/v4/admin/subscription-groups/:id/members` lists
-the users granted the group directly (the `v2_user_subscription_group` rows
+the users granted the group directly (the `v5_user_subscription_group` rows
 that `POST /api/v2/admin/subscription/users/:user_id/groups` creates), the
 same rows that `GET /api/v2/admin/subscription/stats` counts as `user_count`
 (all members) and `enabled_users` (`status=active`). Users who reach the
-group through their plan or their primary group (`v2_user.group_id`) are not
+group through their plan or their primary group (`v5_user.group_id`) are not
 members here; the users list's `plan_id` filter lists a plan's users.
 `page` (default 1) and `page_size` (default 20, at most 100) page the list,
 `q` keeps the e-mails that contain it (`%` and `_` match themselves) and

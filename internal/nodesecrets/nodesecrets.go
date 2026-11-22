@@ -1,8 +1,8 @@
 // Package nodesecrets is the one writer of the node credential split
 // (docs/architecture/node-ops-service.md, section 4).
 //
-// The split moves protocol secrets out of the legacy tables (v2_node's raw
-// configuration, v2_node_protocol, v2_wireguard_peer) into the protected
+// The split moves protocol secrets out of the legacy tables (v5_node's raw
+// configuration, v5_node_protocol, v5_wireguard_peer) into the protected
 // kernel table v4_kernel_protocol_secret. Existing tables are never altered.
 //
 // Every table is finalized (phase P3; the earlier phases and the commands
@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -29,9 +30,9 @@ import (
 
 // The legacy tables the split moves secrets out of.
 const (
-	TableNode          = "v2_node"
-	TableNodeProtocol  = "v2_node_protocol"
-	TableWireGuardPeer = "v2_wireguard_peer"
+	TableNode          = "v5_node"
+	TableNodeProtocol  = "v5_node_protocol"
+	TableWireGuardPeer = "v5_wireguard_peer"
 )
 
 // Tables lists the split tables.
@@ -55,7 +56,7 @@ const (
 const tombstonePrefix = "!moved:"
 
 // Tombstone is the value of a legacy key column once its secret has moved
-// (v2_wireguard_peer.private_key and .preshared_key): unique per row,
+// (v5_wireguard_peer.private_key and .preshared_key): unique per row,
 // non-empty, and never a key.
 func Tombstone(id uint64) string {
 	return tombstonePrefix + strconv.FormatUint(id, 10)
@@ -86,6 +87,8 @@ func RequireFinalized(db *gorm.DB) error {
 		}
 	}
 	for _, table := range Tables() {
+		// Before the start migrates, the tables may still have their v2_ names.
+		table = migrations.TableIn(db, table)
 		state := states[table]
 		if state.Phase == PhaseFinalized && state.FinalizedAt != nil || !db.Migrator().HasTable(table) {
 			continue

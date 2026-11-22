@@ -28,5 +28,5 @@ type AgentDiagnosticTask struct {
 }
 
 func (AgentDiagnosticTask) TableName() string {
-	return "v2_agent_diagnostic_task"
+	return "v5_agent_diagnostic_task"
 }

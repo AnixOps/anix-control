@@ -80,9 +80,9 @@ const (
 
 // Node kinds of an agent identity.
 const (
-	// NodeKindProxy is a proxy node, a v2_node row.
+	// NodeKindProxy is a proxy node, a v5_node row.
 	NodeKindProxy = "proxy"
-	// NodeKindForward is a forward node, a v2_forward_node row.
+	// NodeKindForward is a forward node, a v5_forward_node row.
 	NodeKindForward = "forward"
 )
 

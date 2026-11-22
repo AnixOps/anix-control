@@ -17,7 +17,7 @@ type knowledgeBridge interface {
 }
 
 // newKnowledgeService returns the knowledge host's router. Every route has a
-// native handler on the adopted v2_knowledge table
+// native handler on the adopted v5_knowledge table
 // and serves natively from the start: the kernel keeps no legacy handler for
 // them.
 func newKnowledgeService(bridge knowledgeBridge, leaseID string) (*pluginhostsdk.Router, error) {

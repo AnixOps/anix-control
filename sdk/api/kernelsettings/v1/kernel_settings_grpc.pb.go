@@ -29,8 +29,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // KernelSettings is the kernel's contract for system settings: the rows of
-// the protected v2_system_config table and the backup configuration row of
-// v2_backup_config. The kernel stays their only writer; official packages
+// the protected v5_system_config table and the backup configuration row of
+// v5_backup_config. The kernel stays their only writer; official packages
 // read and change them through this contract instead of the tables
 // (docs/architecture/settings-service.md).
 //
@@ -129,8 +129,8 @@ func (c *kernelSettingsClient) DeleteSettings(ctx context.Context, in *DeleteSet
 // for forward compatibility.
 //
 // KernelSettings is the kernel's contract for system settings: the rows of
-// the protected v2_system_config table and the backup configuration row of
-// v2_backup_config. The kernel stays their only writer; official packages
+// the protected v5_system_config table and the backup configuration row of
+// v5_backup_config. The kernel stays their only writer; official packages
 // read and change them through this contract instead of the tables
 // (docs/architecture/settings-service.md).
 //

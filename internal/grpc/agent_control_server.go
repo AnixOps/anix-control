@@ -1006,7 +1006,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 			}
 			// Plugin telemetry and observations belong to proxy nodes
-			// (v2_node); forward-node counters join with A5.
+			// (v5_node); forward-node counters join with A5.
 			if agentNode.Kind == agentcontrol.NodeKindProxy {
 				s.recordHeartbeatPluginState(nodeID, payload.Heartbeat)
 				// Connections the exit refused to mainland-China

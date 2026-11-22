@@ -37,7 +37,7 @@ type Setting struct {
 	Masked bool `protobuf:"varint,5,opt,name=masked,proto3" json:"masked,omitempty"`
 	// has_value: the stored value is not blank.
 	HasValue bool `protobuf:"varint,6,opt,name=has_value,json=hasValue,proto3" json:"has_value,omitempty"`
-	// type, group and remark are the v2_system_config row's metadata; empty
+	// type, group and remark are the v5_system_config row's metadata; empty
 	// for backup fields.
 	Type          string `protobuf:"bytes,7,opt,name=type,proto3" json:"type,omitempty"`
 	Group         string `protobuf:"bytes,8,opt,name=group,proto3" json:"group,omitempty"`
@@ -311,7 +311,7 @@ type SettingEntry struct {
 	// field password of notification.email.config) sent as the placeholder
 	// keeps its stored value, "" when none is stored.
 	Keep bool `protobuf:"varint,3,opt,name=keep,proto3" json:"keep,omitempty"`
-	// type, group and remark are stored with a v2_system_config key; empty
+	// type, group and remark are stored with a v5_system_config key; empty
 	// leaves the stored one (a new key's type defaults to "string"). They
 	// must be empty for backup fields.
 	Type          string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`

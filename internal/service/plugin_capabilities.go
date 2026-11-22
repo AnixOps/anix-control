@@ -31,7 +31,7 @@ const (
 	CapabilitySubscriberBalance      = "kernel.subscriber.balance.v1"
 	CapabilitySubscriberDirectory    = "kernel.subscriber.directory.v1"
 	// CapabilitySubscriberGroups edits one subscription group membership
-	// (v2_user_subscription_group) at a time.
+	// (v5_user_subscription_group) at a time.
 	CapabilitySubscriberGroups = "kernel.subscriber.groups.v1"
 	// CapabilitySubscriberSummary reads one subscriber's cached
 	// subscription summary (kernel-caches.md).
@@ -62,24 +62,24 @@ var (
 	adoptableTablePattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 	kernelAPIViewPattern   = regexp.MustCompile(`^kapi_[a-z][a-z0-9_]*_v[1-9][0-9]*$`)
 	settingsCapability     = regexp.MustCompile(`^kernel\.settings\.([a-z][a-z0-9-]*)\.(read|write|secrets)\.v1$`)
-	protectedTablePrefixes = []string{"v2_user", "v3_kernel_", "v4_kernel_", "identity_", "kapi_", "pg_"}
+	protectedTablePrefixes = []string{"v5_user", "v3_kernel_", "v4_kernel_", "identity_", "kapi_", "pg_"}
 	protectedTables        = map[string]bool{
-		"v2_system_config": true, "v2_audit_log": true, "v2_operation_log": true,
-		// Node credentials: v2_node holds each node's API key, key hash and
+		"v5_system_config": true, "v5_audit_log": true, "v5_operation_log": true,
+		// Node credentials: v5_node holds each node's API key, key hash and
 		// secret, which the kernel's node authentication checks. A package
 		// that could read or write them could act as any node.
-		"v2_node": true,
-		// Node runtime secrets: v2_node_protocol holds each protocol's
+		"v5_node": true,
+		// Node runtime secrets: v5_node_protocol holds each protocol's
 		// Reality private key, WireGuard server private key and custom
 		// configuration, and the kernel builds every node's configuration
 		// and every subscription from its
 		// rows without validating them again: its protocol validator runs on
-		// its own writes only. v2_wireguard_peer holds every user's
+		// its own writes only. v5_wireguard_peer holds every user's
 		// WireGuard private and preshared keys. A package that could read
 		// them could impersonate the nodes, and one that could write
-		// v2_node_protocol could push unvalidated configuration to every
+		// v5_node_protocol could push unvalidated configuration to every
 		// node.
-		"v2_node_protocol": true, "v2_wireguard_peer": true,
+		"v5_node_protocol": true, "v5_wireguard_peer": true,
 		// The node secret split (node-ops-service.md, section 4): the
 		// protocol secrets moved out of the tables above, in clear, and the
 		// split's state. The v4_kernel_ prefix protects them already; they
@@ -270,12 +270,12 @@ func validateManifestCapabilities(capabilities []string) error {
 }
 
 // forwardCredentialTables are the forward tables no package may adopt:
-//   - v2_forward_node is the forward node inventory and the Agent identity
+//   - v5_forward_node is the forward node inventory and the Agent identity
 //     (forward-<id>) the kernel's agent PKI issues certificates for;
 //   - v2_forward_runtime_job holds the legacy runtime's jobs, whose
 //     payloads carried the node's API token.
 var forwardCredentialTables = map[string]bool{
-	"v2_forward_node": true, "v2_forward_runtime_job": true,
+	"v5_forward_node": true, "v2_forward_runtime_job": true,
 }
 
 // adoptableTables are the protected tables a package may declare it adopts
@@ -283,7 +283,7 @@ var forwardCredentialTables = map[string]bool{
 // the kernel's split tables, so their legacy columns hold only tombstones
 // and redacted documents. Every other protected table stays the kernel's.
 var adoptableTables = map[string]bool{
-	"v2_node": true, "v2_node_protocol": true, "v2_forward_node": true,
+	"v5_node": true, "v5_node_protocol": true, "v5_forward_node": true,
 }
 
 func protectedKernelTable(table string) bool {

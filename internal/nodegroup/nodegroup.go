@@ -52,7 +52,7 @@ func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 }
 
-// Audit actions of the operation log (v2_operation_log, module node_group).
+// Audit actions of the operation log (v5_operation_log, module node_group).
 // No entry carries a join token.
 const (
 	auditModule                   = "node_group"

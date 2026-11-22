@@ -41,7 +41,7 @@ Before you try to start the panel, keep these rules straight:
 - on SQLite Control backs itself up into `data_dir/backups` (daily, before every pending migration, on request) and verifies every bundle; a start that cannot take its pre-migration backup migrates nothing and stops, and a restore runs only with Control stopped (`data_dir/control.lock`) ([`reference/backups.md`](reference/backups.md))
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
 - `forward_runtime` (deprecated, read until M5) is the canonical runtime entry
-- `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
+- `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v5_system_config`
 - the operator keys and the deprecated keys still read (database, `forward_runtime`) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in values ([`reference/environment-variables.md`](reference/environment-variables.md)); no secret is configuration
 - no administrator is configured: on an empty database the start logs ``No administrator yet. Run `sudo anix-control admin claim-link` to get the claim link.`` and the first administrator claims the panel with that one-time link ([`reference/quickstart.md`](reference/quickstart.md#the-first-administrator)); `admin.*` is ignored with a warning
 
