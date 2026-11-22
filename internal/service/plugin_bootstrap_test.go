@@ -418,9 +418,6 @@ func TestMaterializeBuiltinHostReleaseRequiresTheEmbeddedManifest(t *testing.T) 
 	root := t.TempDir()
 	ref, err := MaterializePluginControlArtifact(db, key.public, "knowledge", "5.0.0", root)
 	require.NoError(t, err)
-	require.True(t, ref.Builtin)
-	require.Empty(t, ref.EntrypointPath)
-	require.Empty(t, ref.EntrypointSHA256)
 	require.FileExists(t, ref.ArtifactPath)
 	require.FileExists(t, ref.ManifestPath)
 	require.NoFileExists(t, filepath.Join(filepath.Dir(ref.ArtifactPath), "control-host"))
@@ -449,6 +446,9 @@ func TestBuiltinControlEntrypointManifestRules(t *testing.T) {
 	for name, mutate := range map[string]func(*PluginManifest){
 		"other package": func(m *PluginManifest) { m.ControlEntrypoint = &PluginEntrypoint{Builtin: "plan"} },
 		"also a file":   func(m *PluginManifest) { m.ControlEntrypoint.Path = "bin/control-host" },
+		"a file": func(m *PluginManifest) {
+			m.ControlEntrypoint = &PluginEntrypoint{Path: "bin/control-host", SHA256: m.ArtifactSHA256}
+		},
 		"agent target": func(m *PluginManifest) {
 			m.Targets = []string{"control", "agent"}
 			m.AgentEntrypoint = &PluginEntrypoint{Path: "agent/entrypoints.json", SHA256: m.ArtifactSHA256}

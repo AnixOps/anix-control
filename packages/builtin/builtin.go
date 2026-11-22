@@ -1,7 +1,6 @@
 // Package builtin is the table of the official package hosts linked into
-// the Control binary. The kernel starts a host by executing its own binary
-// again as `anix-control package-host <id>` (cmd/server) with the package
-// host environment of internal/pluginhost; Main is that command.
+// the Control binary. The kernel runs a host inside its own process
+// (internal/pluginhost ManagerConfig.InProcess, cmd/server).
 //
 // The table names every official package of packages/shared/build_package.py
 // (PACKAGE_SPECS). TestHostsMatchThePackageMatrix keeps the two lists equal.
@@ -11,8 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"sort"
 	"strings"
 
@@ -29,14 +26,6 @@ import (
 	ticket "github.com/AnixOps/anix-control/v5/packages/ticket/control"
 	wireguard "github.com/AnixOps/anix-control/v5/packages/wireguard/control"
 )
-
-// CommandName is the Control subcommand that runs a package host.
-const CommandName = "package-host"
-
-// VersionEnvironment carries the package release the kernel verified and
-// starts the host for. The host serves exactly that version: it answers only
-// requests for it (pluginhostsdk.Server).
-const VersionEnvironment = "ANIX_CONTROL_HOST_PACKAGE_VERSION"
 
 // Host is one official package's Control host.
 type Host struct {
@@ -111,57 +100,4 @@ func Run(ctx context.Context, id, version string) error {
 		return fmt.Errorf("%s: the package version is required", id)
 	}
 	return host.Run(ctx, version)
-}
-
-// Options configures Main.
-type Options struct {
-	// Getenv reads the host environment (os.Getenv).
-	Getenv func(string) string
-	// Version resolves the release to serve when the kernel did not set
-	// VersionEnvironment (the standalone binary started by hand) and
-	// checks the one it did set. Nil accepts the environment's version and
-	// fails without one.
-	Version func(id, requested string) (string, error)
-	// Stderr receives usage and errors.
-	Stderr io.Writer
-}
-
-// Main runs `package-host <id>` and returns the process exit code: 0 after
-// a clean stop, 1 when the host fails, 2 for a usage error.
-func Main(ctx context.Context, args []string, options Options) int {
-	logger := log.Default()
-	if options.Stderr != nil {
-		logger = log.New(options.Stderr, "", log.LstdFlags)
-	}
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		logger.Printf("usage: anix-control %s <package-id>; package ids: %s", CommandName, strings.Join(IDs(), ", "))
-		return 2
-	}
-	id := args[0]
-	if _, ok := Lookup(id); !ok {
-		logger.Printf("%s: %v: %q (package ids: %s)", CommandName, ErrUnknownHost, id, strings.Join(IDs(), ", "))
-		return 2
-	}
-	requested := ""
-	if options.Getenv != nil {
-		requested = strings.TrimSpace(options.Getenv(VersionEnvironment))
-	}
-	version := requested
-	if options.Version != nil {
-		resolved, err := options.Version(id, requested)
-		if err != nil {
-			logger.Printf("%s control host: %v", id, err)
-			return 1
-		}
-		version = resolved
-	}
-	if version == "" {
-		logger.Printf("%s control host: %s is not set and this binary embeds no %s package", id, VersionEnvironment, id)
-		return 1
-	}
-	if err := Run(ctx, id, version); err != nil {
-		logger.Printf("%s control host: %v", id, err)
-		return 1
-	}
-	return 0
 }

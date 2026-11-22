@@ -594,9 +594,9 @@ keys:
     removed_in: M2 (P7)
     reason: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
   - key: plugins.identity_bootstrap_package_dir
-    status: read
-    removed_in: M2 (P11)
-    reason: imports identity-platform into a development binary that embeds no packages; a release binary ignores it
+    status: ignored
+    removed_in: M5
+    reason: every official package, identity-platform included, is built into Control; a binary built without them installs none
   - key: plugins.official_public_key
     status: read
     removed_in: M2 (P11)

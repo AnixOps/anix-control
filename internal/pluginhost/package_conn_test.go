@@ -15,11 +15,11 @@ import (
 // the host protocol.
 func TestPackageConnReachesTheRunningHost(t *testing.T) {
 	manager, _ := newSupervisedTestManager(t)
-	require.NoError(t, manager.Start(context.Background(), writeHostArtifactRef(t, "knowledge", "4.0.0"), 7))
+	require.NoError(t, manager.Start(context.Background(), writeVerifiedArtifactRef(t, "knowledge", "4.0.0"), 7))
 
 	conn, err := manager.PackageConn("knowledge")
 	require.NoError(t, err)
-	health, err := pluginhostv1.NewControlPackageHostClient(conn).Health(context.Background(), &pluginhostv1.HealthRequest{})
+	health, err := pluginhostv1.NewControlPackageHostClient(conn).Health(context.Background(), &pluginhostv1.HealthRequest{RouteGeneration: 7})
 	require.NoError(t, err)
 	require.True(t, health.GetHealthy())
 

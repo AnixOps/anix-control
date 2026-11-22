@@ -21,7 +21,7 @@ Important:
 - runtime selection is defined in `forward_runtime` (deprecated, read until M5)
 - merged runtime values are persisted into `v5_system_config`
 - no administrator, email or password is configured anywhere: on an empty database the first administrator claims the panel with a one-time link, `https://<domain>/claim#anixclaim_…`, that `anix-control admin claim-link` prints (it works once, for 24 hours; [first administrator](#the-first-administrator)). `admin.email` and `admin.password` are ignored with a warning
-- the official packages are built into the release binary and installed at every start; a binary built from a checkout carries them only after `make build` (or `make build-packages`), signed with a development key that `make run` configures (`plugins.official_public_key`); a plain `go build` carries none and imports `identity-platform` from `plugins.identity_bootstrap_package_dir`
+- the official packages are built into the release binary and installed at every start; a binary built from a checkout carries them only after `make build` (or `make build-packages`), signed with a development key that `make run` configures (`plugins.official_public_key`); a plain `go build` carries none, installs no package and logs a warning: nobody can sign in
 
 ## Docker Quickstart
 

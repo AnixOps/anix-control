@@ -152,7 +152,7 @@ type ServerConfig struct {
 	PackageVersion string
 	// MaxResponseBytes bounds DispatchResponse.ResponseBody; the whole
 	// encoded response may additionally use ResponseEnvelopeBytes. Hosts
-	// should set it from MaxResponseBytesFromEnvironment. Zero selects
+	// should set it from MaxResponseBytesFrom. Zero selects
 	// DefaultMaxResponseBytes.
 	MaxResponseBytes int
 }

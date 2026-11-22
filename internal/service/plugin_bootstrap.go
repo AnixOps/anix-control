@@ -216,7 +216,7 @@ func VerifyBuiltinPackage(embedded builtinpkg.Package, publicKey ed25519.PublicK
 	if _, err := ParsePluginMigrationIndex(*manifest, embedded.Artifact); err != nil {
 		return nil, fmt.Errorf("verify the migration index: %w", err)
 	}
-	routes, err := extractPluginArtifactFile(embedded.Artifact, manifest.CompatibilityRoutes.Path, maxPluginControlEntrypointBytes)
+	routes, err := extractPluginArtifactFile(embedded.Artifact, manifest.CompatibilityRoutes.Path, maxPluginArtifactFileBytes)
 	if err != nil {
 		return nil, fmt.Errorf("extract the compatibility routes: %w", err)
 	}

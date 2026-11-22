@@ -19,7 +19,9 @@ imported and login does not go down. The releases signed by the old root stay
 registered and bound to it. A package re-signed at the same version is
 refused (`release ... is already registered under another trust root`): a
 rotation always comes with a new version. The rest of this runbook describes
-the releases up to 4.2.x, whose packages were imported.
+the releases up to 4.2.x, whose packages were imported; the identity bootstrap
+directory it mentions (`plugins.identity_bootstrap_package_dir`) is ignored
+since slim audit C1c-1b.
 
 ## How Control Treats The Root
 

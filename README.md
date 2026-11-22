@@ -44,7 +44,7 @@ The official packages,
 `identity-platform` included, are built into the release binary: at every
 start Control verifies each one against the pinned official root, installs or
 upgrades it to the binary's version, enables it and runs its package host
-(`anix-control package-host <id>`). Nothing is staged from release assets or
+inside the Control process. Nothing is staged from release assets or
 imported, by the container image or the installer. Operators should retain
 the documented rollback plan throughout rollout. Package hosts may invoke
 narrowly scoped, kernel-owned compatibility bridge operations to preserve

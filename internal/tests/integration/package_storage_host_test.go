@@ -10,11 +10,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagefixture/storagehost"
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
@@ -78,6 +79,9 @@ func runStorageHostMigration(t *testing.T, db *gorm.DB, driver, storageSource st
 		RuntimeDir:     shortRuntimeDir(t),
 		BridgeFactory:  packagebridge.NewFactory(allowlist).WithSessionOptions(packagebridge.SessionOptions{HostOperations: operations}),
 		StartupTimeout: 10 * time.Second,
+		InProcess: func(ctx context.Context, _, version string) error {
+			return storagehost.Run(ctx, version)
+		},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
@@ -148,7 +152,7 @@ func seedStorageFixtureRelease(t *testing.T, db *gorm.DB) ed25519.PublicKey {
 	manifest := service.PluginManifest{
 		ID: storageFixtureID, Name: "Storage fixture", Version: "4.1.0", APIVersion: "v2", Publisher: "AnixOps",
 		Targets: []string{"control"}, ArtifactSHA256: digest,
-		ControlEntrypoint:   &service.PluginEntrypoint{Path: "bin/control-host", SHA256: digest},
+		ControlEntrypoint:   &service.PluginEntrypoint{Builtin: storageFixtureID},
 		Migrations:          &service.PluginMigrations{Index: "migrations/index.json", SHA256: digest},
 		CompatibilityRoutes: &service.PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: digest},
 		RouteContractDigest: digest,
@@ -170,19 +174,11 @@ func buildStorageFixtureRef(t *testing.T) pluginhost.ArtifactRef {
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	require.NoError(t, err)
 	directory := t.TempDir()
-	entrypointPath := filepath.Join(directory, "storage-fixture-host")
-	command := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-o", entrypointPath, "./internal/tests/packagefixture/storagehost")
-	command.Dir = repoRoot
-	command.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
-	output, err := command.CombinedOutput()
-	require.NoError(t, err, string(output))
 	write := func(name string, content []byte) (string, string) {
 		path := filepath.Join(directory, name)
 		require.NoError(t, os.WriteFile(path, content, 0o600))
 		return path, sha256Hex(content)
 	}
-	entrypoint, err := os.ReadFile(entrypointPath)
-	require.NoError(t, err)
 	artifactPath, artifactDigest := write("package.anxp", []byte("storage fixture artifact"))
 	manifestPath, manifestDigest := write("manifest.json", []byte(`{"id":"storage-fixture","version":"4.1.0","targets":["control"]}`))
 	steps := make([]pluginhost.MigrationStep, 0, 2)
@@ -194,7 +190,6 @@ func buildStorageFixtureRef(t *testing.T) pluginhost.ArtifactRef {
 	return pluginhost.ArtifactRef{
 		PackageID: storageFixtureID, Version: "4.1.0",
 		ArtifactPath: artifactPath, ArtifactSHA256: artifactDigest,
-		EntrypointPath: entrypointPath, EntrypointSHA256: sha256Hex(entrypoint),
 		ManifestPath: manifestPath, ManifestSHA256: manifestDigest,
 		MigrationIndexSHA256: strings.Repeat("b", 64), Migrations: steps, Storage: true,
 	}

@@ -41,7 +41,8 @@ enables its own set at every start.
 
 - **The hosts.** Every official package's Control host is a library
   (`packages/<id>/control`), and `packages/builtin` lists them.
-  Control links all of them: `anix-control package-host <id>` runs one.
+  Control links all of them and runs each inside its own process; there is
+  no other way to run a host.
 - **The slim signed packages.** `build_package.py --all --builtin` writes, for
   every package, the signed artifact without any host or Agent binary
   (compatibility routes, migration index and scripts, configuration schema),
@@ -55,8 +56,9 @@ enables its own set at every start.
   `linux/amd64` and `linux/arm64`, and names the linked host instead of an
   entrypoint file: `"control_entrypoint":{"builtin":"<id>"}` (its own id and
   nothing else; the kernel rejects a built-in entrypoint for the Agent).
-  File entrypoints keep their exact signed bytes: the fields are omitted when
-  empty. The Agent plugin payloads are not built in, and Control does not
+  The kernel accepts no other Control entrypoint: a release whose
+  `control_entrypoint` names a file is invalid (slim audit C1c-1b). The Agent
+  plugin payloads are not built in, and Control does not
   dispatch Agent plugins.
 
 **Start-up bootstrap** (`service.BootstrapBuiltinPackages`, under the
@@ -91,17 +93,15 @@ raises `builtin_package_invalid` or `builtin_package_failed`
 ([`../reference/kernel-alerts.md`](../reference/kernel-alerts.md)), the
 package's routes answer as unavailable, and Control starts and serves the
 others. Restarting Control retries. A binary without built-in packages (a
-development build) imports `identity-platform` from
-`plugins.identity_bootstrap_package_dir` as before; a binary with them
-ignores that key.
+`go build` without `make build`) installs nothing and logs a warning: nobody
+can sign in until it is rebuilt with the set. Every binary ignores
+`plugins.identity_bootstrap_package_dir` (slim audit C1c-1b).
 
 **Launch and attestation.** A built-in host runs inside Control, on its own
 goroutines (`ManagerConfig.InProcess`, `cmd/server` `runBuiltinHost`; slim
-audit C1a). The supervisor treats it like a child process: it gets the same
-private runtime directory and Unix socket (`ANIX_CONTROL_HOST_SOCKET`), its
-end of the package bridge socketpair, the response limit, the package
-environment and `ANIX_CONTROL_HOST_PACKAGE_VERSION` (the release version the
-kernel verified), as settings it reads through `modulesdk.Host.Getenv`, not
+audit C1a). It gets a private runtime directory and Unix socket
+(`ANIX_CONTROL_HOST_SOCKET`), its end of the package bridge socketpair, the
+response limit and the package environment, as settings it reads through `modulesdk.Host.Getenv`, not
 from Control's environment. It answers Health before it serves, is restarted
 by the watchdog when it ends, and stops when the kernel ends its context
 (in-flight RPCs finish, the rest is cut after the 2 s grace period). A panic
@@ -125,14 +125,11 @@ or request. What it runs is established by these checks:
    `packages/builtin` links, and, when the binary embeds that package, only
    at the embedded version (`builtinpkg.HostVersion`).
 
-Until the subprocess path is removed (slim audit C1c), a package host that is
-not built in still runs as a child process, and `anix-control package-host
-<id>` still runs a built-in host by hand; Control itself no longer starts it.
-
-`package-host` reads no configuration and opens no database: a host reaches
-the kernel only through its bridge. `packages/builtin/cmd/package-host` is
-the standalone build of the same hosts, for the full package format
-(`build_package.py` without `--builtin`). The network module runtime was
+Control starts no host process and stages no host binary: the standalone
+host (`anix-control package-host <id>`, `packages/builtin/cmd/package-host`),
+the subprocess launcher and the full package format with host binaries were
+removed in slim audit C1c-1b. A host reaches the kernel only through its
+bridge. The network module runtime was
 removed in the 2026-11 slimming audit (`kernel-ca.md`, "History").
 
 Third-party packages remain unsupported for execution: only official

@@ -145,7 +145,6 @@ plugins:
 	require.NoError(t, err)
 	defaults := Defaults().Plugins
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
-	assert.Equal(t, "/var/lib/anixops/bootstrap", loaded.Plugins.IdentityBootstrapPackageDir)
 	assert.Equal(t, "/var/lib/anixops/plugin-hosts", loaded.Plugins.ControlHostRuntimeDir)
 	assert.Equal(t, "/var/lib/anixops/plugin-artifacts", loaded.Plugins.ControlHostArtifactDir)
 	assert.Equal(t, defaults.ControlPollInterval, loaded.Plugins.ControlPollInterval)

@@ -92,7 +92,7 @@ func TestHostVersionWithoutEmbeddedPackageTakesTheKernelVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "4.3.0", version)
 	for _, candidate := range embedded.Packages {
-		version, err := HostVersion(candidate.ID, "")
+		version, err := HostVersion(candidate.ID, candidate.Version)
 		require.NoError(t, err)
 		require.Equal(t, candidate.Version, version)
 		_, err = HostVersion(candidate.ID, candidate.Version+"-other")

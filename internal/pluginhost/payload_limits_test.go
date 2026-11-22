@@ -15,8 +15,8 @@ import (
 // TestCompiledHostHonorsConfiguredResponseLimit drives a legacy handler's
 // response through the real package bridge session, the compiled identity
 // host (pluginhostsdk), and the kernel host client.
-func TestCompiledHostHonorsConfiguredResponseLimit(t *testing.T) {
-	ref := buildIdentityPlatformArtifactRef(t)
+func TestHostHonorsConfiguredResponseLimit(t *testing.T) {
+	ref := writeVerifiedArtifactRef(t, "identity-platform", "4.0.0")
 	tests := []struct {
 		name         string
 		limit        int64
@@ -38,10 +38,9 @@ func TestCompiledHostHonorsConfiguredResponseLimit(t *testing.T) {
 			})
 			require.NoError(t, err)
 			factory := packagebridge.NewFactory(allowlist).WithSessionOptions(packagebridge.SessionOptions{MaxResponseBodyBytes: test.limit})
-			manager, err := NewManager(ManagerConfig{
-				RuntimeDir: shortHostTempDir(t), BridgeFactory: factory, StartupTimeout: 10 * time.Second, MaxResponseBytes: test.limit,
+			manager := newHostTestManager(t, ManagerConfig{
+				BridgeFactory: factory, StartupTimeout: 10 * time.Second, MaxResponseBytes: test.limit, InProcess: serveIdentityPlatform,
 			})
-			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
 			require.NoError(t, manager.Start(context.Background(), ref, 7))
 

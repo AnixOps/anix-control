@@ -352,7 +352,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (5s) |
 | `plugins.dispatch_enabled` | `ANIX_CONTROL_PLUGINS_DISPATCH_ENABLED` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
 | `plugins.dispatch_poll_interval` | `ANIX_CONTROL_PLUGINS_DISPATCH_POLL_INTERVAL` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
-| `plugins.identity_bootstrap_package_dir` | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | still read | M2 (P11) | imports identity-platform into a development binary that embeds no packages; a release binary ignores it |
+| `plugins.identity_bootstrap_package_dir` | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | ignored | M5 | every official package, identity-platform included, is built into Control; a binary built without them installs none |
 | `plugins.official_public_key` | `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | still read | M2 (P11) | the key the built-in packages verify against (development builds sign with their own), until the package index carries it |
 | `plugins.topology_execution_enabled` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_EXECUTION_ENABLED` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |
 | `plugins.topology_poll_interval` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_POLL_INTERVAL` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |
@@ -582,7 +582,7 @@ Two deprecated keys, still read until M2 (P11), bear on it:
 | Key | Default | Notes |
 |------|------|------|
 | `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`) | the AnixOps release root | Every built-in package must verify against it; a package that does not is left out (`builtin_package_invalid`) and Control starts without it. A development build (`make build`) is signed with a development key: `make run` sets the variable to it (`make dev-package-key` prints it). |
-| `plugins.identity_bootstrap_package_dir` | empty | Ignored by a binary with built-in packages (every release). A development build without them still imports `identity-platform` from this directory at start. |
+| `plugins.identity_bootstrap_package_dir` | empty | Ignored (slim audit C1c-1b; a start that finds it set logs so). A binary built without `make build` embeds no packages, installs none and logs a warning. |
 
 `app.edition` is gone: there are no community and commercial editions.
 Orders, payments and affiliate are installed like every other package, and
@@ -752,7 +752,7 @@ boundary; their 4.2 keys `plugins.control_host_max_request_bytes` and
 | Limit | Enforced by | Error when exceeded |
 |------|------|------|
 | request body, 1 MiB | the v2 gateway, before dispatch | `413` `plugin_request_too_large` |
-| response body, 1 MiB | the package bridge (legacy handler body), the package-host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
+| response body, 1 MiB | the package bridge (legacy handler body), the package host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
 
 - The response limit applies to the body only. The SDK additionally allows a
   fixed 64 KiB for status, headers, and identifiers, so a body the bridge

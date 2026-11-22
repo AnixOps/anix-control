@@ -33,17 +33,16 @@ func seedKnowledgeRelease(t *testing.T, db *gorm.DB, schema string, capabilities
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"knowledge","version":"4.0.1"}`)
 	routes := []byte(routeModeTestRoutes)
 	artifact := kernelTestV2Package(t, map[string][]byte{
-		"bin/control-host": entrypoint, "compat/v2-routes.json": routes, "migrations/index.json": migrations,
+		"compat/v2-routes.json": routes, "migrations/index.json": migrations,
 	})
 	digest := func(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
 	manifest := PluginManifest{
 		ID: "knowledge", Name: "Knowledge", Version: "4.0.1", APIVersion: pluginManifestAPIVersionV2, Publisher: "AnixOps",
 		Targets: []string{"control"}, ArtifactSHA256: digest(artifact),
-		ControlEntrypoint:   &PluginEntrypoint{Path: "bin/control-host", SHA256: digest(entrypoint)},
+		ControlEntrypoint:   &PluginEntrypoint{Builtin: "knowledge"},
 		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: digest(migrations)},
 		CompatibilityRoutes: &PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: digest(routes)},
 		RouteContractDigest: digest(routes),

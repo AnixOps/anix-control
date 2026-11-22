@@ -11,28 +11,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"golang.org/x/sys/unix"
 )
 
 // ArtifactRef describes files materialized by a caller that has already bound
-// them to a signed package release. The manager verifies every supplied digest
-// again immediately before starting the entrypoint.
+// them to a signed package release. The host is the one linked into the
+// Control binary under PackageID (the signed manifest's
+// control_entrypoint.builtin). The manager verifies every supplied digest
+// again immediately before starting the host.
 type ArtifactRef struct {
 	PackageID      string
 	Version        string
 	ArtifactPath   string
 	ArtifactSHA256 string
-	// Builtin marks a host linked into the Control binary (the signed
-	// manifest's control_entrypoint.builtin): the launcher executes the
-	// running binary as `package-host <PackageID>` (SelfExecutable) and the
-	// entrypoint fields stay empty. Otherwise EntrypointPath is the
-	// materialized host binary, checked against EntrypointSHA256.
-	Builtin          bool
-	EntrypointPath   string
-	EntrypointSHA256 string
-	ManifestPath     string
-	ManifestSHA256   string
+	ManifestPath   string
+	ManifestSHA256 string
 	// MigrationIndexSHA256 and Migrations describe the verified migration
 	// index of the release; Migrations is empty when it declares no steps.
 	MigrationIndexSHA256 string
@@ -56,9 +48,7 @@ type MigrationStep struct {
 func sameArtifactRelease(left, right ArtifactRef) bool {
 	return left.PackageID == right.PackageID &&
 		left.Version == right.Version &&
-		left.Builtin == right.Builtin &&
 		left.ArtifactSHA256 == right.ArtifactSHA256 &&
-		left.EntrypointSHA256 == right.EntrypointSHA256 &&
 		left.ManifestSHA256 == right.ManifestSHA256
 }
 
@@ -72,17 +62,10 @@ func verifyArtifactRef(ref ArtifactRef) error {
 	if ref.PackageID == "" || ref.Version == "" {
 		return fmt.Errorf("%w: package identity is required", ErrHostIncompatible)
 	}
-	if _, err := verifyFileDigest(ref.ArtifactPath, ref.ArtifactSHA256, false); err != nil {
+	if _, err := verifyFileDigest(ref.ArtifactPath, ref.ArtifactSHA256); err != nil {
 		return err
 	}
-	if ref.Builtin {
-		if ref.EntrypointPath != "" || ref.EntrypointSHA256 != "" {
-			return fmt.Errorf("%w: a built-in host has no entrypoint file", ErrHostIncompatible)
-		}
-	} else if _, err := verifyFileDigest(ref.EntrypointPath, ref.EntrypointSHA256, true); err != nil {
-		return err
-	}
-	manifestBytes, err := verifyFileDigest(ref.ManifestPath, ref.ManifestSHA256, false)
+	manifestBytes, err := verifyFileDigest(ref.ManifestPath, ref.ManifestSHA256)
 	if err != nil {
 		return err
 	}
@@ -101,8 +84,8 @@ func verifyArtifactRef(ref ArtifactRef) error {
 	return fmt.Errorf("%w: manifest does not target control", ErrHostIncompatible)
 }
 
-func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte, error) {
-	file, err := openVerifiedRegularFile(filePath, executable)
+func verifyFileDigest(filePath, expectedDigest string) ([]byte, error) {
+	file, err := openVerifiedRegularFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -110,59 +93,11 @@ func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte,
 	return readVerifiedDigest(file, expectedDigest)
 }
 
-func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir *hostRuntimeDir) (string, error) {
-	if runtimeDir == nil || runtimeDir.directory == nil {
-		return "", fmt.Errorf("%w: host runtime directory is unavailable", ErrHostUnavailable)
-	}
-	source, err := openVerifiedRegularFile(ref.EntrypointPath, true)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = source.Close() }()
-	expected, err := decodeDigest(ref.EntrypointSHA256)
-	if err != nil {
-		return "", err
-	}
-	const stagedEntrypointName = "entrypoint"
-	fd, err := unix.Openat(directoryFD(runtimeDir.directory), stagedEntrypointName, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o700)
-	if err != nil {
-		return "", fmt.Errorf("%w: create staged entrypoint: %v", ErrHostUnavailable, err)
-	}
-	destination := os.NewFile(uintptr(fd), stagedEntrypointName)
-	if destination == nil {
-		_ = unix.Close(fd)
-		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
-		return "", fmt.Errorf("%w: create staged entrypoint", ErrHostUnavailable)
-	}
-	cleanup := func() {
-		_ = destination.Close()
-		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
-	}
-	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(destination, hasher), source); err != nil {
-		cleanup()
-		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostIncompatible, err)
-	}
-	if err := unix.Fchmod(fd, 0o700); err != nil {
-		cleanup()
-		return "", fmt.Errorf("%w: secure staged entrypoint: %v", ErrHostUnavailable, err)
-	}
-	if err := destination.Close(); err != nil {
-		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
-		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostUnavailable, err)
-	}
-	if subtle.ConstantTimeCompare(expected, hasher.Sum(nil)) != 1 {
-		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
-		return "", fmt.Errorf("%w: file digest does not match", ErrHostIncompatible)
-	}
-	return runtimeDir.path(stagedEntrypointName), nil
+func openVerifiedRegularFile(filePath string) (*os.File, error) {
+	return openVerifiedRegularFileWithOpen(filePath, os.Open)
 }
 
-func openVerifiedRegularFile(filePath string, executable bool) (*os.File, error) {
-	return openVerifiedRegularFileWithOpen(filePath, executable, os.Open)
-}
-
-func openVerifiedRegularFileWithOpen(filePath string, executable bool, openFile func(string) (*os.File, error)) (*os.File, error) {
+func openVerifiedRegularFileWithOpen(filePath string, openFile func(string) (*os.File, error)) (*os.File, error) {
 	if !filepath.IsAbs(filePath) {
 		return nil, fmt.Errorf("%w: file path must be absolute", ErrHostIncompatible)
 	}
@@ -170,7 +105,7 @@ func openVerifiedRegularFileWithOpen(filePath string, executable bool, openFile 
 	if err != nil || !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: verified file is unavailable", ErrHostIncompatible)
 	}
-	if err := validateVerifiedFileMode(before, executable); err != nil {
+	if err := validateVerifiedFileMode(before); err != nil {
 		return nil, err
 	}
 	file, err := openFile(filePath)
@@ -182,19 +117,16 @@ func openVerifiedRegularFileWithOpen(filePath string, executable bool, openFile 
 		_ = file.Close()
 		return nil, fmt.Errorf("%w: verified file changed before open", ErrHostIncompatible)
 	}
-	if err := validateVerifiedFileMode(after, executable); err != nil {
+	if err := validateVerifiedFileMode(after); err != nil {
 		_ = file.Close()
 		return nil, err
 	}
 	return file, nil
 }
 
-func validateVerifiedFileMode(info os.FileInfo, executable bool) error {
+func validateVerifiedFileMode(info os.FileInfo) error {
 	if info.Mode().Perm()&0o022 != 0 {
 		return fmt.Errorf("%w: verified file is writable by group or others", ErrHostIncompatible)
-	}
-	if executable && info.Mode().Perm()&0o111 == 0 {
-		return fmt.Errorf("%w: entrypoint is not executable", ErrHostIncompatible)
 	}
 	return nil
 }

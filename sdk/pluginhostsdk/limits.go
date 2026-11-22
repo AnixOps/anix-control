@@ -2,7 +2,6 @@ package pluginhostsdk
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -10,11 +9,12 @@ import (
 )
 
 const (
-	// MaxResponseBytesEnvironment carries the kernel's configured response
-	// body limit (plugins.control_host_max_response_bytes) to a package host.
+	// MaxResponseBytesEnvironment is the setting that carries the kernel's
+	// configured response body limit (plugins.control_host_max_response_bytes)
+	// to a package host.
 	MaxResponseBytesEnvironment = "ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES"
-	// MaxConfigurableResponseBytes is the largest limit a host accepts from
-	// its environment; it matches the kernel configuration bound.
+	// MaxConfigurableResponseBytes is the largest limit a host accepts; it
+	// matches the kernel configuration bound.
 	MaxConfigurableResponseBytes = 64 << 20
 	// ResponseEnvelopeBytes is the fixed allowance for everything in a
 	// DispatchResponse except the body (status, headers, identifiers). The
@@ -26,13 +26,8 @@ const (
 	defaultGRPCMessageBytes = 4 << 20
 )
 
-// MaxResponseBytesFromEnvironment returns the response body limit configured
-// by the kernel, or zero (the SDK default) when the variable is unset.
-func MaxResponseBytesFromEnvironment() (int, error) {
-	return MaxResponseBytesFrom(os.Getenv)
-}
-
-// MaxResponseBytesFrom is MaxResponseBytesFromEnvironment over getenv.
+// MaxResponseBytesFrom returns the response body limit the kernel gave the
+// host (getenv, its settings), or zero (the SDK default) when it gave none.
 func MaxResponseBytesFrom(getenv func(string) string) (int, error) {
 	raw := strings.TrimSpace(getenv(MaxResponseBytesEnvironment))
 	if raw == "" {

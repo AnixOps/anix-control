@@ -185,8 +185,8 @@ nothing. A package that fails is logged (`WARNING: built-in package ...`) and
 raised as a kernel alert, and the start goes on
 ([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)).
 A binary built without them (`go build` from a checkout; `make build` embeds
-a development-key set) imports `identity-platform` from
-`plugins.identity_bootstrap_package_dir` instead. When the package host
+a development-key set) installs no package and logs a warning; nobody can
+sign in until it is rebuilt with them. When the package host
 supervisor starts, Control starts every enabled package's host inside its
 own process and runs the migrations of a package whose version changed.
 

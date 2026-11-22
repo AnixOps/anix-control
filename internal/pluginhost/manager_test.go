@@ -5,13 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -44,10 +40,10 @@ func TestDefaultManagerReturnsConfiguredSupervisor(t *testing.T) {
 	require.Same(t, manager, DefaultManager())
 }
 
-func TestManagerRejectsStartWhenEntrypointDigestDoesNotMatch(t *testing.T) {
-	manager := newTestManager(t)
+func TestManagerRejectsStartWhenArtifactDigestDoesNotMatch(t *testing.T) {
+	manager := newHostTestManager(t, ManagerConfig{})
 	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
-	ref.EntrypointSHA256 = strings.Repeat("0", sha256.Size*2)
+	ref.ArtifactSHA256 = strings.Repeat("0", sha256.Size*2)
 
 	err := manager.Start(context.Background(), ref, 7)
 
@@ -56,19 +52,15 @@ func TestManagerRejectsStartWhenEntrypointDigestDoesNotMatch(t *testing.T) {
 }
 
 func TestManagerStartsVerifiedHostOverPrivateUnixSocket(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	t.Setenv(hostTestForbiddenSecretEnvironment, "server-secret")
-	manager, err := NewManager(ManagerConfig{
+	manager := newHostTestManager(t, ManagerConfig{
 		RuntimeDir:     filepath.Join(shortHostTempDir(t), "runtime"),
 		StartupTimeout: 5 * time.Second,
 	})
-	require.NoError(t, err)
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
-	require.Equal(t, childRuntimePath("entrypoint"), host.command.Path)
 	runtimeInfo, err := manager.runtimeRoot.directory.Stat()
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), runtimeInfo.Mode().Perm())
@@ -96,18 +88,16 @@ func TestManagerStartsVerifiedHostOverPrivateUnixSocket(t *testing.T) {
 }
 
 func TestManagerRestartsExitedHostAtSameGeneration(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{})
 	// Keep the watchdog out of the way: this covers the explicit Start path.
 	manager.restartBaseDelay = time.Hour
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	first := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, first)
-	require.NoError(t, first.command.Process.Kill())
+	crashTestHost(t, first)
 	require.Eventually(t, func() bool {
 		select {
 		case <-first.waitDone:
@@ -132,16 +122,12 @@ func TestManagerRestartsExitedHostAtSameGeneration(t *testing.T) {
 }
 
 func TestManagerAcceptsEquivalentRematerializedArtifactAtSameGeneration(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{})
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	firstRef := writeHostArtifactRef(t, "knowledge", "4.0.0")
-	secondRef := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	firstRef := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
+	secondRef := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 	require.NotEqual(t, firstRef.ArtifactPath, secondRef.ArtifactPath)
-	require.NotEqual(t, firstRef.EntrypointPath, secondRef.EntrypointPath)
 	require.Equal(t, firstRef.ArtifactSHA256, secondRef.ArtifactSHA256)
-	require.Equal(t, firstRef.EntrypointSHA256, secondRef.EntrypointSHA256)
 	require.Equal(t, firstRef.ManifestSHA256, secondRef.ManifestSHA256)
 
 	require.NoError(t, manager.Start(context.Background(), firstRef, 7))
@@ -149,17 +135,18 @@ func TestManagerAcceptsEquivalentRematerializedArtifactAtSameGeneration(t *testi
 	require.NoError(t, manager.Start(context.Background(), secondRef, 7))
 	require.Same(t, active, manager.hosts[hostKey(firstRef.PackageID, firstRef.Version)])
 
-	differentRef := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", ":\n")
+	differentRef := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
+	different := []byte("another package artifact")
+	require.NoError(t, os.WriteFile(differentRef.ArtifactPath, different, 0o600))
+	differentRef.ArtifactSHA256 = testDigest(different)
 	require.ErrorIs(t, manager.Start(context.Background(), differentRef, 7), ErrHostIncompatible)
 }
 
 func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{})
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	firstRef := writeHostArtifactRef(t, "knowledge", "4.0.0")
-	secondRef := writeHostArtifactRef(t, "knowledge", "4.1.0")
+	firstRef := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
+	secondRef := writeVerifiedArtifactRef(t, "knowledge", "4.1.0")
 
 	require.NoError(t, manager.Start(context.Background(), firstRef, 7))
 	first := manager.hosts[hostKey(firstRef.PackageID, firstRef.Version)]
@@ -172,7 +159,7 @@ func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
 	require.Eventually(t, func() bool { return hostExited(first) }, time.Second, 10*time.Millisecond)
 	require.Nil(t, first.runtimeDir)
 
-	_, err = manager.Dispatch(context.Background(), DispatchInput{
+	_, err := manager.Dispatch(context.Background(), DispatchInput{
 		PackageID: firstRef.PackageID, Version: firstRef.Version, Generation: 7,
 		RequestID: "old-request", RouteID: "knowledge.article.list", Method: "GET",
 		PrincipalJSON: []byte(`{"actor_id":7}`), Deadline: time.Now().Add(time.Second),
@@ -189,11 +176,9 @@ func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
 }
 
 func TestManagerDrainsAndStopsOlderHostForNewerLifecycleGeneration(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{})
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
@@ -205,101 +190,15 @@ func TestManagerDrainsAndStopsOlderHostForNewerLifecycleGeneration(t *testing.T)
 }
 
 func TestManagerRejectsStaleLifecycleStopAgainstNewerHost(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{})
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 8))
 
-	err = manager.Stop(context.Background(), ref.PackageID, ref.Version, 7)
+	err := manager.Stop(context.Background(), ref.PackageID, ref.Version, 7)
 	require.ErrorIs(t, err, ErrGenerationUnavailable)
 	err = manager.Stop(context.Background(), ref.PackageID, ref.Version, 8)
 	require.ErrorIs(t, err, ErrGenerationUnavailable)
-}
-
-func TestManagerStopTerminatesHostProcessGroup(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	childPIDPath := filepath.Join(t.TempDir(), "descendant.pid")
-	ref := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", "/bin/sleep 60 &\necho $! > "+strconv.Quote(childPIDPath)+"\n")
-	require.NoError(t, manager.Start(context.Background(), ref, 7))
-
-	pidBytes, err := os.ReadFile(childPIDPath)
-	require.NoError(t, err)
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		if !processExited(pid) {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
-		}
-	})
-
-	require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
-	require.Eventually(t, func() bool { return processExited(pid) }, time.Second, 10*time.Millisecond)
-}
-
-func TestManagerRetiresDescendantAfterLeaderExit(t *testing.T) {
-	tests := []struct {
-		name   string
-		retire func(t *testing.T, manager *Supervisor, ref ArtifactRef)
-	}{
-		{
-			name: "stop",
-			retire: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
-				require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
-			},
-		},
-		{
-			name: "replacement",
-			retire: func(t *testing.T, manager *Supervisor, _ ArtifactRef) {
-				replacement := writeHostArtifactRef(t, "knowledge", "4.1.0")
-				require.NoError(t, manager.Start(context.Background(), replacement, 8))
-				t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-			},
-		},
-		{
-			name: "shutdown",
-			retire: func(t *testing.T, manager *Supervisor, _ ArtifactRef) {
-				require.NoError(t, manager.Shutdown(context.Background()))
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Setenv(hostTestChildEnvironment, "1")
-			manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
-			require.NoError(t, err)
-			// The watchdog would reap the descendant on restart; this covers
-			// explicit retirement of an exited leader.
-			manager.restartBaseDelay = time.Hour
-			childPIDPath := filepath.Join(t.TempDir(), "descendant.pid")
-			ref := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", "/bin/sleep 60 &\necho $! > "+strconv.Quote(childPIDPath)+"\n")
-			require.NoError(t, manager.Start(context.Background(), ref, 7))
-			host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
-			require.NotNil(t, host)
-
-			pidBytes, err := os.ReadFile(childPIDPath)
-			require.NoError(t, err)
-			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				if !processExited(pid) {
-					_ = syscall.Kill(pid, syscall.SIGKILL)
-				}
-			})
-
-			require.NoError(t, host.command.Process.Kill())
-			require.Eventually(t, func() bool { return hostExited(host) }, time.Second, 10*time.Millisecond)
-			require.False(t, processExited(pid), "the descendant must outlive the exited leader before retirement")
-
-			test.retire(t, manager, ref)
-			require.Eventually(t, func() bool { return processExited(pid) }, time.Second, 10*time.Millisecond)
-		})
-	}
 }
 
 func TestNewManagerRejectsRuntimeRootSymlinkAncestor(t *testing.T) {
@@ -346,12 +245,10 @@ func TestNewManagerCreatesUniquePrivateDefaultRuntimeRoots(t *testing.T) {
 }
 
 func TestManagerKeepsRuntimeRootPinnedAfterPathReplacement(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
 	parent := shortHostTempDir(t)
 	runtimeRoot := filepath.Join(parent, "runtime")
 	require.NoError(t, os.Mkdir(runtimeRoot, 0o700))
-	manager, err := NewManager(ManagerConfig{RuntimeDir: runtimeRoot})
-	require.NoError(t, err)
+	manager := newHostTestManager(t, ManagerConfig{RuntimeDir: runtimeRoot})
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 
 	pinnedRoot := filepath.Join(parent, "pinned-runtime")
@@ -360,12 +257,11 @@ func TestManagerKeepsRuntimeRootPinnedAfterPathReplacement(t *testing.T) {
 	require.NoError(t, os.Mkdir(attackerRoot, 0o700))
 	require.NoError(t, os.Symlink(attackerRoot, runtimeRoot))
 
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
 	require.True(t, strings.HasPrefix(host.runtimeDir.path("."), "/proc/self/fd/"))
-	require.Equal(t, childRuntimeDirectoryPath, filepath.Dir(host.command.Path))
 	require.Empty(t, readDirectoryNames(t, attackerRoot))
 	require.NotEmpty(t, readDirectoryNames(t, pinnedRoot))
 
@@ -378,47 +274,13 @@ func TestManagerKeepsRuntimeRootPinnedAfterPathReplacement(t *testing.T) {
 	require.EqualValues(t, 202, response.StatusCode)
 }
 
-func TestStageVerifiedEntrypointExecutesSnapshotAfterSourceReplacement(t *testing.T) {
-	runtimeRoot, err := newRuntimeRoot(shortHostTempDir(t))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, runtimeRoot.Close()) })
-	runtimeDir, err := runtimeRoot.createHostRuntimeDir()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, runtimeDir.remove()) })
-	outputPath := filepath.Join(t.TempDir(), "result")
-	sourcePath := filepath.Join(t.TempDir(), "entrypoint")
-	safe := []byte("#!/bin/sh\nprintf safe > " + strconv.Quote(outputPath) + "\n")
-	require.NoError(t, os.WriteFile(sourcePath, safe, 0o700))
-
-	stagedPath, err := stageVerifiedEntrypoint(ArtifactRef{
-		EntrypointPath: sourcePath, EntrypointSHA256: testDigest(safe),
-	}, runtimeDir)
-	require.NoError(t, err)
-	require.Equal(t, runtimeDir.path("entrypoint"), stagedPath)
-	stagedInfo, err := os.Stat(stagedPath)
-	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o700), stagedInfo.Mode().Perm())
-
-	unsafe := []byte("#!/bin/sh\nprintf unsafe > " + strconv.Quote(outputPath) + "\n")
-	require.NoError(t, os.WriteFile(sourcePath, unsafe, 0o700))
-	command := exec.Command(childRuntimePath("entrypoint"))
-	command.Dir = runtimeDir.path(".")
-	command.ExtraFiles = []*os.File{runtimeDir.directory}
-	command.Env = hostEnvironment(childRuntimePath("unused.sock"), childRuntimeDirectoryPath)
-	require.NoError(t, command.Run())
-
-	result, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-	require.Equal(t, "safe", string(result))
-}
-
 func TestOpenVerifiedRegularFileRejectsReplacementBeforeOpen(t *testing.T) {
-	sourcePath := filepath.Join(t.TempDir(), "entrypoint")
+	sourcePath := filepath.Join(t.TempDir(), "package.anxp")
 	replacementPath := filepath.Join(t.TempDir(), "replacement")
-	require.NoError(t, os.WriteFile(sourcePath, []byte("original"), 0o700))
-	require.NoError(t, os.WriteFile(replacementPath, []byte("replacement"), 0o700))
+	require.NoError(t, os.WriteFile(sourcePath, []byte("original"), 0o600))
+	require.NoError(t, os.WriteFile(replacementPath, []byte("replacement"), 0o600))
 
-	file, err := openVerifiedRegularFileWithOpen(sourcePath, true, func(path string) (*os.File, error) {
+	file, err := openVerifiedRegularFileWithOpen(sourcePath, func(path string) (*os.File, error) {
 		require.NoError(t, os.Rename(replacementPath, path))
 		return os.Open(path)
 	})
@@ -428,10 +290,8 @@ func TestOpenVerifiedRegularFileRejectsReplacementBeforeOpen(t *testing.T) {
 }
 
 func TestManagerShutdownStopsSupervisedHosts(t *testing.T) {
-	t.Setenv(hostTestChildEnvironment, "1")
-	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t)})
-	require.NoError(t, err)
-	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	manager := newHostTestManager(t, ManagerConfig{})
+	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
@@ -459,10 +319,8 @@ func writeVerifiedArtifactRef(t *testing.T, packageID, version string) ArtifactR
 	t.Helper()
 	directory := t.TempDir()
 	artifactPath := filepath.Join(directory, "package.anxp")
-	entrypointPath := filepath.Join(directory, "control-host")
 	manifestPath := filepath.Join(directory, "manifest.json")
 	artifact := []byte("verified package artifact")
-	entrypoint := []byte("verified control host")
 	manifest, err := json.Marshal(struct {
 		ID      string   `json:"id"`
 		Version string   `json:"version"`
@@ -470,39 +328,16 @@ func writeVerifiedArtifactRef(t *testing.T, packageID, version string) ArtifactR
 	}{ID: packageID, Version: version, Targets: []string{"control"}})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(artifactPath, artifact, 0o600))
-	require.NoError(t, os.WriteFile(entrypointPath, entrypoint, 0o700))
 	require.NoError(t, os.WriteFile(manifestPath, manifest, 0o600))
 
 	return ArtifactRef{
-		PackageID:        packageID,
-		Version:          version,
-		ArtifactPath:     artifactPath,
-		ArtifactSHA256:   testDigest(artifact),
-		EntrypointPath:   entrypointPath,
-		EntrypointSHA256: testDigest(entrypoint),
-		ManifestPath:     manifestPath,
-		ManifestSHA256:   testDigest(manifest),
+		PackageID:      packageID,
+		Version:        version,
+		ArtifactPath:   artifactPath,
+		ArtifactSHA256: testDigest(artifact),
+		ManifestPath:   manifestPath,
+		ManifestSHA256: testDigest(manifest),
 	}
-}
-
-func writeHostArtifactRef(t *testing.T, packageID, version string) ArtifactRef {
-	return writeHostArtifactRefWithPrelude(t, packageID, version, "")
-}
-
-func writeHostArtifactRefWithPrelude(t *testing.T, packageID, version, prelude string) ArtifactRef {
-	t.Helper()
-	ref := writeVerifiedArtifactRef(t, packageID, version)
-	// A race-enabled child otherwise sleeps 1s at exit, which would make every
-	// graceful SIGTERM stop in a -race run take a second.
-	entrypoint := []byte("#!/bin/sh\n" + prelude + "export GORACE=atexit_sleep_ms=0\n" + hostTestChildEnvironment + "=1 exec " + strconv.Quote(os.Args[0]) + " -test.run=^TestPluginHostProcess$ --\n")
-	require.NoError(t, os.WriteFile(ref.EntrypointPath, entrypoint, 0o700))
-	ref.EntrypointSHA256 = testDigest(entrypoint)
-	return ref
-}
-
-func processExited(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return errors.Is(err, syscall.ESRCH)
 }
 
 func shortHostTempDir(t *testing.T) string {

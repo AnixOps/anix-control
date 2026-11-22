@@ -5,7 +5,6 @@ package pluginhost
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"sort"
 	"time"
 )
@@ -154,7 +153,7 @@ func (s hostSupervisionState) describe() string {
 func (m *Supervisor) hostStartOptions() hostStartOptions {
 	return hostStartOptions{
 		startupTimeout: m.startupTimeout, bridgeFactory: m.bridgeFactory,
-		stopGrace: m.stopGrace, logf: m.logger(), maxResponseBytes: m.maxResponse,
+		logf: m.logger(), maxResponseBytes: m.maxResponse,
 		packageEnvironment: m.packageEnvironment, inProcess: m.inProcess,
 	}
 }
@@ -347,11 +346,7 @@ func (m *Supervisor) recoverHost(exited *hostProcess, token uint64) {
 
 func describeHostExit(err error) string {
 	if err == nil {
-		return "exit status 0"
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return exitErr.Error()
+		return "returned without an error"
 	}
 	return err.Error()
 }

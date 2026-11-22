@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -158,10 +157,9 @@ type ManagerConfig struct {
 	// host environment, for secrets that package alone needs (the identity
 	// key-encryption key). Hosts otherwise inherit nothing from the kernel.
 	PackageEnvironment map[string][]string
-	// InProcess runs a built-in host (ArtifactRef.Builtin) inside Control:
-	// it serves one release of one package until ctx ends, taking its
-	// settings and bridge from ctx (modulesdk.WithInProcess). Nil starts
-	// built-in hosts as child processes.
+	// InProcess runs the host linked into Control for a package: it serves
+	// one release of one package until ctx ends, taking its settings and
+	// bridge from ctx (modulesdk.WithInProcess). Without it no host starts.
 	InProcess func(ctx context.Context, packageID, version string) error
 }
 
@@ -190,7 +188,6 @@ type Supervisor struct {
 
 	// Watchdog and stop timings. NewManager sets the production defaults;
 	// tests shorten them before the first Start.
-	stopGrace        time.Duration
 	restartBaseDelay time.Duration
 	restartMaxDelay  time.Duration
 	restartWindow    time.Duration
@@ -220,8 +217,7 @@ type hostProcess struct {
 	ref        ArtifactRef
 	runtimeDir *hostRuntimeDir
 	socketPath string
-	command    *exec.Cmd
-	// cancel ends an in-process host (command is nil then).
+	// cancel ends the host.
 	cancel            context.CancelFunc
 	waitDone          chan struct{}
 	waitErr           error
@@ -232,7 +228,6 @@ type hostProcess struct {
 	draining          bool
 	relayHealthCancel context.CancelFunc
 	bridge            hostBridge
-	stopGrace         time.Duration
 	maxResponseBytes  int64
 	// retiring is set once a lifecycle operation (Drain, Stop, replacement,
 	// Shutdown) owns this process, so its exit is expected and never restarted.
@@ -257,7 +252,7 @@ func NewManager(config ManagerConfig) (*Supervisor, error) {
 	return &Supervisor{
 		hosts: make(map[string]*hostProcess), runtimeRoot: runtimeRoot, runtimeDir: runtimeRoot.configuredPath,
 		startupTimeout: config.StartupTimeout, bridgeFactory: config.BridgeFactory,
-		stopGrace: defaultHostStopGrace, restartBaseDelay: defaultRestartBaseDelay, restartMaxDelay: defaultRestartMaxDelay,
+		restartBaseDelay: defaultRestartBaseDelay, restartMaxDelay: defaultRestartMaxDelay,
 		restartWindow: defaultRestartWindow, maxRestarts: defaultMaxRestarts, logf: log.Printf,
 		restartCtx: restartCtx, cancelRestart: cancelRestart, stats: make(map[string]*HostStats),
 		maxResponse:        normalizeMaxResponseBytes(config.MaxResponseBytes),

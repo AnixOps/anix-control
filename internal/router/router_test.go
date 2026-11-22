@@ -133,22 +133,19 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 	config.Set(cfg)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"knowledge","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","package_id":"knowledge","routes":[{"method":"GET","legacy_path":"/api/v2/user/knowledge","package_route":"knowledge.article.list","envelope":"data"},{"method":"GET","legacy_path":"/api/v2/admin/ws/monitor","package_route":"telemetry.monitor.ws","envelope":"websocket","transport":"websocket"}]}`)
 	artifact := v2TestPackage(t, map[string][]byte{
-		"bin/control-host":      entrypoint,
 		"compat/v2-routes.json": routes,
 		"migrations/index.json": migrations,
 	})
 	artifactDigest := sha256.Sum256(artifact)
-	entrypointDigest := sha256.Sum256(entrypoint)
 	migrationsDigest := sha256.Sum256(migrations)
 	routesDigest := sha256.Sum256(routes)
 	manifest := service.PluginManifest{
 		ID: "knowledge", Name: "Knowledge", Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
 		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
-		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		ControlEntrypoint: &service.PluginEntrypoint{Builtin: "knowledge"},
 		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
 		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
 			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
@@ -170,20 +167,18 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 
 func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	t.Helper()
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"identity-platform","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[{"method":"POST","legacy_path":"/api/v2/login","package_route":"identity.auth.login","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/register","package_route":"identity.auth.register","envelope":"panel"},{"method":"GET","legacy_path":"/api/v2/admin/invite/codes","package_route":"identity.admin.invite.codes.get","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/admin/invite/codes","package_route":"identity.admin.invite.codes.post","envelope":"panel"},{"method":"DELETE","legacy_path":"/api/v2/admin/invite/codes/:id","package_route":"identity.admin.invite.codes.id.delete","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/user/subscription/reset","package_route":"identity.user.subscription.reset.post","envelope":"panel"}]}`)
 	artifact := v2TestPackage(t, map[string][]byte{
-		"bin/control-host": entrypoint, "compat/v2-routes.json": routes, "migrations/index.json": migrations,
+		"compat/v2-routes.json": routes, "migrations/index.json": migrations,
 	})
 	artifactDigest := sha256.Sum256(artifact)
-	entrypointDigest := sha256.Sum256(entrypoint)
 	migrationsDigest := sha256.Sum256(migrations)
 	routesDigest := sha256.Sum256(routes)
 	manifest := service.PluginManifest{
 		ID: "identity-platform", Name: "Identity Platform", Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
 		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
-		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		ControlEntrypoint: &service.PluginEntrypoint{Builtin: "identity-platform"},
 		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
 		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
 			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
@@ -204,19 +199,17 @@ func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey
 
 func seedV2TaskSixPackage(t *testing.T, packageID, name, routes string, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	t.Helper()
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + "4.0.0" + `"}`)
 	artifact := v2TestPackage(t, map[string][]byte{
-		"bin/control-host": entrypoint, "compat/v2-routes.json": []byte(routes), "migrations/index.json": migrations,
+		"compat/v2-routes.json": []byte(routes), "migrations/index.json": migrations,
 	})
 	artifactDigest := sha256.Sum256(artifact)
-	entrypointDigest := sha256.Sum256(entrypoint)
 	migrationsDigest := sha256.Sum256(migrations)
 	routesDigest := sha256.Sum256([]byte(routes))
 	manifest := service.PluginManifest{
 		ID: packageID, Name: name, Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
 		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
-		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		ControlEntrypoint: &service.PluginEntrypoint{Builtin: packageID},
 		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
 		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
 			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
@@ -262,7 +255,7 @@ func v2TestPackage(t *testing.T, files map[string][]byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
-	for _, name := range []string{"bin/control-host", "compat/v2-routes.json", "migrations/index.json"} {
+	for _, name := range []string{"compat/v2-routes.json", "migrations/index.json"} {
 		file, err := writer.Create(name)
 		require.NoError(t, err)
 		_, err = file.Write(files[name])

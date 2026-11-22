@@ -167,6 +167,30 @@ package bridge, migrations and health checks.
 - Nothing to configure. Rollback is the previous release; there is no schema
   change.
 
+### The standalone package host and the full package format are gone
+
+What C1a left for hand use is removed (slim audit C1c-1b): the
+`anix-control package-host <id>` command, the standalone host build
+`packages/builtin/cmd/package-host`, the subprocess launcher, the full
+package format with host binaries (`build_package.py` builds the slim set
+only; `--builtin` is accepted and changes nothing) and the import of
+`identity-platform` from `plugins.identity_bootstrap_package_dir`.
+
+- A release binary behaves as before: it installs, upgrades and runs its
+  built-in packages at every start. Control logs the executable's SHA-256 at
+  start, which the `package-host` command used to print.
+- `plugins.identity_bootstrap_package_dir` is ignored by every binary; a start
+  that finds it set says so. Leave it or remove it.
+- A binary built with a plain `go build` (no `make build`) embeds no
+  packages: it now installs none and logs a warning, so nobody can sign in.
+  Build with `make build`.
+- A registered release whose `control_entrypoint` names a file (the full
+  format) no longer validates. Releases before the built-in set (4.2.x) had
+  such entrypoints; the bootstrap moves every official installation to the
+  binary's built-in release at start, as since 5.0.0, so nothing changes for
+  an installation that runs a 5.x release.
+- Rollback is the previous release; there is no schema change.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

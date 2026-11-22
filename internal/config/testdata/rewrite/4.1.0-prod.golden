@@ -106,7 +106,7 @@ Dropped:
   plugins.control_poll_interval: a built-in value (5s)
   plugins.dispatch_enabled: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
   plugins.dispatch_poll_interval: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
-  plugins.identity_bootstrap_package_dir: still read until M2 (P11), not written: imports identity-platform into a development binary that embeds no packages; a release binary ignores it
+  plugins.identity_bootstrap_package_dir: every official package, identity-platform included, is built into Control; a binary built without them installs none
   plugins.official_public_key: still read until M2 (P11), not written: the key the built-in packages verify against (development builds sign with their own), until the package index carries it
   plugins.topology_execution_enabled: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)
   plugins.topology_poll_interval: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)

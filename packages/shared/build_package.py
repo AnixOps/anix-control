@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """Build deterministic signed AnixOps v2 package artifacts.
 
-Two formats share the manifest, the signing and the verification:
-
-* the full package (default): the slim contents plus the standalone Control
-  host binaries per platform and, for Agent packages, the Agent plugin and its
-  runtimes; tests, the cross-repository E2E and the network module image use it;
-* --builtin: the slim package Control embeds (internal/builtinpkg). It holds no
-  binary: the signed manifest's control_entrypoint is {"builtin": "<id>"}, the
-  host linked into the Control binary (packages/builtin), targets only
-  "control", and index.json lists the set. Releases build this format.
+The packages are the ones Control embeds (internal/builtinpkg). A package
+holds no binary: the signed manifest's control_entrypoint is
+{"builtin": "<id>"}, the host linked into the Control binary
+(packages/builtin), it targets only "control", and index.json lists the set.
 """
 
 from __future__ import annotations
@@ -42,27 +37,24 @@ MANIFEST_API_VERSION = "v2"
 AGENT_RUNTIME_API_VERSION_V110 = "anixops.agent.sdk/v1.1.0"
 PACKAGE_FORMAT = "anixops.package/v2"
 MAX_ARTIFACT_BYTES = 64 << 20
-MAX_RUNTIME_BINARY_BYTES = 32 << 20
 ED25519_PUBLIC_KEY_BYTES = 32
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 SAFE_SEGMENT_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-")
 MIGRATION_VERSION_TOKEN = "__ANIXOPS_PACKAGE_VERSION__"
 MIGRATION_ID_PATTERN = re.compile(r"[0-9a-z][0-9a-z_]{0,63}")
-ENTRYPOINT_INDEX_FORMAT = "anixops.package-entrypoints/v1"
 BUILTIN_INDEX_FORMAT = "anixops.builtin-packages/v1"
 BUILTIN_INDEX_NAME = "index.json"
 BUILTIN_PUBLIC_KEY_NAME = "official-public-key.pem"
 BUILTIN_TARGETS = ("control",)
-CONTROL_ENTRYPOINT_INDEX_PATH = "bin/control-entrypoints.json"
-AGENT_ENTRYPOINT_INDEX_PATH = "agent/entrypoints.json"
 SUPPORTED_PLATFORMS = (("linux", "amd64"), ("linux", "arm64"))
 
 
 @dataclass(frozen=True)
 class PackageSpec:
     package_id: str
+    # targets are the ones the package's manifest template declares; the
+    # built package targets only "control" (BUILTIN_TARGETS).
     targets: tuple[str, ...]
-    runtimes: tuple[str, ...] = ()
 
 
 _ALL_PACKAGE_SPECS = (
@@ -215,79 +207,6 @@ def platform_name(platform: tuple[str, str]) -> str:
     return platform[0] + "/" + platform[1]
 
 
-def platform_path_suffix(platform: tuple[str, str]) -> str:
-    return platform[0] + "-" + platform[1]
-
-
-def parse_platform(value: str) -> tuple[str, str]:
-    if not isinstance(value, str) or value.count("/") != 1:
-        raise PackageBuildError("platform must use GOOS/GOARCH")
-    goos, goarch = value.split("/", 1)
-    if (goos, goarch) not in SUPPORTED_PLATFORMS:
-        raise PackageBuildError(f"unsupported package platform {value!r}")
-    return goos, goarch
-
-
-def normalize_platforms(values: list[str]) -> tuple[tuple[str, str], ...]:
-    platforms = tuple(sorted({parse_platform(value) for value in values}, key=platform_name))
-    if not platforms:
-        raise PackageBuildError("at least one package platform is required")
-    if len(platforms) != len(values):
-        raise PackageBuildError("duplicate package platform")
-    return platforms
-
-
-def parse_agent_binary_inputs(values: list[str]) -> dict[tuple[str, tuple[str, str]], Path]:
-    agent_package_ids = {spec.package_id for spec in PACKAGE_SPECS if "agent" in spec.targets}
-    inputs: dict[tuple[str, tuple[str, str]], Path] = {}
-    for value in values:
-        if not isinstance(value, str) or value.count("=") != 1:
-            raise PackageBuildError("agent binary must use PACKAGE_ID@GOOS/GOARCH=PATH")
-        package_platform, raw_path = value.split("=", 1)
-        if package_platform.count("@") != 1:
-            raise PackageBuildError("agent binary must use PACKAGE_ID@GOOS/GOARCH=PATH")
-        package_id, raw_platform = package_platform.split("@", 1)
-        if package_id not in agent_package_ids:
-            raise PackageBuildError(f"agent binary package {package_id!r} is not an Agent-target package")
-        platform = parse_platform(raw_platform)
-        path = Path(raw_path)
-        if not path.is_absolute():
-            raise PackageBuildError("agent binary path must be absolute")
-        key = (package_id, platform)
-        if key in inputs:
-            raise PackageBuildError(f"duplicate agent binary input for {package_id}@{platform_name(platform)}")
-        inputs[key] = path
-    return inputs
-
-
-def parse_runtime_binary_inputs(values: list[str]) -> dict[tuple[str, str, tuple[str, str]], Path]:
-    runtime_keys = {(spec.package_id, runtime_name) for spec in PACKAGE_SPECS for runtime_name in spec.runtimes}
-    inputs: dict[tuple[str, str, tuple[str, str]], Path] = {}
-    for value in values:
-        if not isinstance(value, str) or value.count("=") != 1:
-            raise PackageBuildError("runtime binary must use PACKAGE_ID:RUNTIME@GOOS/GOARCH=PATH")
-        package_runtime_platform, raw_path = value.split("=", 1)
-        if package_runtime_platform.count("@") != 1:
-            raise PackageBuildError("runtime binary must use PACKAGE_ID:RUNTIME@GOOS/GOARCH=PATH")
-        package_runtime, raw_platform = package_runtime_platform.split("@", 1)
-        if package_runtime.count(":") != 1:
-            raise PackageBuildError("runtime binary must use PACKAGE_ID:RUNTIME@GOOS/GOARCH=PATH")
-        package_id, runtime_name = package_runtime.split(":", 1)
-        if (package_id, runtime_name) not in runtime_keys:
-            raise PackageBuildError(f"runtime binary {package_id}:{runtime_name} is not declared by the package matrix")
-        platform = parse_platform(raw_platform)
-        path = Path(raw_path)
-        if not path.is_absolute():
-            raise PackageBuildError("runtime binary path must be absolute")
-        key = (package_id, runtime_name, platform)
-        if key in inputs:
-            raise PackageBuildError(
-                f"duplicate runtime binary input for {package_id}:{runtime_name}@{platform_name(platform)}"
-            )
-        inputs[key] = path
-    return inputs
-
-
 def deterministic_tar(entries: list[ArchiveEntry]) -> bytes:
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w", format=tarfile.USTAR_FORMAT) as archive:
@@ -330,14 +249,6 @@ def manifest_template(package_id: str) -> dict[str, Any]:
     return template
 
 
-def generated_control_host(package_id: str) -> bytes:
-    return (
-        "#!/bin/sh\n"
-        f"printf '%s\\n' 'AnixOps package {package_id} host is not implemented in the manifest stage' >&2\n"
-        "exit 78\n"
-    ).encode("utf-8")
-
-
 def generated_migrations_index(package_id: str, version: str) -> bytes:
     return pretty_json(
         {
@@ -357,140 +268,6 @@ def generated_compatibility_routes(package_id: str) -> bytes:
             "routes": [],
         }
     )
-
-
-# The standalone host binary: packages/builtin/cmd/package-host linked for
-# one package, which runs the package's own host (packages/<id>/control).
-# Control runs the same hosts
-# as `anix-control package-host <id>`; --builtin packages carry no binary.
-STANDALONE_HOST_PACKAGE = "./packages/builtin/cmd/package-host"
-
-
-def source_control_host(spec: PackageSpec, version: str, platform: tuple[str, str]) -> bytes:
-    if shutil.which("go") is None:
-        raise PackageBuildError(f"{spec.package_id} Control host requires the Go toolchain")
-    package_path = STANDALONE_HOST_PACKAGE
-    link_flags = f"-s -w -buildid= -X main.packageID={spec.package_id} -X main.packageVersion={version}"
-    with tempfile.TemporaryDirectory(prefix=f"anixops-{spec.package_id}-host-") as temporary:
-        output = Path(temporary) / "control-host"
-        environment = os.environ.copy()
-        environment.update({"CGO_ENABLED": "0", "GOARCH": platform[1], "GOOS": platform[0], "GOWORK": "off"})
-        result = subprocess.run(
-            [
-                "go",
-                "build",
-                "-trimpath",
-                "-buildvcs=false",
-                "-ldflags",
-                link_flags,
-                "-o",
-                str(output),
-                package_path,
-            ],
-            cwd=REPO_ROOT,
-            env=environment,
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip()
-            raise PackageBuildError(f"build {spec.package_id} Control host: {detail}")
-        return read_source(output, f"{spec.package_id} compiled Control host")
-
-
-def source_executable_input(path: Path, label: str, maximum: int) -> bytes:
-    if path.is_symlink() or not path.is_file():
-        raise PackageBuildError(f"{label} must be a regular file")
-    try:
-        mode = stat.S_IMODE(path.stat().st_mode)
-    except OSError as error:
-        raise PackageBuildError(f"inspect {label}: {error}") from error
-    if mode & 0o111 == 0:
-        raise PackageBuildError(f"{label} must be executable")
-    binary = read_source(path, label)
-    if len(binary) > maximum:
-        raise PackageBuildError(f"{label} exceeds {maximum} bytes")
-    return binary
-
-
-def source_agent_binary(package_id: str, platform: tuple[str, str], inputs: dict[tuple[str, tuple[str, str]], Path]) -> bytes:
-    path = inputs.get((package_id, platform))
-    if path is None:
-        raise PackageBuildError(f"{package_id} agent binary for {platform_name(platform)} is required")
-    return source_executable_input(
-        path,
-        f"{package_id} Agent binary for {platform_name(platform)}",
-        MAX_ARTIFACT_BYTES,
-    )
-
-
-def runtime_binary_contract(package_id: str, runtime_name: str, platform: tuple[str, str]) -> dict[str, str]:
-    if (package_id, runtime_name) != ("gost-mesh", "gost"):
-        raise PackageBuildError(f"no pinned runtime contract exists for {package_id}:{runtime_name}")
-    contract = load_json(package_root(package_id) / "runtime-contract.json", f"{package_id} runtime contract")
-    if (
-        not isinstance(contract, dict)
-        or set(contract) != {"format", "platforms", "runtime", "version"}
-        or contract.get("format") != "anixops.runtime-contract/v1"
-        or contract.get("runtime") != runtime_name
-        or contract.get("version") != "3.2.6"
-        or not isinstance(contract.get("platforms"), dict)
-    ):
-        raise PackageBuildError(f"{package_id} runtime contract is invalid")
-    entry = contract["platforms"].get(platform_name(platform))
-    if (
-        not isinstance(entry, dict)
-        or set(entry) != {"archive_sha256", "binary_sha256"}
-        or not valid_digest(entry.get("archive_sha256"))
-        or not valid_digest(entry.get("binary_sha256"))
-    ):
-        raise PackageBuildError(f"{package_id} runtime contract has no valid {runtime_name} entry for {platform_name(platform)}")
-    return {"archive_sha256": entry["archive_sha256"], "binary_sha256": entry["binary_sha256"]}
-
-
-def runtime_entrypoint_name(runtime_name: str, platform: tuple[str, str]) -> str:
-    return f"runtime-{runtime_name}-{platform_path_suffix(platform)}"
-
-
-def runtime_archive_path(runtime_name: str, platform: tuple[str, str]) -> str:
-    return f"runtime/{platform_path_suffix(platform)}/{runtime_name}"
-
-
-def generated_runtime_entrypoints(spec: PackageSpec, platforms: tuple[tuple[str, str], ...]) -> dict[str, str]:
-    return {
-        runtime_entrypoint_name(runtime_name, platform): runtime_archive_path(runtime_name, platform)
-        for runtime_name in spec.runtimes
-        for platform in platforms
-    }
-
-
-def source_runtime_binary(
-    package_id: str,
-    runtime_name: str,
-    platform: tuple[str, str],
-    inputs: dict[tuple[str, str, tuple[str, str]], Path],
-    *,
-    require_pinned: bool = True,
-) -> bytes:
-    path = inputs.get((package_id, runtime_name, platform))
-    if path is None:
-        raise PackageBuildError(f"{package_id} {runtime_name} runtime binary for {platform_name(platform)} is required")
-    label = f"{package_id} {runtime_name} runtime binary for {platform_name(platform)}"
-    binary = source_executable_input(path, label, MAX_RUNTIME_BINARY_BYTES)
-    if require_pinned:
-        expected = runtime_binary_contract(package_id, runtime_name, platform)["binary_sha256"]
-        actual = sha256_bytes(binary)
-        if not hmac.compare_digest(actual, expected):
-            raise PackageBuildError(
-                f"{package_id} {runtime_name} runtime binary SHA-256 mismatch for {platform_name(platform)}"
-            )
-    return binary
-
-
-def generated_entrypoint_index(entries: list[dict[str, str]]) -> bytes:
-    ordered = sorted(entries, key=lambda entry: entry["architecture"])
-    return pretty_json({"entries": ordered, "format": ENTRYPOINT_INDEX_FORMAT})
 
 
 def source_compatibility_routes(package_id: str) -> bytes:
@@ -554,68 +331,19 @@ def source_migrations(package_id: str, version: str) -> tuple[bytes, list[Archiv
     return materialized, entries
 
 
-def package_entries(
-    spec: PackageSpec,
-    version: str,
-    platforms: tuple[tuple[str, str], ...],
-    agent_inputs: dict[tuple[str, tuple[str, str]], Path],
-    runtime_inputs: dict[tuple[str, str, tuple[str, str]], Path],
-    *,
-    formal_release: bool = False,
-    builtin: bool = False,
-) -> tuple[list[ArchiveEntry], dict[str, Any]]:
+def package_entries(spec: PackageSpec, version: str) -> tuple[list[ArchiveEntry], dict[str, Any]]:
     migrations, migration_entries = source_migrations(spec.package_id, version)
     routes = source_compatibility_routes(spec.package_id)
     entries = [
         ArchiveEntry("compat/v2-routes.json", routes, 0o644),
         ArchiveEntry("migrations/index.json", migrations, 0o644),
     ]
-    control_entrypoint = b""
-    if not builtin:
-        control_index_entries: list[dict[str, str]] = []
-        for platform in platforms:
-            control_host = source_control_host(spec, version, platform)
-            control_path = f"bin/control-host-{platform_path_suffix(platform)}"
-            entries.append(ArchiveEntry(control_path, control_host, 0o755))
-            control_index_entries.append(
-                {"architecture": platform_name(platform), "path": control_path, "sha256": sha256_bytes(control_host)}
-            )
-        control_entrypoint = generated_entrypoint_index(control_index_entries)
-        entries.append(ArchiveEntry(CONTROL_ENTRYPOINT_INDEX_PATH, control_entrypoint, 0o644))
     entries.extend(migration_entries)
     source_root = package_root(spec.package_id)
     for relative_path in ("config.schema.json", "config.defaults.json"):
         source = source_root / relative_path
         if source.is_file():
             entries.append(ArchiveEntry(relative_path, read_source(source, f"{spec.package_id} {relative_path}"), 0o644))
-
-    agent_entrypoint = b""
-    targets = BUILTIN_TARGETS if builtin else spec.targets
-    if "agent" in targets:
-        agent_index_entries: list[dict[str, str]] = []
-        for platform in platforms:
-            agent = source_agent_binary(spec.package_id, platform, agent_inputs)
-            agent_path = f"agent/{platform_path_suffix(platform)}/plugin"
-            entries.append(ArchiveEntry(agent_path, agent, 0o755))
-            agent_index_entries.append(
-                {"architecture": platform_name(platform), "path": agent_path, "sha256": sha256_bytes(agent)}
-            )
-        agent_entrypoint = generated_entrypoint_index(agent_index_entries)
-        entries.append(ArchiveEntry(AGENT_ENTRYPOINT_INDEX_PATH, agent_entrypoint, 0o644))
-
-    runtime_entrypoints = {} if builtin else generated_runtime_entrypoints(spec, platforms)
-    for runtime_name in () if builtin else spec.runtimes:
-        for platform in platforms:
-            runtime_binary = source_runtime_binary(
-                spec.package_id,
-                runtime_name,
-                platform,
-                runtime_inputs,
-                require_pinned=formal_release,
-            )
-            entries.append(
-                ArchiveEntry(runtime_archive_path(runtime_name, platform), runtime_binary, 0o755)
-            )
 
     entries.sort(key=lambda entry: entry.path)
     file_index = [
@@ -631,18 +359,12 @@ def package_entries(
         "files": file_index,
         "format": PACKAGE_FORMAT,
         "id": spec.package_id,
-        "targets": list(targets),
+        "targets": list(BUILTIN_TARGETS),
         "version": version,
     }
     entries.append(ArchiveEntry("package.json", pretty_json(package_index), 0o644))
     entries.sort(key=lambda entry: entry.path)
-    return entries, {
-        "agent_entrypoint": agent_entrypoint,
-        "control_entrypoint": control_entrypoint,
-        "migrations": migrations,
-        "routes": routes,
-        "runtime_entrypoints": runtime_entrypoints,
-    }
+    return entries, {"migrations": migrations, "routes": routes}
 
 
 def ordered_manifest(template: Any) -> dict[str, Any]:
@@ -655,22 +377,11 @@ def ordered_manifest(template: Any) -> dict[str, Any]:
     return {field: template[field] for field in MANIFEST_FIELDS}
 
 
-def emitted_manifest_fields(spec: PackageSpec, builtin: bool = False) -> tuple[str, ...]:
-    omitted = set()
-    if builtin or "agent" not in spec.targets:
-        omitted = {"agent_entrypoint", "runtime_api_version"}
-    return tuple(field for field in MANIFEST_FIELDS if field not in omitted)
+# A Control package declares no Agent runtime metadata.
+EMITTED_MANIFEST_FIELDS = tuple(field for field in MANIFEST_FIELDS if field not in {"agent_entrypoint", "runtime_api_version"})
 
 
-def generated_manifest(
-    spec: PackageSpec,
-    version: str,
-    platforms: tuple[tuple[str, str], ...],
-    artifact: bytes,
-    contents: dict[str, Any],
-    *,
-    builtin: bool = False,
-) -> dict[str, Any]:
+def generated_manifest(spec: PackageSpec, version: str, artifact: bytes, contents: dict[str, Any]) -> dict[str, Any]:
     manifest = ordered_manifest(manifest_template(spec.package_id))
     if manifest["id"] != spec.package_id:
         raise PackageBuildError(f"{spec.package_id} manifest template identity is invalid")
@@ -682,23 +393,15 @@ def generated_manifest(
 
     manifest["version"] = version
     manifest["api_version"] = MANIFEST_API_VERSION
-    if builtin:
-        # The host is the Control binary, released for these platforms; the
-        # package itself holds no binary.
-        manifest["targets"] = list(BUILTIN_TARGETS)
-        platforms = SUPPORTED_PLATFORMS
-    manifest["architectures"] = [platform_name(platform) for platform in platforms]
+    # The host is the Control binary, released for these platforms; the
+    # package itself holds no binary.
+    manifest["targets"] = list(BUILTIN_TARGETS)
+    manifest["architectures"] = [platform_name(platform) for platform in SUPPORTED_PLATFORMS]
     manifest["artifact_sha256"] = sha256_bytes(artifact)
     manifest["config_schema"] = sorted_json_value(manifest["config_schema"])
-    manifest["entrypoints"] = contents["runtime_entrypoints"]
+    manifest["entrypoints"] = {}
     manifest["migration_version"] = 0
-    if builtin:
-        manifest["control_entrypoint"] = {"builtin": spec.package_id}
-    else:
-        manifest["control_entrypoint"] = {
-            "path": CONTROL_ENTRYPOINT_INDEX_PATH,
-            "sha256": sha256_bytes(contents["control_entrypoint"]),
-        }
+    manifest["control_entrypoint"] = {"builtin": spec.package_id}
     manifest["migrations"] = {
         "index": "migrations/index.json",
         "sha256": sha256_bytes(contents["migrations"]),
@@ -709,16 +412,9 @@ def generated_manifest(
     }
     # This contract is deliberately the final compatibility-routes file bytes.
     manifest["route_contract_digest"] = sha256_bytes(contents["routes"])
-    if "agent" in manifest["targets"]:
-        manifest["agent_entrypoint"] = {
-            "path": AGENT_ENTRYPOINT_INDEX_PATH,
-            "sha256": sha256_bytes(contents["agent_entrypoint"]),
-        }
-        manifest["runtime_api_version"] = AGENT_RUNTIME_API_VERSION_V110
-    else:
-        del manifest["agent_entrypoint"]
-        del manifest["runtime_api_version"]
-    validate_manifest_value(manifest, spec, builtin=builtin)
+    del manifest["agent_entrypoint"]
+    del manifest["runtime_api_version"]
+    validate_manifest_value(manifest, spec)
     return manifest
 
 
@@ -726,67 +422,37 @@ def valid_digest(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
 
 
-def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec, *, builtin: bool = False) -> None:
-    if tuple(manifest) != emitted_manifest_fields(spec, builtin):
+def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec) -> None:
+    if tuple(manifest) != EMITTED_MANIFEST_FIELDS:
         raise PackageBuildError("generated manifest field order is not canonical")
-    targets = BUILTIN_TARGETS if builtin else spec.targets
     if manifest.get("frontend_sha256") != "":
         raise PackageBuildError("generated manifest must keep frontend_sha256 empty")
     if manifest.get("api_version") != MANIFEST_API_VERSION:
         raise PackageBuildError("generated manifest API version is invalid")
     if manifest.get("publisher") != "AnixOps":
         raise PackageBuildError("generated manifest publisher is invalid")
-    if tuple(manifest.get("targets", [])) != targets:
-        raise PackageBuildError("generated manifest targets do not match the package matrix")
-    architectures = manifest.get("architectures")
-    if not isinstance(architectures, list):
-        raise PackageBuildError("generated manifest architectures are invalid")
-    try:
-        platforms = tuple(parse_platform(architecture) for architecture in architectures)
-    except PackageBuildError as error:
-        raise PackageBuildError("generated manifest architectures are invalid") from error
-    if len(platforms) != len(architectures) or len(set(platforms)) != len(platforms):
-        raise PackageBuildError("generated manifest architectures are invalid")
-    expected_entrypoints = {} if builtin else generated_runtime_entrypoints(spec, platforms)
-    if manifest.get("entrypoints") != expected_entrypoints:
+    if tuple(manifest.get("targets", [])) != BUILTIN_TARGETS:
+        raise PackageBuildError("generated manifest must target only control")
+    if manifest.get("architectures") != [platform_name(platform) for platform in SUPPORTED_PLATFORMS]:
+        raise PackageBuildError("generated manifest must declare linux/amd64 and linux/arm64")
+    if manifest.get("entrypoints") != {}:
         raise PackageBuildError("generated manifest runtime entrypoints are invalid")
-    control_entrypoint = manifest.get("control_entrypoint")
-    if builtin:
-        if control_entrypoint != {"builtin": spec.package_id}:
-            raise PackageBuildError("generated built-in manifest must name its built-in host")
-        if platforms != SUPPORTED_PLATFORMS:
-            raise PackageBuildError("generated built-in manifest must declare linux/amd64 and linux/arm64")
+    if manifest.get("control_entrypoint") != {"builtin": spec.package_id}:
+        raise PackageBuildError("generated manifest must name its built-in host")
     digests = [
         manifest.get("artifact_sha256"),
         manifest.get("route_contract_digest"),
         manifest.get("migrations", {}).get("sha256") if isinstance(manifest.get("migrations"), dict) else None,
         manifest.get("compatibility_routes", {}).get("sha256") if isinstance(manifest.get("compatibility_routes"), dict) else None,
     ]
-    paths = [("migrations", "index"), ("compatibility_routes", "path")]
-    if not builtin:
-        if isinstance(control_entrypoint, dict) and "builtin" in control_entrypoint:
-            raise PackageBuildError("generated manifest names a built-in host outside --builtin")
-        digests.append(control_entrypoint.get("sha256") if isinstance(control_entrypoint, dict) else None)
-        paths.append(("control_entrypoint", "path"))
     for value in digests:
         if not valid_digest(value):
             raise PackageBuildError("generated manifest digest is invalid")
-    for key, field in paths:
+    for key, field in (("migrations", "index"), ("compatibility_routes", "path")):
         value = manifest.get(key)
         if not isinstance(value, dict):
             raise PackageBuildError(f"generated manifest {key} is required")
         require_relative_path(value.get(field), f"generated manifest {key}")
-    agent_entrypoint = manifest.get("agent_entrypoint")
-    if "agent" in targets:
-        if not isinstance(agent_entrypoint, dict):
-            raise PackageBuildError("generated Agent-target manifest requires agent_entrypoint")
-        require_relative_path(agent_entrypoint.get("path"), "generated manifest agent_entrypoint")
-        if not valid_digest(agent_entrypoint.get("sha256")):
-            raise PackageBuildError("generated manifest Agent entrypoint digest is invalid")
-        if manifest.get("runtime_api_version") != AGENT_RUNTIME_API_VERSION_V110:
-            raise PackageBuildError("generated manifest runtime API version is invalid")
-    elif agent_entrypoint is not None or manifest.get("runtime_api_version") is not None:
-        raise PackageBuildError("Control-only manifest declares Agent runtime metadata")
 
 
 def atomic_write(path: Path, data: bytes, mode: int = 0o644) -> None:
@@ -1018,7 +684,6 @@ def verify_output(
     official_public_key: bytes | None = None,
     formal_release: bool = False,
     require_public_key: bool = True,
-    builtin: bool = False,
 ) -> None:
     stem = f"{spec.package_id}-{version}"
     artifact_path = output / f"{stem}.anxp"
@@ -1034,11 +699,9 @@ def verify_output(
     manifest = load_json(manifest_path, f"{spec.package_id} generated manifest")
     if not isinstance(manifest, dict):
         raise PackageBuildError("generated manifest must be an object")
-    validate_manifest_value(manifest, spec, builtin=builtin)
+    validate_manifest_value(manifest, spec)
     if manifest.get("id") != spec.package_id or manifest.get("version") != version:
         raise PackageBuildError("generated manifest identity does not match the selected package")
-    if formal_release and manifest.get("architectures") != [platform_name(platform) for platform in SUPPORTED_PLATFORMS]:
-        raise PackageBuildError("formal release manifest must declare linux/amd64 and linux/arm64")
     if canonical_json(manifest) != manifest_path.read_bytes():
         raise PackageBuildError("generated manifest is not canonical")
     artifact = artifact_path.read_bytes()
@@ -1064,28 +727,9 @@ def verify_output(
             for member in members:
                 if not member.isfile() or member.mtime != 0 or member.uid != 0 or member.gid != 0:
                     raise PackageBuildError("artifact metadata is not deterministic")
-            if builtin:
-                binaries = [name for name in names if name.startswith(("bin/", "agent/", "runtime/"))]
-                if binaries:
-                    raise PackageBuildError(f"{spec.package_id} built-in artifact must hold no binary: {', '.join(binaries)}")
-            for runtime_name in () if builtin else spec.runtimes:
-                for platform in (parse_platform(value) for value in manifest["architectures"]):
-                    entrypoint = runtime_archive_path(runtime_name, platform)
-                    member = archive.getmember(entrypoint)
-                    if member.mode & 0o777 != 0o755:
-                        raise PackageBuildError(f"{spec.package_id} runtime {entrypoint} must be executable")
-                    handle = archive.extractfile(member)
-                    if handle is None:
-                        raise PackageBuildError(f"{spec.package_id} runtime {entrypoint} cannot be read")
-                    runtime_binary = handle.read(MAX_RUNTIME_BINARY_BYTES + 1)
-                    if len(runtime_binary) > MAX_RUNTIME_BINARY_BYTES:
-                        raise PackageBuildError(f"{spec.package_id} runtime {entrypoint} exceeds {MAX_RUNTIME_BINARY_BYTES} bytes")
-                    if formal_release:
-                        expected = runtime_binary_contract(spec.package_id, runtime_name, platform)["binary_sha256"]
-                        if not hmac.compare_digest(sha256_bytes(runtime_binary), expected):
-                            raise PackageBuildError(
-                                f"{spec.package_id} runtime {entrypoint} does not match the pinned runtime contract"
-                            )
+            binaries = [name for name in names if name.startswith(("bin/", "agent/", "runtime/"))]
+            if binaries:
+                raise PackageBuildError(f"{spec.package_id} artifact must hold no binary: {', '.join(binaries)}")
     except (tarfile.TarError, KeyError) as error:
         raise PackageBuildError(f"generated artifact is not a tar archive: {error}") from error
     sbom = load_json(sbom_path, f"{spec.package_id} SBOM")
@@ -1098,28 +742,16 @@ def build_package(
     version: str,
     output: Path,
     signer: Signer,
-    platforms: tuple[tuple[str, str], ...],
-    agent_inputs: dict[tuple[str, tuple[str, str]], Path],
-    runtime_inputs: dict[tuple[str, str, tuple[str, str]], Path],
     official_public_key: bytes | None = None,
     formal_release: bool = False,
-    builtin: bool = False,
 ) -> None:
-    entries, contents = package_entries(
-        spec,
-        version,
-        platforms,
-        agent_inputs,
-        runtime_inputs,
-        formal_release=formal_release,
-        builtin=builtin,
-    )
+    entries, contents = package_entries(spec, version)
     # Archive order and bytes are fixed before any generated digest is inserted
     # into the signed manifest.
     artifact = deterministic_artifact(entries)
     if len(artifact) > MAX_ARTIFACT_BYTES:
         raise PackageBuildError(f"{spec.package_id} artifact exceeds {MAX_ARTIFACT_BYTES} bytes")
-    manifest = generated_manifest(spec, version, platforms, artifact, contents, builtin=builtin)
+    manifest = generated_manifest(spec, version, artifact, contents)
     manifest_bytes = canonical_json(manifest)
     signature = base64.b64encode(signer.sign(manifest_bytes)) + b"\n"
     stem = f"{spec.package_id}-{version}"
@@ -1133,7 +765,7 @@ def build_package(
     }
     for name, data in generated.items():
         atomic_write(output / name, data, 0o644)
-    verify_output(output, spec, version, official_public_key, formal_release, builtin=builtin)
+    verify_output(output, spec, version, official_public_key, formal_release)
 
 
 # The built-in set: the slim packages Control embeds (internal/builtinpkg)
@@ -1171,7 +803,7 @@ def verify_builtin_set(
     if index_path.read_bytes() != builtin_index(selected, version):
         raise PackageBuildError("built-in package index does not list exactly the selected packages")
     for spec in selected:
-        verify_output(output, spec, version, official_public_key, formal_release, builtin=True)
+        verify_output(output, spec, version, official_public_key, formal_release)
     public_key_path = output / BUILTIN_PUBLIC_KEY_NAME
     if public_key_path.is_symlink() or not public_key_path.is_file():
         raise PackageBuildError("built-in package set has no public key")
@@ -1189,43 +821,19 @@ def parse_args() -> argparse.Namespace:
         "--package",
         action="append",
         choices=[spec.package_id for spec in PACKAGE_SPECS],
-        help="Build one package; repeat for several (with --builtin, the index lists them).",
+        help="Build one package; repeat for several (the index lists them).",
     )
     parser.add_argument("--version", required=True, help="Stable package version applied to every selected artifact.")
     parser.add_argument(
         "--out",
         type=Path,
         required=True,
-        help="Directory for .anxp, manifest, signature, and SBOM files (and index.json with --builtin).",
-    )
-    parser.add_argument("--goos", default="linux", help="Legacy single-platform GOOS selector (default: linux).")
-    parser.add_argument("--goarch", default="amd64", help="Legacy single-platform GOARCH selector (default: amd64).")
-    parser.add_argument(
-        "--platform",
-        action="append",
-        default=[],
-        help="Package platform GOOS/GOARCH. Repeat for a multiarch package; supports linux/amd64 and linux/arm64.",
-    )
-    parser.add_argument(
-        "--agent-binary",
-        action="append",
-        default=[],
-        help="Real Agent binary input PACKAGE_ID@GOOS/GOARCH=ABSOLUTE_PATH. Repeat for every Agent package/platform.",
-    )
-    parser.add_argument(
-        "--runtime-binary",
-        action="append",
-        default=[],
-        help="Runtime binary input PACKAGE_ID:RUNTIME@GOOS/GOARCH=ABSOLUTE_PATH. Repeat for every declared runtime/platform.",
+        help="Directory for .anxp, manifest, signature, and SBOM files and index.json.",
     )
     parser.add_argument(
         "--builtin",
         action="store_true",
-        help=(
-            "Build the slim packages Control embeds (internal/builtinpkg/dist): no host or Agent binaries, "
-            "control_entrypoint {\"builtin\": ID}, and index.json listing the set. Accepts --formal-release "
-            "and --verify-release; no platforms, Agent or runtime binaries."
-        ),
+        help="Accepted for existing invocations: every package is the built-in format.",
     )
     parser.add_argument("--signing-key", type=Path, help="PEM Ed25519 key used for an official release signature.")
     release_mode = parser.add_mutually_exclusive_group()
@@ -1254,44 +862,14 @@ def main() -> int:
         if args.package and len(set(args.package)) != len(args.package):
             raise PackageBuildError("--package names a package twice")
         selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id in args.package)
-        if args.platform and (args.goos != "linux" or args.goarch != "amd64"):
-            raise PackageBuildError("--platform cannot be combined with --goos or --goarch")
-        platforms = normalize_platforms(args.platform or [args.goos + "/" + args.goarch])
-        agent_inputs = parse_agent_binary_inputs(args.agent_binary)
-        runtime_inputs = parse_runtime_binary_inputs(args.runtime_binary)
-        selected_ids = {spec.package_id for spec in selected}
-        for package_id, platform in agent_inputs:
-            if package_id not in selected_ids:
-                raise PackageBuildError(f"agent binary input {package_id}@{platform_name(platform)} is outside the selected package scope")
-            if platform not in platforms:
-                raise PackageBuildError(f"agent binary input {package_id}@{platform_name(platform)} is outside the selected platform scope")
-        for package_id, runtime_name, platform in runtime_inputs:
-            if package_id not in selected_ids:
-                raise PackageBuildError(
-                    f"runtime binary input {package_id}:{runtime_name}@{platform_name(platform)} is outside the selected package scope"
-                )
-            if platform not in platforms:
-                raise PackageBuildError(
-                    f"runtime binary input {package_id}:{runtime_name}@{platform_name(platform)} is outside the selected platform scope"
-                )
-        if args.builtin:
-            if args.platform or args.goos != "linux" or args.goarch != "amd64":
-                raise PackageBuildError("--builtin packages hold no binary: they take no platform")
-            if agent_inputs or runtime_inputs:
-                raise PackageBuildError("--builtin packages hold no Agent or runtime binary")
         if args.official_public_key is not None and not (args.formal_release or args.verify_release):
             raise PackageBuildError("--official-public-key requires --formal-release or --verify-release")
         if args.verify_release:
             if args.signing_key is not None:
                 raise PackageBuildError("release artifact verification does not accept --signing-key")
             official_public_key = load_official_public_key(args.official_public_key, "release artifact verification")
-            if args.builtin:
-                verify_builtin_set(args.out, selected, version, official_public_key, formal_release=True)
-                print(f"verified {len(selected)} built-in packages and their index against the configured official root in {args.out}")
-                return 0
-            for spec in selected:
-                verify_output(args.out, spec, version, official_public_key, formal_release=True)
-            print(f"verified {len(selected)} release package artifacts against the configured official root in {args.out}")
+            verify_builtin_set(args.out, selected, version, official_public_key, formal_release=True)
+            print(f"verified {len(selected)} built-in packages and their index against the configured official root in {args.out}")
             return 0
 
         official_public_key = None
@@ -1300,29 +878,14 @@ def main() -> int:
                 raise PackageBuildError("formal release requires --signing-key")
             official_public_key = load_official_public_key(args.official_public_key, "formal release")
         with signer_for_build(args.signing_key, official_public_key) as signer:
-            if args.formal_release and not args.builtin and platforms != SUPPORTED_PLATFORMS:
-                raise PackageBuildError("formal release requires linux/amd64 and linux/arm64 package platforms")
             for spec in selected:
-                build_package(
-                    spec,
-                    version,
-                    args.out,
-                    signer,
-                    platforms,
-                    agent_inputs,
-                    runtime_inputs,
-                    official_public_key,
-                    args.formal_release,
-                    args.builtin,
-                )
-            if args.builtin:
-                write_builtin_index(args.out, selected, version, signer)
-                verify_builtin_set(args.out, selected, version, official_public_key, args.formal_release)
+                build_package(spec, version, args.out, signer, official_public_key, args.formal_release)
+            write_builtin_index(args.out, selected, version, signer)
+            verify_builtin_set(args.out, selected, version, official_public_key, args.formal_release)
     except PackageBuildError as error:
         print(f"build_package.py: error: {error}", file=os.sys.stderr)
         return 1
-    kind = "built-in package artifacts and their index" if args.builtin else "package artifacts"
-    print(f"built {len(selected)} signed {kind} and {len(selected)} SBOM files in {args.out}")
+    print(f"built {len(selected)} signed built-in package artifacts, their index and {len(selected)} SBOM files in {args.out}")
     return 0
 
 
