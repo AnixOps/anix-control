@@ -1,0 +1,42 @@
+name: CLA
+
+# Checks that the author of a pull request signed the Contributor License
+# Agreement (CLA.md): their GitHub login starts a line of
+# .github/cla-signatures.txt in the pull request's merge result. The
+# repository owner and bot accounts are exempt.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the author signed the CLA
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        shell: bash
+        run: |
+          case "${AUTHOR}" in
+            kalijerry|*'[bot]')
+              echo "${AUTHOR} is exempt."
+              exit 0
+              ;;
+          esac
+          if grep -qiE "^${AUTHOR}[[:space:]]*\|" .github/cla-signatures.txt; then
+            echo "${AUTHOR} signed the CLA."
+            exit 0
+          fi
+          echo "::error::${AUTHOR} has not signed the CLA. Read CLA.md and add your line to .github/cla-signatures.txt in this pull request."
+          exit 1

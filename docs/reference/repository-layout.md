@@ -42,6 +42,7 @@ It should not become a dumping ground for:
 | `changelog.d/` | changelog fragments: one Markdown file per change that is not released yet; `config/scripts/prepare_release.py` merges them into `CHANGELOG.md` at release (format in its `README.md`) |
 | `README.md` | canonical repository entrypoint |
 | `AGENTS.md` | contributor/agent rules |
+| `LICENSING.md` / `CLA.md` / `CONTRIBUTING.md` / `NOTICE` | editions and license timeline, contributor license agreement (signatures in `.github/cla-signatures.txt`, checked by `workflows/cla.yml`), contribution steps, upstream notices |
 | `ROADMAP.md` / `TODO.md` / `CHANGELOG.md` | roadmap pointer, open backlog, and change history |
 
 ## `scripts/` Versus `config/scripts/`

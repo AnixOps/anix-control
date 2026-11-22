@@ -1,0 +1,3 @@
+# Signatures of the AnixOps Contributor License Agreement (CLA.md).
+# One line per contributor: <GitHub login> | <name> | <YYYY-MM-DD> | CLA <version>
+# The commit that adds a line is that contributor's signature.
