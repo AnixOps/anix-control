@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"google.golang.org/grpc"
 )
@@ -137,7 +138,6 @@ type hostRPCClient interface {
 	Health(context.Context, uint64) (HostHealth, error)
 	Drain(context.Context, uint64, time.Time) (DrainResult, error)
 	OpenWebSocket(context.Context, WebSocketInput) (webSocketTransport, error)
-	Close() error
 }
 
 type DrainResult struct {
@@ -146,12 +146,11 @@ type DrainResult struct {
 }
 
 type ManagerConfig struct {
-	RuntimeDir     string
 	StartupTimeout time.Duration
 	BridgeFactory  packagebridge.SessionFactory
-	// MaxResponseBytes is plugins.control_host_max_response_bytes. It is
-	// passed to hosts as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and bounds the
-	// kernel client's receive size. Zero selects the 1 MiB default.
+	// MaxResponseBytes is plugins.control_host_max_response_bytes: the
+	// largest response body the kernel takes from a package. Zero selects
+	// the 1 MiB default.
 	MaxResponseBytes int64
 	// PackageEnvironment adds "NAME=value" entries to one package's local
 	// host environment, for secrets that package alone needs (the identity
@@ -173,14 +172,10 @@ type Supervisor struct {
 	// lets a watchdog restart run without holding mu so request dispatch to
 	// other packages is not blocked while a crashed host restarts.
 	lifecycleMu sync.Mutex
-	// mu guards hosts, closed, runtimeRoot, and the supervision fields of every
+	// mu guards hosts, closed, and the supervision fields of every
 	// hostProcess.
-	mu          sync.RWMutex
-	hosts       map[string]*hostProcess
-	runtimeRoot *runtimeRoot
-	// runtimeDir is diagnostic compatibility state. Runtime filesystem work is
-	// always relative to runtimeRoot's pinned descriptor.
-	runtimeDir     string
+	mu             sync.RWMutex
+	hosts          map[string]*hostProcess
 	startupTimeout time.Duration
 	bridgeFactory  packagebridge.SessionFactory
 	maxResponse    int64
@@ -215,12 +210,12 @@ type hostProcess struct {
 	version    string
 	generation uint64
 	ref        ArtifactRef
-	runtimeDir *hostRuntimeDir
-	socketPath string
 	// cancel ends the host.
-	cancel            context.CancelFunc
-	waitDone          chan struct{}
-	waitErr           error
+	cancel   context.CancelFunc
+	waitDone chan struct{}
+	waitErr  error
+	// ready receives the package the host built.
+	ready             chan pluginhostsdk.Package
 	client            hostRPCClient
 	leaseID           string
 	relayMu           sync.Mutex
@@ -241,16 +236,12 @@ type hostProcess struct {
 }
 
 func NewManager(config ManagerConfig) (*Supervisor, error) {
-	runtimeRoot, err := newRuntimeRoot(config.RuntimeDir)
-	if err != nil {
-		return nil, err
-	}
 	if config.StartupTimeout <= 0 {
 		config.StartupTimeout = 5 * time.Second
 	}
 	restartCtx, cancelRestart := context.WithCancel(context.Background())
 	return &Supervisor{
-		hosts: make(map[string]*hostProcess), runtimeRoot: runtimeRoot, runtimeDir: runtimeRoot.configuredPath,
+		hosts:          make(map[string]*hostProcess),
 		startupTimeout: config.StartupTimeout, bridgeFactory: config.BridgeFactory,
 		restartBaseDelay: defaultRestartBaseDelay, restartMaxDelay: defaultRestartMaxDelay,
 		restartWindow: defaultRestartWindow, maxRestarts: defaultMaxRestarts, logf: log.Printf,
@@ -279,7 +270,7 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 	// generation waits for the host instead of failing while it boots.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed || m.runtimeRoot == nil {
+	if m.closed {
 		return ErrHostUnavailable
 	}
 	key := hostKey(ref.PackageID, ref.Version)
@@ -308,7 +299,7 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 		delete(m.hosts, key)
 		m.recordStateLocked(existing, HostStateStopped)
 	}
-	host, err := startHostProcess(ctx, m.runtimeRoot, ref, generation, m.hostStartOptions())
+	host, err := startHostProcess(ctx, ref, generation, m.hostStartOptions())
 	if err != nil {
 		return err
 	}
@@ -535,11 +526,9 @@ func (m *Supervisor) Shutdown(ctx context.Context) error {
 		hosts = append(hosts, host)
 	}
 	m.hosts = make(map[string]*hostProcess)
-	runtimeRoot := m.runtimeRoot
-	m.runtimeRoot = nil
 	m.mu.Unlock()
 
-	// Stop hosts concurrently so SIGTERM grace periods overlap.
+	// Stop hosts concurrently so their stops overlap.
 	var (
 		shutdownErr error
 		errMu       sync.Mutex
@@ -557,13 +546,10 @@ func (m *Supervisor) Shutdown(ctx context.Context) error {
 		}()
 	}
 	stopped.Wait()
-	if runtimeRoot != nil {
-		shutdownErr = errors.Join(shutdownErr, runtimeRoot.Close())
-	}
 	return shutdownErr
 }
 
-// Close retires every host and releases the pinned runtime-root descriptor.
+// Close retires every host.
 func (m *Supervisor) Close() error {
 	return m.Shutdown(context.Background())
 }
@@ -635,10 +621,9 @@ func (m *Supervisor) PackageConn(packageID string) (grpc.ClientConnInterface, er
 	if host == nil || exited || host.client == nil {
 		return nil, fmt.Errorf("%w: package %s has no running host", ErrHostUnavailable, packageID)
 	}
-	switch client := host.client.(type) {
-	case *hostClient:
-		return client.connection, nil
-	default:
-		return nil, fmt.Errorf("%w: package %s host has no connection", ErrHostUnavailable, packageID)
+	client, ok := host.client.(*packageClient)
+	if !ok || client.services == nil {
+		return nil, fmt.Errorf("%w: package %s serves no services", ErrHostUnavailable, packageID)
 	}
+	return client.services, nil
 }

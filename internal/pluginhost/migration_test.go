@@ -2,31 +2,25 @@ package pluginhost
 
 import (
 	"context"
-	"net"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestManagerMigratePersistsCheckpointBeforeInterruptionAndResume(t *testing.T) {
 	server := &migrationTestHostServer{
-		responses: []*pluginhostv1.MigrationResponse{
+		responses: []pluginhostsdk.MigrationResponse{
 			{Checkpoint: "opaque-step-1", Complete: false},
 			{Checkpoint: "opaque-step-2", ValidationDigest: "opaque-validation", Complete: true},
 		},
 		healthLeaseID: "lease-5",
 	}
-	client := dialMigrationTestHost(t, server)
+	client := newPackageClient(server, 0)
 	manager := newTestManager(t, &hostProcess{
 		packageID: "order", version: "4.0.0", generation: 5, client: client, leaseID: "lease-5",
 	})
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	var checkpoints []MigrationOutput
 	recorder := func(_ context.Context, output MigrationOutput) error {
@@ -52,9 +46,8 @@ func TestManagerMigratePersistsCheckpointBeforeInterruptionAndResume(t *testing.
 		{Checkpoint: "opaque-step-2", ValidationDigest: "opaque-validation", Complete: true},
 	}, checkpoints)
 	require.Len(t, server.requests, 2)
-	require.Equal(t, "opaque-step-1", server.requests[1].GetCheckpoint())
-	require.Len(t, server.healthRequests, 1)
-	require.EqualValues(t, 5, server.healthRequests[0].GetRouteGeneration())
+	require.Equal(t, "opaque-step-1", server.requests[1].Checkpoint)
+	require.Equal(t, 1, server.healthCalls)
 	require.Equal(t, []string{"checkpoint", "checkpoint", "health"}, server.eventSnapshot())
 	require.Equal(t, "lease-5", second.HealthLeaseID)
 	require.EqualValues(t, 5, second.HealthGeneration)
@@ -62,14 +55,13 @@ func TestManagerMigratePersistsCheckpointBeforeInterruptionAndResume(t *testing.
 
 func TestManagerMigrateRejectsActivationWhenHealthLeaseChanges(t *testing.T) {
 	server := &migrationTestHostServer{
-		responses:     []*pluginhostv1.MigrationResponse{{Checkpoint: "opaque-done", Complete: true}},
+		responses:     []pluginhostsdk.MigrationResponse{{Checkpoint: "opaque-done", Complete: true}},
 		healthLeaseID: "replacement-lease",
 	}
-	client := dialMigrationTestHost(t, server)
+	client := newPackageClient(server, 0)
 	manager := newTestManager(t, &hostProcess{
 		packageID: "order", version: "4.0.0", generation: 5, client: client, leaseID: "lease-5",
 	})
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	persisted := false
 	_, err := manager.Migrate(context.Background(), MigrationInput{
@@ -84,34 +76,34 @@ func TestManagerMigrateRejectsActivationWhenHealthLeaseChanges(t *testing.T) {
 }
 
 type migrationTestHostServer struct {
-	pluginhostv1.UnimplementedControlPackageHostServer
+	fakePackage
 
-	mu             sync.Mutex
-	responses      []*pluginhostv1.MigrationResponse
-	requests       []*pluginhostv1.MigrationRequest
-	healthRequests []*pluginhostv1.HealthRequest
-	events         []string
-	healthLeaseID  string
+	mu            sync.Mutex
+	responses     []pluginhostsdk.MigrationResponse
+	requests      []pluginhostsdk.MigrationRequest
+	healthCalls   int
+	events        []string
+	healthLeaseID string
 }
 
-func (s *migrationTestHostServer) Migrate(_ context.Context, request *pluginhostv1.MigrationRequest) (*pluginhostv1.MigrationResponse, error) {
+func (s *migrationTestHostServer) Migrate(_ context.Context, request pluginhostsdk.MigrationRequest) (pluginhostsdk.MigrationResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requests = append(s.requests, request)
 	if len(s.responses) == 0 {
-		return &pluginhostv1.MigrationResponse{}, nil
+		return pluginhostsdk.MigrationResponse{}, nil
 	}
 	response := s.responses[0]
 	s.responses = s.responses[1:]
 	return response, nil
 }
 
-func (s *migrationTestHostServer) Health(_ context.Context, request *pluginhostv1.HealthRequest) (*pluginhostv1.HealthResponse, error) {
+func (s *migrationTestHostServer) Health(context.Context) (pluginhostsdk.HealthResponse, error) {
 	s.mu.Lock()
-	s.healthRequests = append(s.healthRequests, request)
+	s.healthCalls++
 	s.events = append(s.events, "health")
 	s.mu.Unlock()
-	return &pluginhostv1.HealthResponse{Healthy: true, LeaseId: s.healthLeaseID}, nil
+	return pluginhostsdk.HealthResponse{Healthy: true, LeaseID: s.healthLeaseID}, nil
 }
 
 func (s *migrationTestHostServer) recordEvent(event string) {
@@ -124,22 +116,4 @@ func (s *migrationTestHostServer) eventSnapshot() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.events...)
-}
-
-func dialMigrationTestHost(t *testing.T, server pluginhostv1.ControlPackageHostServer) *hostClient {
-	t.Helper()
-	socketPath := filepath.Join(t.TempDir(), "migration.sock")
-	listener, err := net.Listen("unix", socketPath)
-	require.NoError(t, err)
-	require.NoError(t, os.Chmod(socketPath, 0o600))
-	grpcServer := grpc.NewServer()
-	pluginhostv1.RegisterControlPackageHostServer(grpcServer, server)
-	go func() { _ = grpcServer.Serve(listener) }()
-	t.Cleanup(grpcServer.Stop)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	client, err := dialHostClient(ctx, socketPath)
-	require.NoError(t, err)
-	return client
 }

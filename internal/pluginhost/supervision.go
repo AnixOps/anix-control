@@ -294,7 +294,7 @@ func (m *Supervisor) recoverHost(exited *hostProcess, token uint64) {
 	defer m.lifecycleMu.Unlock()
 	key := hostKey(exited.packageID, exited.version)
 	m.mu.Lock()
-	if m.closed || m.runtimeRoot == nil || m.hosts[key] != exited || exited.recoveryToken != token || exited.retiring.Load() {
+	if m.closed || m.hosts[key] != exited || exited.recoveryToken != token || exited.retiring.Load() {
 		m.mu.Unlock()
 		return
 	}
@@ -305,7 +305,7 @@ func (m *Supervisor) recoverHost(exited *hostProcess, token uint64) {
 		exited.restartHistory = append(exited.restartHistory, time.Now())
 		m.updateStats(exited, func(stats *HostStats) { stats.Restarts++ })
 	}
-	runtimeRoot, options, ctx := m.runtimeRoot, m.hostStartOptions(), m.restartCtx
+	options, ctx := m.hostStartOptions(), m.restartCtx
 	m.mu.Unlock()
 	if ctx == nil {
 		ctx = context.Background()
@@ -321,7 +321,7 @@ func (m *Supervisor) recoverHost(exited *hostProcess, token uint64) {
 		return
 	}
 
-	replacement, err := startHostProcess(ctx, runtimeRoot, exited.ref, exited.generation, options)
+	replacement, err := startHostProcess(ctx, exited.ref, exited.generation, options)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/packages/notification/native"
@@ -125,20 +124,18 @@ func TestNotificationManifestCapabilities(t *testing.T) {
 }
 
 // Setting the webhook without a url needs the request's scheme and host,
-// which the kernel sends as DispatchRequest fields; without them the route
+// which the kernel sends in the request metadata; without them the route
 // fails, and is never relayed.
 func TestNotificationHostSetsTheWebhookOnlyWithTheRequestAddress(t *testing.T) {
 	bridge := &bridgeStub{}
 	router, err := newNotificationService(bridge, "lease-1")
 	require.NoError(t, err)
-	server, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{PackageID: "notification", PackageVersion: "4.1.0"}, router)
-	require.NoError(t, err)
 	dispatch := func(scheme, host string) error {
-		_, err := server.Dispatch(context.Background(), &pluginhostv1.DispatchRequest{
-			PackageId: "notification", PackageVersion: "4.1.0", RouteGeneration: 1, RequestId: "request-1",
-			RouteId: native.SetWebhookRouteID, Method: "POST", PrincipalJson: []byte(`{"actor_id":1,"admin":true}`),
-			RequestMetadataJson: []byte(`{"path":"/api/v2/admin/telegram/webhook"}`), BridgeCapability: make([]byte, 32),
-			DeadlineUnixMillis: time.Now().Add(5 * time.Second).UnixMilli(), RequestScheme: scheme, RequestHost: host,
+		_, err := router.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+			PackageID: "notification", PackageVersion: "4.1.0", RouteGeneration: 1, RequestID: "request-1",
+			RouteID: native.SetWebhookRouteID, Method: "POST", PrincipalJSON: []byte(`{"actor_id":1,"admin":true}`),
+			Metadata:         pluginhostsdk.RequestMetadata{Path: "/api/v2/admin/telegram/webhook", Scheme: scheme, Host: host},
+			BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(5 * time.Second).UnixMilli(),
 		})
 		return err
 	}

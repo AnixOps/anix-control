@@ -8,124 +8,150 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
+	"log"
+	"runtime/debug"
+	"sync"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
-	"google.golang.org/grpc"
+	"github.com/AnixOps/anix-control/sdk/modulesdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/v5/internal/localgrpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
-type hostClient struct {
-	connection *grpc.ClientConn
-	rpc        pluginhostv1.ControlPackageHostClient
+// packageClient calls a package the host built (modulesdk.InProcess.Ready)
+// directly. A panic or an error of the package fails only that call.
+type packageClient struct {
+	packageImpl      pluginhostsdk.Package
+	maxResponseBytes int64
+	// services holds what the package serves beside the host protocol
+	// (modulesdk.ServiceRegistrant), such as IdentityService.
+	services *localgrpc.Channel
 }
 
-func dialHostClient(ctx context.Context, socketPath string) (*hostClient, error) {
-	return dialHostClientWithLimit(ctx, socketPath, 0)
+func newPackageClient(packageImpl pluginhostsdk.Package, maxResponseBytes int64) *packageClient {
+	client := &packageClient{packageImpl: packageImpl, maxResponseBytes: normalizeMaxResponseBytes(maxResponseBytes)}
+	if registrant, ok := packageImpl.(modulesdk.ServiceRegistrant); ok {
+		client.services = &localgrpc.Channel{}
+		registrant.RegisterServices(client.services)
+	}
+	return client
 }
 
-// dialHostClientWithLimit bounds what the kernel accepts from a host to the
-// configured response body limit plus the SDK envelope allowance.
-func dialHostClientWithLimit(_ context.Context, socketPath string, maxResponseBytes int64) (*hostClient, error) {
-	connection, err := grpc.NewClient(
-		"passthrough:///anix-control-plugin-host",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
-		}),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(hostReceiveMessageLimit(maxResponseBytes))),
-	)
-	if err != nil {
-		return nil, hostClientError(err)
-	}
-	return &hostClient{connection: connection, rpc: pluginhostv1.NewControlPackageHostClient(connection)}, nil
-}
-
-func (c *hostClient) Dispatch(ctx context.Context, input DispatchInput) (DispatchOutput, error) {
-	if c == nil || c.rpc == nil {
-		return DispatchOutput{}, ErrHostUnavailable
-	}
-	metadata, err := marshalRequestMetadata(input.Metadata)
-	if err != nil {
-		return DispatchOutput{}, err
-	}
-	response, err := c.rpc.Dispatch(ctx, &pluginhostv1.DispatchRequest{
-		PackageId:           input.PackageID,
-		PackageVersion:      input.Version,
-		RouteGeneration:     input.Generation,
-		RequestId:           input.RequestID,
-		IdempotencyKey:      input.IdempotencyKey,
-		RouteId:             input.RouteID,
-		Method:              input.Method,
-		RequestBody:         append([]byte(nil), input.Body...),
-		PrincipalJson:       append([]byte(nil), input.PrincipalJSON...),
-		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
-		RequestMetadataJson: metadata,
-		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
-		RequestScheme:       requestScheme(input.Metadata),
-		RequestHost:         input.Metadata.Host,
+func (c *packageClient) Dispatch(ctx context.Context, input DispatchInput) (output DispatchOutput, err error) {
+	defer recoverPackagePanic("dispatch", &err)
+	ctx, cancel := context.WithDeadline(ctx, input.Deadline)
+	defer cancel()
+	response, err := c.packageImpl.Dispatch(ctx, pluginhostsdk.DispatchRequest{
+		PackageID: input.PackageID, PackageVersion: input.Version, RouteGeneration: input.Generation,
+		RequestID: input.RequestID, IdempotencyKey: input.IdempotencyKey, RouteID: input.RouteID, Method: input.Method,
+		RequestBody: append([]byte(nil), input.Body...), PrincipalJSON: append([]byte(nil), input.PrincipalJSON...),
+		Metadata: packageRequestMetadata(input.Metadata), BridgeCapability: append([]byte(nil), input.BridgeCapability...),
+		DeadlineUnixMillis: input.Deadline.UnixMilli(),
 	})
 	if err != nil {
-		return DispatchOutput{}, hostClientError(err)
+		return DispatchOutput{}, packageCallError(err)
 	}
-	headers := make([]Header, len(response.GetHeaders()))
-	for index, header := range response.GetHeaders() {
-		headers[index] = Header{Name: header.GetName(), Value: header.GetValue()}
+	if response.StatusCode < 100 || response.StatusCode > 599 {
+		return DispatchOutput{}, fmt.Errorf("%w: package response status code is invalid", ErrHostIncompatible)
+	}
+	if int64(len(response.ResponseBody)) > c.maxResponseBytes {
+		return DispatchOutput{}, fmt.Errorf("%w: %w", ErrHostUnavailable, ErrResponseTooLarge)
+	}
+	headers := make([]Header, len(response.Headers))
+	for index, header := range response.Headers {
+		headers[index] = Header{Name: header.Name, Value: header.Value}
 	}
 	return DispatchOutput{
-		StatusCode: response.GetStatusCode(), Body: append([]byte(nil), response.GetResponseBody()...), Headers: headers,
-		OperationID: response.GetOperationId(), FailureCode: response.GetFailureCode(),
+		StatusCode: response.StatusCode, Body: response.ResponseBody, Headers: headers,
+		OperationID: response.OperationID, FailureCode: response.FailureCode,
 	}, nil
 }
 
-func (c *hostClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (webSocketTransport, error) {
-	if c == nil || c.rpc == nil {
-		return nil, ErrHostUnavailable
+func (c *packageClient) Migrate(ctx context.Context, input MigrationInput) (output MigrationOutput, err error) {
+	defer recoverPackagePanic("migrate", &err)
+	if !input.Deadline.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, input.Deadline)
+		defer cancel()
 	}
-	metadata, err := marshalRequestMetadata(input.Metadata)
+	response, err := c.packageImpl.Migrate(ctx, pluginhostsdk.MigrationRequest{
+		PackageID: input.PackageID, PackageVersion: input.Version, MigrationID: input.MigrationID,
+		Checkpoint: input.Checkpoint, RouteGeneration: input.Generation,
+		BridgeCapability: append([]byte(nil), input.BridgeCapability...), DeadlineUnixMillis: input.Deadline.UnixMilli(),
+	})
 	if err != nil {
-		return nil, err
+		return MigrationOutput{}, packageCallError(err)
 	}
-	stream, err := c.rpc.OpenWebSocket(ctx)
-	if err != nil {
-		return nil, hostClientError(err)
-	}
-	if err := stream.Send(&pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Open{Open: &pluginhostv1.WebSocketOpen{
-		PackageId:           input.PackageID,
-		PackageVersion:      input.Version,
-		RouteGeneration:     input.Generation,
-		RouteId:             input.RouteID,
-		PrincipalJson:       append([]byte(nil), input.PrincipalJSON...),
-		RequestId:           input.RequestID,
-		IdempotencyKey:      input.IdempotencyKey,
-		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
-		RequestMetadataJson: metadata,
-		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
-		RequestScheme:       requestScheme(input.Metadata),
-		RequestHost:         input.Metadata.Host,
-	}}}); err != nil {
-		_ = stream.CloseSend()
-		return nil, hostClientError(err)
-	}
-	return &webSocketClientStream{stream: stream}, nil
+	return MigrationOutput{
+		Checkpoint: response.Checkpoint, ValidationDigest: response.ValidationDigest,
+		Complete: response.Complete, FailureCode: response.FailureCode,
+	}, nil
 }
 
-// requestScheme is the original request's scheme as the kernel resolved it
-// (internal/requestorigin): "https" when the connection was TLS or a trusted
-// reverse proxy reported https, else "http". Package hosts must use it and
-// never read forwarding headers, which the kernel does not pass on.
-func requestScheme(metadata RequestMetadata) string {
-	if metadata.TLS {
-		return "https"
+func (c *packageClient) Health(ctx context.Context, _ uint64) (health HostHealth, err error) {
+	defer recoverPackagePanic("health", &err)
+	response, err := c.packageImpl.Health(ctx)
+	if err != nil {
+		return HostHealth{}, packageCallError(err)
 	}
-	return "http"
+	return HostHealth{Healthy: response.Healthy, LeaseID: response.LeaseID, DetailsJSON: response.DetailsJSON}, nil
+}
+
+func (c *packageClient) Drain(ctx context.Context, _ uint64, deadline time.Time) (result DrainResult, err error) {
+	defer recoverPackagePanic("drain", &err)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	response, err := c.packageImpl.Drain(ctx)
+	if err != nil {
+		return DrainResult{}, packageCallError(err)
+	}
+	return DrainResult{Drained: response.Drained, InFlight: response.InFlight}, nil
+}
+
+func (c *packageClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (webSocketTransport, error) {
+	packageImpl, ok := c.packageImpl.(pluginhostsdk.WebSocketPackage)
+	if !ok {
+		return nil, fmt.Errorf("%w: package does not implement WebSocket routes", ErrHostIncompatible)
+	}
+	ctx, cancel := context.WithDeadline(ctx, input.Deadline)
+	pipe := &webSocketPipe{
+		ctx: ctx, toPackage: make(chan WebSocketFrame), toKernel: make(chan WebSocketFrame),
+		sendClosed: make(chan struct{}), done: make(chan struct{}),
+	}
+	open := pluginhostsdk.WebSocketOpen{
+		PackageID: input.PackageID, PackageVersion: input.Version, RouteGeneration: input.Generation, RouteID: input.RouteID,
+		PrincipalJSON: append([]byte(nil), input.PrincipalJSON...), Metadata: packageRequestMetadata(input.Metadata),
+		RequestID: input.RequestID, IdempotencyKey: input.IdempotencyKey, DeadlineUnixMillis: input.Deadline.UnixMilli(),
+		BridgeCapability: append([]byte(nil), input.BridgeCapability...),
+	}
+	go func() {
+		defer close(pipe.done)
+		defer cancel()
+		defer recoverPackagePanic("open WebSocket", &pipe.err)
+		if err := packageImpl.OpenWebSocket(ctx, open, (*packageWebSocketStream)(pipe)); err != nil {
+			pipe.err = packageCallError(err)
+		}
+	}()
+	return pipe, nil
+}
+
+// packageRequestMetadata is the request address as the package sees it: the
+// scheme the kernel resolved (internal/requestorigin) and the validated Host.
+func packageRequestMetadata(metadata RequestMetadata) pluginhostsdk.RequestMetadata {
+	scheme := "http"
+	if metadata.TLS {
+		scheme = "https"
+	}
+	return pluginhostsdk.RequestMetadata{
+		Path: metadata.Path, Query: metadata.Query, Headers: metadata.Headers, PathParams: metadata.PathParams,
+		ClientIP: metadata.ClientIP, UserAgent: metadata.UserAgent, Scheme: scheme, Host: metadata.Host,
+	}
 }
 
 // marshalBridgeRequestMetadata encodes the kernel-side bridge snapshot, which
-// adds the original request address to the metadata sent to package hosts.
+// adds the original request address to the request metadata.
 func marshalBridgeRequestMetadata(metadata RequestMetadata) ([]byte, error) {
 	encoded, err := json.Marshal(struct {
 		RequestMetadata
@@ -138,119 +164,111 @@ func marshalBridgeRequestMetadata(metadata RequestMetadata) ([]byte, error) {
 	return encoded, nil
 }
 
-func marshalRequestMetadata(metadata RequestMetadata) ([]byte, error) {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return nil, fmt.Errorf("%w: request metadata is invalid", ErrHostIncompatible)
-	}
-	return encoded, nil
-}
-
-func (c *hostClient) Health(ctx context.Context, generation uint64) (HostHealth, error) {
-	if c == nil || c.rpc == nil {
-		return HostHealth{}, ErrHostUnavailable
-	}
-	response, err := c.rpc.Health(ctx, &pluginhostv1.HealthRequest{RouteGeneration: generation})
-	if err != nil {
-		return HostHealth{}, hostClientError(err)
-	}
-	return HostHealth{Healthy: response.GetHealthy(), LeaseID: response.GetLeaseId(), DetailsJSON: response.GetDetailsJson()}, nil
-}
-
-func (c *hostClient) Drain(ctx context.Context, generation uint64, deadline time.Time) (DrainResult, error) {
-	if c == nil || c.rpc == nil {
-		return DrainResult{}, ErrHostUnavailable
-	}
-	response, err := c.rpc.Drain(ctx, &pluginhostv1.DrainRequest{
-		RouteGeneration: generation, DeadlineUnixMillis: deadline.UnixMilli(),
-	})
-	if err != nil {
-		return DrainResult{}, hostClientError(err)
-	}
-	return DrainResult{Drained: response.GetDrained(), InFlight: response.GetInFlight()}, nil
-}
-
-func (c *hostClient) Close() error {
-	if c == nil || c.connection == nil {
-		return nil
-	}
-	return c.connection.Close()
-}
-
-type webSocketClientStream struct {
-	stream pluginhostv1.ControlPackageHost_OpenWebSocketClient
-}
-
-func (s *webSocketClientStream) Send(frame WebSocketFrame) error {
-	if s == nil || s.stream == nil {
-		return ErrHostUnavailable
-	}
-	if frame.Close != nil && len(frame.Data) != 0 {
-		return fmt.Errorf("%w: WebSocket frame cannot contain data and close", ErrHostIncompatible)
-	}
-	var wireFrame *pluginhostv1.WebSocketFrame
-	if frame.Close != nil {
-		wireFrame = &pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Close{Close: &pluginhostv1.WebSocketClose{
-			Code: frame.Close.Code, Reason: frame.Close.Reason,
-		}}}
-	} else {
-		wireFrame = &pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Data{Data: append([]byte(nil), frame.Data...)}}
-	}
-	if err := s.stream.Send(wireFrame); err != nil {
-		return hostClientError(err)
-	}
-	return nil
-}
-
-func (s *webSocketClientStream) Recv() (WebSocketFrame, error) {
-	if s == nil || s.stream == nil {
-		return WebSocketFrame{}, ErrHostUnavailable
-	}
-	frame, err := s.stream.Recv()
-	if errors.Is(err, io.EOF) {
-		return WebSocketFrame{}, io.EOF
-	}
-	if err != nil {
-		return WebSocketFrame{}, hostClientError(err)
-	}
-	switch value := frame.Value.(type) {
-	case *pluginhostv1.WebSocketFrame_Data:
-		return WebSocketFrame{Data: append([]byte(nil), value.Data...)}, nil
-	case *pluginhostv1.WebSocketFrame_Close:
-		if value.Close == nil {
-			return WebSocketFrame{}, fmt.Errorf("%w: WebSocket close frame is required", ErrHostIncompatible)
-		}
-		return WebSocketFrame{Close: &WebSocketClose{Code: value.Close.GetCode(), Reason: value.Close.GetReason()}}, nil
-	default:
-		return WebSocketFrame{}, fmt.Errorf("%w: WebSocket opening frame must be first and unique", ErrHostIncompatible)
-	}
-}
-
-func (s *webSocketClientStream) CloseSend() error {
-	if s == nil || s.stream == nil {
-		return nil
-	}
-	return s.stream.CloseSend()
-}
-
-func hostClientError(err error) error {
-	if err == nil {
-		return nil
-	}
+// packageCallError classifies what a package returned: a status error keeps
+// its code, a plain error is a package failure.
+func packageCallError(err error) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("%w: %v", ErrHostUnavailable, err)
 	}
 	switch status.Code(err) {
+	case codes.Unknown, codes.Internal:
+		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrPackageFailed)
 	case codes.InvalidArgument, codes.FailedPrecondition, codes.Unimplemented, codes.DataLoss:
 		return fmt.Errorf("%w: %s", ErrHostIncompatible, status.Code(err))
-	case codes.Internal:
-		// The host reached the package, which returned an error or panicked.
-		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrPackageFailed)
 	case codes.ResourceExhausted:
-		// The host SDK or package bridge rejected an oversized response, or
-		// the host sent a message above this client's receive limit.
 		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrResponseTooLarge)
 	default:
 		return fmt.Errorf("%w: %s", ErrHostUnavailable, status.Code(err))
 	}
+}
+
+// recoverPackagePanic must be deferred directly: a panic in a package call
+// is logged and fails that call only.
+func recoverPackagePanic(operation string, err *error) {
+	if recovered := recover(); recovered != nil {
+		log.Printf("panic recovered in package %s: %v\n%s", operation, recovered, debug.Stack())
+		*err = fmt.Errorf("%w: %w", ErrHostUnavailable, ErrPackageFailed)
+	}
+}
+
+// webSocketPipe joins the kernel's relay to the package's stream. The
+// channels are unbuffered, so every frame the package sends is received
+// before its OpenWebSocket returns.
+type webSocketPipe struct {
+	ctx                 context.Context
+	toPackage, toKernel chan WebSocketFrame
+	closeSendOnce       sync.Once
+	sendClosed          chan struct{}
+	done                chan struct{}
+	err                 error
+}
+
+func (p *webSocketPipe) Send(frame WebSocketFrame) error {
+	if frame.Close != nil && len(frame.Data) != 0 {
+		return fmt.Errorf("%w: WebSocket frame cannot contain data and close", ErrHostIncompatible)
+	}
+	select {
+	case p.toPackage <- copyFrame(frame):
+		return nil
+	case <-p.done:
+		return io.EOF
+	case <-p.ctx.Done():
+		return packageCallError(p.ctx.Err())
+	}
+}
+
+func (p *webSocketPipe) Recv() (WebSocketFrame, error) {
+	select {
+	case frame := <-p.toKernel:
+		return frame, nil
+	case <-p.done:
+		if p.err != nil {
+			return WebSocketFrame{}, p.err
+		}
+		return WebSocketFrame{}, io.EOF
+	case <-p.ctx.Done():
+		return WebSocketFrame{}, packageCallError(p.ctx.Err())
+	}
+}
+
+func (p *webSocketPipe) CloseSend() error {
+	p.closeSendOnce.Do(func() { close(p.sendClosed) })
+	return nil
+}
+
+// packageWebSocketStream is the package's end of a webSocketPipe.
+type packageWebSocketStream webSocketPipe
+
+func (s *packageWebSocketStream) Recv() (pluginhostsdk.WebSocketFrame, error) {
+	select {
+	case frame := <-s.toPackage:
+		if frame.Close != nil {
+			return pluginhostsdk.WebSocketFrame{Close: &pluginhostsdk.WebSocketClose{Code: frame.Close.Code, Reason: frame.Close.Reason}}, nil
+		}
+		return pluginhostsdk.WebSocketFrame{Data: frame.Data}, nil
+	case <-s.sendClosed:
+		return pluginhostsdk.WebSocketFrame{}, io.EOF
+	case <-s.ctx.Done():
+		return pluginhostsdk.WebSocketFrame{}, s.ctx.Err()
+	}
+}
+
+func (s *packageWebSocketStream) Send(frame pluginhostsdk.WebSocketFrame) error {
+	converted := WebSocketFrame{Data: append([]byte(nil), frame.Data...)}
+	if frame.Close != nil {
+		converted = WebSocketFrame{Close: &WebSocketClose{Code: frame.Close.Code, Reason: frame.Close.Reason}}
+	}
+	select {
+	case s.toKernel <- converted:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
+}
+
+func copyFrame(frame WebSocketFrame) WebSocketFrame {
+	if frame.Close != nil {
+		return WebSocketFrame{Close: &WebSocketClose{Code: frame.Close.Code, Reason: frame.Close.Reason}}
+	}
+	return WebSocketFrame{Data: append([]byte(nil), frame.Data...)}
 }

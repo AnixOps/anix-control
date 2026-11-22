@@ -1,7 +1,7 @@
-// Package modulesdk runs a package host for the kernel: it serves the host
-// protocol on the socket the kernel gives it and reaches the kernel over the
-// package bridge. The kernel runs every host inside its own process and
-// hands it its settings and bridge (WithInProcess).
+// Package modulesdk runs a package host for the kernel: it builds the
+// package, hands it to the kernel, which calls it directly, and reaches the
+// kernel over the package bridge. The kernel runs every host inside its own
+// process and hands it its settings and bridge (WithInProcess).
 package modulesdk
 
 import (
@@ -10,13 +10,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
-	"net"
 	"os"
 	"runtime/debug"
 	"strings"
-	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"google.golang.org/grpc"
@@ -44,19 +41,19 @@ type Host struct {
 }
 
 // InProcess is what the kernel hands a host it runs inside its own process:
-// the host's settings and its end of the package bridge.
+// the host's settings, its end of the package bridge, and where to hand the
+// built package.
 type InProcess struct {
 	Getenv func(string) string
 	Bridge *os.File
 	// Logf, when set, replaces the host's default logger (log.Printf), so
 	// its lines name the package in Control's log.
 	Logf func(string, ...any)
+	// Ready receives the built package; the kernel calls it from then on.
+	Ready func(pluginhostsdk.Package)
 }
 
 type inProcessKey struct{}
-
-// stopGrace is how long a stopping host lets in-flight RPCs finish.
-const stopGrace = 2 * time.Second
 
 // WithInProcess carries the kernel's InProcess to Run.
 func WithInProcess(ctx context.Context, host InProcess) context.Context {
@@ -69,24 +66,17 @@ type Options struct {
 	PackageVersion string
 	// Build returns the package the host serves. A package that implements
 	// Run(context.Context) is run for the life of the host, one that
-	// implements pluginhostsdk.ResumablePackage is resumed whenever it binds
-	// to a generation, and one that implements ServiceRegistrant serves its
-	// extra gRPC services next to the host protocol (only the kernel reaches
-	// them, over the kernel-owned socket).
+	// implements pluginhostsdk.ResumablePackage is resumed after a drain,
+	// and one that implements ServiceRegistrant serves its extra gRPC
+	// services to the kernel (in process, with no transport).
 	Build func(Host) (pluginhostsdk.Package, error)
 	Logf  func(string, ...any)
 }
 
-// ServiceRegistrant is a package that serves more gRPC services than the
-// host protocol, such as a contract the kernel calls.
+// ServiceRegistrant is a package that serves gRPC services of its own, such
+// as a contract the kernel calls.
 type ServiceRegistrant interface {
 	RegisterServices(grpc.ServiceRegistrar)
-}
-
-func registerPackageServices(server *grpc.Server, packageImpl pluginhostsdk.Package) {
-	if registrant, ok := packageImpl.(ServiceRegistrant); ok {
-		registrant.RegisterServices(server)
-	}
 }
 
 // Run serves the host the kernel started with ctx (WithInProcess) until ctx
@@ -96,7 +86,7 @@ func Run(ctx context.Context, options Options) error {
 		return errors.New("module package identity and Build are required")
 	}
 	inProcess, ok := ctx.Value(inProcessKey{}).(InProcess)
-	if !ok || inProcess.Getenv == nil {
+	if !ok || inProcess.Getenv == nil || inProcess.Ready == nil {
 		return errors.New("a package host runs only inside Control")
 	}
 	if options.Logf == nil {
@@ -104,11 +94,6 @@ func Run(ctx context.Context, options Options) error {
 	}
 	if options.Logf == nil {
 		options.Logf = log.Printf
-	}
-	getenv := inProcess.Getenv
-	socketPath := strings.TrimSpace(getenv("ANIX_CONTROL_HOST_SOCKET"))
-	if socketPath == "" {
-		return errors.New("control host socket is required")
 	}
 	bridge, err := packagebridgesdk.DialFile(ctx, inProcess.Bridge)
 	if err != nil {
@@ -119,47 +104,14 @@ func Run(ctx context.Context, options Options) error {
 	if err != nil {
 		return err
 	}
-	packageImpl, err := options.Build(Host{PackageID: options.PackageID, Bridge: bridge, LeaseID: leaseID, Logf: options.Logf, Getenv: getenv})
+	packageImpl, err := options.Build(Host{PackageID: options.PackageID, Bridge: bridge, LeaseID: leaseID, Logf: options.Logf, Getenv: inProcess.Getenv})
 	if err != nil {
 		return err
 	}
 	runPackage(ctx, packageImpl, options.Logf)
-	maxResponseBytes, err := pluginhostsdk.MaxResponseBytesFrom(getenv)
-	if err != nil {
-		return err
-	}
-	host, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{
-		PackageID: options.PackageID, PackageVersion: options.PackageVersion, MaxResponseBytes: maxResponseBytes,
-	}, packageImpl)
-	if err != nil {
-		return err
-	}
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = listener.Close() }()
-	// The descriptor-pinned parent supervisor verifies and secures this socket
-	// before it can dispatch a request to the host.
-	server := grpc.NewServer(pluginhostsdk.HostServerOptions()...)
-	pluginhostv1.RegisterControlPackageHostServer(server, host)
-	registerPackageServices(server, packageImpl)
-	// The kernel ends ctx: finish in-flight RPCs, and cut the rest (long
-	// WebSocket streams) when the grace period is over.
-	go func() {
-		<-ctx.Done()
-		stopped := make(chan struct{})
-		go func() {
-			server.GracefulStop()
-			close(stopped)
-		}()
-		select {
-		case <-stopped:
-		case <-time.After(stopGrace):
-			server.Stop()
-		}
-	}()
-	return server.Serve(listener)
+	inProcess.Ready(packageImpl)
+	<-ctx.Done()
+	return nil
 }
 
 // runPackage starts the package's background work. A panic in it is
