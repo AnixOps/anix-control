@@ -94,7 +94,7 @@ Dropped:
   plugins.control_execution_enabled: the built-in packages always run; Control starts their hosts at every start
   plugins.control_host_artifact_dir: still read until M2 (P11), not written: where package hosts' files are kept, until the systemd unit gives Control its directories
   plugins.control_host_request_timeout: a built-in value (30s)
-  plugins.control_host_runtime_dir: still read until M2 (P11), not written: where package hosts' sockets live, until the systemd unit gives Control its runtime directory
+  plugins.control_host_runtime_dir: package hosts run inside Control and reach the kernel without sockets
   plugins.control_host_startup_timeout: a built-in value (5s)
   plugins.control_poll_interval: a built-in value (5s)
   plugins.dispatch_enabled: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)

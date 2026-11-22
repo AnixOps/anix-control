@@ -570,9 +570,9 @@ keys:
     removed_in: M2 (P8)
     reason: a built-in value (30s)
   - key: plugins.control_host_runtime_dir
-    status: read
-    removed_in: M2 (P11)
-    reason: where package hosts' sockets live, until the systemd unit gives Control its runtime directory
+    status: ignored
+    removed_in: M5
+    reason: package hosts run inside Control and reach the kernel without sockets
   - key: plugins.control_host_startup_timeout
     status: ignored
     removed_in: M2 (P8)

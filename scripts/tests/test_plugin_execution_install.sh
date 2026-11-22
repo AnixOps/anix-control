@@ -69,42 +69,27 @@ printf '%s\n' \
 configure_plugin_execution_config
 grep -Fx '  identity_bootstrap_package_dir: "/srv/operator-selected-bootstrap"' "${CONFIG_FILE}" >/dev/null
 
-FRESH_CONFIG=1
-VERSION="v4.0.0"
+# The artifact directory is moved under INSTALL_DIR; the host runtime
+# directory, which Control no longer reads, is dropped.
 INSTALL_DIR="${temporary}/install"
-PLUGIN_HOST_RUNTIME_DIR="${temporary}/install/runtime/plugin-hosts"
 PLUGIN_ARTIFACT_DIR="${temporary}/install/data/plugin-artifacts"
-printf '%s\n' \
-  'plugins:' \
-  '  control_execution_enabled: false' \
-  '  control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"' \
-  '  control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"' >"${CONFIG_FILE}"
-
-configure_plugin_execution_config
-grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
-grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
-
-FRESH_CONFIG=0
 VERSION="v4.0.0"
-printf '%s\n' \
-  'plugins:' \
-  '  control_execution_enabled: false' \
-  '  control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"' \
-  '  control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"' >"${CONFIG_FILE}"
+for runtime_dir in "" "/var/lib/anixops/plugin-hosts" "/srv/operator/plugin-hosts"; do
+  for artifact_dir in "/var/lib/anixops/plugin-artifacts" "/srv/operator/plugin-artifacts"; do
+    printf '%s\n' \
+      'plugins:' \
+      '  control_execution_enabled: false' \
+      "  control_host_runtime_dir: \"${runtime_dir}\"" \
+      "  control_host_artifact_dir: \"${artifact_dir}\"" >"${CONFIG_FILE}"
 
-configure_plugin_execution_config
-grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
-grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
-
-printf '%s\n' \
-  'plugins:' \
-  '  control_execution_enabled: false' \
-  '  control_host_runtime_dir: "/srv/operator/plugin-hosts"' \
-  '  control_host_artifact_dir: "/srv/operator/plugin-artifacts"' >"${CONFIG_FILE}"
-
-configure_plugin_execution_config
-grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
-grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
+    configure_plugin_execution_config
+    grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
+    if grep -q 'control_host_runtime_dir' "${CONFIG_FILE}"; then
+      printf 'the installer must drop plugins.control_host_runtime_dir\n' >&2
+      exit 1
+    fi
+  done
+done
 
 # The installer's key is the built-in official package root.
 configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "${REPO_ROOT}/internal/config/defaults.yaml")"
@@ -137,7 +122,6 @@ test_normal_v4_main_initializes_plugin_execution_dirs() (
   COMMAND="install"
   SKIP_START=0
   INSTALL_DIR="${temporary}/main-flow-install"
-  PLUGIN_HOST_RUNTIME_DIR=""
   PLUGIN_ARTIFACT_DIR=""
   cleanup() {
     [[ -n "${TMP_DIR}" && -d "${TMP_DIR}" ]] && find "${TMP_DIR}" -depth -delete
@@ -149,7 +133,6 @@ test_normal_v4_main_initializes_plugin_execution_dirs() (
   install_base_tools() { :; }
   ensure_app_user() { :; }
   ensure_layout_and_config() {
-    [[ "${PLUGIN_HOST_RUNTIME_DIR}" == "${INSTALL_DIR}/runtime/plugin-hosts" ]]
     [[ "${PLUGIN_ARTIFACT_DIR}" == "${INSTALL_DIR}/data/plugin-artifacts" ]]
   }
   asset_name() { printf 'anix-control-linux-amd64.tar.gz'; }
@@ -172,16 +155,14 @@ if [[ "${EUID}" -eq 0 ]]; then
   INSTALL_DIR="${temporary}/install"
   VERSION="v4.0.0"
   BACKUP_ROOT="${INSTALL_DIR}/backups"
-  PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   install -d "${TMP_DIR}"
 
   printf '%s\n' 'plugins:' >"${CONFIG_FILE}"
   ensure_layout_and_config
-  [[ "$(stat -c '%a' "${PLUGIN_HOST_RUNTIME_DIR}")" == '700' ]]
   [[ "$(stat -c '%a' "${PLUGIN_ARTIFACT_DIR}")" == '700' ]]
-  [[ "$(stat -c '%U' "${PLUGIN_HOST_RUNTIME_DIR}")" == "${APP_USER}" ]]
   [[ "$(stat -c '%U' "${PLUGIN_ARTIFACT_DIR}")" == "${APP_USER}" ]]
+  [[ ! -e "${INSTALL_DIR}/runtime/plugin-hosts" ]]
 fi
 
 for version in v1.0.0 v3.9.9 v3.10.0-rc.1; do

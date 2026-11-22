@@ -79,6 +79,11 @@
   `packagebridgesdk.NewClient`, and `modulesdk.InProcess.Bridge` is a
   `grpc.ClientConnInterface`. Capabilities, fencing, limits and the bridge
   behaviour are unchanged; the Agent transport is unchanged.
+- `plugins.control_host_runtime_dir` (2026-11 slimming, class C1c-3): no
+  package host uses a socket any more, so the key is ignored (a start that
+  finds it set says so). `scripts/install.sh` drops it from `config.yaml` and
+  no longer creates `runtime/plugin-hosts/`. Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#package-hosts-use-no-sockets-pluginscontrol_host_runtime_dir-is-ignored).
 
 ### Changed
 

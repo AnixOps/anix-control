@@ -87,13 +87,14 @@ The installer will:
 3. Verify both packages against the release `SHA256SUMS.txt`.
 4. Download no package: the official packages, `identity-platform`
    included, are inside the binary, and nothing is staged for them.
-5. For `v4.*` and later, place Control host sockets and materialized package artifacts
-   under the installation root with service-user-only permissions. The installer
-   sets these internal execution paths on both fresh installs and updates so
-   they remain within the systemd writable root. The package hosts always run
+5. For `v4.*` and later, place materialized package artifacts under the
+   installation root with service-user-only permissions. The installer sets
+   this path on both fresh installs and updates so it remains within the
+   systemd writable root. The package hosts always run
    (the identity package serves login); the installer no longer writes
    `plugins.control_execution_enabled` and drops the removed `plugins.*`
-   switches from an existing `config.yaml`.
+   switches and `plugins.control_host_runtime_dir` from an existing
+   `config.yaml`.
 6. Download the configuration template that matches the selected tag (the
    `domain` line, which the installer keeps a comment).
 7. Write `config.yaml` from the template and nothing else
@@ -219,7 +220,6 @@ Control serves plain http on `127.0.0.1:8080` behind the reverse proxy
 | `/opt/anixops/control/data/root.key` | The root key (service user, 0600; `ANIX_CONTROL_DATA_DIR` in the unit); back it up with the database |
 | `/opt/anixops/control/config/tls/control.crt`, `control.key` | gRPC certificate (0644) and key (0600) for Agents |
 | `/opt/anixops/control/config/data/control.db` | The SQLite database of a trial install (`--sqlite`); an earlier install that named no file keeps `v2board.db` |
-| `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |
 | `/opt/anixops/control/data/plugin-artifacts/` | Service-user-private materialized Control package artifacts |
 | `/opt/anixops/control/backups/` | Binary/frontend rollback snapshots |
 | `/opt/anixops/control/.release-version` | Installed release tag |

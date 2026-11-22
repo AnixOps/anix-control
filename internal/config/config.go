@@ -292,7 +292,6 @@ type IdentityConfig struct {
 type PluginConfig struct {
 	OfficialPublicKey                  string `yaml:"official_public_key"`
 	ControlPollInterval                string `yaml:"control_poll_interval"`
-	ControlHostRuntimeDir              string `yaml:"control_host_runtime_dir"`
 	ControlHostArtifactDir             string `yaml:"control_host_artifact_dir"`
 	ControlHostStartupTimeout          string `yaml:"control_host_startup_timeout"`
 	ControlHostRequestTimeout          string `yaml:"control_host_request_timeout"`

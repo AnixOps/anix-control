@@ -46,7 +46,6 @@ func TestLoadWithoutConfigFileUsesBuiltInDefaultsAndEnvironment(t *testing.T) {
 	assert.Equal(t, "db.internal", loaded.Database.Host)
 	assert.Equal(t, "container-secret-0123456789abcdef", loaded.JWT.Secret)
 	assert.Equal(t, "5s", loaded.Plugins.ControlPollInterval)
-	assert.Empty(t, loaded.Plugins.ControlHostRuntimeDir, "private temporary host directories")
 	assert.Equal(t, "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=", loaded.Plugins.OfficialPublicKey)
 	require.NoError(t, loaded.ValidateForServer())
 }
