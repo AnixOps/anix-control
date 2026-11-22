@@ -39,13 +39,6 @@ func AgentListEntryJSON(session agentstreams.Session, now time.Time) []byte {
 	return encoded
 }
 
-// agentMonitorView is the snapshot GET /api/v2/admin/agent/monitor answers.
-type agentMonitorView struct {
-	NodeID    uint            `json:"node_id"`
-	System    json.RawMessage `json:"system"`
-	UpdatedAt time.Time       `json:"updated_at"`
-}
-
 // AgentControlConnectionJSON renders a stream session as the
 // administrator's Agent Control status shows it ("connection"): the stream
 // manager's snapshot, scrubbed.
