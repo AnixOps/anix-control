@@ -19,7 +19,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 - Database: PostgreSQL by default (every real deployment); SQLite only for
   trials, chosen explicitly with `database.driver: sqlite`. Control never
   falls back to SQLite by itself ([Database](docs/reference/configuration.md#database)).
-- Current release: `v5.0.10`, the 5.0 stable release ([upgrading from 4.2.x](docs/UPGRADE.md#upgrading-from-42x-to-500-rc1)).
+- Current release: `v5.0.11`, the 5.0 stable release ([upgrading from 4.2.x](docs/UPGRADE.md#upgrading-from-42x-to-500-rc1)).
   The 18 official packages under `packages/` are built into the Control
   binary, which installs, upgrades and enables them at every start; there is
   no packages archive and nothing to import. Binaries are published for Linux
