@@ -130,15 +130,9 @@ func buildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 	case "snell":
 		buildSnellConfig(config, protocolConfig)
 	case "shadowsocks":
-		cipherStr := "aes-256-gcm"
-		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {
-			cipherStr = c
-			config["cipher"] = c
-		} else if m, ok := protocolConfig["method"].(string); ok && m != "" {
-			cipherStr = m
-			config["cipher"] = m
-		} else {
-			config["cipher"] = cipherStr
+		config["cipher"] = "aes-256-gcm"
+		if cipher := firstStringSetting(protocolConfig, "cipher", "method"); cipher != "" {
+			config["cipher"] = cipher
 		}
 		if serverKey, ok := protocolConfig["server_key"]; ok {
 			config["server_key"] = serverKey
