@@ -60,6 +60,17 @@
   every binary now ignores. A plain `go build` without `make build` installs
   no package and logs a warning. Upgrade notes in
   [`docs/UPGRADE.md`](docs/UPGRADE.md#the-standalone-package-host-and-the-full-package-format-are-gone).
+- The gRPC transport between the kernel and the built-in package hosts
+  (2026-11 slimming, class C1c-2a): the per-host Unix socket, the
+  `pluginhost.v1` server in `sdk/pluginhostsdk` (`NewServer`, `ServerConfig`,
+  `HostServerOptions`, `RecoveryServerOptions` and the response envelope
+  limits) and the kernel's gRPC host client. The kernel calls each package's
+  `pluginhostsdk.Package` directly; packages hand it over through
+  `modulesdk.InProcess.Ready`. Requests, WebSockets, migrations, health, the
+  response limit and panic isolation behave as before. The Agent transport
+  (`anix.agent.v1`, enrollment, the gRPC listener and its certificates) is
+  unchanged. `plugins.control_host_runtime_dir` is still read but no longer
+  used; it is retired in a later step.
 
 ### Changed
 

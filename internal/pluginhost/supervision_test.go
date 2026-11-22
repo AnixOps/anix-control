@@ -5,7 +5,6 @@ package pluginhost
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -30,7 +29,6 @@ func TestWatchdogRestartsKilledHostAtSameGeneration(t *testing.T) {
 	require.Equal(t, ref.Version, second.version)
 	require.True(t, sameArtifactRelease(ref, second.ref))
 	require.NoError(t, dispatchTestRequest(manager, ref, 7))
-	require.Nil(t, first.runtimeDir, "the crashed host's runtime directory is released")
 
 	stats := hostStatsFor(t, manager, ref.PackageID)
 	require.Equal(t, HostStats{
@@ -270,7 +268,7 @@ func (c *testLogCapture) String() string {
 
 func newSupervisedTestManager(t *testing.T) (*Supervisor, *testLogCapture) {
 	t.Helper()
-	manager := newHostTestManager(t, ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
+	manager := newHostTestManager(t, ManagerConfig{})
 	logs := &testLogCapture{}
 	manager.logf = logs.logf
 	manager.restartBaseDelay = 10 * time.Millisecond

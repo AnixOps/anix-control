@@ -64,10 +64,7 @@ func TestHostHonorsConfiguredResponseLimit(t *testing.T) {
 	}
 }
 
-func TestHostReceiveMessageLimitCoversConfiguredResponses(t *testing.T) {
-	require.Equal(t, 4<<20, hostReceiveMessageLimit(0))
-	require.Equal(t, 4<<20, hostReceiveMessageLimit(3<<20))
-	require.Equal(t, 6<<20+64<<10, hostReceiveMessageLimit(6<<20))
+func TestMaxResponseBytesFallsBackToTheDefault(t *testing.T) {
 	require.Equal(t, int64(1<<20), normalizeMaxResponseBytes(-1))
 	require.Equal(t, int64(1<<20), normalizeMaxResponseBytes(128<<20))
 }

@@ -752,17 +752,12 @@ boundary; their 4.2 keys `plugins.control_host_max_request_bytes` and
 | Limit | Enforced by | Error when exceeded |
 |------|------|------|
 | request body, 1 MiB | the v2 gateway, before dispatch | `413` `plugin_request_too_large` |
-| response body, 1 MiB | the package bridge (legacy handler body), the package host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
+| response body, 1 MiB | the package bridge (legacy handler body), the kernel's package client (package response body) | `502` `plugin_response_too_large` |
 
-- The response limit applies to the body only. The SDK additionally allows a
-  fixed 64 KiB for status, headers, and identifiers, so a body the bridge
-  accepts is never rejected by the host for its envelope.
-- The kernel passes the response limit to each package host as
-  `ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES`; hosts built on `sdk/pluginhostsdk`
-  read it with `MaxResponseBytesFromEnvironment`.
-- gRPC receive sizes grow with the limits, so values above 4 MiB work end to
-  end. Package hosts should build their gRPC server with
-  `pluginhostsdk.HostServerOptions()`.
+- The response limit applies to the body only. Package hosts run inside
+  Control and the kernel calls their `pluginhostsdk.Package` directly, so the
+  limit is checked once on the response the package returns; hosts no longer
+  read it from their environment (slim audit C1c-2a).
 - WebSocket frames are not affected by these keys.
 
 The gateway exports per-package traffic on `/metrics`:

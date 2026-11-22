@@ -30,14 +30,9 @@ func (panickingPackage) Drain(context.Context) (pluginhostsdk.DrainResponse, err
 }
 
 func TestClientMapsPackagePanicToPackageFailure(t *testing.T) {
-	host, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{PackageID: "knowledge", PackageVersion: "4.0.0"}, panickingPackage{})
-	require.NoError(t, err)
-	socketPath := startTestHostServerWithService(t, host)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := dialHostClient(ctx, socketPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	client := newPackageClient(panickingPackage{}, 0)
+	ctx := context.Background()
+	var err error
 
 	for range 2 {
 		_, err = client.Dispatch(ctx, DispatchInput{

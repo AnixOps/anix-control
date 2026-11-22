@@ -51,23 +51,13 @@ func TestManagerRejectsStartWhenArtifactDigestDoesNotMatch(t *testing.T) {
 	require.Empty(t, manager.hosts)
 }
 
-func TestManagerStartsVerifiedHostOverPrivateUnixSocket(t *testing.T) {
-	manager := newHostTestManager(t, ManagerConfig{
-		RuntimeDir:     filepath.Join(shortHostTempDir(t), "runtime"),
-		StartupTimeout: 5 * time.Second,
-	})
+func TestManagerStartsVerifiedHostAndCallsItsPackage(t *testing.T) {
+	manager := newHostTestManager(t, ManagerConfig{StartupTimeout: 5 * time.Second})
 	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
 
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
-	runtimeInfo, err := manager.runtimeRoot.directory.Stat()
-	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o700), runtimeInfo.Mode().Perm())
-	socketInfo, err := os.Lstat(host.socketPath)
-	require.NoError(t, err)
-	require.NotZero(t, socketInfo.Mode()&os.ModeSocket)
-	require.Equal(t, os.FileMode(0o600), socketInfo.Mode().Perm())
 
 	response, err := manager.Dispatch(context.Background(), DispatchInput{
 		PackageID:     ref.PackageID,
@@ -81,10 +71,10 @@ func TestManagerStartsVerifiedHostOverPrivateUnixSocket(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.EqualValues(t, 202, response.StatusCode)
-	require.Equal(t, []byte(`{"transport":"unix"}`), response.Body)
+	require.Equal(t, []byte(`{"transport":"direct"}`), response.Body)
 
 	require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
-	require.NoFileExists(t, host.socketPath)
+	require.True(t, hostExited(host))
 }
 
 func TestManagerRestartsExitedHostAtSameGeneration(t *testing.T) {
@@ -157,7 +147,6 @@ func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
 	require.NotNil(t, second)
 	require.NotSame(t, first, second)
 	require.Eventually(t, func() bool { return hostExited(first) }, time.Second, 10*time.Millisecond)
-	require.Nil(t, first.runtimeDir)
 
 	_, err := manager.Dispatch(context.Background(), DispatchInput{
 		PackageID: firstRef.PackageID, Version: firstRef.Version, Generation: 7,
@@ -201,79 +190,6 @@ func TestManagerRejectsStaleLifecycleStopAgainstNewerHost(t *testing.T) {
 	require.ErrorIs(t, err, ErrGenerationUnavailable)
 }
 
-func TestNewManagerRejectsRuntimeRootSymlinkAncestor(t *testing.T) {
-	parent := shortHostTempDir(t)
-	target := filepath.Join(parent, "target")
-	require.NoError(t, os.Mkdir(target, 0o700))
-	link := filepath.Join(parent, "runtime-link")
-	require.NoError(t, os.Symlink(target, link))
-
-	_, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(link, "hosts")})
-
-	require.ErrorIs(t, err, ErrHostIncompatible)
-}
-
-func TestNewManagerRejectsUntrustedRuntimeRootAncestor(t *testing.T) {
-	untrusted := filepath.Join(shortHostTempDir(t), "untrusted")
-	require.NoError(t, os.Mkdir(untrusted, 0o700))
-	require.NoError(t, os.Chmod(untrusted, 0o777))
-
-	_, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(untrusted, "hosts")})
-
-	require.ErrorIs(t, err, ErrHostIncompatible)
-}
-
-func TestNewManagerCreatesUniquePrivateDefaultRuntimeRoots(t *testing.T) {
-	first, err := NewManager(ManagerConfig{})
-	require.NoError(t, err)
-	second, err := NewManager(ManagerConfig{})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, first.Close())
-		require.NoError(t, second.Close())
-	})
-
-	firstInfo, err := first.runtimeRoot.directory.Stat()
-	require.NoError(t, err)
-	secondInfo, err := second.runtimeRoot.directory.Stat()
-	require.NoError(t, err)
-	require.False(t, os.SameFile(firstInfo, secondInfo))
-	require.Equal(t, os.FileMode(0o700), firstInfo.Mode().Perm())
-	require.Equal(t, os.FileMode(0o700), secondInfo.Mode().Perm())
-	require.NotEqual(t, filepath.Join(os.TempDir(), "anixops", "plugin-hosts"), first.runtimeDir)
-	require.NotEqual(t, filepath.Join(os.TempDir(), "anixops", "plugin-hosts"), second.runtimeDir)
-}
-
-func TestManagerKeepsRuntimeRootPinnedAfterPathReplacement(t *testing.T) {
-	parent := shortHostTempDir(t)
-	runtimeRoot := filepath.Join(parent, "runtime")
-	require.NoError(t, os.Mkdir(runtimeRoot, 0o700))
-	manager := newHostTestManager(t, ManagerConfig{RuntimeDir: runtimeRoot})
-	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-
-	pinnedRoot := filepath.Join(parent, "pinned-runtime")
-	require.NoError(t, os.Rename(runtimeRoot, pinnedRoot))
-	attackerRoot := filepath.Join(parent, "attacker-runtime")
-	require.NoError(t, os.Mkdir(attackerRoot, 0o700))
-	require.NoError(t, os.Symlink(attackerRoot, runtimeRoot))
-
-	ref := writeVerifiedArtifactRef(t, "knowledge", "4.0.0")
-	require.NoError(t, manager.Start(context.Background(), ref, 7))
-	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
-	require.NotNil(t, host)
-	require.True(t, strings.HasPrefix(host.runtimeDir.path("."), "/proc/self/fd/"))
-	require.Empty(t, readDirectoryNames(t, attackerRoot))
-	require.NotEmpty(t, readDirectoryNames(t, pinnedRoot))
-
-	response, err := manager.Dispatch(context.Background(), DispatchInput{
-		PackageID: ref.PackageID, Version: ref.Version, Generation: 7,
-		RequestID: "request-1", RouteID: "knowledge.article.list", Method: "GET",
-		PrincipalJSON: []byte(`{"actor_id":7}`), Deadline: time.Now().Add(time.Second),
-	})
-	require.NoError(t, err)
-	require.EqualValues(t, 202, response.StatusCode)
-}
-
 func TestOpenVerifiedRegularFileRejectsReplacementBeforeOpen(t *testing.T) {
 	sourcePath := filepath.Join(t.TempDir(), "package.anxp")
 	replacementPath := filepath.Join(t.TempDir(), "replacement")
@@ -298,12 +214,12 @@ func TestManagerShutdownStopsSupervisedHosts(t *testing.T) {
 
 	require.NoError(t, manager.Shutdown(context.Background()))
 	require.Empty(t, manager.hosts)
-	require.NoFileExists(t, host.socketPath)
+	require.True(t, hostExited(host))
 }
 
 func newTestManager(t *testing.T, hosts ...*hostProcess) *Supervisor {
 	t.Helper()
-	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t)})
+	manager, err := NewManager(ManagerConfig{})
 	require.NoError(t, err)
 	for _, host := range hosts {
 		manager.hosts[hostKey(host.packageID, host.version)] = host
@@ -338,27 +254,6 @@ func writeVerifiedArtifactRef(t *testing.T, packageID, version string) ArtifactR
 		ManifestPath:   manifestPath,
 		ManifestSHA256: testDigest(manifest),
 	}
-}
-
-func shortHostTempDir(t *testing.T) string {
-	t.Helper()
-	parent, err := filepath.Abs(".")
-	require.NoError(t, err)
-	directory, err := os.MkdirTemp(parent, ".anix-host-")
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, os.RemoveAll(directory)) })
-	return directory
-}
-
-func readDirectoryNames(t *testing.T, directory string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(directory)
-	require.NoError(t, err)
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		names = append(names, entry.Name())
-	}
-	return names
 }
 
 func testDigest(value []byte) string {

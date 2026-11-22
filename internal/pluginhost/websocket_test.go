@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,16 +81,6 @@ func TestWebSocketRelayClosesAtDeadline(t *testing.T) {
 			return false
 		}
 	}, time.Second, 10*time.Millisecond)
-}
-
-func TestWebSocketRelayRejectsUnexpectedOpeningFrame(t *testing.T) {
-	host := newLifecycleWebSocketHostServer()
-	host.sendUnexpectedOpen = true
-	_, relay := openLifecycleWebSocketRelay(t, host, time.Now().Add(time.Second))
-
-	_, err := relay.Recv()
-
-	require.ErrorIs(t, err, ErrHostIncompatible)
 }
 
 func TestWebSocketRelayBoundsHealthChecksByDeadline(t *testing.T) {
@@ -171,16 +161,9 @@ func TestWebSocketRelayFinishCancelsWithoutConcurrentCloseSend(t *testing.T) {
 
 func openLifecycleWebSocketRelay(t *testing.T, host *lifecycleWebSocketHostServer, deadline time.Time) (*Supervisor, *WebSocketRelay) {
 	t.Helper()
-	socketPath := startTestHostServerWithService(t, host)
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), time.Second)
-	client, err := dialHostClient(dialCtx, socketPath)
-	cancelDial()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
-
 	manager := &Supervisor{hosts: map[string]*hostProcess{
 		hostKey("machine-telemetry", "4.0.0"): {
-			packageID: "machine-telemetry", version: "4.0.0", generation: 9, client: client, leaseID: "lease-7",
+			packageID: "machine-telemetry", version: "4.0.0", generation: 9, client: newPackageClient(host, 0), leaseID: "lease-7",
 		},
 	}}
 	relay, err := manager.OpenWebSocket(context.Background(), WebSocketInput{
@@ -199,15 +182,14 @@ func openLifecycleWebSocketRelay(t *testing.T, host *lifecycleWebSocketHostServe
 }
 
 type lifecycleWebSocketHostServer struct {
-	testHostServer
-	health             atomic.Bool
-	healthCalls        atomic.Int32
-	blockHealth        atomic.Bool
-	opened             chan *pluginhostv1.WebSocketOpen
-	done               chan struct{}
-	doneOnce           sync.Once
-	releaseHealth      chan struct{}
-	sendUnexpectedOpen bool
+	fakePackage
+	health        atomic.Bool
+	healthCalls   atomic.Int32
+	blockHealth   atomic.Bool
+	opened        chan pluginhostsdk.WebSocketOpen
+	done          chan struct{}
+	doneOnce      sync.Once
+	releaseHealth chan struct{}
 }
 
 type blockingWebSocketTransport struct {
@@ -225,7 +207,7 @@ func (s *blockingWebSocketTransport) CloseSend() error {
 
 func newLifecycleWebSocketHostServer() *lifecycleWebSocketHostServer {
 	host := &lifecycleWebSocketHostServer{
-		opened:        make(chan *pluginhostv1.WebSocketOpen, 1),
+		opened:        make(chan pluginhostsdk.WebSocketOpen, 1),
 		done:          make(chan struct{}),
 		releaseHealth: make(chan struct{}),
 	}
@@ -233,32 +215,21 @@ func newLifecycleWebSocketHostServer() *lifecycleWebSocketHostServer {
 	return host
 }
 
-func (s *lifecycleWebSocketHostServer) Health(ctx context.Context, _ *pluginhostv1.HealthRequest) (*pluginhostv1.HealthResponse, error) {
+func (s *lifecycleWebSocketHostServer) Health(ctx context.Context) (pluginhostsdk.HealthResponse, error) {
 	s.healthCalls.Add(1)
 	if s.blockHealth.Load() {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return pluginhostsdk.HealthResponse{}, ctx.Err()
 		case <-s.releaseHealth:
 		}
 	}
-	return &pluginhostv1.HealthResponse{Healthy: s.health.Load(), LeaseId: "lease-7", DetailsJson: `{}`}, nil
+	return pluginhostsdk.HealthResponse{Healthy: s.health.Load(), LeaseID: "lease-7", DetailsJSON: `{}`}, nil
 }
 
-func (s *lifecycleWebSocketHostServer) OpenWebSocket(stream pluginhostv1.ControlPackageHost_OpenWebSocketServer) error {
-	frame, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-	if open := frame.GetOpen(); open != nil {
-		s.opened <- open
-	} else {
-		return ErrHostIncompatible
-	}
-	if s.sendUnexpectedOpen {
-		return stream.Send(&pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Open{Open: &pluginhostv1.WebSocketOpen{}}})
-	}
-	<-stream.Context().Done()
+func (s *lifecycleWebSocketHostServer) OpenWebSocket(ctx context.Context, open pluginhostsdk.WebSocketOpen, _ pluginhostsdk.WebSocketStream) error {
+	s.opened <- open
+	<-ctx.Done()
 	s.doneOnce.Do(func() { close(s.done) })
-	return stream.Context().Err()
+	return ctx.Err()
 }

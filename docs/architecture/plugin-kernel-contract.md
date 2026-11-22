@@ -99,14 +99,18 @@ can sign in until it is rebuilt with the set. Every binary ignores
 
 **Launch and attestation.** A built-in host runs inside Control, on its own
 goroutines (`ManagerConfig.InProcess`, `cmd/server` `runBuiltinHost`; slim
-audit C1a). It gets a private runtime directory and Unix socket
-(`ANIX_CONTROL_HOST_SOCKET`), its end of the package bridge socketpair, the
-response limit and the package environment, as settings it reads through `modulesdk.Host.Getenv`, not
-from Control's environment. It answers Health before it serves, is restarted
-by the watchdog when it ends, and stops when the kernel ends its context
-(in-flight RPCs finish, the rest is cut after the 2 s grace period). A panic
-while it starts, in its background work or in a request ends only that host
-or request. What it runs is established by these checks:
+audit C1a). It gets its end of the package bridge socketpair and the
+package environment, which it reads through `modulesdk.Host.Getenv`, not
+from Control's environment. It hands the `pluginhostsdk.Package` it built to
+the kernel (`modulesdk.InProcess.Ready`), and the kernel calls Dispatch,
+Migrate, Health, Drain and OpenWebSocket on it directly: there is no socket
+and no gRPC between the kernel and a host (slim audit C1c-2a). Services a
+package serves beside these (`modulesdk.ServiceRegistrant`, such as
+IdentityService) are reached in process through `internal/localgrpc`. A host
+answers Health before it serves, is restarted by the watchdog when it ends,
+and stops when the kernel ends its context; each call carries its own
+deadline. A panic while it starts, in its background work or in a request
+ends only that host or request. What it runs is established by these checks:
 
 1. **The binary is the release's.** The release signs `SHA256SUMS.txt` with
    the official package key (`SHA256SUMS.txt.sig`, Base64 raw Ed25519 over

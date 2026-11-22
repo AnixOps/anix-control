@@ -76,7 +76,6 @@ func runStorageHostMigration(t *testing.T, db *gorm.DB, driver, storageSource st
 	allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
 	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{
-		RuntimeDir:     shortRuntimeDir(t),
 		BridgeFactory:  packagebridge.NewFactory(allowlist).WithSessionOptions(packagebridge.SessionOptions{HostOperations: operations}),
 		StartupTimeout: 10 * time.Second,
 		InProcess: func(ctx context.Context, _, version string) error {
@@ -198,15 +197,4 @@ func buildStorageFixtureRef(t *testing.T) pluginhost.ArtifactRef {
 func sha256Hex(value []byte) string {
 	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])
-}
-
-// shortRuntimeDir keeps host socket paths below the Unix socket limit.
-func shortRuntimeDir(t *testing.T) string {
-	t.Helper()
-	parent, err := filepath.Abs(".")
-	require.NoError(t, err)
-	directory, err := os.MkdirTemp(parent, ".anix-host-")
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, os.RemoveAll(directory)) })
-	return directory
 }

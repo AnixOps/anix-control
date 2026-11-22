@@ -851,8 +851,8 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	}
 	logExecutable()
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
-		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
-		BridgeFactory: bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
+		StartupTimeout: startupTimeout,
+		BridgeFactory:  bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 		PackageEnvironment: identityHostEnvironment(cfg),
 		// Built-in package hosts run inside Control
 		// (docs/architecture/plugin-kernel-contract.md, "Built-in Packages").

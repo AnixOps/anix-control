@@ -28,7 +28,6 @@ func TestHostGetsOnlyItsSettings(t *testing.T) {
 				Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
 					seen <- map[string]string{
 						"secret": host.Getenv("ANIX_TEST_SECRET"), "lifetime": host.Getenv("ANIX_IDENTITY_TOKEN_LIFETIME"),
-						"limit": host.Getenv(hostMaxResponseBytesEnvironment),
 					}
 					return testPackage{leaseID: host.LeaseID}, nil
 				},
@@ -37,9 +36,9 @@ func TestHostGetsOnlyItsSettings(t *testing.T) {
 	})
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
 	require.NoError(t, manager.Start(context.Background(), writeVerifiedArtifactRef(t, "knowledge", "4.3.0"), 1))
-	require.Equal(t, map[string]string{"secret": "s3cret", "lifetime": "", "limit": "2097152"}, <-seen)
+	require.Equal(t, map[string]string{"secret": "s3cret", "lifetime": ""}, <-seen)
 	require.NoError(t, manager.Start(context.Background(), writeVerifiedArtifactRef(t, "ticket", "4.0.0"), 1))
-	require.Equal(t, map[string]string{"secret": "", "lifetime": "", "limit": "2097152"}, <-seen)
+	require.Equal(t, map[string]string{"secret": "", "lifetime": ""}, <-seen)
 }
 
 // A panic while a host starts fails that start; Control lives on.
@@ -57,7 +56,7 @@ func TestHostPanicFailsOnlyItsStart(t *testing.T) {
 
 // No host starts without InProcess: nothing else can run one.
 func TestHostNeedsALinkedHost(t *testing.T) {
-	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t)})
+	manager, err := NewManager(ManagerConfig{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
 	err = manager.Start(context.Background(), writeVerifiedArtifactRef(t, "knowledge", "4.3.0"), 1)

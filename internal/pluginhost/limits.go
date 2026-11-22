@@ -1,27 +1,24 @@
 package pluginhost
 
-import (
-	"errors"
-
-	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-)
+import "errors"
 
 // ErrResponseTooLarge reports a package response above the configured
-// response limit (codes.ResourceExhausted from the host, or a host message
-// the kernel client refused to receive). It is always wrapped together with
-// ErrHostUnavailable so existing callers keep failing closed.
+// response limit. It is always wrapped together with ErrHostUnavailable so
+// existing callers keep failing closed.
 var ErrResponseTooLarge = errors.New("plugin response exceeds its limit")
+
+const (
+	// defaultMaxResponseBytes is the response body limit when none is
+	// configured.
+	defaultMaxResponseBytes = 1 << 20
+	// maxConfigurableResponseBytes matches the configuration bound.
+	maxConfigurableResponseBytes = 64 << 20
+)
 
 // normalizeMaxResponseBytes returns the effective response body limit.
 func normalizeMaxResponseBytes(value int64) int64 {
-	if value <= 0 || value > pluginhostsdk.MaxConfigurableResponseBytes {
-		return pluginhostsdk.DefaultMaxResponseBytes
+	if value <= 0 || value > maxConfigurableResponseBytes {
+		return defaultMaxResponseBytes
 	}
 	return value
-}
-
-// hostReceiveMessageLimit sizes the kernel client's gRPC receive window for
-// a response body limit plus the SDK's fixed envelope allowance.
-func hostReceiveMessageLimit(maxResponseBytes int64) int {
-	return pluginhostsdk.MessageSizeLimit(int(normalizeMaxResponseBytes(maxResponseBytes)))
 }

@@ -35,9 +35,6 @@ func crashTestHost(t *testing.T, host *hostProcess) {
 // empty package bridge; config may set anything else.
 func newHostTestManager(t *testing.T, config ManagerConfig) *Supervisor {
 	t.Helper()
-	if config.RuntimeDir == "" {
-		config.RuntimeDir = shortHostTempDir(t)
-	}
 	if config.BridgeFactory == nil {
 		allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 		require.NoError(t, err)
@@ -55,7 +52,7 @@ func newHostTestManager(t *testing.T, config ManagerConfig) *Supervisor {
 type testPackage struct{ leaseID string }
 
 func (testPackage) Dispatch(context.Context, pluginhostsdk.DispatchRequest) (pluginhostsdk.DispatchResponse, error) {
-	return pluginhostsdk.DispatchResponse{StatusCode: 202, ResponseBody: []byte(`{"transport":"unix"}`)}, nil
+	return pluginhostsdk.DispatchResponse{StatusCode: 202, ResponseBody: []byte(`{"transport":"direct"}`)}, nil
 }
 
 func (testPackage) Migrate(context.Context, pluginhostsdk.MigrationRequest) (pluginhostsdk.MigrationResponse, error) {

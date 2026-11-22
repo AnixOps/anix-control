@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 )
 
@@ -43,30 +42,6 @@ type MigrationOutput struct {
 type MigrationCheckpointRecorder func(context.Context, MigrationOutput) error
 
 var _ MigrationManager = (*Supervisor)(nil)
-
-func (c *hostClient) Migrate(ctx context.Context, input MigrationInput) (MigrationOutput, error) {
-	if c == nil || c.rpc == nil {
-		return MigrationOutput{}, ErrHostUnavailable
-	}
-	response, err := c.rpc.Migrate(ctx, &pluginhostv1.MigrationRequest{
-		PackageId:          input.PackageID,
-		PackageVersion:     input.Version,
-		MigrationId:        input.MigrationID,
-		Checkpoint:         input.Checkpoint,
-		RouteGeneration:    input.Generation,
-		BridgeCapability:   append([]byte(nil), input.BridgeCapability...),
-		DeadlineUnixMillis: input.Deadline.UnixMilli(),
-	})
-	if err != nil {
-		return MigrationOutput{}, hostClientError(err)
-	}
-	return MigrationOutput{
-		Checkpoint:       response.GetCheckpoint(),
-		ValidationDigest: response.GetValidationDigest(),
-		Complete:         response.GetComplete(),
-		FailureCode:      response.GetFailureCode(),
-	}, nil
-}
 
 // Migrate forwards one resumable migration step to the active host, persists
 // its reply through recorder, and treats a completed response as activation
