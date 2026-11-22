@@ -45,6 +45,13 @@
   `module_runtime.*` runtime keys are ignored with a warning; the kernel CA
   that signs Agent certificates, its key and its rotation are unchanged.
 
+### Changed
+
+- The generated API document is committed once, as `docs/docs.go`
+  (`docs/swagger.json` and `docs/swagger.yaml` are gone), and CI fails when
+  it is out of date. `/swagger/doc.json` now comes from the binary, so binary
+  installs serve it too, and it matches the current routes.
+
 ## 5.0.10 - 2026-11-18
 
 Installs Agent 5.0.8 on nodes (passes revoked ANX devices to anx-node

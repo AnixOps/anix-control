@@ -32,7 +32,7 @@ It should not become a dumping ground for:
 | `web/` | Vue 3 + Vite admin/user frontend: `src/`, Vitest tests in `src/__tests__/`, Playwright specs in `e2e/`, helper scripts in `scripts/`; `src/design/` is the vendored AnixOps Design release ([frontend-design.md](frontend-design.md)) |
 | `config/` | the configuration template (`config.yaml.example`, the `domain` line), the `/api/v2` package route catalog (`v2-package-route-catalog.json`), `deploy/`, `docker/`, and `scripts/` (see below) |
 | `scripts/` | operator-facing scripts: release installer `install.sh`, `manage.sh`, SQLite/PostgreSQL migration and restore rehearsal, plugin release signing, WireGuard helpers and legacy panel upgrade |
-| `docs/` | documentation tree (see below) plus generated Swagger output (`docs.go`, `swagger.json`, `swagger.yaml`) |
+| `docs/` | documentation tree (see below) plus the generated Swagger package `docs.go` (served at `/swagger/doc.json`) |
 | `.github/` | CI (`workflows/ci.yml`), SDK sync, `workflows/artifact-cleanup.yml` (every six hours, deletes Actions artifacts older than a day; every `upload-artifact` step also sets `retention-days`, because the AnixOps organization shares one artifact storage quota), `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |
 | `install.sh` / `panel_install.sh` | forwarders that fetch the systemd release installer `scripts/install.sh` at the tag named by `--version` (container deployment is the primary path) |
 | `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml` | container image (`source` and CI-only `release` targets), development stack, and production Compose deployment with an external PostgreSQL |

@@ -35,11 +35,9 @@ web/dist
 config/data/
 logs/
 
-# Documentation (the generated swagger package and specs are compiled in)
+# Documentation (the generated swagger package is compiled in)
 docs/
 !docs/docs.go
-!docs/swagger.json
-!docs/swagger.yaml
 *.md
 !README.md
 !config/deploy/ansible/README.md
