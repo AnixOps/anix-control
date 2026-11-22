@@ -2,8 +2,9 @@
 
 `anix-control` is the control-plane service for AnixOps. It combines a Go
 backend, Vue 3 admin/user frontend, node communication APIs, subscription
-generation, payment/order management, traffic statistics, and the in-progress
-minimal forwarding module.
+generation, lines and forwarding, and traffic statistics. Payment, orders,
+coupons and invite commission are in the commercial edition
+([`LICENSING.md`](LICENSING.md)).
 
 The project is being hardened toward a stable, testable, GitHub Actions-only
 release process. Treat [`docs/features.md`](docs/features.md) as the source of
@@ -218,3 +219,9 @@ Do not change these response shapes without checking
 
 Use is subject to [`TERMS.md`](TERMS.md) (user agreement, acceptable use and disclaimer, in Chinese). Operators who
 run the panel for others are the service provider and must publish their own terms to their users.
+
+## License
+
+MIT until the 5.1 switch to AGPL-3.0; released 5.0.x versions stay MIT. Editions,
+commitments and the timeline: [`LICENSING.md`](LICENSING.md). Contributions need
+the [CLA](CLA.md) ([`CONTRIBUTING.md`](CONTRIBUTING.md)).
