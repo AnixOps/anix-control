@@ -9,6 +9,13 @@ Rules (CLA.md, "How To Sign"):
   2. A pull request may only add signature lines for its own author: nobody
      signs for someone else.
   3. A pull request never removes or changes an existing signature line.
+  4. The pull request author must have signed too (or be exempt): unlike a
+     commit author, which is only an email in the commit, the pull request
+     author is an authenticated GitHub account.
+
+Commits by the AI coding agent account ("claude", from noreply@anthropic.com)
+are accepted only in pull requests opened by the repository owner: they are
+the owner's work done with an AI tool, not a separate contributor's.
 
 Usage:
   check_cla.py --author LOGIN --commits FILE --patch FILE --signatures FILE
@@ -21,6 +28,7 @@ import argparse
 import sys
 
 OWNER = "kalijerry"
+AI_AGENTS = {"claude"}
 
 
 def exempt(login):
@@ -50,7 +58,10 @@ def check(author, commit_authors, patch_lines, signature_lines):
                 if login != author.lower():
                     errors.append(f"adds a signature for {login}, but only the pull request author ({author}) may sign in this pull request")
     signed = signed_logins(signature_lines)
-    for login in sorted(set(commit_authors)):
+    owner_pr = author.lower() == OWNER
+    for login in sorted(set(commit_authors) | {author}):
+        if owner_pr and login.lower() in AI_AGENTS:
+            continue
         if login.startswith("UNLINKED:"):
             errors.append(f"commit {login[9:]} has an author email not linked to a GitHub account")
         elif not exempt(login) and login.lower() not in signed:
@@ -72,6 +83,9 @@ def self_test():
         ("unsigned co-author commit", "alice", ["alice", "dave"], [], sig, 1),
         ("unlinked commit email", "alice", ["alice", "UNLINKED:abc1234"], [], sig, 1),
         ("comment-only patch", "alice", ["alice"], ["+# note"], sig, 0),
+        ("AI agent commits in an owner PR", "kalijerry", ["claude"], [], sig, 0),
+        ("AI agent commits in a contributor PR", "alice", ["alice", "claude"], [], sig, 1),
+        ("unsigned PR author with signed commits", "bob", ["alice"], [], sig, 1),
     ]
     failed = 0
     for name, author, commits, patch, sigs, want in cases:

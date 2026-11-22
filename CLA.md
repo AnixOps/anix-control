@@ -61,13 +61,18 @@ requests need nothing more.
 The "CLA" check (`.github/workflows/cla.yml`, `.github/scripts/check_cla.py`)
 enforces three rules on every pull request:
 
-1. Every commit author has a signature line. Commit with an email linked to
-   your GitHub account, or the check cannot match the commit to you.
+1. Every commit author, and the pull request author, has a signature line.
+   Commit with an email linked to your GitHub account, or the check cannot
+   match the commit to you.
 2. A pull request adds signature lines only for its own author: nobody signs
    for someone else.
 3. Existing signature lines are never removed or changed.
 
-The repository owner and bot accounts are exempt. `Co-authored-by` trailers
+The repository owner and bot accounts are exempt. Commits by the AI coding
+agent account (`claude`) are accepted only in pull requests the owner opens:
+they are the owner's work done with an AI tool. Commit authorship is an email
+address in the commit and is not authenticated by git; the authenticated pull
+request author is therefore always checked as well. `Co-authored-by` trailers
 are not machine-checked: before merging, the reviewer confirms that every
 human co-author named in a trailer has signed.
 
@@ -78,4 +83,4 @@ human co-author named in a trailer has signed.
 - AnixOps 承诺：合并的贡献会一直在公开仓库以 AGPL-3.0 或其他 OSI 批准的许可证提供。
 - 你声明有权提交该贡献；包含他人代码时在 PR 里说明来源和许可证。
 - 签署方式：第一次提 PR 时，在 `.github/cla-signatures.txt` 加一行，提交这一行即为签署。
-- CI 检查：PR 中每个提交作者都已签署；只能为 PR 作者本人签署；已有签名不能删改。
+- CI 检查：PR 作者和每个提交作者都已签署；只能为 PR 作者本人签署；已有签名不能删改。AI 编码助手账号（`claude`）的提交只在所有者本人开的 PR 中接受。

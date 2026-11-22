@@ -23,7 +23,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 1a | 许可说明、CLA、贡献指南、NOTICE、CLA 检查、ROADMAP 清单 | [#569](https://github.com/AnixOps/anix-control/pull/569) | `714b913` | [CI/CD Pipeline 44977323101](https://github.com/AnixOps/anix-control/actions/runs/44977323101) success；[CLA 44977323178](https://github.com/AnixOps/anix-control/actions/runs/44977323178) success（head `bc8608a`） | 已合并 2026-11-22 |
 | 1b | 官网“授权与价格”页 `/licensing`（`/pricing` 跳转） | [AnixOps-website#21](https://github.com/AnixOps/AnixOps-website/pull/21) | `54099ea` | [Build 44977472571](https://github.com/AnixOps/AnixOps-website/actions/runs/44977472571) success（head `4a9a572`） | 已合并 2026-11-22 |
-| 1c | CLA 检查加固 + 本审计记录 | 本 PR | — | — | 进行中 |
+| 1c | CLA 检查加固 + 本审计记录 | [#571](https://github.com/AnixOps/anix-control/pull/571) | — | 首次运行 [CLA 44981496387](https://github.com/AnixOps/anix-control/actions/runs/44981496387) 失败：新检查把 AI 编码助手账号 `claude` 的提交判为未签署，证明规则 1 生效；随后补充 AI 账号规则与 PR 作者检查 | 进行中 |
 | 2 | 公开仓库扩展点：新建前配额检查（社区版放行）、前端路由与菜单扩展点、页脚“源代码”链接 | — | — | — | 未开始 |
 | 3 | 商业版接入 license、授权页、前端商业页面移出 | — | — | — | 未开始 |
 | 4 | `LICENSE` 改为 AGPL-3.0 | — | — | — | 未开始 |
@@ -44,13 +44,14 @@
 
 - 文本：[`CLA.md`](../../CLA.md) 1.0，授权型（贡献者保留版权），含反向承诺。正文为自行撰写，未复制第三方协议文本。
 - 签署：贡献者在 PR 中向 `.github/cla-signatures.txt` 添加一行，提交即签署，记录永久保留在 git 历史中。
-- 检查：`.github/workflows/cla.yml` 调用 `.github/scripts/check_cla.py`（含自测）。规则：每个提交作者都已签署；
-  只能为 PR 作者本人签署；已有签名不能删改。所有者与机器人账号免签。
+- 检查：`.github/workflows/cla.yml` 调用 `.github/scripts/check_cla.py`（含自测）。规则：PR 作者和每个提交作者都已签署；
+  只能为 PR 作者本人签署；已有签名不能删改。所有者与机器人账号免签；AI 编码助手账号 `claude` 的提交只在所有者本人开的 PR 中接受。
+- 已知限制：git 的提交作者只是提交里写的邮箱，不经认证，可以冒用；因此 PR 作者（经过 GitHub 认证的账号）也必须已签署。
 - 已知限制：`Co-authored-by` 署名不做机器检查，由合并前的评审确认；CLA 检查尚未加入 `main` 分支规则的必需检查。
 
 ## 5. 开发方式说明
 
-- 本仓库的改动由项目所有者指示、AI 编码助手编写，提交信息中的 `Co-Authored-By: Claude` 表示 AI 参与，不是人类贡献者，不需要签署 CLA。
+- 本仓库的改动由项目所有者指示、AI 编码助手编写。这些提交的作者是 `claude` 账号（`noreply@anthropic.com`），提交信息中的 `Co-Authored-By: Claude` 表示 AI 参与；它们属于所有者本人的工作，不是独立贡献者，CLA 检查只在所有者开的 PR 中接受这类提交。
 - 所有验证在 GitHub Actions 中进行，以上 CI 运行编号可直接打开核对。
 
 ## 6. 未解决问题
