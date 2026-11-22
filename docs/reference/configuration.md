@@ -346,7 +346,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `plugins.control_host_max_request_bytes` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | ignored | M2 (P8) | a built-in value (1 MiB) |
 | `plugins.control_host_max_response_bytes` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_RESPONSE_BYTES` | ignored | M2 (P8) | a built-in value (1 MiB) |
 | `plugins.control_host_request_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_REQUEST_TIMEOUT` | ignored | M2 (P8) | a built-in value (30s) |
-| `plugins.control_host_runtime_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR` | still read | M2 (P11) | where package hosts' sockets live, until the systemd unit gives Control its runtime directory |
+| `plugins.control_host_runtime_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR` | ignored | M5 | package hosts run inside Control and reach the kernel without sockets |
 | `plugins.control_host_startup_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_STARTUP_TIMEOUT` | ignored | M2 (P8) | a built-in value (5s) |
 | `plugins.control_host_websocket_session_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_WEBSOCKET_SESSION_TIMEOUT` | ignored | M2 (P8) | a built-in value (24h) |
 | `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (5s) |

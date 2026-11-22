@@ -24,7 +24,6 @@ BACKUP_DIR=""
 SKIP_START=0
 COMMAND="install"
 VERSION="${ANIX_CONTROL_VERSION:-}"
-PLUGIN_HOST_RUNTIME_DIR=""
 PLUGIN_ARTIFACT_DIR=""
 FRESH_CONFIG=0
 # The database of a fresh install: PostgreSQL (--database-dsn) by default,
@@ -257,24 +256,23 @@ write_fresh_config() {
 }
 
 # The official packages, identity-platform included, are built into the
-# binary and installed at every start; their hosts always run and need
-# runtime directories the systemd unit may write. The plugins.* switches
-# Control no longer reads (control_execution_enabled, dispatch_enabled,
-# topology_execution_enabled and their poll intervals) are dropped from the
-# plugins section; Control would ignore them with a warning. An existing
+# binary and installed at every start; Control materializes their artifacts
+# in a directory the systemd unit may write. The plugins.* keys Control no
+# longer reads (control_execution_enabled, dispatch_enabled,
+# topology_execution_enabled, their poll intervals and
+# control_host_runtime_dir) are dropped from the plugins section; Control
+# would ignore them with a warning. An existing
 # plugins.identity_bootstrap_package_dir is left as it is: Control ignores it.
 configure_plugin_execution_config() {
   [[ -f "${CONFIG_FILE}" ]] || die "Configuration file is missing: ${CONFIG_FILE}"
 
   local configure_runtime_paths=0 replace_runtime_paths=0
   if uses_plugin_execution; then
-    [[ -n "${PLUGIN_HOST_RUNTIME_DIR}" && -n "${PLUGIN_ARTIFACT_DIR}" ]] || \
-      die "Plugin execution directories are not configured"
-    validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
+    [[ -n "${PLUGIN_ARTIFACT_DIR}" ]] || die "The package artifact directory is not configured"
     validate_install_managed_plugin_dir "${PLUGIN_ARTIFACT_DIR}"
     configure_runtime_paths=1
-    # The systemd unit permits writes only under INSTALL_DIR, so V4 package
-    # execution cannot retain an external host/artifact runtime path.
+    # The systemd unit permits writes only under INSTALL_DIR, so package
+    # execution cannot retain an external artifact path.
     replace_runtime_paths=1
   fi
 
@@ -283,9 +281,7 @@ configure_plugin_execution_config() {
   if ! awk \
     -v configure_runtime_paths="${configure_runtime_paths}" \
     -v replace_runtime_paths="${replace_runtime_paths}" \
-    -v host_runtime_dir="${PLUGIN_HOST_RUNTIME_DIR}" \
     -v artifact_dir="${PLUGIN_ARTIFACT_DIR}" \
-    -v legacy_host_runtime_dir="/var/lib/anixops/plugin-hosts" \
     -v legacy_artifact_dir="/var/lib/anixops/plugin-artifacts" '
     function field_value(line, value) {
       value = line
@@ -299,10 +295,6 @@ configure_plugin_execution_config() {
       return value
     }
     function emit_missing() {
-      if (configure_runtime_paths && !host_runtime_seen) {
-        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
-        host_runtime_seen = 1
-      }
       if (configure_runtime_paths && !artifact_dir_seen) {
         print "  control_host_artifact_dir: \"" artifact_dir "\""
         artifact_dir_seen = 1
@@ -321,17 +313,7 @@ configure_plugin_execution_config() {
       emit_missing()
       in_plugins = 0
     }
-    in_plugins && /^[[:space:]]+(control_execution_enabled|dispatch_enabled|dispatch_poll_interval|topology_execution_enabled|topology_poll_interval):/ {
-      next
-    }
-    in_plugins && /^[[:space:]]+control_host_runtime_dir:/ {
-      existing = field_value($0)
-      if (configure_runtime_paths && (replace_runtime_paths || existing == "" || existing == legacy_host_runtime_dir)) {
-        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
-      } else {
-        print
-      }
-      host_runtime_seen = 1
+    in_plugins && /^[[:space:]]+(control_execution_enabled|control_host_runtime_dir|dispatch_enabled|dispatch_poll_interval|topology_execution_enabled|topology_poll_interval):/ {
       next
     }
     in_plugins && /^[[:space:]]+control_host_artifact_dir:/ {
@@ -351,7 +333,6 @@ configure_plugin_execution_config() {
       }
       if (!plugins_seen && configure_runtime_paths) {
         print "plugins:"
-        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
         print "  control_host_artifact_dir: \"" artifact_dir "\""
       }
     }
@@ -779,14 +760,9 @@ ensure_layout_and_config() {
     "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${INSTALL_DIR}/web"
   install -d -m 0700 -o root -g root "${BACKUP_ROOT}"
   if uses_plugin_execution; then
-    validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
     validate_install_managed_plugin_dir "${PLUGIN_ARTIFACT_DIR}"
-    [[ ! -L "${PLUGIN_HOST_RUNTIME_DIR}" && ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || \
-      die "Plugin execution directories must not be symbolic links"
-    install -d -m 0700 -o "${APP_USER}" -g "${APP_USER}" \
-      "${PLUGIN_HOST_RUNTIME_DIR}" "${PLUGIN_ARTIFACT_DIR}"
-    [[ -d "${PLUGIN_HOST_RUNTIME_DIR}" && ! -L "${PLUGIN_HOST_RUNTIME_DIR}" ]] || \
-      die "Plugin host runtime directory is unsafe"
+    [[ ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || die "The package artifact directory must not be a symbolic link"
+    install -d -m 0700 -o "${APP_USER}" -g "${APP_USER}" "${PLUGIN_ARTIFACT_DIR}"
     [[ -d "${PLUGIN_ARTIFACT_DIR}" && ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || \
       die "Plugin artifact directory is unsafe"
   fi
@@ -1066,7 +1042,6 @@ set_install_paths() {
   FRONTEND_DIR="${INSTALL_DIR}/web/public"
   BACKUP_ROOT="${INSTALL_DIR}/backups"
   VERSION_FILE="${INSTALL_DIR}/.release-version"
-  PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   CA_KEK_FILE="${INSTALL_DIR}/config/secrets/module_ca_kek"
   TLS_DIR="${INSTALL_DIR}/config/tls"

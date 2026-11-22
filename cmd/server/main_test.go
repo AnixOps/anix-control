@@ -262,7 +262,6 @@ func TestStartGRPCServerRejectsOccupiedPort(t *testing.T) {
 
 func TestNewControlPluginHostManagerRejectsInvalidTimeout(t *testing.T) {
 	cfg := &appconfig.Config{}
-	cfg.Plugins.ControlHostRuntimeDir = t.TempDir()
 	cfg.Plugins.ControlHostStartupTimeout = "not-a-duration"
 
 	manager, err := newControlPluginHostManager(cfg)
@@ -274,7 +273,6 @@ func TestNewControlPluginHostManagerRejectsInvalidTimeout(t *testing.T) {
 
 func TestNewControlPluginHostManagerRejectsInvalidWebSocketSessionTimeout(t *testing.T) {
 	cfg := &appconfig.Config{}
-	cfg.Plugins.ControlHostRuntimeDir = t.TempDir()
 	cfg.Plugins.ControlHostWebSocketSessionTimeout = "not-a-duration"
 
 	manager, err := newControlPluginHostManager(cfg)

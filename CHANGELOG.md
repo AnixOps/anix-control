@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Removed
+
+- `plugins.control_host_runtime_dir` (2026-11 slimming, class C1c-3): no
+  package host uses a socket any more, so the key is ignored (a start that
+  finds it set says so). `scripts/install.sh` drops it from `config.yaml` and
+  no longer creates `runtime/plugin-hosts/`. Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#upgrading-to-the-release-after-5011-package-hosts-use-no-sockets).
+
 ## 5.0.11 - 2026-11-22
 
 ### Added

@@ -11,6 +11,23 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To The Release After 5.0.11: Package Hosts Use No Sockets
+
+Since 5.0.11 the kernel and the built-in package hosts, all inside Control,
+call each other directly: the per-host Unix socket and the package bridge
+socketpair are gone (slim audit C1c-2a, C1c-2b). This release retires the
+setting that placed them (C1c-3). The Agent connection is unchanged.
+
+- `plugins.control_host_runtime_dir` is ignored; a start that finds it set
+  says so. `scripts/install.sh` drops the line from `config.yaml` and no
+  longer creates `/opt/anixops/control/runtime/plugin-hosts/`. An existing
+  directory is left in place and can be removed by hand once the new release
+  runs; nothing reads it.
+- Rollback is the previous release; there is no schema change. A release
+  before this one, started with the line removed, puts its host sockets in a
+  private temporary directory (the unit sets `PrivateTmp=true`), as it does
+  when the key is empty.
+
 ## Upgrading To The Release After 5.0.10: Former V2Board Names Are Gone
 
 Control started as a fork of V2Board ([`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)).

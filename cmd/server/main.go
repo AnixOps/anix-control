@@ -818,7 +818,7 @@ func startGRPCServer(cfg *config.Config, panel config.PanelSettings, certs *pane
 	if err := server.Start(); err != nil {
 		return nil, "", err
 	}
-	return server, fmt.Sprintf("%s:%d", grpcCfg.Host, grpcCfg.Port), nil
+	return server, server.Addr(), nil
 }
 
 func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, error) {
