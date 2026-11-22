@@ -11,7 +11,7 @@ operator steps are in [Admin API tokens](../guide/admin-api-tokens.md).
 |---|---|
 | Format | `anixadm_` followed by 43 URL-safe base64 characters (32 random bytes, 256 bits); 51 characters in all |
 | Stored | only its SHA-256 (`v4_kernel_admin_api_token.token_hash`) and the last four characters (`hint`); the token is shown once, in the answer that creates it |
-| Owner | one administrator (`v2_user.is_admin = 1`); the owner's rights are read from `v2_user` on every use |
+| Owner | one administrator (`v5_user.is_admin = 1`); the owner's rights are read from `v5_user` on every use |
 | Scope | `read` or `admin` |
 | Expiry | optional (`expires_in_days`, 1 to 730); no expiry is allowed, and not advised |
 | Limit | 25 active (unrevoked, unexpired) tokens per administrator |
@@ -135,8 +135,8 @@ again keeps working, so give tokens an expiry.
 
 ## Audit
 
-Entries go to the operation log (`v2_operation_log`, module
-`admin_api_token`). The administrator audit (`v2_audit_log`, which covers
+Entries go to the operation log (`v5_operation_log`, module
+`admin_api_token`). The administrator audit (`v5_audit_log`, which covers
 `/api/v2/admin`, `/api/v3` and `/api/v4/forward`) records the request itself
 as for any administrator request, and the structured log line of such a
 request adds `auth_method=api_token` and `api_token_id`; the `admin_api_token_use`

@@ -75,7 +75,7 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 	return addTrafficLogs(s.db, logs)
 }
 
-// trafficLogBatch is the number of v2_server_log rows of one INSERT.
+// trafficLogBatch is the number of v5_server_log rows of one INSERT.
 const trafficLogBatch = 100
 
 // addTrafficLogs adds traffic to hourly buckets of the traffic log: a row

@@ -196,7 +196,7 @@ func NodeDiagnosticMutates(action string) bool {
 // request's time ends or ctx does.
 //
 // The generic actions of a proxy node are recorded in
-// v2_agent_diagnostic_task like the legacy routes' tasks. A forward node's
+// v5_agent_diagnostic_task like the legacy routes' tasks. A forward node's
 // tasks and the forward checks (probes, not tasks of a proxy node's table)
 // are not; the caller audits the call.
 //

@@ -86,7 +86,7 @@ supported yet. The script checks all of this before it changes anything
 ## Joining A Node Group
 
 A node group owns a join token and the defaults of the nodes it creates.
-Its kind is `proxy` (the machines serve users: `v2_node` rows) or `forward`
+Its kind is `proxy` (the machines serve users: `v5_node` rows) or `forward`
 (entry and relay machines of forward routes: forward nodes).
 
 ### In The Console

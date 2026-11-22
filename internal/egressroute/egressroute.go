@@ -53,7 +53,7 @@ const (
 	maxFallbacks    = 8
 )
 
-// Audit actions of the operation log (v2_operation_log, module
+// Audit actions of the operation log (v5_operation_log, module
 // egress_route). No entry carries a relay key.
 const (
 	auditModule       = "egress_route"

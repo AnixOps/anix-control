@@ -317,7 +317,7 @@ provider credentials with the least permissions:
 
 ### Nodes
 
-A node is `forward-<id>` (a forward node, `v2_forward_node`) or `proxy-<id>`
+A node is `forward-<id>` (a forward node, `v5_forward_node`) or `proxy-<id>`
 (a proxy node, which can join the forwarding inventory).
 
 | Method and path | Does | Body and answer |

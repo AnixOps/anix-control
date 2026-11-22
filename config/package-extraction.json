@@ -544,7 +544,7 @@
       "route_id": "platform.admin.system.configs.get",
       "mode": "kernel-owned",
       "legacy": "router",
-      "reason": "lists every key of v2_system_config; no package gets a settings grant over every namespace (settings-service.md)"
+      "reason": "lists every key of v5_system_config; no package gets a settings grant over every namespace (settings-service.md)"
     },
     {
       "method": "DELETE",
@@ -553,7 +553,7 @@
       "route_id": "platform.admin.system.configs.key.delete",
       "mode": "kernel-owned",
       "legacy": "router",
-      "reason": "deletes any key of v2_system_config; no package gets a grant over every namespace (settings-service.md)"
+      "reason": "deletes any key of v5_system_config; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "GET",
@@ -562,7 +562,7 @@
       "route_id": "platform.admin.system.configs.key.get",
       "mode": "kernel-owned",
       "legacy": "router",
-      "reason": "reads any key of v2_system_config, secrets in clear; no package gets a grant over every namespace (settings-service.md)"
+      "reason": "reads any key of v5_system_config, secrets in clear; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "PUT",
@@ -571,7 +571,7 @@
       "route_id": "platform.admin.system.configs.key.put",
       "mode": "kernel-owned",
       "legacy": "router",
-      "reason": "writes any key of v2_system_config; no package gets a grant over every namespace (settings-service.md)"
+      "reason": "writes any key of v5_system_config; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "GET",

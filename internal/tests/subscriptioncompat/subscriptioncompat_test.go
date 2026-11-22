@@ -185,7 +185,7 @@ func seed(t testing.TB, db *gorm.DB) {
 		}
 	}
 	require.NoError(t, db.Create(&[]model.NodeProtocol{protocol(1, 1), protocol(2, 1), protocol(3, 2), protocol(4, 3), protocol(5, 1)}).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 3), (2, 2), (2, 4), (2, 1)").Error)
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 3), (2, 2), (2, 4), (2, 1)").Error)
 	require.NoError(t, packagestore.EnsureKernelAPIViews(db))
 	syncSequences(t, db)
 }
@@ -200,8 +200,8 @@ func syncSequences(t testing.TB, db *gorm.DB) {
 		return
 	}
 	for _, table := range []string{
-		"v2_plan", "v2_user", "v2_subscription_group", "v2_subscription_template", "v2_plan_subscription_group",
-		"v2_user_subscription_group", "v2_node", "v2_node_protocol",
+		"v5_plan", "v5_user", "v5_subscription_group", "v5_subscription_template", "v5_plan_subscription_group",
+		"v5_user_subscription_group", "v5_node", "v5_node_protocol",
 	} {
 		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
 	}
@@ -249,7 +249,7 @@ func state(t testing.TB, db *gorm.DB) any {
 		SubscriptionGroupID uint
 		NodeProtocolID      uint
 	}
-	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Order("subscription_group_id, node_protocol_id").Find(&links).Error)
+	require.NoError(t, db.Table("v5_subscription_group_node_protocols").Order("subscription_group_id, node_protocol_id").Find(&links).Error)
 	var members []model.UserSubscriptionGroup
 	require.NoError(t, db.Order("id").Find(&members).Error)
 	var nodes, protocols int64
@@ -501,7 +501,7 @@ func TestProtocolLinkWrites(t *testing.T) {
 }
 
 // membershipState is state plus the shared subscriber state a membership
-// change writes: v2_user_subscription_group, the request ledger and the
+// change writes: v5_user_subscription_group, the request ledger and the
 // change log, with clock times masked and, for requests that carry no key
 // or request id, the random request ids too.
 func membershipState(maskRequestIDs bool) func(t testing.TB, db *gorm.DB) any {

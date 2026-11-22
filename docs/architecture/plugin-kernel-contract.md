@@ -303,7 +303,7 @@ forms are accepted:
 | `kernel.nodeops.forward.v1`, `.nodeconfig.v1`, `.diagnose.v1`, `.agents.v1`, `.credentials.v1` | the `KernelNodeOps` contract (`node-ops-service.md`) for one operation family: submit that family's node operations; any one of the five reads, watches and cancels the package's own operations; honoured only for official AnixOps packages, checked on every call against the host's generation. No operation kind executes yet: a submission answers `UNIMPLEMENTED` |
 | `kernel.settings.<namespace>.read.v1`, `.write.v1`, `.secrets.v1` | the `KernelSettings` contract (`settings-service.md`) for one settings namespace (`mail`, `invite`, `nodex`, `forward-runtime`, `backup`): read, write (with the kernel's audit entries and in-memory refresh), and secret values in clear (requires `read`); unknown namespaces are refused; honoured only for official AnixOps packages, checked on every call |
 | `kernel.storage.v1` | a per-package database role and schema (storage lease) |
-| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) the node and forward agent credential tables (`v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job`) and the node runtime secret tables (`v2_node_protocol`, `v2_wireguard_peer`) cannot be adopted |
+| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v5_user*`, `v5_system_config`, `v5_audit_log`, `v5_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) the node and forward agent credential tables (`v5_node`, `v2_authorized_key`, `v5_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job`) and the node runtime secret tables (`v5_node_protocol`, `v5_wireguard_peer`) cannot be adopted |
 | `kernel.view:kapi_<name>_v<N>` | read access to a kernel API view; requires `kernel.storage.v1` |
 
 The packaged migration index (`migrations/index.json`, format
@@ -442,34 +442,34 @@ is meant for development and tests.
 **Kernel API views** are versioned read-only views, created at startup and
 never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
 `is_admin`, `is_staff`, `banned`, `plan_id`, `group_id`, `expired_at` and
-`created_at` of `v2_user`, and no password hash, token or UUID.
-`kapi_system_audit_log_v1` exposes the `v2_operation_log` rows of module
+`created_at` of `v5_user`, and no password hash, token or UUID.
+`kapi_system_audit_log_v1` exposes the `v5_operation_log` rows of module
 `system` (the audit trail of configuration and backup changes, which records
 whether a secret is set, never its value). `kapi_plan_catalog_v1` exposes
 what an order needs of a plan (`id`, `group_id`, `transfer_enable`,
-`speed_limit`, `device_limit` and the seven period prices of `v2_plan`),
+`speed_limit`, `device_limit` and the seven period prices of `v5_plan`),
 `kapi_plan_name_v1` a plan's `id` and `name` (which the order answers show),
 and `kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
-`v2_plan_subscription_group`. `kapi_order_billing_v1` exposes what a payment
+`v5_plan_subscription_group`. `kapi_order_billing_v1` exposes what a payment
 needs of an order: `id`, `user_id`, `total_amount` and `status` of
-`v2_order`. `kapi_user_referral_v1` exposes `id` and `invite_user_id` of
-`v2_user`: who invited whom. `kapi_affiliate_settings_v1` exposes the `value`
-of the one `v2_system_config` row keyed `invite.frontend.config` (the
+`v5_order`. `kapi_user_referral_v1` exposes `id` and `invite_user_id` of
+`v5_user`: who invited whom. `kapi_affiliate_settings_v1` exposes the `value`
+of the one `v5_system_config` row keyed `invite.frontend.config` (the
 affiliate's frontend settings, which the kernel does not treat as sensitive)
 and no other row. `kapi_user_subscription_group_v1` exposes `user_id`,
-`group_id` and `expire_at` of `v2_user_subscription_group`: the subscription
+`group_id` and `expire_at` of `v5_user_subscription_group`: the subscription
 groups a subscriber holds and until when. `kapi_node_protocol_v1` exposes
-`id` and `node_id` of `v2_node_protocol`, and `kapi_node_heartbeat_v1` `id`
-and `last_check_at` of `v2_node`; neither shows an address, a key or any
+`id` and `node_id` of `v5_node_protocol`, and `kapi_node_heartbeat_v1` `id`
+and `last_check_at` of `v5_node`; neither shows an address, a key or any
 settings. `kapi_node_status_v1` exposes `id`, `status`, `last_check_at`,
-`total_upload` and `total_download` of `v2_node`, and none of a node's
+`total_upload` and `total_download` of `v5_node`, and none of a node's
 credentials. `kapi_forward_node_v1` exposes every column of
-`v2_forward_node` but `api_token`, which authenticates the node's agent.
+`v5_forward_node` but `api_token`, which authenticates the node's agent.
 `kapi_forward_runtime_settings_v1` exposes `key` and `value` of the three
-`v2_system_config` rows that choose the forward runtime backend
+`v5_system_config` rows that choose the forward runtime backend
 (`forward.runtime.nodex_mode`, `forward.runtime_backend`,
 `forward.runtime.ansible.backend`) and no other row. `kapi_traffic_log_v1`
-exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: the
+exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v5_server_log`: the
 bytes a user used on a node in an hour (`log_at` is the hour's start; a row per
 node, hour, user, server type and rate, to which every report of the hour adds,
 `docs/reference/traffic-stats-operations.md`), for traffic charts.

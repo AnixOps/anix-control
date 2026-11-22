@@ -93,7 +93,7 @@ func changeLogBounds(db *gorm.DB) (oldest, latest uint64, err error) {
 
 // servesUserDeltas reports whether this Control offers users.v1 to an
 // agent: when the agent lists it, and to proxy nodes only, since user
-// lists belong to v2_node.
+// lists belong to v5_node.
 func (s *AgentControlGRPCServer) servesUserDeltas(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {
 	return node.Kind == agentcontrol.NodeKindProxy &&
 		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityUsers, agentcontrol.CapabilityVersionV1)

@@ -4,7 +4,7 @@
 // internal/tests/platformcompat.
 //
 // The system configuration routes (list, get, set, delete) have no native
-// handler and stay bridged: they work on any key of v2_system_config, a
+// handler and stay bridged: they work on any key of v5_system_config, a
 // protected kernel table. KernelSettings reaches only the keys of a
 // namespace, and a grant over every key would amount to every secret: the
 // answers mask secrets, but writing an address (the NodeX or SMTP host) next

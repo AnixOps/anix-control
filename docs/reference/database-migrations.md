@@ -148,6 +148,7 @@ every migration has both files; afterwards only the SQLite file remains.
 | `0004_drop_route_modes` | Drops `v4_kernel_route_mode_revision` and `v4_kernel_shadow_mismatch_sample`, and removes the stored route-mode map (the `routes` key) from every Control package configuration in a new revision, writing each removed map to `v2_operation_log` first (action `route_modes_removed`, user `system/migration`). Route modes come only from the rehearsed list since ([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)) |
 | `0005_backups` | Creates `v5_backup`, one row per backup bundle in `<data_dir>/backups` with the result of its latest verification ([`backups.md`](backups.md)) |
 | `0006_destination_stats` | Creates `v5_destination_stat`, each user's traffic by destination domain, node and hour ([`destination-stats.md`](destination-stats.md)) |
+| `0040_table_prefix` | Renames the 51 tables Control kept from V2Board (`v2_*`) to the `v5_` prefix, with their `idx_` indexes and, on PostgreSQL, the primary key and foreign key constraints and id sequences named after them; the three rows of `v4_kernel_node_secret_split` follow. Data, columns, grants and views stay. The steps above name the tables as they were when they ran ([`../UPGRADE.md`](../UPGRADE.md#table-names-lose-the-v2_-prefix)) |
 
 ## Adding A Migration
 

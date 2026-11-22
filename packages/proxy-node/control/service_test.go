@@ -103,10 +103,10 @@ func TestProxyNodeHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// The package adopts v2_node only as the kernel grants it, once the node
+// The package adopts v5_node only as the kernel grants it, once the node
 // credential split finalized it: its API key, key hash and shared secret
 // then hold tombstones, and the credentials live in the kernel's protected
-// split tables, which no grant reaches. It never adopts v2_node_protocol
+// split tables, which no grant reaches. It never adopts v5_node_protocol
 // (protocol-runtime's): it reads it through a view that shows no secret. Of
 // KernelNodeOps it holds the one family its routes use: nodeconfig (raw
 // configuration secrets, node retirement); never credentials, agents or
@@ -120,8 +120,8 @@ func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.Equal(t, []string{
 		"kernel.storage.v1",
-		"kernel.storage.adopt:v2_node_log",
-		"kernel.storage.adopt:v2_node",
+		"kernel.storage.adopt:v5_node_log",
+		"kernel.storage.adopt:v5_node",
 		"kernel.view:kapi_node_status_v1",
 		"kernel.view:kapi_node_protocol_public_v1",
 		"kernel.nodeops.nodeconfig.v1",

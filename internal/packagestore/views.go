@@ -30,7 +30,7 @@ type KernelAPIView struct {
 }
 
 // InviteSettingsKey is the system configuration key holding the affiliate
-// frontend settings, the one row of v2_system_config that
+// frontend settings, the one row of v5_system_config that
 // kapi_affiliate_settings_v1 shows.
 const InviteSettingsKey = "invite.frontend.config"
 
@@ -40,8 +40,8 @@ const InviteSettingsKey = "invite.frontend.config"
 var KernelAPIViews = []KernelAPIView{
 	{
 		Name:   "kapi_user_directory_v1",
-		Source: "v2_user",
-		Query:  "SELECT id, email, is_admin, is_staff, banned, plan_id, group_id, expired_at, created_at FROM v2_user",
+		Source: "v5_user",
+		Query:  "SELECT id, email, is_admin, is_staff, banned, plan_id, group_id, expired_at, created_at FROM v5_user",
 	},
 	{
 		// The system audit trail the kernel records for configuration and
@@ -49,71 +49,71 @@ var KernelAPIViews = []KernelAPIView{
 		// content holds which fields changed and whether a secret is set,
 		// never a secret's value.
 		Name:   "kapi_system_audit_log_v1",
-		Source: "v2_operation_log",
+		Source: "v5_operation_log",
 		Query: "SELECT id, user_id, username, action, module, target_type, target_id, content, ip, user_agent, status, created_at " +
-			"FROM v2_operation_log WHERE module = 'system'",
+			"FROM v5_operation_log WHERE module = 'system'",
 		RowFilter: true,
 	},
 	{
 		// Entitlements and traffic counters (docs/architecture/subscriber-service.md);
 		// no token or uuid.
 		Name:   "kapi_subscriber_entitlement_v1",
-		Source: "v2_user",
+		Source: "v5_user",
 		Query: "SELECT id, plan_id, group_id, expired_at, transfer_enable, u, d, speed_limit, device_limit, " +
-			"flow_reset_time, banned, balance, commission_balance FROM v2_user",
+			"flow_reset_time, banned, balance, commission_balance FROM v5_user",
 	},
 	{
 		// What an order needs of a plan: its prices, to price an order, and
 		// what it grants (group, transfer in GiB, limits), to complete one.
 		Name:   "kapi_plan_catalog_v1",
-		Source: "v2_plan",
+		Source: "v5_plan",
 		Query: "SELECT id, group_id, transfer_enable, speed_limit, device_limit, month_price, quarter_price, " +
-			"half_year_price, year_price, two_year_price, three_year_price, onetime_price FROM v2_plan",
+			"half_year_price, year_price, two_year_price, three_year_price, onetime_price FROM v5_plan",
 	},
 	{
 		// A plan's name, which the order list and detail answers show
 		// next to the order and the administrator's user list next to the
 		// user. No price, content or limit.
 		Name:   "kapi_plan_name_v1",
-		Source: "v2_plan",
-		Query:  "SELECT id, name FROM v2_plan",
+		Source: "v5_plan",
+		Query:  "SELECT id, name FROM v5_plan",
 	},
 	{
 		// The subscription groups a plan grants, which a completed order
 		// gives the subscriber.
 		Name:   "kapi_plan_subscription_group_v1",
-		Source: "v2_plan_subscription_group",
-		Query:  "SELECT plan_id, group_id FROM v2_plan_subscription_group",
+		Source: "v5_plan_subscription_group",
+		Query:  "SELECT plan_id, group_id FROM v5_plan_subscription_group",
 	},
 	{
 		// What a payment needs of an order: whose it is, what it costs (in
 		// cents) and whether it is still pending.
 		Name:   "kapi_order_billing_v1",
-		Source: "v2_order",
-		Query:  "SELECT id, user_id, total_amount, status FROM v2_order",
+		Source: "v5_order",
+		Query:  "SELECT id, user_id, total_amount, status FROM v5_order",
 	},
 	{
 		// Who invited whom, for the affiliate's invite statistics.
 		Name:   "kapi_user_referral_v1",
-		Source: "v2_user",
-		Query:  "SELECT id, invite_user_id FROM v2_user",
+		Source: "v5_user",
+		Query:  "SELECT id, invite_user_id FROM v5_user",
 	},
 	{
 		// The bytes a user used on a node in an hour (log_at is the start of
 		// the hour), their rate, for the machine-telemetry package's traffic
 		// charts and ranking. No node, token or credential.
 		Name:   "kapi_traffic_log_v1",
-		Source: "v2_server_log",
-		Query:  "SELECT user_id, u, d, rate, log_at FROM v2_server_log",
+		Source: "v5_server_log",
+		Query:  "SELECT user_id, u, d, rate, log_at FROM v5_server_log",
 	},
 	{
 		// The affiliate's frontend settings (code prefix and length,
 		// withdrawal fee and methods): the value of one system
 		// configuration key, which the kernel does not treat as sensitive.
-		// No other row of v2_system_config, which holds secrets, is visible.
+		// No other row of v5_system_config, which holds secrets, is visible.
 		Name:      "kapi_affiliate_settings_v1",
-		Source:    "v2_system_config",
-		Query:     "SELECT value FROM v2_system_config WHERE key = '" + InviteSettingsKey + "'",
+		Source:    "v5_system_config",
+		Query:     "SELECT value FROM v5_system_config WHERE key = '" + InviteSettingsKey + "'",
 		RowFilter: true,
 	},
 	{
@@ -121,23 +121,23 @@ var KernelAPIViews = []KernelAPIView{
 		// the subscription package's group lists and statistics. The kernel
 		// stays the only writer of this subscriber state.
 		Name:   "kapi_user_subscription_group_v1",
-		Source: "v2_user_subscription_group",
-		Query:  "SELECT user_id, group_id, expire_at FROM v2_user_subscription_group",
+		Source: "v5_user_subscription_group",
+		Query:  "SELECT user_id, group_id, expire_at FROM v5_user_subscription_group",
 	},
 	{
 		// The node a node protocol runs on, to link protocols to
 		// subscription groups and count a group's online nodes. No settings:
 		// they hold keys.
 		Name:   "kapi_node_protocol_v1",
-		Source: "v2_node_protocol",
-		Query:  "SELECT id, node_id FROM v2_node_protocol",
+		Source: "v5_node_protocol",
+		Query:  "SELECT id, node_id FROM v5_node_protocol",
 	},
 	{
 		// When a node last reported, to count online nodes. No address,
 		// key or configuration.
 		Name:   "kapi_node_heartbeat_v1",
-		Source: "v2_node",
-		Query:  "SELECT id, last_check_at FROM v2_node",
+		Source: "v5_node",
+		Query:  "SELECT id, last_check_at FROM v5_node",
 	},
 	{
 		// What the proxy-node package reads of a node: its status, last
@@ -145,18 +145,18 @@ var KernelAPIViews = []KernelAPIView{
 		// that a node exists. Never its API key, key hash or shared secret,
 		// which the kernel's node authentication checks.
 		Name:   "kapi_node_status_v1",
-		Source: "v2_node",
-		Query:  "SELECT id, status, last_check_at, total_upload, total_download FROM v2_node",
+		Source: "v5_node",
+		Query:  "SELECT id, status, last_check_at, total_upload, total_download FROM v5_node",
 	},
 	{
 		// What the forward package reads of a forward node: everything but
 		// its API token, which authenticates the node's agent. The forward
 		// node routes themselves stay in the kernel.
 		Name:   "kapi_forward_node_v1",
-		Source: "v2_forward_node",
+		Source: "v5_forward_node",
 		Query: "SELECT id, name, type, host, port, api_port, metrics_port, region, isp, datacenter, bandwidth, status, " +
 			"last_check, latency, load, uptime, tags, weight, max_conn, enabled, total_upload, total_download, current_conn, " +
-			"created_at, updated_at FROM v2_forward_node",
+			"created_at, updated_at FROM v5_forward_node",
 	},
 	{
 		// The system configuration keys that choose the forward runtime
@@ -165,8 +165,8 @@ var KernelAPIViews = []KernelAPIView{
 		// address and token and the Ansible settings are other rows, which
 		// this view does not show.
 		Name:   "kapi_forward_runtime_settings_v1",
-		Source: "v2_system_config",
-		Query: "SELECT key, value FROM v2_system_config WHERE key IN ('" +
+		Source: "v5_system_config",
+		Query: "SELECT key, value FROM v5_system_config WHERE key IN ('" +
 			strings.Join(ForwardRuntimeSettingKeys, "', '") + "')",
 		RowFilter: true,
 	},
@@ -223,30 +223,30 @@ func init() {
 var splitViews = []KernelAPIView{
 	{
 		// A proxy node, without its API key, key hash and shared secret.
-		// raw_config is the redacted document a finalized v2_node keeps.
+		// raw_config is the redacted document a finalized v5_node keeps.
 		Name:   "kapi_node_public_v1",
-		Source: "v2_node",
+		Source: "v5_node",
 		Query: "SELECT " + quotedColumns("id", "name", "host", "port", "status", "tags", "group_id", "rate", "traffic_rate",
 			"sort", "show", "auto_register", "parent_id", "monthly_limit", "monthly_upload", "monthly_download",
 			"monthly_reset_day", "raw_config", "server_ip", "server_version", "server_os", "cpu_usage", "memory_usage",
 			"disk_usage", "uptime", "online_users", "runtime_healthy", "runtime_error", "runtime_checked_at",
-			"total_upload", "total_download", "last_check_at", "created_at", "updated_at") + " FROM v2_node",
+			"total_upload", "total_download", "last_check_at", "created_at", "updated_at") + " FROM v5_node",
 	},
 	{
 		// Every column of a node protocol: its settings hold the
 		// placeholder at every secret position.
 		Name:   "kapi_node_protocol_public_v1",
-		Source: "v2_node_protocol",
+		Source: "v5_node_protocol",
 		Query: "SELECT " + quotedColumns("id", "node_id", "name", "type", "port", "enable", "show", "sort", "group_id",
 			"host", "tls", "alpn", "settings", "tls_settings", "transport", "transport_settings", "reality_settings",
-			"custom_config", "created_at", "updated_at") + " FROM v2_node_protocol",
+			"custom_config", "created_at", "updated_at") + " FROM v5_node_protocol",
 	},
 	{
 		// A user's WireGuard peer, without its private and preshared keys.
 		Name:   "kapi_wireguard_peer_v1",
-		Source: "v2_wireguard_peer",
+		Source: "v5_wireguard_peer",
 		Query: "SELECT " + quotedColumns("id", "node_protocol_id", "user_id", "peer_ip", "public_key", "created_at", "updated_at") +
-			" FROM v2_wireguard_peer",
+			" FROM v5_wireguard_peer",
 	},
 }
 

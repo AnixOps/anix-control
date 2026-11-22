@@ -10,7 +10,7 @@ This page describes the exact startup flow after the unified runtime config upda
 | `ANIX_CONTROL_*` environment variables | per-key overrides ([configuration.md](configuration.md#environment-variables)) |
 | `data_dir/root.key` (`/var/lib/anix-control/root.key`) | the root key: generated or adopted at the first start ([configuration.md](configuration.md#the-root-key)) |
 | `.env` (template: [`.env.example`](../../.env.example)) | optional Docker or installer env file |
-| `v2_system_config` | persisted merged runtime snapshot used by runtime services |
+| `v5_system_config` | persisted merged runtime snapshot used by runtime services |
 
 Important:
 
@@ -21,7 +21,7 @@ Important:
   ignored), any other unknown key stops the start naming the closest key;
   `anix-control config check` shows the result without starting
 - local `go run` does not auto-load `.env`
-- runtime services read the forward runtime values that were written into `v2_system_config`
+- runtime services read the forward runtime values that were written into `v5_system_config`
 
 ## 2. Minimal Configuration
 
@@ -141,7 +141,7 @@ The runtime flow is now:
    nothing is migrated and the start stops), then the check that the root
    key opens the stored CA keys (a key that cannot stops the start), then
    the seeds and `InitForwardRuntimeSystemConfig`
-7. persist the parsed runtime snapshot into `v2_system_config`
+7. persist the parsed runtime snapshot into `v5_system_config`
 8. load the panel certificates (`internal/panelcert`): the ones stored in
    `v5_acme_cache`, the certificate files, and the self-signed fallback, so
    that every listener serves the right certificate from its first handshake
@@ -247,7 +247,7 @@ If you need to change runtime behavior, edit `forward_runtime` in the configurat
 - NodeX or local ansible runtime details under `forward_runtime.nodex`, `forward_runtime.nftables_ansible`, and the legacy-compatible `forward_runtime.iptables_ansible`
 - local worker tuning under `forward_runtime.jobs` and `forward_runtime.gost_stats`
 
-Any downstream services will read whichever values were persisted into `v2_system_config` when the backend initialized.
+Any downstream services will read whichever values were persisted into `v5_system_config` when the backend initialized.
 
 ## 7. Validation Checklist
 

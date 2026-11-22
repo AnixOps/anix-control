@@ -495,8 +495,8 @@ GET /api/v4/kernel/nodes/:id/traffic?granularity=day                  # 最近 3
 
 应答 `{"data": {"node_id", "granularity", "since_unix_ms", "until_unix_ms", "points": [{"start_unix_ms",
 "up_bytes", "down_bytes"}], "total": {"up_bytes", "down_bytes"}}}`，按时间升序，没有流量的桶补 0。
-`hour` 汇总该节点在 `v2_server_log` 中的行（UTC 整点，最多 720 个桶，只到原始日志保留的时间为止）；
-`day` 读该节点的每日统计 `v2_stat_server`（按 Control 主机本地日历日，最多 366 个桶，不受原始日志清理影响）。
+`hour` 汇总该节点在 `v5_server_log` 中的行（UTC 整点，最多 720 个桶，只到原始日志保留的时间为止）；
+`day` 读该节点的每日统计 `v5_stat_server`（按 Control 主机本地日历日，最多 366 个桶，不受原始日志清理影响）。
 字节数与 `/api/v2/admin/traffic/hourly` 一致，已按节点流量倍率计，并汇总该节点上报过的所有协议。
 `since` / `until` 为毫秒时间，向外取整到完整的桶，超出上限返回 `400 invalid_request`，节点不存在返回
 `404 not_found`。这是代理节点的用户流量；转发流量见 `/api/v4/forward/stats` 与
@@ -619,10 +619,10 @@ Agent 不能接任务时返回 409：`node_offline`（Agent 没有连着控制�
 `GET` 的应答：`connected`、`agent_version`、`diagnostics`（声明了 `agent.diagnostic`）、`forward_checks`
 （还声明了 `diag.v1`）、`actions`（这个节点现在能运行的动作，`mutating` 标出重启）、`services`、`log_tail_max`、
 `timeout_seconds {default, max}`、`can_restart`（调用者是不是超级管理员）、`history` 和 `tasks`。代理节点的通用动作
-记入 `v2_agent_diagnostic_task`（与 `GET /api/v2/admin/agent/tasks` 同一张表），`tasks` 列出最新的几条，输出只
+记入 `v5_agent_diagnostic_task`（与 `GET /api/v2/admin/agent/tasks` 同一张表），`tasks` 列出最新的几条，输出只
 保留末尾 8 KiB；转发节点和转发检查不保留历史（该表以代理节点 ID 为键），`history` 为 `false`。
 
-每一次调用都记入操作日志（`v2_operation_log`，module `node_diagnostic`，action `node_diagnostic_<动作>`，
+每一次调用都记入操作日志（`v5_operation_log`，module `node_diagnostic`，action `node_diagnostic_<动作>`，
 `.` 写成 `_`；白名单之外的动作记为 `node_diagnostic_refused`），任务发出之前先写日志行，写不进去就不发。内容
 有节点、动作、归一化后的参数、结果（`completed`、`failed`、`timeout`、`node_offline`、`forbidden` 等）、
 `task_id` 和耗时，不含节点的输出。这个请求最长等 120 秒：反向代理的读超时（常见默认值是 60 秒）要不短于它，
@@ -652,9 +652,9 @@ Agent 版本（`agent_install.agent_version`，否则 Control 自己的版本）
 ### 节点组与接入令牌
 
 节点组（5.0）持有一个接入令牌（`anixjoin_…`）和它创建的节点的默认值：在任意机器上运行节点组的安装命令，
-这台机器就成为该组的一个新节点（`proxy` 组建 `v2_node`，`forward` 组建转发节点）。运维步骤见
+这台机器就成为该组的一个新节点（`proxy` 组建 `v5_node`，`forward` 组建转发节点）。运维步骤见
 [Agent 安装](agent-onboarding.md#joining-a-node-group)。所有写操作和令牌读取都记入操作日志
-（`v2_operation_log`，module `node_group`），应答中只有 `.../command` 会带令牌。
+（`v5_operation_log`，module `node_group`），应答中只有 `.../command` 会带令牌。
 
 ```http
 # 节点组（管理员）

@@ -134,7 +134,7 @@ const pluginControlRoutePrefix = "machine-telemetry.control."
 //   - The system information is the kernel binary's own build metadata
 //     (version, build time, code and commit, set when the kernel is linked).
 //   - The monitoring WebSocket streams the kernel's node list and node
-//     statistics from v2_node, a protected kernel table; WebSocket routes
+//     statistics from v5_node, a protected kernel table; WebSocket routes
 //     always relay to the kernel.
 var bridgedRoutes = map[string]struct{}{
 	"telemetry.admin.system.info.get": {},

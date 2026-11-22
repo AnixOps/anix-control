@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -36,7 +37,9 @@ func IdentityAuthoritative(state string) bool {
 // passes, and EnsureIdentityFinalized then records it as finalized.
 func RequireIdentityFinalized(db *gorm.DB) error {
 	migrator := db.Migrator()
-	if !migrator.HasTable(&model.User{}) {
+	// Before the start migrates, the users table may still be v2_user.
+	users := migrations.TableIn(db, model.User{}.TableName())
+	if !migrator.HasTable(users) {
 		return nil
 	}
 	state := model.IdentityAuthorityKernel
@@ -49,11 +52,11 @@ func RequireIdentityFinalized(db *gorm.DB) error {
 	if state == model.IdentityAuthorityFinalized {
 		return nil
 	}
-	var users int64
-	if err := db.Model(&model.User{}).Limit(1).Count(&users).Error; err != nil {
+	var count int64
+	if err := db.Table(users).Limit(1).Count(&count).Error; err != nil {
 		return fmt.Errorf("count users: %w", err)
 	}
-	if users == 0 {
+	if count == 0 {
 		return nil
 	}
 	return fmt.Errorf("identity: the accounts are in state %s (finalize not completed). This release serves logins through identity only. "+

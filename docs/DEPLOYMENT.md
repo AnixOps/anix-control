@@ -29,7 +29,7 @@
   `root.key`（0600）：首次启动时生成，或接管已配置的 `module_runtime.ca_kek`；JWT 密钥和
   identity KEK 由它派生。每次启动先校验它能解开数据库里的 CA 私钥，解不开就拒绝启动。
   它必须与数据库一起备份（[`reference/configuration.md`](reference/configuration.md#the-root-key)）
-- 启动时会先读取 `forward_runtime`（废弃键，M5 前照读），并把这些值写入 `v2_system_config`，不再参考 `FORWARD_RUNTIME_*`
+- 启动时会先读取 `forward_runtime`（废弃键，M5 前照读），并把这些值写入 `v5_system_config`，不再参考 `FORWARD_RUNTIME_*`
 
 ## Verified Deployment Baseline (2026-04-07)
 
@@ -313,7 +313,7 @@ npm run dev
 - 如果只跑本地开发，不会自动读取 `.env`
 - 本地开发优先改 `config/config.yaml.forward_runtime`
 - 需要临时调整 runtime 字段时，重新编辑 `config/config.yaml.forward_runtime` 并重启后台
-- 运行时合并值会在启动阶段写进 `v2_system_config`，后续可在 `/admin/system` 里继续调整
+- 运行时合并值会在启动阶段写进 `v5_system_config`，后续可在 `/admin/system` 里继续调整
 
 发行构建：
 
@@ -395,7 +395,7 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
   - 管运营键与仍读取的旧键（database、forward_runtime 等），不含管理员和任何密钥
 `.env`
   - 用于 Docker Compose 或安装器的额外端口、密钥等元数据；运行时选择依旧来源于 `config/config.yaml.forward_runtime`
-- `v2_system_config`
+- `v5_system_config`
   - 启动后持久化的运行时配置
   - `/admin/system` 编辑的也是这一层
 
@@ -435,7 +435,7 @@ database:
   database: "config/data/control.db"
 ```
 
-SQLite 的连接参数是内置的，不是配置项：一个写连接加 4 个只读连接，WAL，`synchronous=NORMAL`，10 秒忙等待，事务以 `BEGIN IMMEDIATE` 开始；流量日志 `v2_server_log` 按小时合并，并由后台任务按保留期（400 天）分批清理。详见 [`reference/configuration.md`](reference/configuration.md) 与 [`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)。
+SQLite 的连接参数是内置的，不是配置项：一个写连接加 4 个只读连接，WAL，`synchronous=NORMAL`，10 秒忙等待，事务以 `BEGIN IMMEDIATE` 开始；流量日志 `v5_server_log` 按小时合并，并由后台任务按保留期（400 天）分批清理。详见 [`reference/configuration.md`](reference/configuration.md) 与 [`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)。
 
 从 SQLite 迁移到 PostgreSQL 时，不要直接改生产配置后启动。先按 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md) 做备份、dry run、导入、验证和 rollback 记录。
 

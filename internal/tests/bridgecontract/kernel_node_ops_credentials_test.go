@@ -28,7 +28,7 @@ func seedRetirement(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 7, NodeID: 2, Name: "reality", Type: model.ProtocolVLESS, Port: 443, RealitySettings: &reality}).Error)
 	group := &model.SubscriptionGroup{Name: "group", Enable: 1}
 	require.NoError(t, db.Create(group).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, 7).Error)
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, 7).Error)
 	require.NoError(t, db.Create(&model.WireGuardPeer{NodeProtocolID: 7, UserID: 1, PeerIP: "10.9.0.2", PrivateKey: "peer-private-7", PublicKey: "pub"}).Error)
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, 7); err != nil {
@@ -94,7 +94,7 @@ func TestKernelNodeOpsCredentialRoundTrip(t *testing.T) {
 		require.EqualValues(t, 1, result.GetSecretsDeleted())
 		var peers, links, secrets, protocols int64
 		require.NoError(t, db.Model(&model.WireGuardPeer{}).Where("node_protocol_id = ?", 7).Count(&peers).Error)
-		require.NoError(t, db.Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", 7).Count(&links).Error)
+		require.NoError(t, db.Table("v5_subscription_group_node_protocols").Where("node_protocol_id = ?", 7).Count(&links).Error)
 		require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("owner_id = ?", 7).Count(&secrets).Error)
 		require.NoError(t, db.Model(&model.NodeProtocol{}).Where("id = ?", 7).Count(&protocols).Error)
 		require.Zero(t, peers+links+secrets)

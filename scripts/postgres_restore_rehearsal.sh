@@ -18,7 +18,7 @@ WORK_DIR=""
 SOURCE_MODE=""
 SELF_TEST_TMPDIR=""
 
-readonly SNAPSHOT_TABLES=(v2_user v2_plan v2_system_config)
+readonly SNAPSHOT_TABLES=(v5_user v5_plan v5_system_config)
 
 usage() {
   cat <<'EOF'
@@ -183,18 +183,18 @@ if os.path.exists(path):
     os.unlink(path)
 conn = sqlite3.connect(path)
 conn.executescript("""
-CREATE TABLE v2_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT);
-CREATE TABLE v2_plan (id INTEGER PRIMARY KEY, name TEXT);
-CREATE TABLE v2_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT);
+CREATE TABLE v5_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT);
+CREATE TABLE v5_plan (id INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE v5_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT);
 """)
 conn.executemany(
-    "INSERT INTO v2_user (id, email, token) VALUES (?, ?, ?)",
+    "INSERT INTO v5_user (id, email, token) VALUES (?, ?, ?)",
     [(1, "migration.example", "migration-token"),
      (2, "restore.example", "restore-token")],
 )
-conn.execute("INSERT INTO v2_plan (id, name) VALUES (?, ?)", (1, "Migration Plan"))
+conn.execute("INSERT INTO v5_plan (id, name) VALUES (?, ?)", (1, "Migration Plan"))
 conn.execute(
-    "INSERT INTO v2_system_config (id, key, value) VALUES (?, ?, ?)",
+    "INSERT INTO v5_system_config (id, key, value) VALUES (?, ?, ?)",
     (1, "migration.fixture", "true"),
 )
 conn.commit()
@@ -222,9 +222,9 @@ run_migration() {
 
 table_query() {
   case "$1" in
-    v2_user) printf '%s' 'SELECT id, email, token FROM v2_user ORDER BY id' ;;
-    v2_plan) printf '%s' 'SELECT id, name FROM v2_plan ORDER BY id' ;;
-    v2_system_config) printf '%s' 'SELECT id, key, value FROM v2_system_config ORDER BY id' ;;
+    v5_user) printf '%s' 'SELECT id, email, token FROM v5_user ORDER BY id' ;;
+    v5_plan) printf '%s' 'SELECT id, name FROM v5_plan ORDER BY id' ;;
+    v5_system_config) printf '%s' 'SELECT id, key, value FROM v5_system_config ORDER BY id' ;;
     *) error "no deterministic snapshot query for table $1"; return 1 ;;
   esac
 }

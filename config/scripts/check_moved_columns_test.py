@@ -79,7 +79,7 @@ class MovedColumnsGateTest(unittest.TestCase):
             "}\n"
         ))
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("reads v2_wireguard_peer.private_key (model.WireGuardPeer.PrivateKey)", result.stderr)
+        self.assertIn("reads v5_wireguard_peer.private_key (model.WireGuardPeer.PrivateKey)", result.stderr)
 
     def test_refuses_a_moved_column_in_sql(self) -> None:
         result = self.run_gate(self.service(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -78,11 +79,47 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		// 0012_forward_route_subscriptions).
 		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.L2Standby{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}, &model.ClientFailureReport{}, &model.Line{}, &model.Transport{}, &model.EntitlementDevice{}, &model.ReachVantage{}, &model.ReachProbe{}))
 		require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
+		formerTableNames(t, db)
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)
 		assert.Equal(t, "adopted", meta[migrations.MetaOrigin])
 	})
+}
+
+// formerTableNames gives the tables 0040_table_prefix renamed, and their
+// idx_ indexes, the v2_ names a database from before the runner has.
+func formerTableNames(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	known, err := migrations.Steps()
+	require.NoError(t, err)
+	var tables []string
+	for _, step := range known {
+		if step.Name != "table_prefix" {
+			continue
+		}
+		for _, match := range regexp.MustCompile(`ALTER TABLE "(v2_[a-z0-9_]+)" RENAME TO "(v5_[a-z0-9_]+)"`).FindAllStringSubmatch(step.SQL[migrations.DialectSQLite], -1) {
+			require.NoError(t, db.Exec(`ALTER TABLE "`+match[2]+`" RENAME TO "`+match[1]+`"`).Error)
+			tables = append(tables, match[1])
+		}
+	}
+	require.NotEmpty(t, tables)
+	var indexes []struct{ Name, SQL string }
+	if db.Name() == "postgres" {
+		require.NoError(t, db.Raw(`SELECT indexname AS name FROM pg_indexes WHERE schemaname = current_schema() AND tablename IN ? AND indexname LIKE 'idx\_v5\_%'`, tables).Scan(&indexes).Error)
+	} else {
+		require.NoError(t, db.Raw(`SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name IN ? AND name LIKE 'idx\_v5\_%' ESCAPE '\'`, tables).Scan(&indexes).Error)
+	}
+	require.NotEmpty(t, indexes)
+	for _, index := range indexes {
+		former := strings.Replace(index.Name, "idx_v5_", "idx_v2_", 1)
+		if db.Name() == "postgres" {
+			require.NoError(t, db.Exec(`ALTER INDEX "`+index.Name+`" RENAME TO "`+former+`"`).Error)
+			continue
+		}
+		require.NoError(t, db.Exec(`DROP INDEX "`+index.Name+`"`).Error)
+		require.NoError(t, db.Exec(strings.Replace(index.SQL, index.Name, former, 1)).Error)
+	}
 }
 
 // An older Control refuses to start on a database a newer one migrated,
@@ -123,6 +160,10 @@ func TestBootstrapDatabaseRequiresAFinalizedIdentity(t *testing.T) {
 		state, err = service.IdentityAuthorityState(db)
 		require.NoError(t, err)
 		assert.Equal(t, model.IdentityAuthorityKernel, state, "a refused start changes nothing")
+
+		// Before 0040_table_prefix the users are still in v2_user.
+		require.NoError(t, db.Exec("ALTER TABLE v5_user RENAME TO v2_user").Error)
+		require.ErrorContains(t, bootstrapDatabase(ctx, cfg), "state kernel")
 	})
 }
 
@@ -152,7 +193,7 @@ func TestBootstrapDatabaseRequiresAFinalizedSplit(t *testing.T) {
 		} {
 			require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", nodesecrets.TableNodeProtocol).Updates(updates).Error)
 			err := bootstrapDatabase(ctx, cfg)
-			require.ErrorContains(t, err, "table v2_node_protocol is in phase "+updates["phase"].(string))
+			require.ErrorContains(t, err, "table v5_node_protocol is in phase "+updates["phase"].(string))
 			var after int64
 			require.NoError(t, db.Model(&migrations.MigrationRecord{}).Count(&after).Error)
 			assert.Equal(t, applied-1, after, "no migration ran")

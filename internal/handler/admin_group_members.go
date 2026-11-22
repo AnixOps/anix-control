@@ -22,7 +22,7 @@ func NewAdminGroupMembersHandler() *AdminGroupMembersHandler {
 
 // List godoc
 // @Summary 订阅分组成员
-// @Description 分页列出被直接授予该订阅分组的用户 (v2_user_subscription_group), 与分组统计的 user_count / enabled_users 同口径; 通过套餐或主分组到达该分组的用户不在其中。按授予时间倒序。不含订阅 token 与 uuid。
+// @Description 分页列出被直接授予该订阅分组的用户 (v5_user_subscription_group), 与分组统计的 user_count / enabled_users 同口径; 通过套餐或主分组到达该分组的用户不在其中。按授予时间倒序。不含订阅 token 与 uuid。
 // @Tags 管理端-订阅
 // @Produce json
 // @Security BearerAuth
@@ -67,7 +67,7 @@ type groupProtocolLayoutRequest struct {
 
 // ProtocolLayout godoc
 // @Summary 订阅分组节点协议的显示名称与顺序
-// @Description 列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序: 已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 "<节点> - <协议>"。
+// @Description 列出关联到该分组的全部节点协议 (v5_subscription_group_node_protocols), 按分组顺序: 已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 "<节点> - <协议>"。
 // @Tags 管理端-订阅
 // @Produce json
 // @Security BearerAuth

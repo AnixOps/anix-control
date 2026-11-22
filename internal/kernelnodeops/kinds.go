@@ -232,8 +232,8 @@ var nodeKindNames = map[kernelnodeopsv1.NodeKind]string{
 
 // nodeTables are the tables each node kind lives in.
 var nodeTables = map[kernelnodeopsv1.NodeKind]string{
-	kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:   "v2_node",
-	kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD: "v2_forward_node",
+	kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:   "v5_node",
+	kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD: "v5_forward_node",
 }
 
 func nodeKindByName(name string) kernelnodeopsv1.NodeKind {
@@ -426,7 +426,7 @@ func forwardTargets(db *gorm.DB, forwardID uint64) ([]*kernelnodeopsv1.NodeRef, 
 
 func protocolNode(db *gorm.DB, protocolID uint64) (*kernelnodeopsv1.NodeRef, error) {
 	var protocols []struct{ NodeID uint64 }
-	if err := db.Table("v2_node_protocol").Select("node_id").Where("id = ?", protocolID).Limit(1).Find(&protocols).Error; err != nil {
+	if err := db.Table("v5_node_protocol").Select("node_id").Where("id = ?", protocolID).Limit(1).Find(&protocols).Error; err != nil {
 		return nil, err
 	}
 	if len(protocols) == 0 {
@@ -449,7 +449,7 @@ func proxyNode(db *gorm.DB, id uint64, resource string) (resolution, error) {
 // agentOperationKinds are the Agent Control operations a package may send.
 var agentOperationKinds = map[string]bool{"agent.ping": true, "node.reload": true, "users.reload": true}
 
-// protocolSecretColumns are the v2_node_protocol columns that hold secrets.
+// protocolSecretColumns are the v5_node_protocol columns that hold secrets.
 var protocolSecretColumns = map[string]bool{
 	"settings": true, "tls_settings": true, "transport_settings": true, "reality_settings": true, "custom_config": true,
 }

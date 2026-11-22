@@ -17,7 +17,7 @@ const (
 	maxTaskLimit     = 200
 )
 
-// AgentDiagnosticTask is a v2_agent_diagnostic_task row, as the kernel model
+// AgentDiagnosticTask is a v5_agent_diagnostic_task row, as the kernel model
 // declares it: a whitelisted diagnostic action an administrator sent to a
 // node's agent, and the result the agent reported.
 type AgentDiagnosticTask struct {
@@ -36,7 +36,7 @@ type AgentDiagnosticTask struct {
 }
 
 // TableName is the adopted kernel table.
-func (AgentDiagnosticTask) TableName() string { return "v2_agent_diagnostic_task" }
+func (AgentDiagnosticTask) TableName() string { return "v5_agent_diagnostic_task" }
 
 // ListDiagnosticTasks is GET /api/v2/admin/agent/tasks: the newest tasks,
 // optionally of one node. node_id and limit are read as the legacy handler

@@ -19,16 +19,16 @@ func TestSQLiteTablesAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.Exec(`CREATE TABLE v2_user (id integer primary key, email text)`).Error; err != nil {
-		t.Fatalf("create v2_user: %v", err)
+	if err := db.Exec(`CREATE TABLE v5_user (id integer primary key, email text)`).Error; err != nil {
+		t.Fatalf("create v5_user: %v", err)
 	}
-	if err := db.Exec(`CREATE TABLE v2_plan (id integer primary key, name text)`).Error; err != nil {
-		t.Fatalf("create v2_plan: %v", err)
+	if err := db.Exec(`CREATE TABLE v5_plan (id integer primary key, name text)`).Error; err != nil {
+		t.Fatalf("create v5_plan: %v", err)
 	}
-	if err := db.Exec(`INSERT INTO v2_user (id, email) VALUES (1, 'a@example.com'), (2, 'b@example.com')`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO v5_user (id, email) VALUES (1, 'a@example.com'), (2, 'b@example.com')`).Error; err != nil {
 		t.Fatalf("insert users: %v", err)
 	}
-	if err := db.Exec(`INSERT INTO v2_plan (id, name) VALUES (1, 'basic')`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO v5_plan (id, name) VALUES (1, 'basic')`).Error; err != nil {
 		t.Fatalf("insert plans: %v", err)
 	}
 
@@ -36,7 +36,7 @@ func TestSQLiteTablesAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list sqlite tables: %v", err)
 	}
-	if want := []string{"v2_plan", "v2_user"}; !reflect.DeepEqual(tables, want) {
+	if want := []string{"v5_plan", "v5_user"}; !reflect.DeepEqual(tables, want) {
 		t.Fatalf("tables = %#v, want %#v", tables, want)
 	}
 
@@ -44,7 +44,7 @@ func TestSQLiteTablesAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if counts["v2_user"] != 2 || counts["v2_plan"] != 1 {
+	if counts["v5_user"] != 2 || counts["v5_plan"] != 1 {
 		t.Fatalf("counts = %#v", counts)
 	}
 }
@@ -64,15 +64,15 @@ func TestCopyTableCopiesRows(t *testing.T) {
 	}
 
 	for _, db := range []*gorm.DB{src, dst} {
-		if err := db.Exec(`CREATE TABLE v2_user (id integer primary key, email text, banned integer)`).Error; err != nil {
+		if err := db.Exec(`CREATE TABLE v5_user (id integer primary key, email text, banned integer)`).Error; err != nil {
 			t.Fatalf("create target/source table: %v", err)
 		}
 	}
-	if err := src.Exec(`INSERT INTO v2_user (id, email, banned) VALUES (1, 'a@example.com', 1), (2, 'b@example.com', 0)`).Error; err != nil {
+	if err := src.Exec(`INSERT INTO v5_user (id, email, banned) VALUES (1, 'a@example.com', 1), (2, 'b@example.com', 0)`).Error; err != nil {
 		t.Fatalf("insert source rows: %v", err)
 	}
 
-	if err := copyTable(src, dst, "v2_user", map[string]bool{"banned": true}); err != nil {
+	if err := copyTable(src, dst, "v5_user", map[string]bool{"banned": true}); err != nil {
 		t.Fatalf("copy table: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestCopyTableCopiesRows(t *testing.T) {
 		Email  string
 		Banned bool
 	}
-	if err := dst.Table("v2_user").Order("id").Find(&rows).Error; err != nil {
+	if err := dst.Table("v5_user").Order("id").Find(&rows).Error; err != nil {
 		t.Fatalf("read copied rows: %v", err)
 	}
 	if len(rows) != 2 {
@@ -140,7 +140,7 @@ func TestNormalizeValueForPostgresBoolColumns(t *testing.T) {
 // The target keeps its own migration records: a SQLite source's checksums
 // are SQLite's.
 func TestRunnerTablesAreNotCopied(t *testing.T) {
-	for table, want := range map[string]bool{"v5_schema_migration": true, "v5_control_meta": true, "v2_user": false} {
+	for table, want := range map[string]bool{"v5_schema_migration": true, "v5_control_meta": true, "v5_user": false} {
 		if got := runnerTable(table); got != want {
 			t.Fatalf("runnerTable(%q) = %v, want %v", table, got, want)
 		}

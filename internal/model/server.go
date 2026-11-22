@@ -47,7 +47,7 @@ type ServerVMess struct {
 }
 
 func (ServerVMess) TableName() string {
-	return "v2_server_vmess"
+	return "v5_server_vmess"
 }
 
 // ServerVLESS VLESS服务器
@@ -62,7 +62,7 @@ type ServerVLESS struct {
 }
 
 func (ServerVLESS) TableName() string {
-	return "v2_server_vless"
+	return "v5_server_vless"
 }
 
 // ServerTrojan Trojan服务器
@@ -75,7 +75,7 @@ type ServerTrojan struct {
 }
 
 func (ServerTrojan) TableName() string {
-	return "v2_server_trojan"
+	return "v5_server_trojan"
 }
 
 // ServerShadowsocks Shadowsocks服务器
@@ -88,7 +88,7 @@ type ServerShadowsocks struct {
 }
 
 func (ServerShadowsocks) TableName() string {
-	return "v2_server_shadowsocks"
+	return "v5_server_shadowsocks"
 }
 
 // ServerTUIC TUIC服务器

@@ -123,9 +123,9 @@ func TestStepsDigestIsOrderIndependentAndLowercase(t *testing.T) {
 }
 
 func TestLeasedNamesTheAdoptedTablesAndGrantedViews(t *testing.T) {
-	store := &Store{Lease: packagebridgesdk.StorageLease{AdoptedTables: []string{"v2_node"}, Views: []string{"kapi_node_public_v1"}}}
-	require.True(t, store.Leased("v2_node"))
+	store := &Store{Lease: packagebridgesdk.StorageLease{AdoptedTables: []string{"v5_node"}, Views: []string{"kapi_node_public_v1"}}}
+	require.True(t, store.Leased("v5_node"))
 	require.True(t, store.Leased("kapi_node_public_v1"))
-	require.False(t, store.Leased("v2_node_protocol"))
-	require.False(t, (*Store)(nil).Leased("v2_node"))
+	require.False(t, store.Leased("v5_node_protocol"))
+	require.False(t, (*Store)(nil).Leased("v5_node"))
 }

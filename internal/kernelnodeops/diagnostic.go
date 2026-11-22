@@ -56,7 +56,7 @@ type AgentDiagnostic struct {
 
 // RunAgentDiagnostic validates a diagnostic task against the kernel's
 // whitelist (its parameters normalized), records it in
-// v2_agent_diagnostic_task, sends it over transport and records whether it
+// v5_agent_diagnostic_task, sends it over transport and records whether it
 // went out, as the legacy task route does. A refused task is a
 // DiagnosticValidationError and records nothing.
 func RunAgentDiagnostic(ctx context.Context, db *gorm.DB, request AgentDiagnosticRequest, transport agentstreams.DiagnosticTransport) (*AgentDiagnostic, error) {

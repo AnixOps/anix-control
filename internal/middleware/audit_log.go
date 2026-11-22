@@ -65,7 +65,7 @@ func (r *auditBodyCapture) Read(p []byte) (int, error) {
 const AuditActionKey = "audit_action"
 
 // AuditLog returns a gin middleware that records all admin API operations
-// to both structured slog output and the v2_audit_log database table.
+// to both structured slog output and the v5_audit_log database table.
 // It applies to requests whose path starts with /api/v2/admin/, /api/v3/,
 // /api/v4/forward/, /api/v4/admin/ or /api/v5/, and to the user writes in
 // auditedUserWrites.

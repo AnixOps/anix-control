@@ -92,7 +92,7 @@ func TestPostgresLeaseProvisionsALeastPrivilegeRole(t *testing.T) {
 	t.Cleanup(func() { _ = kernel.Exec("DROP TABLE IF EXISTS " + quoteIdent(adopted)).Error })
 	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
 	require.NoError(t, kernel.Create(&model.User{Email: "lease-" + suffix + "@example.com", Password: "hash", Token: "token-" + suffix, UUID: "uuid-" + suffix}).Error)
-	t.Cleanup(func() { _ = kernel.Exec("DELETE FROM v2_user WHERE email = ?", "lease-"+suffix+"@example.com").Error })
+	t.Cleanup(func() { _ = kernel.Exec("DELETE FROM v5_user WHERE email = ?", "lease-"+suffix+"@example.com").Error })
 
 	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
 	holder := Holder{PackageID: packageID, Version: "4.1.0", Generation: 3}
@@ -136,7 +136,7 @@ func TestPostgresLeaseProvisionsALeastPrivilegeRole(t *testing.T) {
 	require.Len(t, emails, 1)
 	require.ErrorContains(t, pkg.Raw("SELECT password FROM kapi_user_directory_v1").Scan(&emails).Error, "does not exist")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_user").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_user").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v4_kernel_package_storage").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("CREATE TABLE public.escape (id INT)").Error)
 	requirePermissionDenied(t, pkg.Exec("CREATE ROLE sneaky").Error)
@@ -172,7 +172,7 @@ func TestPostgresLeaseProvisionsALeastPrivilegeRole(t *testing.T) {
 }
 
 // A role granted kapi_system_audit_log_v1 reads the system audit trail and
-// nothing else of v2_operation_log, and cannot change it through the view.
+// nothing else of v5_operation_log, and cannot change it through the view.
 func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	require.NoError(t, kernel.AutoMigrate(&model.OperationLog{}))
@@ -185,7 +185,7 @@ func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
 	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
 	action := "audit-" + suffix
 	require.NoError(t, kernel.Create(&[]model.OperationLog{{Module: "system", Action: action}, {Module: "user", Action: action}}).Error)
-	t.Cleanup(func() { _ = kernel.Exec("DELETE FROM v2_operation_log WHERE action = ?", action).Error })
+	t.Cleanup(func() { _ = kernel.Exec("DELETE FROM v5_operation_log WHERE action = ?", action).Error })
 
 	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
 	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
@@ -196,7 +196,7 @@ func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
 	require.NoError(t, pkg.Raw("SELECT module FROM kapi_system_audit_log_v1 WHERE action = ?", action).Scan(&modules).Error)
 	require.Equal(t, []string{"system"}, modules)
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_operation_log").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_operation_log").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_system_audit_log_v1 WHERE action = ?", action).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_system_audit_log_v1 SET content = '' WHERE action = ?", action).Error)
 
@@ -226,7 +226,7 @@ func TestPostgresExistingRowFilterViewBecomesASecurityBarrier(t *testing.T) {
 	kernel, _ := openPostgresKernel(t)
 	require.NoError(t, kernel.AutoMigrate(&model.OperationLog{}))
 	require.NoError(t, kernel.Exec("DROP VIEW IF EXISTS kapi_system_audit_log_v1").Error)
-	require.NoError(t, kernel.Exec("CREATE VIEW kapi_system_audit_log_v1 AS SELECT id FROM v2_operation_log WHERE module = 'system'").Error)
+	require.NoError(t, kernel.Exec("CREATE VIEW kapi_system_audit_log_v1 AS SELECT id FROM v5_operation_log WHERE module = 'system'").Error)
 	t.Cleanup(func() {
 		_ = kernel.Exec("DROP VIEW IF EXISTS kapi_system_audit_log_v1").Error
 		_ = EnsureKernelAPIViews(kernel)
@@ -252,7 +252,7 @@ func TestPostgresLeaseFailsWithoutPartialState(t *testing.T) {
 	require.False(t, exists, "the role is created in the same transaction")
 
 	_, err = store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
-		Grants{Storage: true, AdoptTables: []string{"v2_user"}, Views: []string{"v2_user"}})
+		Grants{Storage: true, AdoptTables: []string{"v5_user"}, Views: []string{"v5_user"}})
 	require.ErrorIs(t, err, ErrGrantTargetMissing, "a table is not a view")
 }
 
@@ -327,7 +327,7 @@ func TestPostgresRemoteReplicasShareOneLease(t *testing.T) {
 }
 
 // A role granted the plan views reads the plan catalog and its subscription
-// groups and nothing else of v2_plan, and cannot change them through the
+// groups and nothing else of v5_plan, and cannot change them through the
 // views.
 func TestPostgresPlanViewsAreReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
@@ -360,13 +360,13 @@ func TestPostgresPlanViewsAreReadOnly(t *testing.T) {
 	var names []string
 	require.ErrorContains(t, pkg.Raw("SELECT name FROM kapi_plan_catalog_v1").Scan(&names).Error, "does not exist")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_plan").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_plan").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_plan_catalog_v1 SET month_price = 1 WHERE id = ?", plan.ID).Error)
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_plan_subscription_group_v1 WHERE plan_id = ?", plan.ID).Error)
 }
 
 // A role granted kapi_plan_name_v1 reads a plan's id and name, and neither
-// its prices nor v2_plan itself, nor can it change a plan through the view.
+// its prices nor v5_plan itself, nor can it change a plan through the view.
 func TestPostgresPlanNameViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	require.NoError(t, kernel.AutoMigrate(&model.Plan{}))
@@ -390,13 +390,13 @@ func TestPostgresPlanNameViewIsReadOnly(t *testing.T) {
 	var prices []int64
 	require.ErrorContains(t, pkg.Raw("SELECT month_price FROM kapi_plan_name_v1").Scan(&prices).Error, "does not exist")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_plan").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_plan").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM kapi_plan_catalog_v1").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_plan_name_v1 SET name = 'x' WHERE id = ?", plan.ID).Error)
 }
 
 // A role granted kapi_order_billing_v1 reads an order's buyer, total and
-// status, and can neither read v2_order itself nor change it through the
+// status, and can neither read v5_order itself nor change it through the
 // view.
 func TestPostgresOrderBillingViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
@@ -432,12 +432,12 @@ func TestPostgresOrderBillingViewIsReadOnly(t *testing.T) {
 	var tradeNos []string
 	require.ErrorContains(t, pkg.Raw("SELECT trade_no FROM kapi_order_billing_v1").Scan(&tradeNos).Error, "does not exist")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_order").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_order").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_order_billing_v1 SET status = 1 WHERE id = ?", order.ID).Error)
 }
 
 // A role granted kapi_traffic_log_v1 reads the traffic reports' users,
-// bytes, rate and time, and can neither read v2_server_log itself nor change
+// bytes, rate and time, and can neither read v5_server_log itself nor change
 // it through the view.
 func TestPostgresTrafficLogViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
@@ -467,12 +467,12 @@ func TestPostgresTrafficLogViewIsReadOnly(t *testing.T) {
 	var serverTypes []string
 	require.ErrorContains(t, pkg.Raw("SELECT server_type FROM kapi_traffic_log_v1").Scan(&serverTypes).Error, "does not exist")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_server_log").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_server_log").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_traffic_log_v1 SET u = 0 WHERE user_id = ?", entry.UserID).Error)
 }
 
 // A role granted kapi_user_referral_v1 reads who invited whom and nothing
-// else of v2_user.
+// else of v5_user.
 func TestPostgresReferralViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	suffix := randomSuffix(t)
@@ -499,7 +499,7 @@ func TestPostgresReferralViewIsReadOnly(t *testing.T) {
 }
 
 // A role granted kapi_affiliate_settings_v1 reads the affiliate settings
-// and no other v2_system_config row, not even through a function of its
+// and no other v5_system_config row, not even through a function of its
 // own that the planner could otherwise run before the view's filter.
 func TestPostgresAffiliateSettingsViewHidesOtherKeys(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
@@ -531,7 +531,7 @@ func TestPostgresAffiliateSettingsViewHidesOtherKeys(t *testing.T) {
 	require.NoError(t, pkg.Raw("SELECT value FROM kapi_affiliate_settings_v1").Scan(&values).Error)
 	require.Equal(t, []string{settings}, values)
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_system_config").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_system_config").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_affiliate_settings_v1 SET value = 'x'").Error)
 
 	// A cheap function in the package's own schema records every value it
@@ -584,7 +584,7 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 	member := model.UserSubscriptionGroup{UserID: user.ID, GroupID: group.ID, ExpireAt: &expires}
 	require.NoError(t, kernel.Create(&member).Error)
 	t.Cleanup(func() {
-		kernel.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE subscription_group_id = ?", group.ID)
+		kernel.Exec("DELETE FROM v5_subscription_group_node_protocols WHERE subscription_group_id = ?", group.ID)
 		kernel.Where("group_id = ?", group.ID).Delete(&model.SubscriptionTemplate{})
 		kernel.Where("group_id = ?", group.ID).Delete(&model.PlanSubscriptionGroup{})
 		kernel.Where("group_id = ?", group.ID).Delete(&model.UserSubscriptionGroup{})
@@ -599,7 +599,7 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1}, Grants{
 		Storage: true,
 		AdoptTables: []string{
-			"v2_plan_subscription_group", "v2_subscription_group", "v2_subscription_group_node_protocols", "v2_subscription_template",
+			"v5_plan_subscription_group", "v5_subscription_group", "v5_subscription_group_node_protocols", "v5_subscription_template",
 		},
 		Views: []string{
 			"kapi_node_heartbeat_v1", "kapi_node_protocol_v1", "kapi_plan_catalog_v1", "kapi_subscriber_entitlement_v1",
@@ -609,10 +609,10 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 	require.NoError(t, err)
 	pkg := openPostgres(t, lease.DSN)
 
-	require.NoError(t, pkg.Exec("UPDATE v2_subscription_group SET priority = 3 WHERE id = ?", group.ID).Error)
-	require.NoError(t, pkg.Exec("INSERT INTO v2_subscription_template (group_id, name, created_at, updated_at) VALUES (?, 't', now(), now())", group.ID).Error)
-	require.NoError(t, pkg.Exec("INSERT INTO v2_plan_subscription_group (plan_id, group_id, created_at) VALUES (?, ?, now())", plan.ID, group.ID).Error)
-	require.NoError(t, pkg.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+	require.NoError(t, pkg.Exec("UPDATE v5_subscription_group SET priority = 3 WHERE id = ?", group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v5_subscription_template (group_id, name, created_at, updated_at) VALUES (?, 't', now(), now())", group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v5_plan_subscription_group (plan_id, group_id, created_at) VALUES (?, ?, now())", plan.ID, group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
 
 	var members []struct {
 		UserID   uint
@@ -634,17 +634,17 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 	require.ErrorContains(t, pkg.Raw("SELECT reality_settings FROM kapi_node_protocol_v1").Scan(&values).Error, "does not exist")
 	require.ErrorContains(t, pkg.Raw("SELECT api_key FROM kapi_node_heartbeat_v1").Scan(&values).Error, "does not exist")
 	var count int64
-	for _, table := range []string{"v2_node_protocol", "v2_node", "v2_user_subscription_group", "v2_plan", "v2_user"} {
+	for _, table := range []string{"v5_node_protocol", "v5_node", "v5_user_subscription_group", "v5_plan", "v5_user"} {
 		requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM "+table).Scan(&count).Error)
 	}
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_user_subscription_group_v1 WHERE group_id = ?", group.ID).Error)
-	requirePermissionDenied(t, pkg.Exec("INSERT INTO v2_user_subscription_group (user_id, group_id, created_at) VALUES (?, ?, now())", user.ID, group.ID).Error)
+	requirePermissionDenied(t, pkg.Exec("INSERT INTO v5_user_subscription_group (user_id, group_id, created_at) VALUES (?, ?, now())", user.ID, group.ID).Error)
 }
 
 func ptr[T any](value T) *T { return &value }
 
 // A role granted kapi_node_status_v1 reads a node's status and traffic, and
-// can neither read a node's credentials, nor v2_node itself, nor change it
+// can neither read a node's credentials, nor v5_node itself, nor change it
 // through the view.
 func TestPostgresNodeStatusViewHidesNodeCredentials(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
@@ -680,7 +680,7 @@ func TestPostgresNodeStatusViewHidesNodeCredentials(t *testing.T) {
 		require.ErrorContains(t, pkg.Raw("SELECT "+column+" FROM kapi_node_status_v1").Scan(&values).Error, "does not exist", column)
 	}
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_node").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_node").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_node_status_v1 SET status = 3 WHERE id = ?", node.ID).Error)
 }
 
@@ -722,8 +722,8 @@ func TestPostgresForwardViewsHideTokensAndOtherKeys(t *testing.T) {
 	var tokens []string
 	require.Error(t, pkg.Raw("SELECT api_token FROM kapi_forward_node_v1").Scan(&tokens).Error, "the view has no token column")
 	var count int64
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_forward_node").Scan(&count).Error)
-	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_system_config").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_forward_node").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v5_system_config").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_forward_runtime_settings_v1 SET value = 'x'").Error)
 
 	var values []string

@@ -208,7 +208,7 @@ func (s *NodeLogService) GetLogs(params NodeLogListParams) (*NodeLogListResult, 
 const NodeLogSourceMaintenance = "maintenance"
 
 // RecordAgentMaintenanceEvent records one maintenance event of the Agent
-// Control stream (maintenance.v1) once per node and event id: a v2_node_log
+// Control stream (maintenance.v1) once per node and event id: a v5_node_log
 // row of source "maintenance" whose fields_json is the event, inserted in
 // the transaction that claims the event's record (internal/agentreports,
 // kind maintenance). It reports whether this call recorded the event; false

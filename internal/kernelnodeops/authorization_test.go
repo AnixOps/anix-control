@@ -70,10 +70,10 @@ func TestEachFamilyNeedsItsCapability(t *testing.T) {
 			phases[table.GetTable()] = table.GetPhase()
 		}
 		require.Equal(t, map[string]kernelnodeopsv1.SecretSplitPhase{
-			"v2_node":                kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+			"v5_node":                kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
 			"v2_forward_runtime_job": kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY,
-			"v2_node_protocol":       kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
-			"v2_wireguard_peer":      kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+			"v5_node_protocol":       kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+			"v5_wireguard_peer":      kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
 		}, phases)
 	})
 }

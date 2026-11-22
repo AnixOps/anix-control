@@ -21,7 +21,7 @@ const nodeStatusPending = 0
 // statistics to count it online, as in the kernel.
 const onlineWindowSeconds = 300
 
-// NodeLog is a v2_node_log row: a runtime log line a node reported.
+// NodeLog is a v5_node_log row: a runtime log line a node reported.
 type NodeLog struct {
 	ID         uint `gorm:"primaryKey"`
 	NodeID     uint
@@ -36,7 +36,7 @@ type NodeLog struct {
 }
 
 // TableName is the adopted kernel table.
-func (NodeLog) TableName() string { return "v2_node_log" }
+func (NodeLog) TableName() string { return "v5_node_log" }
 
 // GetNodeStats is GET /api/v2/admin/nodes/stats. A node is online when it
 // checked in within five minutes, whatever its status; offline is what is

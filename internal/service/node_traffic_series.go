@@ -11,10 +11,10 @@ import (
 // Granularities of a node's traffic series.
 const (
 	// NodeTrafficHour: hourly buckets from the raw traffic log
-	// (v2_server_log), aligned to UTC hours.
+	// (v5_server_log), aligned to UTC hours.
 	NodeTrafficHour = "hour"
 	// NodeTrafficDay: daily buckets from the daily server statistics
-	// (v2_stat_server, record_type d), aligned to the local midnight the
+	// (v5_stat_server, record_type d), aligned to the local midnight the
 	// statistics were recorded at.
 	NodeTrafficDay = "day"
 
@@ -111,14 +111,14 @@ func NodeTrafficBucketBounds(granularity string, since, until, now time.Time) (t
 // GetNodeTraffic returns one node's traffic series between since and until
 // (see NodeTrafficBucketBounds for how they are aligned and bounded).
 //
-// Hourly buckets sum the node's rows of v2_server_log, (u * rate) up and
+// Hourly buckets sum the node's rows of v5_server_log, (u * rate) up and
 // (d * rate) down, over every server type the node reported under (agent
 // reports write "node", older UniProxy rows the protocol name; the node id
 // is the same). It reads the rows of one node in the window through
-// idx_v2_server_log_server_id and idx_v2_server_log_log_at: cheaper than the
+// idx_v5_server_log_server_id and idx_v5_server_log_log_at: cheaper than the
 // global GetHourlyTraffic, which scans the window of every node, and bounded
 // by the retention of the raw log (docs/reference/traffic-stats-operations.md).
-// Daily buckets are the node's v2_stat_server day rows, which are kept and
+// Daily buckets are the node's v5_stat_server day rows, which are kept and
 // small, and are recorded with the rate applied already.
 //
 // ErrNodeTrafficNode when the node does not exist.
@@ -210,7 +210,7 @@ func (s *StatsService) nodeDailyTraffic(nodeID uint, since, until time.Time) (ma
 }
 
 // trafficLogDirectionExpr is trafficLogAggregateExpr for one direction
-// column of v2_server_log (u or d): the sum of the column with the row's
+// column of v5_server_log (u or d): the sum of the column with the row's
 // rate applied, clamped to int64, negative values counting as zero, in the
 // SQL of the database in use.
 func (s *StatsService) trafficLogDirectionExpr(column string) string {

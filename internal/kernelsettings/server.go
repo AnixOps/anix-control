@@ -1,6 +1,6 @@
 // Package kernelsettings serves the KernelSettings contract
 // (sdk/api/kernelsettings/v1, docs/architecture/settings-service.md) to
-// official packages: the system settings in v2_system_config, per namespace
+// official packages: the system settings in v5_system_config, per namespace
 // (service.SettingsNamespaces). The backup configuration namespace went with
 // the backup settings nothing executed (Control's backups are
 // internal/backup).
@@ -35,14 +35,14 @@ import (
 const (
 	maxRequestID = 128
 	maxKeys      = 64
-	// maxKeyBytes is v2_system_config.key's size.
+	// maxKeyBytes is v5_system_config.key's size.
 	maxKeyBytes   = 100
 	maxValueBytes = 256 << 10
 	maxTypeBytes  = 20
 	maxGroupBytes = 50
-	// maxRemarkBytes is v2_system_config.remark's size.
+	// maxRemarkBytes is v5_system_config.remark's size.
 	maxRemarkBytes = 255
-	// maxUserAgent is v2_operation_log.user_agent's size, in characters; a
+	// maxUserAgent is v5_operation_log.user_agent's size, in characters; a
 	// longer user agent is cut so the audit entry is always written.
 	maxUserAgent = 255
 
@@ -324,7 +324,7 @@ func kept(namespace service.SettingsNamespace, entry *kernelsettingsv1.SettingEn
 	return entry.GetKeep() || (namespace.Secret(entry.GetKey()) && entry.GetValue() == service.SensitiveSystemConfigPlaceholder)
 }
 
-// putSystemConfig writes entries to v2_system_config as the kernel's system
+// putSystemConfig writes entries to v5_system_config as the kernel's system
 // configuration handler does, with its audit entries when the namespace
 // records them.
 func putSystemConfig(tx *gorm.DB, namespace service.SettingsNamespace, entries []*kernelsettingsv1.SettingEntry, actor service.SettingsAuditActor) ([]ledgerChange, error) {

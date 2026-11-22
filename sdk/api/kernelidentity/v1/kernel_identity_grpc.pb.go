@@ -38,11 +38,11 @@ const (
 // a package whose signed manifest declares kernel.identity.v1 and that is
 // signed by the official trust root.
 //
-// v2_user stays the kernel's subscriber and entitlement table. Its email,
+// v5_user stays the kernel's subscriber and entitlement table. Its email,
 // is_admin, is_staff and banned columns are a read projection that only this
 // contract writes.
 type KernelIdentityClient interface {
-	// CreateSubscriber allocates the v2_user row (id, uuid, subscription
+	// CreateSubscriber allocates the v5_user row (id, uuid, subscription
 	// token) for a new account. It is idempotent on account_uuid.
 	CreateSubscriber(ctx context.Context, in *CreateSubscriberRequest, opts ...grpc.CallOption) (*CreateSubscriberResponse, error)
 	// UpdateSubscriber changes entitlement fields an administrator edits
@@ -164,11 +164,11 @@ func (c *kernelIdentityClient) GetSubscriber(ctx context.Context, in *GetSubscri
 // a package whose signed manifest declares kernel.identity.v1 and that is
 // signed by the official trust root.
 //
-// v2_user stays the kernel's subscriber and entitlement table. Its email,
+// v5_user stays the kernel's subscriber and entitlement table. Its email,
 // is_admin, is_staff and banned columns are a read projection that only this
 // contract writes.
 type KernelIdentityServer interface {
-	// CreateSubscriber allocates the v2_user row (id, uuid, subscription
+	// CreateSubscriber allocates the v5_user row (id, uuid, subscription
 	// token) for a new account. It is idempotent on account_uuid.
 	CreateSubscriber(context.Context, *CreateSubscriberRequest) (*CreateSubscriberResponse, error)
 	// UpdateSubscriber changes entitlement fields an administrator edits

@@ -23,8 +23,8 @@ type protocolRuntimeBridge interface {
 // Every route in protocolRuntimeRoutes is served by its native handler
 // alone (the kernel has no handler for them):
 //   - the protocol templates, and the diagnostic task history and detail on
-//     the adopted v2_agent_diagnostic_task;
-//   - a node's protocols and their writes on v2_node_protocol, which the
+//     the adopted v5_agent_diagnostic_task;
+//   - a node's protocols and their writes on v5_node_protocol, which the
 //     lease adopts once the node credential split is finalized (the kernel
 //     starts on a finalized split only). The secrets in a write reach the
 //     kernel only, as sealed handles (PutSecretDocument);

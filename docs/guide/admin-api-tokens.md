@@ -102,10 +102,10 @@ used lately, or used from an unknown address, should be revoked.
   `GET /api/v4/kernel/api-tokens?user_id=<id>` and revokes each with `DELETE`.
 - **Leaked token.** Revoke it (`DELETE`, as its owner or as a super
   administrator), create a replacement, and look at the operation log
-  (`v2_operation_log`, `module = 'admin_api_token'`) for the token's `id`: the
+  (`v5_operation_log`, `module = 'admin_api_token'`) for the token's `id`: the
   entries `admin_api_token_use` list the writes it made, with their status,
   and `admin_api_token_use_denied` the refused attempts. The administrator
-  audit (`v2_audit_log`, for `/api/v2/admin`, `/api/v3` and `/api/v4/forward`)
+  audit (`v5_audit_log`, for `/api/v2/admin`, `/api/v3` and `/api/v4/forward`)
   has those requests themselves, and the access log lines carry
   `api_token_id`.
 - **Rotating.** Create the new token, deploy it, check that the old one's

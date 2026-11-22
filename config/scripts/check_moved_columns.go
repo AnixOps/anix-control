@@ -23,7 +23,7 @@
 // databases, then call the writer or prune), tests, and the reasoned
 // entries of allowed below.
 //
-// The JSON settings columns (v2_node.raw_config, v2_node_protocol's five
+// The JSON settings columns (v5_node.raw_config, v5_node_protocol's five
 // settings columns) are not checked: their non-secret parts are read
 // everywhere, and their secret positions are resolved by
 // nodesecrets.ResolveProtocols and ResolveNodeRawConfig, which answer from
@@ -68,7 +68,7 @@ var movedFields = map[string]map[string]string{
 	"WireGuardPeer": {"PrivateKey": "private_key", "PresharedKey": "preshared_key"},
 }
 
-var modelTables = map[string]string{"WireGuardPeer": "v2_wireguard_peer"}
+var modelTables = map[string]string{"WireGuardPeer": "v5_wireguard_peer"}
 
 // movedColumns are refused in any gorm SQL.
 var movedColumns = []string{"private_key", "preshared_key"}

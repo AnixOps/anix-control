@@ -14,8 +14,8 @@ import (
 
 func TestLeaseStorageGrantsOnlySignedCapabilitiesToTheCurrentGeneration(t *testing.T) {
 	db := newKernelTestDB(t)
-	require.NoError(t, db.Exec("CREATE TABLE v2_knowledge (id INTEGER PRIMARY KEY)").Error)
-	_, installation := seedKnowledgeRelease(t, db, "", []string{"kernel.storage.v1", "kernel.storage.adopt:v2_knowledge"})
+	require.NoError(t, db.Exec("CREATE TABLE v5_knowledge (id INTEGER PRIMARY KEY)").Error)
+	_, installation := seedKnowledgeRelease(t, db, "", []string{"kernel.storage.v1", "kernel.storage.adopt:v5_knowledge"})
 	path := filepath.Join(t.TempDir(), "kernel.db")
 	operations := PackageHostOperations{DB: db, Storage: &packagestore.Store{DB: db, Driver: "sqlite", DSN: path}}
 	current := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.0.1", Generation: 7}
@@ -24,7 +24,7 @@ func TestLeaseStorageGrantsOnlySignedCapabilitiesToTheCurrentGeneration(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, packagebridge.StorageLease{
 		Driver: "sqlite", DSN: path, TablePrefix: "pkg_knowledge_", LeaseGeneration: 1,
-		AdoptedTables: []string{"v2_knowledge"}, Views: []string{},
+		AdoptedTables: []string{"v5_knowledge"}, Views: []string{},
 	}, lease)
 	var row model.PackageStorage
 	require.NoError(t, db.First(&row, "package_id = ?", "knowledge").Error)

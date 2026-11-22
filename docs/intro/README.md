@@ -75,7 +75,7 @@ This is the main source of confusion and should stay explicit:
 - `.env`
   - deployment-time variables
   - used by Docker Compose and install scripts
-- `v2_system_config`
+- `v5_system_config`
   - runtime-persisted values shown in `/admin/system`
   - seeded from `config/config.yaml.forward_runtime` on startup by `InitForwardRuntimeSystemConfig`
 

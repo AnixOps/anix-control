@@ -28,8 +28,8 @@ const (
 //
 // KernelOrder is the kernel's contract for the order writes that span
 // domains (docs/architecture/order-service.md). Completing a paid order
-// changes the order (v2_order, the order module's table) and grants its
-// plan (v2_user, the kernel's subscriber state) in one transaction; no
+// changes the order (v5_order, the order module's table) and grants its
+// plan (v5_user, the kernel's subscriber state) in one transaction; no
 // single module may write both, so the kernel does it for the module that
 // took the payment.
 //
@@ -87,8 +87,8 @@ func (c *kernelOrderClient) CompleteOrderPayment(ctx context.Context, in *Comple
 //
 // KernelOrder is the kernel's contract for the order writes that span
 // domains (docs/architecture/order-service.md). Completing a paid order
-// changes the order (v2_order, the order module's table) and grants its
-// plan (v2_user, the kernel's subscriber state) in one transaction; no
+// changes the order (v5_order, the order module's table) and grants its
+// plan (v5_user, the kernel's subscriber state) in one transaction; no
 // single module may write both, so the kernel does it for the module that
 // took the payment.
 //

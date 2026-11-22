@@ -181,7 +181,7 @@ func emptyDashboard(t testing.TB, _ *gorm.DB) {
 	t.Cleanup(cache.CloseMemory)
 }
 
-// brokenDashboard has no v2_server_trojan, so building fails.
+// brokenDashboard has no v5_server_trojan, so building fails.
 func brokenDashboard(t testing.TB, db *gorm.DB) {
 	seedDashboard(t, db)
 	require.NoError(t, db.Migrator().DropTable(&model.ServerTrojan{}))

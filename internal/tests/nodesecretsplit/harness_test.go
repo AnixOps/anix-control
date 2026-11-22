@@ -92,9 +92,9 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 func legacyColumns(t *testing.T, db *gorm.DB) map[string][]map[string]any {
 	t.Helper()
 	columns := map[string][]string{
-		"v2_node":           {"id", "raw_config"},
-		"v2_node_protocol":  {"id", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"},
-		"v2_wireguard_peer": {"id", "private_key", "public_key", "preshared_key"},
+		"v5_node":           {"id", "raw_config"},
+		"v5_node_protocol":  {"id", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"},
+		"v5_wireguard_peer": {"id", "private_key", "public_key", "preshared_key"},
 	}
 	out := map[string][]map[string]any{}
 	for table, selected := range columns {

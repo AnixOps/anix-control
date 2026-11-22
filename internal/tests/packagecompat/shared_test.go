@@ -34,7 +34,7 @@ func TestSharedDatabasesStartEachCaseEmpty(t *testing.T) {
 			require.NoError(t, db.Create(&model.User{Email: "a@example.test", Token: "token-a", UUID: "uuid-a"}).Error)
 			require.NoError(t, db.Create(&model.User{Email: "b@example.test", Token: "token-b", UUID: "uuid-b"}).Error)
 			require.NoError(t, db.Exec("CREATE TABLE extra_rows (id INTEGER)").Error)
-			require.NoError(t, db.Exec("CREATE VIEW extra_users AS SELECT id FROM v2_user").Error)
+			require.NoError(t, db.Exec("CREATE VIEW extra_users AS SELECT id FROM v5_user").Error)
 		})
 		step("the next case finds none of it", func(t *testing.T, db *gorm.DB) {
 			require.NotSame(t, first, db, "each case gets its own handle")
@@ -48,25 +48,25 @@ func TestSharedDatabasesStartEachCaseEmpty(t *testing.T) {
 			require.EqualValues(t, 1, user.ID, "ids start from 1 again")
 		})
 		step("a case changes the migrated schema", func(t *testing.T, db *gorm.DB) {
-			require.NoError(t, db.Exec("ALTER TABLE v2_order ADD COLUMN extra_column INTEGER").Error)
+			require.NoError(t, db.Exec("ALTER TABLE v5_order ADD COLUMN extra_column INTEGER").Error)
 			if backend == backendPostgres {
-				require.NoError(t, db.Exec("ALTER TABLE v2_order DROP CONSTRAINT IF EXISTS fk_v2_order_user").Error)
+				require.NoError(t, db.Exec("ALTER TABLE v5_order DROP CONSTRAINT IF EXISTS fk_v5_order_user").Error)
 			}
 		})
 		step("the next case gets the migrated schema", func(t *testing.T, db *gorm.DB) {
 			require.False(t, db.Migrator().HasColumn(&model.Order{}, "extra_column"))
 			if backend == backendPostgres {
-				require.True(t, db.Migrator().HasConstraint(&model.Order{}, "fk_v2_order_user"))
+				require.True(t, db.Migrator().HasConstraint(&model.Order{}, "fk_v5_order_user"))
 			}
 		})
 		step("a case drops a foreign key only", func(t *testing.T, db *gorm.DB) {
 			if backend == backendPostgres {
-				require.NoError(t, db.Exec("ALTER TABLE v2_order DROP CONSTRAINT fk_v2_order_user").Error)
+				require.NoError(t, db.Exec("ALTER TABLE v5_order DROP CONSTRAINT fk_v5_order_user").Error)
 			}
 		})
 		step("the next case has it back", func(t *testing.T, db *gorm.DB) {
 			if backend == backendPostgres {
-				require.True(t, db.Migrator().HasConstraint(&model.Order{}, "fk_v2_order_user"))
+				require.True(t, db.Migrator().HasConstraint(&model.Order{}, "fk_v5_order_user"))
 			}
 		})
 	}

@@ -9,11 +9,11 @@ import (
 // This file writes the tombstones of section 4.4. A legacy secret column
 // holds no secret:
 //
-//   - a key column (v2_wireguard_peer.private_key and .preshared_key) holds
+//   - a key column (v5_wireguard_peer.private_key and .preshared_key) holds
 //     the tombstone "!moved:<row id>": unique per row, non-empty, and never
 //     a key;
-//   - a JSON column (v2_node.raw_config, the five settings columns of
-//     v2_node_protocol) holds its redacted document, Redact of the
+//   - a JSON column (v5_node.raw_config, the five settings columns of
+//     v5_node_protocol) holds its redacted document, Redact of the
 //     original, with the placeholder at every secret position.
 //
 // Tombstones are value writes; no table is altered.

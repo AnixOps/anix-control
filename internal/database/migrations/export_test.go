@@ -6,4 +6,5 @@ var (
 	LoadSteps     = loadSteps
 	Statements    = statements
 	SplitTopLevel = splitTopLevel
+	RenameDerived = renameDerivedNames
 )

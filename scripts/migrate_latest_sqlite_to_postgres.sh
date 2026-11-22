@@ -137,6 +137,6 @@ echo "Verifying service and row counts..."
 curl -fsS "http://127.0.0.1:${PANEL_API_PORT}/health"
 echo
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -c \
-  "select 'v2_user' table_name, count(*) from v2_user union all select 'v2_node', count(*) from v2_node union all select 'v2_node_protocol', count(*) from v2_node_protocol union all select 'v2_plan', count(*) from v2_plan order by table_name;"
+  "select 'v5_user' table_name, count(*) from v5_user union all select 'v5_node', count(*) from v5_node union all select 'v5_node_protocol', count(*) from v5_node_protocol union all select 'v5_plan', count(*) from v5_plan order by table_name;"
 
 echo "Done."

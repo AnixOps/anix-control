@@ -33,7 +33,7 @@ function kernelAlerts(now) {
       alert(31, 'ca_expiring', 'critical', 'ca', 'forward_link_ca:3fa9c1', { ca: 'forward_link', cluster: 'default', not_after: iso(now, 6 * DAY_MS), expired: false, next_staged: false, window_days: 60 }, { expires_at: iso(now, 6 * DAY_MS) }),
       alert(32, 'agent_certificate_expiring', 'warning', 'node', 'proxy-1', { node: 'proxy-1', node_name: 'hk-01', not_after: iso(now, 20 * 3_600_000), expired: false, lifetime_hours: 168, window_hours: 28 }, { expires_at: iso(now, 20 * 3_600_000) }),
       alert(33, 'link_certificate_expiring', 'warning', 'node', 'forward-4', { node: 'forward-4', node_name: 'edge-sg-1', not_after: iso(now, 14 * 3_600_000), expired: false, lifetime_hours: 168, window_hours: 28 }, { expires_at: iso(now, 14 * 3_600_000) }),
-      alert(34, 'node_secrets_split_stalled', 'warning', 'node_secrets', 'v2_node', { table: 'v2_node', phase: 'dual_write', since: iso(now, -5 * DAY_MS), stuck_after_hours: 72 })
+      alert(34, 'node_secrets_split_stalled', 'warning', 'node_secrets', 'v5_node', { table: 'v5_node', phase: 'dual_write', since: iso(now, -5 * DAY_MS), stuck_after_hours: 72 })
     ],
     resolved: [
       alert(21, 'module_certificate_expiring', 'warning', 'module', 'identity-platform#4c1d0e7a', { package_id: 'identity-platform', not_after: iso(now, -1 * DAY_MS), expired: false }, { status: 'resolved', resolved_at: iso(now, -3 * 3_600_000) }),

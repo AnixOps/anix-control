@@ -32,7 +32,7 @@ type Plan struct {
 }
 
 func (Plan) TableName() string {
-	return "v2_plan"
+	return "v5_plan"
 }
 
 // GetSpeedLimit 获取速度限制

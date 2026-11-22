@@ -1,5 +1,5 @@
 // Package native implements the ticket package's v2 routes in the package
-// itself, on the kernel's v2_ticket and v2_ticket_message tables adopted in
+// itself, on the kernel's v5_ticket and v5_ticket_message tables adopted in
 // place (kernel.storage.adopt). Legacy handlers and native routes share the
 // tables, so a route can switch between them at any time. Responses are
 // byte-compatible with the legacy handlers (internal/tests/ticketcompat).
@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Ticket is a v2_ticket row. Its JSON matches the kernel model, which the
+// Ticket is a v5_ticket row. Its JSON matches the kernel model, which the
 // create and detail answers return as is (the kernel's User relation is
 // never loaded there, so it is omitted).
 type Ticket struct {
@@ -34,9 +34,9 @@ type Ticket struct {
 }
 
 // TableName is the adopted kernel table.
-func (Ticket) TableName() string { return "v2_ticket" }
+func (Ticket) TableName() string { return "v5_ticket" }
 
-// Message is a v2_ticket_message row.
+// Message is a v5_ticket_message row.
 type Message struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	TicketID  uint      `gorm:"index" json:"ticket_id"`
@@ -47,7 +47,7 @@ type Message struct {
 }
 
 // TableName is the adopted kernel table.
-func (Message) TableName() string { return "v2_ticket_message" }
+func (Message) TableName() string { return "v5_ticket_message" }
 
 // Service holds what the native routes need.
 type Service struct {

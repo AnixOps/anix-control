@@ -48,7 +48,7 @@ type PaymentGateway struct {
 
 // TableName 指定表名
 func (PaymentGateway) TableName() string {
-	return "v2_payment_gateway"
+	return "v5_payment_gateway"
 }
 
 // AlipayConfig 支付宝配置
@@ -143,5 +143,5 @@ type PaymentRecord struct {
 
 // TableName 指定表名
 func (PaymentRecord) TableName() string {
-	return "v2_payment_record"
+	return "v5_payment_record"
 }

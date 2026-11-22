@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Audit actions written to the operation log (v2_operation_log).
+// Audit actions written to the operation log (v5_operation_log).
 const (
 	auditModule            = "agent_pki"
 	AuditActionTokenIssue  = "agent_enrollment_token_issue"

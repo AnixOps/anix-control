@@ -30,7 +30,7 @@ const NodeGroupLiveNameIndex = "ux_v5_node_group_live_name"
 // NodeGroup owns a join token and the defaults of the nodes the token
 // creates (docs/design/node-onboarding, "Node Groups"). Running the install
 // command with the group's anixjoin_ token on a machine makes the machine a
-// clean node of the group (a v2_node row without protocols).
+// clean node of the group (a v5_node row without protocols).
 //
 // Rows are never removed. Deleting a group sets Deleted to 1 and DeletedAt;
 // gorm.io/plugin/soft_delete then adds "deleted = 0" to every query, update

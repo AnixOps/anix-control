@@ -1,5 +1,5 @@
 // Package identityimport hands identity the account of the first
-// administrator the claim link creates: the kernel allocates the v2_user
+// administrator the claim link creates: the kernel allocates the v5_user
 // row, identity owns the credentials. It uses IdentityService.ImportAccounts
 // with a one-account import.
 package identityimport
@@ -24,7 +24,7 @@ var accountNamespace = uuid.MustParse("5f0f3a6e-1c2d-4b8e-9f7a-3d2c1b0a9e8f")
 
 // AccountUUID is the account UUID of a kernel user without a link yet.
 func AccountUUID(userID uint) string {
-	return uuid.NewSHA1(accountNamespace, []byte("v2_user:"+strconv.FormatUint(uint64(userID), 10))).String()
+	return uuid.NewSHA1(accountNamespace, []byte("v5_user:"+strconv.FormatUint(uint64(userID), 10))).String()
 }
 
 // ErrNotInitialized is returned without an identity connection.

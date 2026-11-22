@@ -48,7 +48,7 @@ var platformRoutes = map[string]struct{}{
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.
-//   - The system configuration routes work on any key of v2_system_config,
+//   - The system configuration routes work on any key of v5_system_config,
 //     a protected kernel table. KernelSettings reaches the keys of a
 //     namespace only, and the package holds no grant over every key, which
 //     would amount to every secret: the answers mask secrets, but a write

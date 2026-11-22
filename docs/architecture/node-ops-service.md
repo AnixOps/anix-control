@@ -21,8 +21,8 @@ phase 3 of the 2026-10 plan, done together with Agent line A2.
 > - **KernelNodeOps 契约**：模块提交类型化、幂等的节点操作（应用转发、同步节点、
 >   诊断、签发凭据），由内核持有凭据和 Agent 连接、选择通道执行，并返回回执和结果。
 >   模块拿不到任何令牌或私钥：管理员请求和应答里的密钥由网关换成一次性句柄。
-> - **凭据外置**：把凭据和密钥从 `v2_node`、`v2_forward_node`、`v2_node_protocol`、
->   `v2_wireguard_peer` 等表移到新的受保护表，走双写、回填、双读、定稿四步。
+> - **凭据外置**：把凭据和密钥从 `v5_node`、`v5_forward_node`、`v5_node_protocol`、
+>   `v5_wireguard_peer` 等表移到新的受保护表，走双写、回填、双读、定稿四步。
 >   不 ALTER 旧表，旧列定稿后写入墓碑值。之后 proxy-node、protocol-runtime 和
 >   forward 可以接管去掉凭据后的表。
 > - **Agent A2**：配置、用户变更、流量、日志统一走 mTLS 的 Agent Control 流。
@@ -69,7 +69,7 @@ There are five needs:
 | **Node pushes** | apply a forward on its node, push a node's configuration, re-apply a tunnel's forwards, push a legacy rule | the forward runtime executors (`internal/service/forward_runtime_executors.go`): NodeX over HTTP, a local Ansible job, a clean agent job (`v2_forward_runtime_job`, bridged to the AnixOps Agent's task poll by `forward_agent_bridge_*`); `AgentControlManager` (`internal/grpc/agent_control_server.go`: `node.reload`, `users.reload`, `agent.ping`); the agent WebSocket (`internal/handler/agent.go`: diagnostic tasks); the legacy pull (UniProxy, the v2board gRPC node service) |
 | **Diagnostics dialing out** | forward node checks, forward and tunnel diagnoses, gost statistics sync | the kernel dials from Control's network, with the node's token where the node's API needs it |
 | **Node caches** | the node cache (`nodeCacheKey`), the gost manager's address and token per node (`internal/gost/manager.go`), live agent connections and monitor snapshots | kernel memory |
-| **Credentials and secrets** | node API keys and shared secrets, forward node tokens, clean agent tokens, registration keys, Reality and WireGuard private keys, WireGuard peer keys | columns of the protected tables `v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job` (payloads), `v2_node_protocol`, `v2_wireguard_peer` (`internal/service/plugin_capabilities.go`) |
+| **Credentials and secrets** | node API keys and shared secrets, forward node tokens, clean agent tokens, registration keys, Reality and WireGuard private keys, WireGuard peer keys | columns of the protected tables `v5_node`, `v2_authorized_key`, `v5_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job` (payloads), `v5_node_protocol`, `v5_wireguard_peer` (`internal/service/plugin_capabilities.go`) |
 | **Live connections** | the agent list, Agent Control status, task creation that waits for an acknowledgement | `AgentControlManager` and `AgentHandler` in kernel memory |
 
 **What #92 changed.** Administrator answers no longer show node secrets:
@@ -213,7 +213,7 @@ in `Operation.kind`.
 | `diagnose.node_stats` | `CollectNodeStats` | diagnose | the node's gost metrics endpoint, local Ansible | `ForwardHandler.SyncNodeStats`, the Ansible statistics |
 | `diagnose.forward` | `DiagnoseForward` | diagnose | Control dial; agent after A2 | `PanelForwardService.DiagnoseForward` (public targets only for users) |
 | `diagnose.tunnel` | `DiagnoseTunnel` | diagnose | Control dial; agent after A2 | `PanelForwardService.DiagnoseTunnel` |
-| `agent.diagnostic` | `RunAgentDiagnostic` | diagnose | agent WebSocket, Agent Control after A2 | `AgentHandler.CreateTask`, `ExecuteCommand` (whitelist, `v2_agent_diagnostic_task`, acknowledgement) |
+| `agent.diagnostic` | `RunAgentDiagnostic` | diagnose | agent WebSocket, Agent Control after A2 | `AgentHandler.CreateTask`, `ExecuteCommand` (whitelist, `v5_agent_diagnostic_task`, acknowledgement) |
 | `agent.operation` | `AgentControlOperation` | agents | Agent Control | `NodeHandler.DispatchAgentControlOperation` (`agent.ping`, `node.reload`, `users.reload`) |
 | `credential.issue` | `IssueCredential` | credentials | kernel | node creation, forward node token handling, rotation |
 | `credential.revoke` | `RevokeCredential` | credentials | kernel | clean agent revocation |
@@ -596,7 +596,7 @@ pinned to the endpoint it was issued for:
 - **What moves the pin.** The kernel's own forward node writers
   (`ForwardNodeService.Create`, `Update` and the Ansible machine routes),
   which re-derive the endpoint from the row they just wrote
-  (`nodesecrets.Sync`). Today every write of `v2_forward_node` goes through
+  (`nodesecrets.Sync`). Today every write of `v5_forward_node` goes through
   them, driven by the administrator's `PUT /admin/forward/nodes/:id`; had
   the table been adopted (M3-4, cancelled: section 7), only the `SyncNode`
   bound to that request would move it (NO-5/NO-6). A write that bypasses
@@ -1062,22 +1062,22 @@ native, and none will: M3-4 and M3-5 are cancelled (section 7).
 > certificate only, so the credential half of this split is gone: node API
 > keys, shared secrets, forward node tokens, clean agents and
 > `v4_kernel_node_credential` (migration `0027_drop_node_credentials`). What
-> remains is the protocol secret half: `v2_node.raw_config`,
-> `v2_node_protocol` and `v2_wireguard_peer` in `v4_kernel_protocol_secret`.
+> remains is the protocol secret half: `v5_node.raw_config`,
+> `v5_node_protocol` and `v5_wireguard_peer` in `v4_kernel_protocol_secret`.
 > The text below is the original design and still names the removed parts.
 
 ### 4.1 What moves
 
 | Table | Column(s) | What it is | New home |
 |---|---|---|---|
-| `v2_node` | `api_key`, `api_key_hash` | the node's API key, and its SHA-256 used for lookups | `v4_kernel_node_credential` (kind `node_api_key`) |
-| `v2_node` | `secret` | the node's shared signing secret | `v4_kernel_node_credential` (`node_shared_secret`) |
-| `v2_node` | secrets inside `raw_config` | WireGuard and other private keys of the raw configuration | `v4_kernel_protocol_secret` (scope `node_raw_config`) |
-| `v2_forward_node` | `api_token` | the forward node's token: its agent, and the relay's gost API | `v4_kernel_node_credential` (`forward_node_token`, with the pinned `endpoint`) |
+| `v5_node` | `api_key`, `api_key_hash` | the node's API key, and its SHA-256 used for lookups | `v4_kernel_node_credential` (kind `node_api_key`) |
+| `v5_node` | `secret` | the node's shared signing secret | `v4_kernel_node_credential` (`node_shared_secret`) |
+| `v5_node` | secrets inside `raw_config` | WireGuard and other private keys of the raw configuration | `v4_kernel_protocol_secret` (scope `node_raw_config`) |
+| `v5_forward_node` | `api_token` | the forward node's token: its agent, and the relay's gost API | `v4_kernel_node_credential` (`forward_node_token`, with the pinned `endpoint`) |
 | `v2_forward_clean_agent` | `token` | the clean agent's token | `v4_kernel_node_credential` (`clean_agent_token`) |
 | `v2_forward_runtime_job` | tokens inside `payload` | node tokens copied into clean agent job payloads | none: resolved when the job runs; old payloads scrubbed |
-| `v2_node_protocol` | secrets inside `settings`, `tls_settings`, `transport_settings`, `reality_settings`, `custom_config` | Reality and TLS private keys, WireGuard server keys, Shadowsocks keys, passwords, and so on (`IsNodeSecretKey`) | `v4_kernel_protocol_secret` (scope `node_protocol`) |
-| `v2_wireguard_peer` | `private_key`, `preshared_key` | every user's WireGuard keys | `v4_kernel_protocol_secret` (scope `wireguard_peer`) |
+| `v5_node_protocol` | secrets inside `settings`, `tls_settings`, `transport_settings`, `reality_settings`, `custom_config` | Reality and TLS private keys, WireGuard server keys, Shadowsocks keys, passwords, and so on (`IsNodeSecretKey`) | `v4_kernel_protocol_secret` (scope `node_protocol`) |
+| `v5_wireguard_peer` | `private_key`, `preshared_key` | every user's WireGuard keys | `v4_kernel_protocol_secret` (scope `wireguard_peer`) |
 
 ### 4.2 New tables
 
@@ -1226,7 +1226,7 @@ gate (NO-9) refuses any other kernel read of a moved column.
   - `dual_write`, the way back, is always allowed;
   - `finalized` and `legacy` are neither asked for nor left;
   - `all` moves every table or none;
-  - each change writes an audit entry (`v2_operation_log`, module
+  - each change writes an audit entry (`v5_operation_log`, module
     `node_secrets`) in the same transaction.
 - **Tombstones.** No reader accepts `!moved:<id>` or `********` as a
   credential in any phase, presented or stored, including the plain-key
@@ -1318,8 +1318,8 @@ themselves; production finalize waits for the owner (D6).
   The JSON settings columns are not gated: their non-secret parts are read
   everywhere, and their secret positions come from `ResolveProtocols`.
 - **Conditional adoption** (until 5.0.3). A manifest may declare
-  `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
-  `v2_forward_node`; `service.EffectiveStorageGrants` honoured it at the
+  `kernel.storage.adopt:` for `v5_node`, `v5_node_protocol` and
+  `v5_forward_node`; `service.EffectiveStorageGrants` honoured it at the
   lease only once `nodesecrets.AdoptionAllowed` (finalized, with
   `finalized_at`), and left the views of section 4.6 out until they
   existed. `GetCapabilities.tables` answered each table's phase
@@ -1331,7 +1331,7 @@ pre-migration backup goes back. Production finalized all three tables on
 2026-11-08.
 
 **Adoption.** A table's `kernel.storage.adopt:<table>` grant is honoured
-for exactly `v2_node`, `v2_node_protocol` and `v2_forward_node`; the other
+for exactly `v5_node`, `v5_node_protocol` and `v5_forward_node`; the other
 protected tables stay protected (section 4.6). Before 5.0.3 the grant
 waited for the table to be finalized; since the start gate it always
 holds.
@@ -1343,16 +1343,16 @@ second row. Tombstones are unique and non-empty, and can never authenticate.
 
 | Column | Tombstone | Why it cannot authenticate |
 |---|---|---|
-| `v2_node.api_key` (unique) | `!moved:<node id>` | the kernel looks up `v4_kernel_node_credential.key_hash`; `!` never occurs in generated keys |
-| `v2_node.api_key_hash` | `""` | no SHA-256 is empty; nothing reads it after P3 |
-| `v2_node.secret` | `!moved:<node id>` | a tombstone signs nothing (`Unusable`) |
-| `v2_forward_node.api_token` | `!moved:<node id>` | "has a token" comes from the credential row (`ForwardNodeTokenPresent`, `kapi_node_credential_status_v1`) |
+| `v5_node.api_key` (unique) | `!moved:<node id>` | the kernel looks up `v4_kernel_node_credential.key_hash`; `!` never occurs in generated keys |
+| `v5_node.api_key_hash` | `""` | no SHA-256 is empty; nothing reads it after P3 |
+| `v5_node.secret` | `!moved:<node id>` | a tombstone signs nothing (`Unusable`) |
+| `v5_forward_node.api_token` | `!moved:<node id>` | "has a token" comes from the credential row (`ForwardNodeTokenPresent`, `kapi_node_credential_status_v1`) |
 | `v2_forward_clean_agent.token` (unique, not null) | `!moved:<agent id>` | |
-| `v2_wireguard_peer.private_key`, `.preshared_key` | `!moved:<peer id>` | the renderer reads peer keys from `v4_kernel_protocol_secret` |
+| `v5_wireguard_peer.private_key`, `.preshared_key` | `!moved:<peer id>` | the renderer reads peer keys from `v4_kernel_protocol_secret` |
 | JSON secret columns | the redacted document: `RedactNodeSecretsJSON` of the original, with `********` at every secret position | the builder takes secret positions from `v4_kernel_protocol_secret` only (section 3.8) |
 
 NO-9 changed three rows of this table from `""` to `!moved:<id>`
-(`v2_node.secret`, `v2_forward_node.api_token`, the peer keys). An empty
+(`v5_node.secret`, `v5_forward_node.api_token`, the peer keys). An empty
 value is a writer's "no secret" (an Ansible machine's cleared token), so a
 writer of a finalized table could not tell a tombstone from a removal. An
 empty shared secret would sign every request for a binary on the legacy
@@ -1363,7 +1363,7 @@ secret column.
 
 Two more rules:
 
-- **Rows packages insert.** A package that adopts `v2_node` inserts rows
+- **Rows packages insert.** A package that adopts `v5_node` inserts rows
   with `api_key = "!moved:" + <uuid>`, because the unique index needs a
   value. The node's credential comes from `IssueCredential`.
 - **Byte parity.** The redacted document is exactly what `RedactNodeProtocol`
@@ -1391,9 +1391,9 @@ Two more rules:
 
 | Package | Adopts once finalized | Through the contract | Reads through views |
 |---|---|---|---|
-| proxy-node | `v2_node` (credential columns tombstoned, `raw_config` redacted), `v2_node_group` (not protected; can be adopted now) | credentials (API key and secret, registration keys), `PutSecretDocument` (raw configuration), `SyncNode`, `RetireNode`, `ValidateNodeConfig`, `CheckEndpoints` (load balancer check) | `kapi_node_protocol_public_v1`, `kapi_registration_key_v1`, `kapi_node_credential_status_v1`, `kapi_forward_node_v1` (exists) |
-| protocol-runtime | `v2_node_protocol` (secret positions redacted) | `PutSecretDocument`, `RetireProtocol`, `SyncNode`, `ValidateNodeConfig`, the agents family, `RunAgentDiagnostic` | `kapi_node_public_v1`, `kapi_wireguard_peer_v1` |
-| forward | `v2_forward_node` (token tombstoned; the endpoint pinned in the kernel), `v2_forward_port_binding` (not protected; written in the forward change flow) | the forward family, `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel`, credentials (forward node tokens, clean agents), `SyncNode` and `RetireNode` on forward nodes | `kapi_node_credential_status_v1`, `kapi_forward_clean_agent_v1`, `kapi_forward_runtime_job_v1`, `kapi_node_public_v1` (also unblocks the 3 observability routes) |
+| proxy-node | `v5_node` (credential columns tombstoned, `raw_config` redacted), `v2_node_group` (not protected; can be adopted now) | credentials (API key and secret, registration keys), `PutSecretDocument` (raw configuration), `SyncNode`, `RetireNode`, `ValidateNodeConfig`, `CheckEndpoints` (load balancer check) | `kapi_node_protocol_public_v1`, `kapi_registration_key_v1`, `kapi_node_credential_status_v1`, `kapi_forward_node_v1` (exists) |
+| protocol-runtime | `v5_node_protocol` (secret positions redacted) | `PutSecretDocument`, `RetireProtocol`, `SyncNode`, `ValidateNodeConfig`, the agents family, `RunAgentDiagnostic` | `kapi_node_public_v1`, `kapi_wireguard_peer_v1` |
+| forward | `v5_forward_node` (token tombstoned; the endpoint pinned in the kernel), `v2_forward_port_binding` (not protected; written in the forward change flow) | the forward family, `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel`, credentials (forward node tokens, clean agents), `SyncNode` and `RetireNode` on forward nodes | `kapi_node_credential_status_v1`, `kapi_forward_clean_agent_v1`, `kapi_forward_runtime_job_v1`, `kapi_node_public_v1` (also unblocks the 3 observability routes) |
 | subscription | nothing new | none | `kapi_node_protocol_public_v1`, `kapi_node_public_v1` |
 
 These tables stay kernel-owned and protected. The kernel writes them, and
@@ -1404,7 +1404,7 @@ packages read them through views or change them through operations:
 - `v2_forward_runtime_job`: the kernel's executors claim and complete
   jobs;
 - `v2_forward_agent_bridge_task`;
-- `v2_wireguard_peer`: the subscription renderer creates peers. It stays
+- `v5_wireguard_peer`: the subscription renderer creates peers. It stays
   protected and non-adoptable after finalize too (decided by the owner,
   2026-10-01); packages read peers through `kapi_wireguard_peer_v1`.
 
@@ -1414,12 +1414,12 @@ Before 5.0.3 a view of a split table waited for its source to be finalized
 
 | View | Source | Columns |
 |---|---|---|
-| `kapi_node_public_v1` | `v2_node` | every column but `api_key`, `api_key_hash`, `secret`; `raw_config` only once finalized |
-| `kapi_node_protocol_public_v1` | `v2_node_protocol` | every column; created only once finalized |
+| `kapi_node_public_v1` | `v5_node` | every column but `api_key`, `api_key_hash`, `secret`; `raw_config` only once finalized |
+| `kapi_node_protocol_public_v1` | `v5_node_protocol` | every column; created only once finalized |
 | `kapi_node_credential_status_v1` | `v4_kernel_node_credential` | `subject_kind`, `subject_id`, `kind`, `version`, `status`, `rotated_at`, `has_value`; no value or hash |
 | `kapi_forward_clean_agent_v1` | `v2_forward_clean_agent` | every column but `token` |
 | `kapi_forward_runtime_job_v1` | `v2_forward_runtime_job` | every column; created only once its payloads are scrubbed |
-| `kapi_wireguard_peer_v1` | `v2_wireguard_peer` | `id`, `node_protocol_id`, `user_id`, `peer_ip`, `public_key`, times |
+| `kapi_wireguard_peer_v1` | `v5_wireguard_peer` | `id`, `node_protocol_id`, `user_id`, `peer_ip`, `public_key`, times |
 
 ## 5. Agent A2: unified control plane
 
@@ -1444,7 +1444,7 @@ Gaps A2 closes:
 - stored credentials are "encrypted" with a key derived from
   `/etc/machine-id`;
 - signing is off by default;
-- a forward node cannot open a stream: the stream authenticates `v2_node`
+- a forward node cannot open a stream: the stream authenticates `v5_node`
   only.
 
 ### 5.2 Target
@@ -1466,8 +1466,8 @@ One mTLS stream per node carries everything:
 ### 5.3 Identity and enrollment
 
 - **SAN.** `spiffe://anixops/<cluster>/agent/<node>`, where `<node>` is
-  `proxy-<id>` for a `v2_node` row or `forward-<id>` for a
-  `v2_forward_node` row.
+  `proxy-<id>` for a `v5_node` row or `forward-<id>` for a
+  `v5_forward_node` row.
   - Node ids of the two tables overlap, so the kind is part of the name.
   - The module CA's name constraint (`spiffe://anixops/...`) already allows
     it.
@@ -1718,7 +1718,7 @@ advertised them.
     path as new batches.
 - **Online IPs.** They ride in `TrafficReport.online` and feed the same
   alive set that UniProxy feeds.
-- **Logs.** `LogBatch` goes into `v2_node_log` (as `NodeLogService`), with
+- **Logs.** `LogBatch` goes into `v5_node_log` (as `NodeLogService`), with
   the same batch idempotency.
 - **Operations.** As today: at-least-once, with replay by operation id and
   revision, and handlers made idempotent. KernelNodeOps operations are
@@ -2086,7 +2086,7 @@ routes, the v2 node management routes and the clean agent routes (F5d;
 `forward-sdk.md` section 10). The tables are kept as the record of the
 plan.
 
-**Forward nodes (8): native.** These are rows of `v2_forward_node`. Forward
+**Forward nodes (8): native.** These are rows of `v5_forward_node`. Forward
 adopts the table once it is finalized; the token is pinned in the kernel.
 
 | Route | Planned calls | Mode |
@@ -2100,7 +2100,7 @@ adopts the table once it is finalized; the token is pinned in the kernel.
 | `POST /admin/forward/nodes/:id/toggle` | update the row; `SyncNode` (drops the gost manager's copy) | native |
 | `POST /admin/forward/nodes/:id/sync-stats` | `CollectNodeStats` (wait T) | native |
 
-**Ansible machines (8): native.** These are also rows of `v2_forward_node`.
+**Ansible machines (8): native.** These are also rows of `v5_forward_node`.
 The same calls apply to `GET`/`POST /admin/forward/ansible-machines` and to
 `GET`/`PUT`/`DELETE /:id`, `/:id/check`, `/:id/toggle` and
 `/:id/sync-stats`. The statistics come from the local Ansible collector
@@ -2180,7 +2180,7 @@ port bindings (adopting `v2_forward_port_binding`) and quota checks.
 
 ### 6.2 proxy-node (18)
 
-Proxy-node adopts `v2_node` once it is finalized.
+Proxy-node adopts `v5_node` once it is finalized.
 
 | Route | Planned calls | Mode |
 |---|---|---|
@@ -2206,16 +2206,16 @@ the whole path a deployment runs, on SQLite and PostgreSQL); three are not:
 
 | Route | Outcome | Why |
 |---|---|---|
-| `POST /admin/nodes` | **bridged** | The legacy creation also writes the node's default VMess protocol into `v2_node_protocol`, protocol-runtime's table, in its transaction (the row above leaves it out). No KernelNodeOps call creates a protocol; a kernel operation that does would unblock it |
+| `POST /admin/nodes` | **bridged** | The legacy creation also writes the node's default VMess protocol into `v5_node_protocol`, protocol-runtime's table, in its transaction (the row above leaves it out). No KernelNodeOps call creates a protocol; a kernel operation that does would unblock it |
 | `PUT /admin/nodes/:id` | **bridged** | Besides the row and the cache, the legacy update records a group change in the subscriber change log (`subscriber.RecordNodeGroupChangeTx`) and revokes a disabled node's agent certificates, in its transaction. No KernelNodeOps call records a node's group change; `SyncNode` would drop the cache but also store and push the desired configuration, which the legacy update does not |
 | `POST /admin/nodes/validate-config` | **kernel-owned** | Its answer's `size` is the length of the configuration with its secret values. The gateway seals this route's secrets into handles that never resolve, so neither the package nor `ValidateNodeConfig` can compute it |
 
 What the native routes do, and what the kernel gained:
 
 - **The node routes wait for the finalize.** The list and detail answer
-  natively once the lease adopts `v2_node` and grants
+  natively once the lease adopts `v5_node` and grants
   `kapi_node_protocol_public_v1`; the deletion and the raw configuration
-  once it adopts `v2_node`. Until then they answer from the legacy
+  once it adopts `v5_node`. Until then they answer from the legacy
   handler, SQLite included; a host started before the finalize keeps them
   legacy until Control restarts.
 - **The raw configuration is validated with the typed secrets.** The
@@ -2238,7 +2238,7 @@ What the native routes do, and what the kernel gained:
 
 ### 6.3 protocol-runtime (11): all native
 
-Protocol-runtime adopts `v2_node_protocol` once it is finalized.
+Protocol-runtime adopts `v5_node_protocol` once it is finalized.
 
 | Route | Planned calls | Mode |
 |---|---|---|
@@ -2268,7 +2268,7 @@ WebSocket agent on the kernel's agent handler). Byte parity holds on SQLite
 and PostgreSQL. What differs from the rows above, and what the kernel gained:
 
 - **The protocols need the finalize.** The routes answer only when the
-  lease adopts `v2_node_protocol` (`packagestoresdk.Store.Leased`), which
+  lease adopts `v5_node_protocol` (`packagestoresdk.Store.Leased`), which
   it always does: the kernel starts on a finalized split only. The kernel
   keeps no legacy handler for these routes (removed after 5.0.3; the suite
   now pins the recorded answers). The agent routes need no finalize: a
@@ -2541,7 +2541,7 @@ it up to A2-3.
     - the link certificate (H28);
     - forward.v1: a route is planned, pushed, applied and reported at the
       same generation, and traffic flows through gost;
-    - user traffic through the inbound counted once in `v2_user` and the
+    - user traffic through the inbound counted once in `v5_user` and the
       report ledger;
     - the alive list;
     - `agent.diagnostic` on the stream;

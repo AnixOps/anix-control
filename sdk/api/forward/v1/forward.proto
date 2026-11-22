@@ -97,7 +97,7 @@ service ForwardControl {
   // package's /api/v4/forward/* serves. No answer carries a node
   // credential.
 
-  // ListNodes answers every forward node (v2_forward_node) and every proxy
+  // ListNodes answers every forward node (v5_forward_node) and every proxy
   // node in the forwarding inventory, by node_ref, with its settings, the
   // planner's view and its desired and reported generations.
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);

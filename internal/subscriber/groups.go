@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ErrSubscriptionGroupNotFound means no v2_subscription_group row has the id.
+// ErrSubscriptionGroupNotFound means no v5_subscription_group row has the id.
 var ErrSubscriptionGroupNotFound = errors.New("subscription group not found")
 
 // ErrMembershipNotFound means the subscriber does not hold the group.

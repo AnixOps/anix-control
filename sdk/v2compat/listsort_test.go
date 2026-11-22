@@ -44,7 +44,7 @@ func TestParseListSortWithoutTiebreaker(t *testing.T) {
 }
 
 func TestParseListSortRefusesWhatIsNotListed(t *testing.T) {
-	for _, value := range []string{"password", "email; DROP TABLE v2_user", "EMAIL", "(select 1)", "id desc", "u + d"} {
+	for _, value := range []string{"password", "email; DROP TABLE v5_user", "EMAIL", "(select 1)", "id desc", "u + d"} {
 		_, err := ParseListSort(value, "", testSortColumns, "id DESC")
 		var refused *SortError
 		require.True(t, errors.As(err, &refused), value)

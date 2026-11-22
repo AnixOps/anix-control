@@ -32,6 +32,6 @@ var wireGuardRoutes = map[string]struct{}{
 // bridgedRoutes are the package's compatibility routes without a native
 // handler. There are none: the WireGuard protocols themselves, with their
 // server keys, are protocol-runtime's routes on the protected
-// v2_node_protocol, and the users' peers live in the protected
-// v2_wireguard_peer, which the kernel's subscription rendering writes.
+// v5_node_protocol, and the users' peers live in the protected
+// v5_wireguard_peer, which the kernel's subscription rendering writes.
 var bridgedRoutes = map[string]struct{}{}

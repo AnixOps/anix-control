@@ -63,10 +63,10 @@ func groupProtocolLess(layouts map[groupProtocolKey]model.SubscriptionGroupProto
 }
 
 // linkedGroupProtocols lists the ids of the node protocols linked to the
-// group (v2_subscription_group_node_protocols).
+// group (v5_subscription_group_node_protocols).
 func linkedGroupProtocols(db *gorm.DB, groupID uint) ([]uint, error) {
 	var ids []uint
-	err := db.Table("v2_subscription_group_node_protocols").
+	err := db.Table("v5_subscription_group_node_protocols").
 		Where("subscription_group_id = ?", groupID).
 		Pluck("node_protocol_id", &ids).Error
 	return ids, err

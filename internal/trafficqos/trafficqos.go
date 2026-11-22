@@ -8,7 +8,7 @@
 // lower classes there use what the higher ones leave of the capacity, and
 // a capped class holds each user's connections of it to its cap.
 //
-// The settings are one JSON document in v2_system_config (SettingsKey).
+// The settings are one JSON document in v5_system_config (SettingsKey).
 // Without it the defaults apply: on, downloads at low priority, Steam
 // downloads capped at 5 Mbit/s per user.
 package trafficqos
@@ -25,7 +25,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// SettingsKey is the v2_system_config key of the settings.
+// SettingsKey is the v5_system_config key of the settings.
 const SettingsKey = "traffic.qos"
 
 // The priorities a category or a cap may have.

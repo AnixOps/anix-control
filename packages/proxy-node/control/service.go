@@ -22,7 +22,7 @@ type proxyNodeBridge interface {
 
 // newProxyNodeService returns the proxy-node host's router. The routes in
 // proxyNodeRoutes have a native handler and are served by it alone: the
-// kernel has no handler for them. The node routes read v2_node, which the
+// kernel has no handler for them. The node routes read v5_node, which the
 // lease adopts since the node credential split finalized it; a node's
 // deletion reaches the kernel's KernelNodeOps over the bridge connection
 // (local socket or module listener). The routes in bridgedRoutes relay to
@@ -72,7 +72,7 @@ var proxyNodeRoutes = map[string]struct{}{
 // handler; they always relay to the kernel's legacy handler.
 //
 //   - Node creation (bridged) also creates the node's default protocol in
-//     v2_node_protocol, protocol-runtime's table, in the kernel's
+//     v5_node_protocol, protocol-runtime's table, in the kernel's
 //     transaction; no KernelNodeOps call creates a protocol.
 //   - Node update (bridged) also records a group change in the subscriber
 //     change log (subscriber.RecordNodeGroupChangeTx), revokes the node's

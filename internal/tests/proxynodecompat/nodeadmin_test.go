@@ -20,7 +20,7 @@ import (
 
 // The node routes run through the whole path a deployment runs
 // (packagecompat.RunKernelRead and RunKernelWrite): the kernel's gateway
-// expands the handles an answer shows, the package host reads v2_node, which
+// expands the handles an answer shows, the package host reads v5_node, which
 // its lease adopts since the node credential split finalized it, and the
 // kernel retires deleted nodes. The answers and, for the deletion, the rows,
 // the kernel's secrets and credentials after it are the ones recorded in
@@ -111,8 +111,8 @@ func seedFleet(t testing.TB, db *gorm.DB) {
 	require.NoError(t, db.Create(&model.WireGuardPeer{ID: 1, NodeProtocolID: 2, UserID: 1, PeerIP: "10.8.0.2", PrivateKey: "fake-peer-private",
 		PublicKey: "peer-pub", PresharedKey: "fake-psk", CreatedAt: seeded, UpdatedAt: seeded}).Error)
 	require.NoError(t, db.Create(&model.SubscriptionGroup{ID: 1, Name: "default", Enable: 1, CreatedAt: seeded, UpdatedAt: seeded}).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 2), (1, 3)").Error)
-	syncTables(t, db, "v2_node", "v2_node_protocol", "v2_wireguard_peer", "v2_subscription_group", "v2_user")
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 2), (1, 3)").Error)
+	syncTables(t, db, "v5_node", "v5_node_protocol", "v5_wireguard_peer", "v5_subscription_group", "v5_user")
 }
 
 func wireGuardSettings(private, public string) string {
@@ -148,7 +148,7 @@ func fleetState(t testing.TB, db *gorm.DB) any {
 	require.NoError(t, db.Model(&model.ProtocolSecret{}).Order("scope, owner_id, column_name, json_pointer").Find(&secrets).Error)
 	var peers, links int64
 	require.NoError(t, db.Model(&model.WireGuardPeer{}).Count(&peers).Error)
-	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
+	require.NoError(t, db.Table("v5_subscription_group_node_protocols").Count(&links).Error)
 	return map[string]any{"nodes": nodeRows, "protocols": protocols, "secrets": secrets, "peers": peers, "links": links}
 }
 
@@ -225,7 +225,7 @@ func TestNodeList(t *testing.T) {
 		{Name: "empty sort keeps the administrator's order", Path: path + "?sort=&order=desc"},
 		{Name: "order without sort keeps the administrator's order", Path: path + "?order=desc"},
 		{Name: "the shown status is not a sort column", Path: path + "?sort=status"},
-		{Name: "a sort that is an injection", Path: path + "?sort=id%3B%20DROP%20TABLE%20v2_node"},
+		{Name: "a sort that is an injection", Path: path + "?sort=id%3B%20DROP%20TABLE%20v5_node"},
 		{Name: "a direction that is not asc or desc", Path: path + "?sort=id&order=up"},
 	})
 }

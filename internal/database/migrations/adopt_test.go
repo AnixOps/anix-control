@@ -110,8 +110,8 @@ func TestAdoptionCompletesADatabaseAnOlderReleaseLeft(t *testing.T) {
 		// active flux jobs were failed (SupersededJobs) before
 		// 0028_drop_flux_tables dropped their table.
 		var proxy, relay string
-		require.NoError(t, db.Raw("SELECT approval FROM v2_node WHERE name = 'proxy'").Scan(&proxy).Error)
-		require.NoError(t, db.Raw("SELECT approval FROM v2_forward_node WHERE name = 'relay'").Scan(&relay).Error)
+		require.NoError(t, db.Raw("SELECT approval FROM v5_node WHERE name = 'proxy'").Scan(&proxy).Error)
+		require.NoError(t, db.Raw("SELECT approval FROM v5_forward_node WHERE name = 'relay'").Scan(&relay).Error)
 		assert.Equal(t, model.NodeApprovalApproved, proxy)
 		assert.Equal(t, model.NodeApprovalApproved, relay)
 		assert.False(t, db.Migrator().HasTable("v2_forward_runtime_job"))
@@ -152,7 +152,7 @@ func TestAdoptionKeepsTheFluxTablesDropped(t *testing.T) {
 		for _, table := range fluxTables {
 			assert.False(t, db.Migrator().HasTable(table), table)
 		}
-		assert.True(t, db.Migrator().HasTable("v2_forward_node"))
+		assert.True(t, db.Migrator().HasTable("v5_forward_node"))
 	})
 }
 

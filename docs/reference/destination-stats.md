@@ -79,7 +79,7 @@ The console edits them at 流量与监控 → 流量分类.
 The categories also steer the proxy nodes' traffic (`internal/trafficqos`,
 console 流量与监控 → 流量分类 → QoS, `GET`/`PUT /api/v4/admin/traffic/qos`,
 audited as `traffic_qos`). The settings are one JSON document in
-`v2_system_config` (`traffic.qos`); without it the defaults apply: on,
+`v5_system_config` (`traffic.qos`); without it the defaults apply: on,
 downloads at low priority, Steam downloads (`trafficqos.SteamDownloadDomains`)
 capped at 5 Mbit/s per user.
 
@@ -105,7 +105,7 @@ scheduled.
 
 ## Settings
 
-| Setting | Key (`v2_system_config`) | Default | |
+| Setting | Key (`v5_system_config`) | Default | |
 |---|---|---|---|
 | On or off | `traffic.destinations.enabled` | `false` | Off, Control acknowledges the Agents' batches and drops them; the history kept is still shown. Takes effect at once, without reconnecting the Agents. |
 | Retention | `traffic.destinations.retention_days` | `30` | 7 to 180 days. The retention worker (hourly) deletes the older rows. |

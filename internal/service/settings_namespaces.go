@@ -38,7 +38,7 @@ const (
 )
 
 // SettingsNamespace is one entry of the kernel's namespace table. Its keys
-// are rows of v2_system_config.
+// are rows of v5_system_config.
 type SettingsNamespace struct {
 	Name string
 	// Keys are exact keys; Prefixes match the longer keys that start with

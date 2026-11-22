@@ -77,7 +77,7 @@ func (KernelNodeOperation) TableName() string { return "v4_kernel_node_operation
 type KernelNodeOperationTarget struct {
 	ID          uint64 `gorm:"primaryKey;autoIncrement" json:"-"`
 	OperationID string `gorm:"size:64;not null;index" json:"operation_id"`
-	// NodeKind is proxy (v2_node), forward (v2_forward_node) or clean_agent
+	// NodeKind is proxy (v5_node), forward (v5_forward_node) or clean_agent
 	// (v2_forward_clean_agent).
 	NodeKind string `gorm:"size:16;not null;index:idx_kernel_node_operation_target_node,priority:1" json:"node_kind"`
 	NodeID   uint64 `gorm:"not null;index:idx_kernel_node_operation_target_node,priority:2" json:"node_id"`

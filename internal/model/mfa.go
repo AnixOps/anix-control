@@ -32,7 +32,7 @@ type UserMFA struct {
 
 // TableName 指定表名
 func (UserMFA) TableName() string {
-	return "v2_user_mfa"
+	return "v5_user_mfa"
 }
 
 // MFAMethod MFA方式

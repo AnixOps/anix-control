@@ -14,7 +14,7 @@ import (
 
 // InviteService 邀请服务
 //
-// It keeps the invite configuration (v2_invite_config) in memory and
+// It keeps the invite configuration (v5_invite_config) in memory and
 // reloads it when the invite settings namespace changed
 // (SettingsGeneration): the affiliate module writes the table it adopted,
 // then the frontend settings through KernelSettings, which bumps the
@@ -163,7 +163,7 @@ func (s *InviteService) GenerateUserInviteCode(userID uint) (*model.InviteCode, 
 // inviteCodeLockClass is the first key of the PostgreSQL advisory lock that
 // serializes a user's invite code generations ("invc" in ASCII). Advisory
 // locks need no grant, so the affiliate package's role takes the same lock
-// (packages/affiliate/native); a row lock on v2_user, which no package may
+// (packages/affiliate/native); a row lock on v5_user, which no package may
 // read or write, would not serialize the two.
 const inviteCodeLockClass int32 = 0x696e7663
 

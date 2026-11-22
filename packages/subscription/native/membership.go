@@ -21,7 +21,7 @@ import (
 
 // Subscriber is the part of KernelSubscriber the native routes call: the
 // membership family (kernel.subscriber.groups.v1), since
-// v2_user_subscription_group is subscriber state the kernel alone writes,
+// v5_user_subscription_group is subscriber state the kernel alone writes,
 // and the subscription summary (kernel.subscriber.summary.v1), which the
 // kernel caches.
 type Subscriber interface {

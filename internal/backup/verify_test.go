@@ -129,8 +129,8 @@ func TestVerifyFindsEachProblem(t *testing.T) {
 			tamper(t, path, unchanged, false, func(m *Manifest) { m.SchemaVersion++ })
 		}, ProblemMigrations, "the manifest says"},
 		{"row counts not the manifest's", func(t *testing.T, path string) {
-			tamper(t, path, unchanged, false, func(m *Manifest) { m.RowCounts["v2_user"] = 3 })
-		}, ProblemRowCounts, "v2_user has 2 rows, the manifest says 3"},
+			tamper(t, path, unchanged, false, func(m *Manifest) { m.RowCounts["v5_user"] = 3 })
+		}, ProblemRowCounts, "v5_user has 2 rows, the manifest says 3"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

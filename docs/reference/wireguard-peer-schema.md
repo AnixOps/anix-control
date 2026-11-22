@@ -3,7 +3,7 @@
 Date: 2026-07-10
 
 The P0 WireGuard panel slice stores one managed peer per user and node protocol
-in `v2_wireguard_peer`. The server calls the idempotent
+in `v5_wireguard_peer`. The server calls the idempotent
 `service.EnsureWireGuardPeerSchema` hook in every environment, including
 production, while the full application schema remains protected from automatic
 production migration. The PostgreSQL migration tool also includes this table.
@@ -11,7 +11,7 @@ production migration. The PostgreSQL migration tool also includes this table.
 Required table:
 
 ```sql
-CREATE TABLE v2_wireguard_peer (
+CREATE TABLE v5_wireguard_peer (
   id INTEGER PRIMARY KEY,
   node_protocol_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
@@ -24,16 +24,16 @@ CREATE TABLE v2_wireguard_peer (
 );
 
 CREATE UNIQUE INDEX idx_wg_peer_protocol_user
-  ON v2_wireguard_peer (node_protocol_id, user_id);
+  ON v5_wireguard_peer (node_protocol_id, user_id);
 
 CREATE UNIQUE INDEX idx_wg_peer_protocol_ip
-  ON v2_wireguard_peer (node_protocol_id, peer_ip);
+  ON v5_wireguard_peer (node_protocol_id, peer_ip);
 
-CREATE INDEX idx_v2_wireguard_peer_node_protocol_id
-  ON v2_wireguard_peer (node_protocol_id);
+CREATE INDEX idx_v5_wireguard_peer_node_protocol_id
+  ON v5_wireguard_peer (node_protocol_id);
 
-CREATE INDEX idx_v2_wireguard_peer_user_id
-  ON v2_wireguard_peer (user_id);
+CREATE INDEX idx_v5_wireguard_peer_user_id
+  ON v5_wireguard_peer (user_id);
 ```
 
 Operational notes:

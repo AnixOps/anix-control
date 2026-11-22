@@ -88,7 +88,7 @@ due again.
 
 | Channel | When |
 |---------|------|
-| in-app | always: an entry in the administrator's notifications (`v2_notification_log`, event `system.alert`) |
+| in-app | always: an entry in the administrator's notifications (`v5_notification_log`, event `system.alert`) |
 | e-mail | when the notification e-mail settings are configured |
 | Telegram | for administrators who bound a Telegram account (the bot must be configured) |
 
@@ -101,7 +101,7 @@ and points to the list for the rest. If no channel could deliver, the alerts
 stay due and the next scan tries again.
 
 The Telegram copy of a digest has the characters `_ * ` [ ]` replaced
-(`v2_node` reads `v2-node`): Telegram's legacy Markdown mode refuses a whole
+(`v5_node` reads `v5-node`): Telegram's legacy Markdown mode refuses a whole
 message that has one of them unpaired. The in-app and e-mail copies keep the
 text as it is.
 

@@ -142,7 +142,7 @@ func telegramLogs(t *testing.T) *bytes.Buffer {
 // resetTelegramTables empties what a test case creates.
 func resetTelegramTables(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	for _, table := range []string{"v2_telegram_bot", "v2_telegram_user", "v2_operation_log"} {
+	for _, table := range []string{"v5_telegram_bot", "v5_telegram_user", "v5_operation_log"} {
 		require.NoError(t, db.Exec("DELETE FROM "+table).Error)
 	}
 }

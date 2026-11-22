@@ -94,7 +94,7 @@ Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用
 节点配置按以下优先级解析：
 
 1. **RawConfig** - 原始 JSON 配置（管理员高级模式）
-2. **协议配置** - 从 `v2_node_protocol` 表构建
+2. **协议配置** - 从 `v5_node_protocol` 表构建
 3. **默认配置** - 最小化启动配置
 
 ### 协议配置示例
@@ -126,7 +126,7 @@ Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用
 
 ## 数据库表结构
 
-### v2_node (节点表)
+### v5_node (节点表)
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -142,7 +142,7 @@ Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用
 | api_key_hash | string | API Key 哈希 |
 | secret_hash | string | Secret 哈希 |
 
-### v2_node_protocol (协议表)
+### v5_node_protocol (协议表)
 
 | 字段 | 类型 | 说明 |
 |------|------|------|

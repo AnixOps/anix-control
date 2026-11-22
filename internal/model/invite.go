@@ -30,7 +30,7 @@ type UserLevel struct {
 
 // TableName 指定表名
 func (UserLevel) TableName() string {
-	return "v2_user_level"
+	return "v5_user_level"
 }
 
 // InviteCode 邀请码
@@ -49,7 +49,7 @@ type InviteCode struct {
 
 // TableName 指定表名
 func (InviteCode) TableName() string {
-	return "v2_invite_code"
+	return "v5_invite_code"
 }
 
 // CommissionRecord 佣金记录
@@ -69,7 +69,7 @@ type CommissionRecord struct {
 
 // TableName 指定表名
 func (CommissionRecord) TableName() string {
-	return "v2_commission_record"
+	return "v5_commission_record"
 }
 
 // CommissionWithdraw 佣金提现
@@ -90,7 +90,7 @@ type CommissionWithdraw struct {
 
 // TableName 指定表名
 func (CommissionWithdraw) TableName() string {
-	return "v2_commission_withdraw"
+	return "v5_commission_withdraw"
 }
 
 // InviteConfig 邀请配置
@@ -120,5 +120,5 @@ type InviteConfig struct {
 
 // TableName 指定表名
 func (InviteConfig) TableName() string {
-	return "v2_invite_config"
+	return "v5_invite_config"
 }

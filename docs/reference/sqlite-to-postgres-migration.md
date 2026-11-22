@@ -78,13 +78,13 @@ dry-run: no PostgreSQL data changed
 
 Record the displayed counts for these tables when present:
 
-- `v2_user`
-- `v2_plan`
-- `v2_node`
-- `v2_node_protocol`
-- `v2_subscription_group`
+- `v5_user`
+- `v5_plan`
+- `v5_node`
+- `v5_node_protocol`
+- `v5_subscription_group`
 - `v2_forward`
-- `v2_system_config`
+- `v5_system_config`
 
 ## Import
 

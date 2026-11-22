@@ -2,7 +2,7 @@
 // with: the same type names, fields and JSON tags, in a package of the
 // same name, so the answers are the same bytes.
 //
-// Node is the kernel's v2_node, which the package adopts once the node
+// Node is the kernel's v5_node, which the package adopts once the node
 // secret split finalized it. Its raw configuration holds
 // the placeholder at every secret position. NodeProtocol reads a node's
 // protocols through the kernel view kapi_node_protocol_public_v1: the
@@ -25,7 +25,7 @@ const (
 // ProtocolType is the kernel's node protocol type.
 type ProtocolType string
 
-// Node is a v2_node row without its credentials.
+// Node is a v5_node row without its credentials.
 type Node struct {
 	ID           uint       `gorm:"primaryKey" json:"id"`
 	Name         string     `gorm:"size:255" json:"name"`
@@ -73,7 +73,7 @@ type Node struct {
 }
 
 // TableName is the adopted kernel table.
-func (Node) TableName() string { return "v2_node" }
+func (Node) TableName() string { return "v5_node" }
 
 // IsOnline is the kernel's: the node checked in within five minutes.
 func (n *Node) IsOnline(now time.Time) bool {
@@ -81,7 +81,7 @@ func (n *Node) IsOnline(now time.Time) bool {
 }
 
 // NodeProtocol is a row of kapi_node_protocol_public_v1: a node protocol,
-// its settings as a finalized v2_node_protocol keeps them.
+// its settings as a finalized v5_node_protocol keeps them.
 type NodeProtocol struct {
 	ID      uint         `gorm:"primaryKey" json:"id"`
 	NodeID  uint         `json:"node_id"`

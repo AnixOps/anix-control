@@ -140,7 +140,8 @@ func legacySchemaModels() []any {
 	}
 }
 
-// keptBackupRecord is model.BackupRecord as the baseline created it. The
+// keptBackupRecord is model.BackupRecord as the baseline created it (as v2_,
+// undoTablePrefix gives it that name back). The
 // model went with the old backup service (Control's backups are v5_backup);
 // its table stays in the schema, unused, until a cleanup migration drops
 // it, so both the baseline's start and today's create it.
@@ -160,7 +161,7 @@ type keptBackupRecord struct {
 	UpdatedAt   time.Time
 }
 
-func (keptBackupRecord) TableName() string { return "v2_backup_record" }
+func (keptBackupRecord) TableName() string { return "v5_backup_record" }
 
 // keptBackupConfig is model.BackupConfig as the baseline created it: the
 // schedule, retention and S3 settings nothing executed. Kept like
@@ -185,7 +186,7 @@ type keptBackupConfig struct {
 	UpdatedAt time.Time
 }
 
-func (keptBackupConfig) TableName() string { return "v2_backup_config" }
+func (keptBackupConfig) TableName() string { return "v5_backup_config" }
 
 // postBaselineIndexes are the indexes later migrations added to the models:
 // the legacy start of the baseline did not create them. legacyPrepare drops
@@ -471,6 +472,7 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	require.NoError(t, legacyPrepareErr(db, production))
 	require.NoError(t, legacyFluxPrepare(db))
 	require.NoError(t, db.AutoMigrate(retiredKernelModels()...))
+	undoTablePrefix(t, db)
 	// 0020_node_groups_without_templates dropped columns of v5_node_group:
 	// the baseline's table is built from the frozen copy.
 	require.NoError(t, db.Migrator().DropTable(&model.NodeGroup{}))
@@ -483,6 +485,48 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	}
 	// 0030_ss2022_user_keys added v4_kernel_agent_transport.protocol_revision.
 	require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
+}
+
+// undoTablePrefix gives the tables 0040_table_prefix renamed their names of
+// the baseline back: today's models create them as v5_, the baseline had
+// v2_. It inverts the step's own statements, then (PostgreSQL) its Go part.
+func undoTablePrefix(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	var step migrations.Step
+	for _, candidate := range steps(t) {
+		if candidate.Name == "table_prefix" {
+			step = candidate
+		}
+	}
+	list, err := migrations.Statements(step.SQL[dialectName(db)])
+	require.NoError(t, err)
+	renamed := regexp.MustCompile(`^ALTER (TABLE|INDEX) "([a-z0-9_]+)" RENAME TO "([a-z0-9_]+)"$`)
+	var tables, indexes []string
+	for _, statement := range list {
+		if match := renamed.FindStringSubmatch(statement); match != nil {
+			inverse := fmt.Sprintf(`ALTER %s "%s" RENAME TO "%s"`, match[1], match[3], match[2])
+			if match[1] == "TABLE" {
+				tables = append(tables, inverse)
+			} else {
+				indexes = append(indexes, inverse)
+			}
+			continue
+		}
+		if strings.HasPrefix(statement, "CREATE ") { // SQLite: the index created again, with its former name
+			index := recordedIndex.FindStringSubmatch(statement)
+			require.NotNil(t, index, statement)
+			former := strings.Replace(index[1], "idx_v5_", "idx_v2_", 1)
+			indexes = append(indexes, `DROP INDEX "`+index[1]+`"`, strings.NewReplacer(
+				"`"+index[1]+"`", "`"+former+"`", "`"+index[2]+"`", "`v2_"+strings.TrimPrefix(index[2], "v5_")+"`").Replace(statement))
+		}
+	}
+	require.Len(t, tables, 51)
+	for _, statement := range append(tables, indexes...) {
+		require.NoError(t, db.Exec(statement).Error, statement)
+	}
+	if db.Name() == "postgres" {
+		require.NoError(t, migrations.RenameDerived(db, "v5_", "v2_"))
+	}
 }
 
 // legacyModelsPrepare is the legacy start's schema work with today's

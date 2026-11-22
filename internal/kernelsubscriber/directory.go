@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// subscriberColumns are the v2_user columns a Subscriber carries: no
+// subscriberColumns are the v5_user columns a Subscriber carries: no
 // password, token or identity fields beyond the ban flag.
 var subscriberColumns = []string{
 	"id", "uuid", "plan_id", "group_id", "expired_at", "transfer_enable", "u", "d", "speed_limit", "device_limit",

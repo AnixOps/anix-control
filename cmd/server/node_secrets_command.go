@@ -19,7 +19,7 @@ const nodeSecretsCommandUsage = `usage:
   anix-control node-secrets status
   anix-control node-secrets validate
 
-Tables: v2_node, v2_node_protocol, v2_wireguard_peer.
+Tables: v5_node, v5_node_protocol, v5_wireguard_peer.
 
 status prints each table's state. Every table is finalized: its secrets are
 in v4_kernel_protocol_secret, and its legacy columns hold tombstones and

@@ -152,7 +152,7 @@ That means ansible attachment depends on:
 - ansible inventory files referenced from `config/config.yaml.forward_runtime`
 - SSH and sudo behavior on the executor host
 
-not on extra fields inside `v2_forward_node`.
+not on extra fields inside `v5_forward_node`.
 
 ### Execution chain
 

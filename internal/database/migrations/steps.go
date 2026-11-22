@@ -69,7 +69,8 @@ var sqlFiles embed.FS
 // goSteps are the Go functions of steps, by version. A Go-only step has a
 // SQL file per dialect with only comments.
 var goSteps = map[int]func(ctx context.Context, tx *gorm.DB, dialect string) error{
-	dropRouteModesVersion: dropStoredRouteModes, // 0004_drop_route_modes
+	dropRouteModesVersion: dropStoredRouteModes,     // 0004_drop_route_modes
+	tablePrefixVersion:    renameTablePrefixObjects, // 0040_table_prefix
 }
 
 // minProgramVersions are the MinProgramVersion of steps, by version.

@@ -4,7 +4,7 @@
 // so are JSON binding errors, which name a field's type with its package
 // ("model.ProtocolType").
 //
-// NodeProtocol is the kernel's v2_node_protocol, which the package adopts
+// NodeProtocol is the kernel's v5_node_protocol, which the package adopts
 // once the node credential split finalized it (its secret positions hold
 // the placeholder; the secrets are the kernel's). Its gorm tags are the
 // kernel model's, so the package writes what the kernel would write
@@ -22,7 +22,7 @@ type ProtocolType string
 // NodeStatus is the kernel's node status.
 type NodeStatus int
 
-// NodeProtocol is a v2_node_protocol row.
+// NodeProtocol is a v5_node_protocol row.
 type NodeProtocol struct {
 	ID      uint         `gorm:"primaryKey" json:"id"`
 	NodeID  uint         `gorm:"index" json:"node_id"`
@@ -51,11 +51,11 @@ type NodeProtocol struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	Node               *Node               `gorm:"foreignKey:NodeID" json:"node,omitempty"`
-	SubscriptionGroups []SubscriptionGroup `gorm:"many2many:v2_subscription_group_node_protocols;" json:"subscription_groups,omitempty"`
+	SubscriptionGroups []SubscriptionGroup `gorm:"many2many:v5_subscription_group_node_protocols;" json:"subscription_groups,omitempty"`
 }
 
 // TableName is the adopted kernel table.
-func (NodeProtocol) TableName() string { return "v2_node_protocol" }
+func (NodeProtocol) TableName() string { return "v5_node_protocol" }
 
 // SecretColumns are the columns of a node protocol that can hold secrets,
 // in the order the package stores them: the settings first, which the
@@ -130,7 +130,7 @@ type Node struct {
 
 // TableName names the kernel table the shape is the kernel's of; the
 // package never reads or writes it.
-func (Node) TableName() string { return "v2_node" }
+func (Node) TableName() string { return "v5_node" }
 
 // SubscriptionGroup is the shape the kernel decodes a nested subscription
 // group to.
@@ -144,11 +144,11 @@ type SubscriptionGroup struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 
 	Templates []SubscriptionTemplate `gorm:"foreignKey:GroupID" json:"templates,omitempty"`
-	Protocols []NodeProtocol         `gorm:"many2many:v2_subscription_group_node_protocols;" json:"protocols,omitempty"`
+	Protocols []NodeProtocol         `gorm:"many2many:v5_subscription_group_node_protocols;" json:"protocols,omitempty"`
 }
 
 // TableName names the kernel table.
-func (SubscriptionGroup) TableName() string { return "v2_subscription_group" }
+func (SubscriptionGroup) TableName() string { return "v5_subscription_group" }
 
 // SubscriptionTemplate is the shape the kernel decodes a nested
 // subscription template to.
@@ -195,4 +195,4 @@ type SubscriptionTemplate struct {
 }
 
 // TableName names the kernel table.
-func (SubscriptionTemplate) TableName() string { return "v2_subscription_template" }
+func (SubscriptionTemplate) TableName() string { return "v5_subscription_template" }

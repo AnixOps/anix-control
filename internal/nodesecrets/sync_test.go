@@ -163,7 +163,7 @@ func TestPruneRemovesOrphans(t *testing.T) {
 		require.EqualValues(t, 1, pruned)
 		require.Empty(t, secrets(t, db, ScopeNodeRawConfig, 999))
 		require.NotEmpty(t, secrets(t, db, ScopeNodeRawConfig, f.nodes[0].ID))
-		_, err = Prune(db, "v2_user")
+		_, err = Prune(db, "v5_user")
 		require.Error(t, err)
 	})
 }
@@ -187,7 +187,7 @@ func TestStateRowsAreFinalized(t *testing.T) {
 			Updates(map[string]any{"phase": "dual_read", "finalized_at": nil}).Error)
 		require.NoError(t, EnsureStateRows(db))
 		requireAllFinalized()
-		require.Error(t, Sync(db, "v2_user", 1))
+		require.Error(t, Sync(db, "v5_user", 1))
 	})
 }
 
@@ -203,13 +203,13 @@ func TestRequireFinalized(t *testing.T) {
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNodeProtocol).
 			Update("phase", "dual_read").Error)
 		err := RequireFinalized(db)
-		require.ErrorContains(t, err, "table v2_node_protocol is in phase dual_read")
+		require.ErrorContains(t, err, "table v5_node_protocol is in phase dual_read")
 		require.ErrorContains(t, err, "Upgrading To 5.0.3")
 
 		// An interrupted finalize.
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNodeProtocol).
 			Updates(map[string]any{"phase": PhaseFinalized, "finalized_at": nil}).Error)
-		require.ErrorContains(t, RequireFinalized(db), "table v2_node_protocol is in phase finalized")
+		require.ErrorContains(t, RequireFinalized(db), "table v5_node_protocol is in phase finalized")
 
 		// The same table without rows passes.
 		require.NoError(t, db.Where("id IN ?", []uint{f.protocols[0].ID, f.protocols[1].ID, f.protocols[2].ID}).Delete(&model.NodeProtocol{}).Error)
@@ -217,6 +217,10 @@ func TestRequireFinalized(t *testing.T) {
 
 		// No state rows, legacy rows: a database from before the split.
 		require.NoError(t, db.Where("1 = 1").Delete(&model.NodeSecretSplit{}).Error)
+		require.ErrorContains(t, RequireFinalized(db), "table v5_node is in phase none")
+
+		// Before 0040_table_prefix the table is still v2_node: the gate reads it.
+		require.NoError(t, db.Exec("ALTER TABLE v5_node RENAME TO v2_node").Error)
 		require.ErrorContains(t, RequireFinalized(db), "table v2_node is in phase none")
 	})
 	t.Run("fresh", func(t *testing.T) {

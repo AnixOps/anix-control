@@ -295,7 +295,7 @@ func (s *SubscriptionService) getUserSubscriptionGroups(user *model.User) ([]*mo
 	}
 
 	// 2. 兼容旧版单分组字段。很多历史数据只写入 user.group_id / plan.group_id，
-	// 没有同步到 v2_user_subscription_group / v2_plan_subscription_group。
+	// 没有同步到 v5_user_subscription_group / v5_plan_subscription_group。
 	if user.GroupID != nil {
 		addGroupID(*user.GroupID)
 	}
@@ -609,8 +609,8 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 	// 查询关联到这些分组的协议
 
 	if err := s.db.Preload("Node").Preload("SubscriptionGroups").
-		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = v2_node_protocol.id").
-		Where("v2_subscription_group_node_protocols.subscription_group_id IN ? AND v2_node_protocol.enable = 1", groupIDs).
+		Joins("JOIN v5_subscription_group_node_protocols ON v5_subscription_group_node_protocols.node_protocol_id = v5_node_protocol.id").
+		Where("v5_subscription_group_node_protocols.subscription_group_id IN ? AND v5_node_protocol.enable = 1", groupIDs).
 		Find(&protocols).Error; err != nil {
 		return nil, err
 	}

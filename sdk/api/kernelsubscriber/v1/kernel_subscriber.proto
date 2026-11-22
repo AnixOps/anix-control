@@ -6,8 +6,8 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1
 
 // KernelSubscriber is the kernel's contract for subscriber state that many
 // domains share: entitlements (plan, group, traffic, limits, expiry),
-// traffic counters, subscription credentials and balances, all in v2_user
-// and v2_user_subscription_group. The kernel stays their only writer;
+// traffic counters, subscription credentials and balances, all in v5_user
+// and v5_user_subscription_group. The kernel stays their only writer;
 // domain modules (plan, order, payment, subscription, proxy-node, forward,
 // affiliate, identity) call this contract instead of writing the tables.
 //
@@ -57,7 +57,7 @@ service KernelSubscriber {
   // and re-list when told their cursor is too old.
   rpc WatchSubscriberChanges(WatchSubscriberChangesRequest) returns (stream SubscriberChange);
   // GrantSubscriptionGroup gives a subscriber one subscription group
-  // (v2_user_subscription_group): it creates the membership, or sets the
+  // (v5_user_subscription_group): it creates the membership, or sets the
   // given fields of an existing one and keeps the others, as the v2
   // administrator route does. NOT_FOUND when the subscriber or the group
   // does not exist; the request is then not recorded.
@@ -90,7 +90,7 @@ service KernelSubscriber {
 // at purchase time.
 message PlanSnapshot {
   uint64 plan_id = 1;
-  // group_id is the primary node group (v2_user.group_id).
+  // group_id is the primary node group (v5_user.group_id).
   uint64 group_id = 2;
   // subscription_group_ids replace the subscriber's subscription groups.
   repeated uint64 subscription_group_ids = 3;

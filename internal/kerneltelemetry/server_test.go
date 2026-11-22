@@ -126,7 +126,7 @@ func TestDashboardAnswersTheKernelsError(t *testing.T) {
 	require.NoError(t, db.Migrator().DropTable(&model.ServerTrojan{}))
 	_, err := server.GetDashboard(context.Background(), &kerneltelemetryv1.GetDashboardRequest{})
 	require.Equal(t, codes.Internal, status.Code(err))
-	require.Equal(t, "count trojan nodes: SQL logic error: no such table: v2_server_trojan (1)", status.Convert(err).Message())
+	require.Equal(t, "count trojan nodes: SQL logic error: no such table: v5_server_trojan (1)", status.Convert(err).Message())
 	_, err = cache.Get(service.CacheKeyDashboardStats)
 	require.ErrorIs(t, err, cache.ErrKeyNotFound)
 }

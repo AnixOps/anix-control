@@ -96,7 +96,7 @@ func deriveNodes(tx *gorm.DB, ids []uint64) (*derivation, error) {
 	return d, nil
 }
 
-// nodeProtocolColumns are the JSON columns of v2_node_protocol that can hold
+// nodeProtocolColumns are the JSON columns of v5_node_protocol that can hold
 // secrets.
 var nodeProtocolColumns = []string{"settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"}
 

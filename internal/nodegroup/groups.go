@@ -22,7 +22,7 @@ const (
 	maxTags          = 16
 	maxTagRunes      = 32
 	maxRate          = 1000
-	// maxTagsJSON is the width of v2_node.tags, which the group's tags are
+	// maxTagsJSON is the width of v5_node.tags, which the group's tags are
 	// copied to.
 	maxTagsJSON = 255
 )

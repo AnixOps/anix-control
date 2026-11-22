@@ -10,7 +10,7 @@ import (
 // The backups moved out of the service package: Control's bundles are
 // internal/backup (docs/reference/backups.md). The former backup service,
 // its settings (schedule, retention, S3, which nothing executed) and the
-// online restore are gone; v2_backup_record and v2_backup_config stay in the
+// online restore are gone; v5_backup_record and v5_backup_config stay in the
 // schema, unused, until a cleanup migration drops them.
 
 type SystemConfigService struct {

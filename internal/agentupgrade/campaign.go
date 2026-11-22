@@ -102,7 +102,7 @@ const (
 	CodeRollbackUnconfirm = "rollback_unconfirmed"
 )
 
-// Audit actions (v2_operation_log, module agent_upgrade).
+// Audit actions (v5_operation_log, module agent_upgrade).
 const (
 	auditModule         = "agent_upgrade"
 	AuditActionStart    = "agent_upgrade_start"

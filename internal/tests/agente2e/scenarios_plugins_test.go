@@ -162,7 +162,7 @@ func (s *suite) scenarioMaintenanceEvents(t *testing.T) string {
 	if s.pluginReadyAt.IsZero() {
 		return skipped + ":" + pluginNotOnTheNode
 	}
-	before := s.count(t, "SELECT COUNT(*) FROM v2_node_log WHERE node_id = ? AND source = 'maintenance'", s.nodeID)
+	before := s.count(t, "SELECT COUNT(*) FROM v5_node_log WHERE node_id = ? AND source = 'maintenance'", s.nodeID)
 	var signatures []string
 	_ = filepath.Walk(s.agent.pluginRoot, func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && info.Name() == "manifest.sig" && strings.Contains(path, "machine-telemetry") {
@@ -194,10 +194,10 @@ func (s *suite) scenarioMaintenanceEvents(t *testing.T) string {
 		TraceID string
 	}
 	eventually(t, 90*time.Second, func() (bool, string) {
-		if s.count(t, "SELECT COUNT(*) FROM v2_node_log WHERE node_id = ? AND source = 'maintenance'", s.nodeID) <= before {
+		if s.count(t, "SELECT COUNT(*) FROM v5_node_log WHERE node_id = ? AND source = 'maintenance'", s.nodeID) <= before {
 			return false, "no maintenance event persisted"
 		}
-		require.NoError(t, s.control.db.Raw("SELECT level, message, trace_id FROM v2_node_log WHERE node_id = ? AND source = 'maintenance' ORDER BY id DESC LIMIT 1", s.nodeID).Scan(&row).Error)
+		require.NoError(t, s.control.db.Raw("SELECT level, message, trace_id FROM v5_node_log WHERE node_id = ? AND source = 'maintenance' ORDER BY id DESC LIMIT 1", s.nodeID).Scan(&row).Error)
 		return true, ""
 	}, s.agent.proc, s.control.proc)
 	require.Equal(t, int64(1), s.count(t, "SELECT COUNT(*) FROM v4_kernel_agent_report_batch WHERE node_kind = 'proxy' AND node_id = ? AND kind = 'maintenance' AND batch_id LIKE 'maintenance:%'", s.nodeID),
@@ -242,7 +242,7 @@ func (s *suite) scenarioDiagnostic(t *testing.T) string {
 			Error   string
 		}
 		eventually(t, 40*time.Second, func() (bool, string) {
-			query := "SELECT task_id, status, success, output, error FROM v2_agent_diagnostic_task WHERE node_id = ? AND action = ? ORDER BY id DESC LIMIT 1"
+			query := "SELECT task_id, status, success, output, error FROM v5_agent_diagnostic_task WHERE node_id = ? AND action = ? ORDER BY id DESC LIMIT 1"
 			require.NoError(t, s.control.db.Raw(query, s.nodeID, action).Scan(&task).Error)
 			return task.Status == "completed" || task.Status == "failed", fmt.Sprintf("%+v", task)
 		}, s.agent.proc, s.control.proc)

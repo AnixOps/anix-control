@@ -30,7 +30,7 @@ import (
 //   - traffic through RecordNodeTrafficReport's transaction, so a byte is
 //     counted once;
 //   - online IPs into the node's alive set;
-//   - logs into v2_node_log;
+//   - logs into v5_node_log;
 //   - status into the node's heartbeat and runtime-health columns.
 //
 // A TrafficReport or LogBatch is applied at most once per node and batch
@@ -105,7 +105,7 @@ func reportsServerCapability(agent []*agentv1pb.Capability) *agentv1pb.Capabilit
 
 // servesReports tells whether the HelloAck advertises reports.v1 to an
 // agent: when the agent lists it and the stream's node is a proxy node
-// (v2_node), whose legacy report sinks exist. Forward-node reports join
+// (v5_node), whose legacy report sinks exist. Forward-node reports join
 // with A5.
 func (s *AgentControlGRPCServer) servesReports(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {
 	return node.Kind == agentcontrol.NodeKindProxy &&

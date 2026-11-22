@@ -57,7 +57,7 @@ plain tar is readable with any tool) with these members, in this order:
 | `domain` | The panel's domain, when configured |
 | `root_key_fingerprint` | `sha256:` and the SHA-256 of a value derived from the root key with its own label (`anixops root key fingerprint v1`); never a digest of the key itself. Two bundles with the same fingerprint carry the same key |
 | `members` | Name, size and SHA-256 of every other member |
-| `row_counts` | Rows of `v2_user`, `v2_node` and `v2_order` in the snapshot |
+| `row_counts` | Rows of `v5_user`, `v5_node` and `v5_order` in the snapshot |
 
 Read it without unpacking: `tar -xOf <bundle> manifest.json`.
 
@@ -288,7 +288,7 @@ back up, local or S3 storage) ran nothing, and the online restore closed the
 running process's database and copied a file over it. They are gone with
 their routes (`/api/v2/admin/system/backup*`, which answer 404), the
 `backup` settings namespace and the platform package's backup handlers. The
-tables `v2_backup_config` and `v2_backup_record` stay, unused, until a
+tables `v5_backup_config` and `v5_backup_record` stay, unused, until a
 cleanup migration drops them; a file the old service wrote stays where it
 was (by default `backups/` under the working directory) and is yours to
 keep or delete.

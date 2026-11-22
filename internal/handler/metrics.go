@@ -170,9 +170,9 @@ type User struct{}
 type Node struct{}
 type Order struct{}
 
-func (User) TableName() string  { return "v2_user" }
-func (Node) TableName() string  { return "v2_node" }
-func (Order) TableName() string { return "v2_order" }
+func (User) TableName() string  { return "v5_user" }
+func (Node) TableName() string  { return "v5_node" }
+func (Order) TableName() string { return "v5_order" }
 
 func formatInt(v int64) string {
 	return strconv.FormatInt(v, 10)

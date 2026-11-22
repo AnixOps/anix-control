@@ -42,7 +42,7 @@ func TestRetireProxyNodeTxRollsBackWithItsCaller(t *testing.T) {
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 5, NodeID: 1, Name: "reality", Type: model.ProtocolVLESS, Port: 443, RealitySettings: &reality}).Error)
 	group := &model.SubscriptionGroup{Name: "group", Enable: 1}
 	require.NoError(t, db.Create(group).Error)
-	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, 5).Error)
+	require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, 5).Error)
 	require.NoError(t, db.Create(&model.WireGuardPeer{NodeProtocolID: 5, UserID: 1, PeerIP: "10.9.0.2", PrivateKey: "peer-private", PublicKey: "pub"}).Error)
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, 1); err != nil {
@@ -55,7 +55,7 @@ func TestRetireProxyNodeTxRollsBackWithItsCaller(t *testing.T) {
 	}))
 	before := func() []int64 {
 		var links int64
-		require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
+		require.NoError(t, db.Table("v5_subscription_group_node_protocols").Count(&links).Error)
 		return []int64{
 			countRows(t, db, &model.NodeProtocol{}, "node_id = ?", 1), countRows(t, db, &model.WireGuardPeer{}, "1 = 1"), links,
 			countRows(t, db, &model.ProtocolSecret{}, "1 = 1"),

@@ -2,7 +2,7 @@
 // itself: the administrator's WireGuard server keypair for the protocol form.
 // It reads and stores nothing: the keys are generated for the caller, who
 // saves the private key into a protocol through the kernel's protocol routes
-// (protocol-runtime; v2_node_protocol is a protected kernel table). The route
+// (protocol-runtime; v5_node_protocol is a protected kernel table). The route
 // is native only: the kernel keeps no legacy handler for it.
 package native
 

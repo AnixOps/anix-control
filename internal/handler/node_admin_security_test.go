@@ -82,9 +82,9 @@ func (s *NodeAdminWritesTestSuite) TestCreateNodeSavesNoNestedAssociations() {
 	created := uint(data["node_id"].(float64))
 	s.NotEqual(uint(77), created, "the body chose the node's id")
 
-	s.EqualValues(3, s.count("v2_node"), "a nested node was created")
-	s.EqualValues(0, s.count("v2_subscription_group"), "a nested subscription group was created")
-	s.EqualValues(0, s.count("v2_subscription_group_node_protocols"), "a nested protocol was linked")
+	s.EqualValues(3, s.count("v5_node"), "a nested node was created")
+	s.EqualValues(0, s.count("v5_subscription_group"), "a nested subscription group was created")
+	s.EqualValues(0, s.count("v5_subscription_group_node_protocols"), "a nested protocol was linked")
 	var protocolA model.NodeProtocol
 	s.Require().NoError(s.db.First(&protocolA, s.protocolA.ID).Error)
 	s.Equal(s.nodeA.ID, protocolA.NodeID, "another node's protocol was moved")
@@ -104,7 +104,7 @@ func (s *NodeAdminWritesTestSuite) TestUpdateNodeKeepsItsID() {
 		s.ok(s.serve("PUT", "/nodes/:id", fmt.Sprintf("/nodes/%d", s.nodeA.ID), body, handler.UpdateNode))
 		s.Equal("renamed", s.node(s.nodeA.ID).Name, body)
 		s.requireSeededIDs()
-		s.EqualValues(2, s.count("v2_node"), body)
+		s.EqualValues(2, s.count("v5_node"), body)
 	}
 }
 

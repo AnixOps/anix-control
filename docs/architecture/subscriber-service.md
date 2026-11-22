@@ -5,14 +5,14 @@ Status: in place. The contract is `sdk/api/kernelsubscriber/v1`, served by
 
 ## Why
 
-Every business domain still writes `v2_user` directly.
+Every business domain still writes `v5_user` directly.
 - **Order completion** writes plan, group, traffic, limits and expiry, and
-  rewrites `v2_user_subscription_group`.
+  rewrites `v5_user_subscription_group`.
 - **Administrator plan assignment** does the same.
-- **Node user lists** filter `v2_user` for banned, expired, out-of-traffic
+- **Node user lists** filter `v5_user` for banned, expired, out-of-traffic
   and group.
-- **Node and forward traffic** increment `v2_user.u/d`.
-- **The monthly reset worker** zeroes `v2_user.u/d`.
+- **Node and forward traffic** increment `v5_user.u/d`.
+- **The monthly reset worker** zeroes `v5_user.u/d`.
 - **Commissions** change `commission_balance`.
 
 A domain cannot become a module while it writes a table other domains own,
@@ -21,9 +21,9 @@ so these writes move behind one kernel contract first.
 ## Ownership
 
 The kernel owns the subscriber record:
-- `v2_user` entitlement columns, traffic counters, subscription token, proxy
+- `v5_user` entitlement columns, traffic counters, subscription token, proxy
   uuid and balances;
-- `v2_user_subscription_group`.
+- `v5_user_subscription_group`.
 
 Identity owns accounts; the kernel keeps a projection of the identity columns
 (`identity-service.md`).
@@ -108,7 +108,7 @@ package and generation.
   accounting stays in the kernel: a forward's counters, the subscriber's
   traffic (`subscriber.RecordTrafficTx`) and the tunnel permission's traffic
   change in one transaction, and exhaustion pauses forwards on their nodes.
-- **Subscription group membership.** `v2_user_subscription_group` rows,
+- **Subscription group membership.** `v5_user_subscription_group` rows,
   one per group a subscriber holds, each with its own expiry, traffic and
   renewal price. `internal/subscriber` holds the engine functions; the
   kernel's legacy handlers and the contract call the same ones.
@@ -159,7 +159,7 @@ package and generation.
   - `expired_at` is null or in the future;
   - `u + d < transfer_enable`: a zero limit serves nothing, as node user
     lists always have;
-  - their primary group (`v2_user.group_id`) is one of the requested groups,
+  - their primary group (`v5_user.group_id`) is one of the requested groups,
     as today's node lists filter. Subscription groups serve subscription
     links, not node lists.
 - **Change feed.**
@@ -214,7 +214,7 @@ package and generation.
   - The legacy v2 handlers then call the same code the contract will serve.
 - **F2b. Traffic ledger** (in place).
   - `internal/subscriber.RecordTrafficTx` and `ResetTrafficTx` are the only
-    writers of `v2_user.u/d`. They are used by node reports, the v2board
+    writers of `v5_user.u/d`. They are used by node reports, the v2board
     traffic service, forward flow and manual resets.
   - Rows are updated in id order, so concurrent reports cannot deadlock.
   - A batch id is applied once. Legacy node reports carry none and are
@@ -272,4 +272,4 @@ package and generation.
 
 - Plan and order data: they belong to the plan and order modules.
 - Multi-currency and refunds beyond balance adjustments.
-- Per-node traffic statistics (`v2_stat_*`): they stay with proxy node.
+- Per-node traffic statistics (`v5_stat_*`): they stay with proxy node.

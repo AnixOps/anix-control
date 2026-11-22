@@ -17,7 +17,7 @@ const (
 )
 
 // The views the protocol pool reads. The kernel creates them, and grants
-// them to the package's lease, only once v2_node_protocol and v2_node are
+// them to the package's lease, only once v5_node_protocol and v5_node are
 // finalized (docs/architecture/node-ops-service.md sections 4.3 and 4.6):
 // their JSON columns then hold the redacted documents, never a key.
 const (
@@ -26,7 +26,7 @@ const (
 )
 
 // PoolProtocol is a row of kapi_node_protocol_public_v1: a node protocol
-// with its settings as a finalized v2_node_protocol keeps them, the
+// with its settings as a finalized v5_node_protocol keeps them, the
 // placeholder at every secret position. It answers as the kernel's
 // model.NodeProtocol does.
 type PoolProtocol struct {
@@ -57,7 +57,7 @@ type PoolProtocol struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	Node               *PoolNode                 `gorm:"foreignKey:NodeID" json:"node,omitempty"`
-	SubscriptionGroups []model.SubscriptionGroup `gorm:"many2many:v2_subscription_group_node_protocols;joinForeignKey:NodeProtocolID;joinReferences:SubscriptionGroupID" json:"subscription_groups,omitempty"`
+	SubscriptionGroups []model.SubscriptionGroup `gorm:"many2many:v5_subscription_group_node_protocols;joinForeignKey:NodeProtocolID;joinReferences:SubscriptionGroupID" json:"subscription_groups,omitempty"`
 }
 
 // TableName is the kernel view.
@@ -156,8 +156,8 @@ func (s *Service) GroupProtocols(ctx context.Context, request pluginhostsdk.Nati
 	}
 	var protocols []PoolProtocol
 	if err := db.Preload("Node").
-		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = "+nodeProtocolPublicView+".id").
-		Where("v2_subscription_group_node_protocols.subscription_group_id = ?", id).
+		Joins("JOIN v5_subscription_group_node_protocols ON v5_subscription_group_node_protocols.node_protocol_id = "+nodeProtocolPublicView+".id").
+		Where("v5_subscription_group_node_protocols.subscription_group_id = ?", id).
 		Find(&protocols).Error; err != nil {
 		return s.panelError(err.Error())
 	}

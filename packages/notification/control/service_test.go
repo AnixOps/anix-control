@@ -116,8 +116,8 @@ func TestNotificationManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.storage.v1", "kernel.storage.adopt:v2_notification_template", "kernel.storage.adopt:v2_notification_log",
-		"kernel.storage.adopt:v2_telegram_bot", "kernel.storage.adopt:v2_telegram_user", "kernel.view:kapi_user_directory_v1",
+		"kernel.storage.v1", "kernel.storage.adopt:v5_notification_template", "kernel.storage.adopt:v5_notification_log",
+		"kernel.storage.adopt:v5_telegram_bot", "kernel.storage.adopt:v5_telegram_user", "kernel.view:kapi_user_directory_v1",
 		// The e-mail configuration holds the SMTP password, which the GET
 		// answers and the test send uses.
 		"kernel.settings.mail.read.v1", "kernel.settings.mail.write.v1", "kernel.settings.mail.secrets.v1",

@@ -22,7 +22,7 @@ import (
 // The node inventory and the forward node registry as ForwardControl
 // serves them (F5a: ListNodes, GetNode, SetNodeSettings, CreateForwardNode,
 // UpdateForwardNode, DeleteForwardNode). A forward node's row
-// (v2_forward_node) is written through service.ForwardNodeService, as the
+// (v5_forward_node) is written through service.ForwardNodeService, as the
 // v2 handlers write it, so its credential split and Agent certificates
 // follow; no answer carries the node's credential.
 

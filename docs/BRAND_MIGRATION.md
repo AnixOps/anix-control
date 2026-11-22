@@ -29,10 +29,12 @@ The names inherited from V2Board are no longer used:
 | browser storage key `v2board-theme` | `app.theme` (the theme choice is asked again once) |
 | `bin/v2board` link and the `/opt/v2board` layout of the installer | removed; `install.sh update` deletes the link |
 | `/home/v2board/.ssh` in the container | `/home/anixops/.ssh` |
+| the 51 database tables prefixed `v2_`, their `idx_v2_*` indexes, constraints and sequences | `v5_` (migration `0040_table_prefix`) |
 
 Still unchanged:
 
-- database tables prefixed with `v2_` (renamed by a later migration);
+- column names that came with the tables (for example `u`, `d` and
+  `transfer_enable` of `v5_user`);
 - the HTTP API versions `/api/v2` to `/api/v5`, which are Control's own;
 - PostgreSQL database and role names an operator chose, for example
   `anix_control_v2board`: renaming a database is an operator decision.

@@ -339,7 +339,7 @@ func TestAgentControlTrafficReportRefusedForGood(t *testing.T) {
 	require.NoError(t, stream.CloseSend())
 }
 
-// A log batch lands in v2_node_log as ReportLogs puts it, with the runtime
+// A log batch lands in v5_node_log as ReportLogs puts it, with the runtime
 // health a WireGuard entry carries; a replay adds nothing.
 func TestAgentControlLogBatchReachesNodeLogs(t *testing.T) {
 	environment := newReportsTestEnvironment(t)

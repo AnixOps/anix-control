@@ -117,5 +117,5 @@ func TestPostgresIdentityDirectoryJoinsAccountsWithSubscriberViews(t *testing.T)
 	require.GreaterOrEqual(t, counts.Total, counts.Banned)
 
 	var tokens []string
-	requirePermissionDenied(t, pkg.DB.Raw("SELECT token FROM v2_user").Scan(&tokens).Error)
+	requirePermissionDenied(t, pkg.DB.Raw("SELECT token FROM v5_user").Scan(&tokens).Error)
 }

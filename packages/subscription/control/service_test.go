@@ -158,7 +158,7 @@ func TestSubscriptionHostRoutesAreThePackageRoutes(t *testing.T) {
 }
 
 // The package adopts its four tables and reads the plan, entitlement,
-// membership and node views. It adopts no v2_user* table and reads no user
+// membership and node views. It adopts no v5_user* table and reads no user
 // directory view (e-mail addresses; the summary carries the caller's own).
 // It reads node and protocol settings only through the public views of the
 // node credential split, which the kernel grants once the split is
@@ -172,8 +172,8 @@ func TestSubscriptionManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.storage.v1", "kernel.storage.adopt:v2_subscription_group", "kernel.storage.adopt:v2_subscription_template",
-		"kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols",
+		"kernel.storage.v1", "kernel.storage.adopt:v5_subscription_group", "kernel.storage.adopt:v5_subscription_template",
+		"kernel.storage.adopt:v5_plan_subscription_group", "kernel.storage.adopt:v5_subscription_group_node_protocols",
 		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1",
 		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1",
 		"kernel.view:kapi_node_protocol_public_v1", "kernel.view:kapi_node_public_v1", "kernel.subscriber.groups.v1",
@@ -205,7 +205,7 @@ func TestSubscriptionHostServesNativeRoutesOnTheLease(t *testing.T) {
 		lease: packagebridgesdk.StorageLease{
 			Driver: "sqlite", DSN: path, TablePrefix: "pkg_subscription_",
 			AdoptedTables: []string{
-				"v2_plan_subscription_group", "v2_subscription_group", "v2_subscription_group_node_protocols", "v2_subscription_template",
+				"v5_plan_subscription_group", "v5_subscription_group", "v5_subscription_group_node_protocols", "v5_subscription_template",
 			},
 		},
 	}
@@ -276,7 +276,7 @@ func TestSubscriptionHostChangesMembershipThroughKernelSubscriberOverTheBridge(t
 		lease: packagebridgesdk.StorageLease{
 			Driver: "sqlite", DSN: path, TablePrefix: "pkg_subscription_",
 			AdoptedTables: []string{
-				"v2_plan_subscription_group", "v2_subscription_group", "v2_subscription_group_node_protocols", "v2_subscription_template",
+				"v5_plan_subscription_group", "v5_subscription_group", "v5_subscription_group_node_protocols", "v5_subscription_template",
 			},
 		},
 	}

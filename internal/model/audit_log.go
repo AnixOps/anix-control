@@ -27,5 +27,5 @@ type AuditLog struct {
 
 // TableName specifies the table name for audit logs.
 func (AuditLog) TableName() string {
-	return "v2_audit_log"
+	return "v5_audit_log"
 }

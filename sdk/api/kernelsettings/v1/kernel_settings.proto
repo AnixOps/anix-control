@@ -5,8 +5,8 @@ package anixops.kernelsettings.v1;
 option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1;kernelsettingsv1";
 
 // KernelSettings is the kernel's contract for system settings: the rows of
-// the protected v2_system_config table and the backup configuration row of
-// v2_backup_config. The kernel stays their only writer; official packages
+// the protected v5_system_config table and the backup configuration row of
+// v5_backup_config. The kernel stays their only writer; official packages
 // read and change them through this contract instead of the tables
 // (docs/architecture/settings-service.md).
 //
@@ -77,7 +77,7 @@ message Setting {
   bool masked = 5;
   // has_value: the stored value is not blank.
   bool has_value = 6;
-  // type, group and remark are the v2_system_config row's metadata; empty
+  // type, group and remark are the v5_system_config row's metadata; empty
   // for backup fields.
   string type = 7;
   string group = 8;
@@ -114,7 +114,7 @@ message SettingEntry {
   // field password of notification.email.config) sent as the placeholder
   // keeps its stored value, "" when none is stored.
   bool keep = 3;
-  // type, group and remark are stored with a v2_system_config key; empty
+  // type, group and remark are stored with a v5_system_config key; empty
   // leaves the stored one (a new key's type defaults to "string"). They
   // must be empty for backup fields.
   string type = 4;

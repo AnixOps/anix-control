@@ -150,7 +150,7 @@ func TestPostgresBundleRoundTrip(t *testing.T) {
 	bundle, err := Write(ctx, f.source(), TypeManual, time.Now())
 	require.NoError(t, err)
 	assert.Equal(t, KindPostgres, bundle.Manifest.Kind())
-	assert.Equal(t, int64(2), bundle.Manifest.RowCounts["v2_user"])
+	assert.Equal(t, int64(2), bundle.Manifest.RowCounts["v5_user"])
 	names := []string{}
 	for _, member := range readMembers(t, bundle.Path) {
 		names = append(names, member.header.Name)

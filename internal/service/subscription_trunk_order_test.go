@@ -32,7 +32,7 @@ func TestSubscriptionPutsTrunkNodesFirst(t *testing.T) {
 		require.NoError(t, db.Create(node).Error)
 		protocol := model.NodeProtocol{NodeID: node.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 11111, Enable: 1, Show: 1}
 		require.NoError(t, db.Create(&protocol).Error)
-		require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+		require.NoError(t, db.Exec("INSERT INTO v5_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
 		return node
 	}
 	direct := add("JP direct", "198.51.100.40")

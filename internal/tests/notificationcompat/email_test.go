@@ -73,11 +73,11 @@ func otherSettings(t testing.TB, db *gorm.DB) {
 
 func syncConfigSequence(t testing.TB, db *gorm.DB) {
 	if db.Name() == "postgres" {
-		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v2_system_config', 'id'), COALESCE((SELECT MAX(id) FROM v2_system_config), 0) + 1, false)").Error)
+		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence('v5_system_config', 'id'), COALESCE((SELECT MAX(id) FROM v5_system_config), 0) + 1, false)").Error)
 	}
 }
 
-// settingsState is v2_system_config and the system audit trail after the
+// settingsState is v5_system_config and the system audit trail after the
 // request, without the times taken from the clock. An audit entry never
 // holds the SMTP password.
 func settingsState(t testing.TB, db *gorm.DB) any {

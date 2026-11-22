@@ -192,7 +192,7 @@ func (h *hostServer) ApplyEntitlement(ctx context.Context, request *kernelsubscr
 	return response, nil
 }
 
-// updateOnce applies v2_user updates through the kernel's user update path
+// updateOnce applies v5_user updates through the kernel's user update path
 // (revocations, change log) once per request id. A subscriber that does not
 // exist is NotFound, and nothing is recorded.
 func (h *hostServer) updateOnce(db *gorm.DB, id, method string, user uint, updates map[string]any) (bool, error) {

@@ -5,7 +5,7 @@ This page is the explicit migration note for the `forward_runtime` config cleanu
 Current rule:
 
 - runtime backend selection now comes only from `config/config.yaml.forward_runtime`
-- startup writes that YAML snapshot into `v2_system_config`
+- startup writes that YAML snapshot into `v5_system_config`
 - old `FORWARD_RUNTIME_*` runtime config inputs are retired and no longer read
 - local worker tuning also lives in YAML now under `forward_runtime.jobs` and `forward_runtime.gost_stats`
 

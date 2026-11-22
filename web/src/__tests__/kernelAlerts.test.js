@@ -24,7 +24,7 @@ describe('kernel alerts on the dashboard', () => {
     beforeAll(() => setLocale(locale))
     const t = (key, params) => i18n.global.t(key, params, { locale })
     const format = createFormatter(locale)
-    const detail = { node: 'proxy-3', node_name: 'hk-1', package_id: 'identity', not_after: '2026-10-08T10:00:00Z', since: '2026-10-01T10:00:00Z', table: 'v2_node', phase: 'dual_write', ca: 'module', expired: false, next_staged: true }
+    const detail = { node: 'proxy-3', node_name: 'hk-1', package_id: 'identity', not_after: '2026-10-08T10:00:00Z', since: '2026-10-01T10:00:00Z', table: 'v5_node', phase: 'dual_write', ca: 'module', expired: false, next_staged: true }
 
     it.each(KERNEL_ALERT_KINDS)('writes a title and a hint for %s without leaving a placeholder or a key', (kind) => {
       for (const extra of [{}, { expired: true, next_staged: false, ca: 'forward_link' }]) {

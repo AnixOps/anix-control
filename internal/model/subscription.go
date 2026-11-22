@@ -18,11 +18,11 @@ type SubscriptionGroup struct {
 
 	// 关联
 	Templates []SubscriptionTemplate `gorm:"foreignKey:GroupID" json:"templates,omitempty"`
-	Protocols []NodeProtocol         `gorm:"many2many:v2_subscription_group_node_protocols;" json:"protocols,omitempty"`
+	Protocols []NodeProtocol         `gorm:"many2many:v5_subscription_group_node_protocols;" json:"protocols,omitempty"`
 }
 
 func (SubscriptionGroup) TableName() string {
-	return "v2_subscription_group"
+	return "v5_subscription_group"
 }
 
 // SubscriptionTemplate 订阅模板 (JSON 配置模板)
@@ -82,7 +82,7 @@ type SubscriptionTemplate struct {
 }
 
 func (SubscriptionTemplate) TableName() string {
-	return "v2_subscription_template"
+	return "v5_subscription_template"
 }
 
 // UserSubscriptionGroup 用户-订阅分组关联 (多对多)
@@ -102,7 +102,7 @@ type UserSubscriptionGroup struct {
 }
 
 func (UserSubscriptionGroup) TableName() string {
-	return "v2_user_subscription_group"
+	return "v5_user_subscription_group"
 }
 
 // PlanSubscriptionGroup 套餐-订阅分组关联
@@ -119,7 +119,7 @@ type PlanSubscriptionGroup struct {
 }
 
 func (PlanSubscriptionGroup) TableName() string {
-	return "v2_plan_subscription_group"
+	return "v5_plan_subscription_group"
 }
 
 // TemplateRenderContext 模板渲染上下文

@@ -41,8 +41,8 @@ const (
 //
 // KernelSubscriber is the kernel's contract for subscriber state that many
 // domains share: entitlements (plan, group, traffic, limits, expiry),
-// traffic counters, subscription credentials and balances, all in v2_user
-// and v2_user_subscription_group. The kernel stays their only writer;
+// traffic counters, subscription credentials and balances, all in v5_user
+// and v5_user_subscription_group. The kernel stays their only writer;
 // domain modules (plan, order, payment, subscription, proxy-node, forward,
 // affiliate, identity) call this contract instead of writing the tables.
 //
@@ -92,7 +92,7 @@ type KernelSubscriberClient interface {
 	// and re-list when told their cursor is too old.
 	WatchSubscriberChanges(ctx context.Context, in *WatchSubscriberChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscriberChange], error)
 	// GrantSubscriptionGroup gives a subscriber one subscription group
-	// (v2_user_subscription_group): it creates the membership, or sets the
+	// (v5_user_subscription_group): it creates the membership, or sets the
 	// given fields of an existing one and keeps the others, as the v2
 	// administrator route does. NOT_FOUND when the subscriber or the group
 	// does not exist; the request is then not recorded.
@@ -284,8 +284,8 @@ func (c *kernelSubscriberClient) GetSubscriptionSummary(ctx context.Context, in 
 //
 // KernelSubscriber is the kernel's contract for subscriber state that many
 // domains share: entitlements (plan, group, traffic, limits, expiry),
-// traffic counters, subscription credentials and balances, all in v2_user
-// and v2_user_subscription_group. The kernel stays their only writer;
+// traffic counters, subscription credentials and balances, all in v5_user
+// and v5_user_subscription_group. The kernel stays their only writer;
 // domain modules (plan, order, payment, subscription, proxy-node, forward,
 // affiliate, identity) call this contract instead of writing the tables.
 //
@@ -335,7 +335,7 @@ type KernelSubscriberServer interface {
 	// and re-list when told their cursor is too old.
 	WatchSubscriberChanges(*WatchSubscriberChangesRequest, grpc.ServerStreamingServer[SubscriberChange]) error
 	// GrantSubscriptionGroup gives a subscriber one subscription group
-	// (v2_user_subscription_group): it creates the membership, or sets the
+	// (v5_user_subscription_group): it creates the membership, or sets the
 	// given fields of an existing one and keeps the others, as the v2
 	// administrator route does. NOT_FOUND when the subscriber or the group
 	// does not exist; the request is then not recorded.

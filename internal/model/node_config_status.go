@@ -33,7 +33,7 @@ const (
 // write it could make a node look converged.
 type KernelNodeConfigStatus struct {
 	ID uint64 `gorm:"primaryKey;autoIncrement" json:"-"`
-	// NodeKind is proxy (v2_node) or forward (v2_forward_node); ids of the
+	// NodeKind is proxy (v5_node) or forward (v5_forward_node); ids of the
 	// two tables overlap.
 	NodeKind string `gorm:"size:16;not null;uniqueIndex:idx_kernel_node_config_status_node,priority:1" json:"node_kind"`
 	NodeID   uint64 `gorm:"not null;uniqueIndex:idx_kernel_node_config_status_node,priority:2" json:"node_id"`

@@ -3,7 +3,7 @@ package model
 // SubscriptionGroupProtocol is how a subscription group presents one of its
 // node protocols to subscribers: the name the subscription shows in place of
 // "<node> - <protocol>" and the protocol's place in the group's list. The
-// link itself stays v2_subscription_group_node_protocols (adopted by the
+// link itself stays v5_subscription_group_node_protocols (adopted by the
 // subscription package); a linked protocol without a row comes after the
 // ordered ones, by id, under its default name. A row whose protocol is no
 // longer linked is ignored.

@@ -131,7 +131,7 @@ func (ChangeKind) EnumDescriptor() ([]byte, []int) {
 type PlanSnapshot struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	PlanId uint64                 `protobuf:"varint,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
-	// group_id is the primary node group (v2_user.group_id).
+	// group_id is the primary node group (v5_user.group_id).
 	GroupId uint64 `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	// subscription_group_ids replace the subscriber's subscription groups.
 	SubscriptionGroupIds []uint64 `protobuf:"varint,3,rep,packed,name=subscription_group_ids,json=subscriptionGroupIds,proto3" json:"subscription_group_ids,omitempty"`
