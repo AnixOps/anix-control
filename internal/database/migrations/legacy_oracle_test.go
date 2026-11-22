@@ -323,6 +323,11 @@ func retiredKernelModels() []any {
 		&retiredCleanAgent{}, &retiredNodeCredential{}, // 0027_drop_node_credentials
 		&retiredMFALoginAttempt{}, &retiredIdentityCutoverEvent{}, // 0034_drop_identity_leftovers
 		&retiredKernelForwardRoute{}, // 0036_forward_routes_as_lines
+		&retiredPluginWebUIAsset{}, &retiredTopology{}, &retiredTopologyRevision{}, // 0042_drop_topology_and_plugin_leftovers
+		&retiredTopologyVertex{}, &retiredTopologyEdge{}, &retiredTopologyDeployment{},
+		&retiredTopologyDeploymentStep{}, &retiredTopologyObservedState{},
+		&retiredPluginLifecyclePlan{}, &retiredPluginLifecyclePlanStep{},
+		&retiredModuleEnrollment{}, &retiredModuleCertificate{}, &retiredPluginRuntime{},
 	}
 }
 
@@ -478,6 +483,9 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	// 0027_drop_node_credentials dropped columns of v2_node and
 	// v2_forward_node: the baseline's tables had them.
 	require.NoError(t, db.AutoMigrate(&baselineNodeCredentials{}, &baselineForwardNodeToken{}))
+	// 0042_drop_topology_and_plugin_leftovers dropped columns of
+	// v3_kernel_operation.
+	require.NoError(t, db.AutoMigrate(&baselineKernelOperationLinks{}))
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}
@@ -573,16 +581,8 @@ func legacyPrepareErr(db *gorm.DB, production bool) error {
 	if err := db.AutoMigrate(model.KernelModels()...); err != nil {
 		return err
 	}
-	if migrator.HasIndex(&model.Topology{}, model.LegacyTopologyNameIndex) {
-		if err := migrator.DropIndex(&model.Topology{}, model.LegacyTopologyNameIndex); err != nil {
-			return err
-		}
-	}
-	if !migrator.HasIndex(&model.Topology{}, model.TopologyLiveNameIndex) {
-		if err := migrator.CreateIndex(&model.Topology{}, model.TopologyLiveNameIndex); err != nil {
-			return err
-		}
-	}
+	// (its topology tables, and their name index swap, are
+	// retiredKernelModels' since 0042_drop_topology_and_plugin_leftovers)
 	// nodesecrets.EnsureSchema (its state rows are EnsureStateRows now)
 	if err := db.AutoMigrate(&model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
 		return err

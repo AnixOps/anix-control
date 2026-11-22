@@ -169,4 +169,8 @@
 //     server_key gets, as a stored secret, the key earlier releases derived
 //     from its node's created_at (ss2022_server_keys.go); Control derives
 //     no key from then on.
+//   - 0042_drop_topology_and_plugin_leftovers: the topology deployment,
+//     lifecycle plan, plugin WebUI asset and remote module runtime tables,
+//     and v3_kernel_operation's topology and lifecycle plan columns, go
+//     with the features the 2026-11 slimming audit removed.
 package migrations

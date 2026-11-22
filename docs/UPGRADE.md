@@ -119,6 +119,37 @@ rotation (`anix-control module ca rotate`,
 
 No schema change. Rollback is the previous release.
 
+### The tables of the removed features are dropped
+
+The migration `0042_drop_topology_and_plugin_leftovers` drops what the
+features removed above and in 5.0.0 left in the schema
+([`reference/database-migrations.md`](reference/database-migrations.md)):
+
+- the topology tables `v3_kernel_topology`, `_revision`, `_vertex`, `_edge`,
+  `_deployment`, `_deployment_step` and `_observed_state`;
+- the lifecycle plan tables `v3_kernel_plugin_lifecycle_plan` and
+  `v3_kernel_plugin_lifecycle_plan_step`;
+- `v3_kernel_plugin_webui_asset` (the package WebUI bundles);
+- `v4_kernel_module_enrollment`, `v4_kernel_module_certificate` and
+  `v4_kernel_plugin_runtime` (the remote module runtime);
+- the columns `topology_deployment_id`, `topology_step_id`,
+  `topology_revision`, `lifecycle_plan_id`, `lifecycle_plan_step_id`,
+  `lifecycle_plan_phase` and `lifecycle_plan_sequence` of
+  `v3_kernel_operation`, with their indexes.
+
+Nothing in Control, the commercial build or the Agent reads or writes them
+since the releases that removed their features. `v4_kernel_service_ca` (the
+kernel CA) and every other operation column stay.
+
+- **Back the database up before the upgrade.** The start takes its
+  pre-migration backup as usual; keep it until the release is confirmed.
+  The rows in these tables cannot be brought back otherwise.
+- To keep a copy of any rows first, on PostgreSQL:
+  `pg_dump -t 'v3_kernel_topology*' -t 'v3_kernel_plugin_lifecycle_plan*' -t v3_kernel_plugin_webui_asset -t 'v4_kernel_module_*' -t v4_kernel_plugin_runtime`.
+
+**Rollback.** As for `0040_table_prefix`: restore the pre-migration backup
+with the previous release.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

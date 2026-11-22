@@ -44,6 +44,14 @@
   the Compose and Helm module files and their CI smokes. The seven
   `module_runtime.*` runtime keys are ignored with a warning; the kernel CA
   that signs Agent certificates, its key and its rotation are unchanged.
+- The tables of the removed features (2026-11 slimming): migration
+  `0042_drop_topology_and_plugin_leftovers` drops the seven
+  `v3_kernel_topology*` tables, the two `v3_kernel_plugin_lifecycle_plan*`
+  tables, `v3_kernel_plugin_webui_asset`, `v4_kernel_module_enrollment`,
+  `v4_kernel_module_certificate` and `v4_kernel_plugin_runtime`, and the
+  seven `topology_*` and `lifecycle_plan_*` columns of `v3_kernel_operation`.
+  Irreversible: back the database up first. Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#the-tables-of-the-removed-features-are-dropped).
 
 ### Changed
 

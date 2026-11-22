@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -60,8 +59,9 @@ var anchorTables = []string{
 // (EnsureKernelSchema); adoption does it once.
 var legacyIndexes = map[string][]string{
 	// The plain unique index on topology names, replaced by the partial
-	// ux_topology_live_name so a deleted topology's name can be reused.
-	"v3_kernel_topology": {model.LegacyTopologyNameIndex},
+	// ux_topology_live_name so a deleted topology's name can be reused
+	// (0042_drop_topology_and_plugin_leftovers later drops the table).
+	"v3_kernel_topology": {"idx_v3_kernel_topology_name"},
 }
 
 // runtimeJobActiveIndex is the partial unique index on the active runtime
