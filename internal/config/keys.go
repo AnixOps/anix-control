@@ -77,7 +77,20 @@ var operatorKeys = []Key{
 	{Path: "grpc.public_name", Description: "Only when domain sits behind a CDN: another name that reaches this machine directly, for the nodes' gRPC (mutual TLS cannot cross a CDN)."},
 	{Path: "grpc.edge_proxies", Description: "Non-empty: a reverse proxy on another machine (its IPs or CIDRs) terminates the nodes' TLS, with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires tls.mode external and no certificate files."},
 	{Path: "subscribe_path", Description: "The subscription path (/<subscribe_path>/:token). Change it only to keep links already handed out working.", field: "app.subscribe_path"},
-	{Path: "data_dir", Description: "The data directory: the root key (root.key), the backups (backups/) and, later, the database. Absolute."},
+	{Path: "data_dir", Description: "The data directory: the root key (root.key) and the backups (backups/). Absolute."},
+	{Path: "database.driver", Description: "postgres (default; an empty driver is postgres) or sqlite (trials only: set it explicitly). Control does not fall back to SQLite when PostgreSQL is unreachable: it stops with an error."},
+	{Path: "database.host", Description: "PostgreSQL host, or the directory of its Unix socket."},
+	{Path: "database.port", Description: "PostgreSQL port."},
+	{Path: "database.username", Description: "PostgreSQL role."},
+	{Path: "database.password", Description: "PostgreSQL password.", Secret: true},
+	{Path: "database.database", Description: "PostgreSQL: the database name. SQLite: the database file (relative to the configuration file's directory)."},
+	{Path: "database.dsn", Description: "A whole PostgreSQL connection string, used verbatim instead of host, port, username, password and database.", Secret: true},
+	{Path: "database.sslmode", Description: "libpq sslmode: disable, allow, prefer, require, verify-ca or verify-full."},
+	{Path: "database.timezone", Description: "The PostgreSQL session time zone (an IANA name)."},
+	{Path: "database.log_level", Description: "The SQL log level: silent, error, warn or info (info logs every statement, without bound values)."},
+	{Path: "database.max_idle_conns", Description: "PostgreSQL: idle connections kept in the pool."},
+	{Path: "database.max_open_conns", Description: "PostgreSQL: the most open connections."},
+	{Path: "database.conn_max_lifetime", Description: "PostgreSQL: a connection's lifetime in seconds."},
 }
 
 //go:embed deprecated_keys.yaml

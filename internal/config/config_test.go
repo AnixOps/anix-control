@@ -77,7 +77,7 @@ app:
 	for _, key := range loadedCfg.Deprecated.Keys() {
 		paths = append(paths, key.Path)
 	}
-	assert.Equal(t, []string{"app.name", "app.version", "database.database", "database.driver", "env", "jwt.expire", "jwt.secret", "server.host", "server.mode", "server.port"}, paths)
+	assert.Equal(t, []string{"app.name", "app.version", "env", "jwt.expire", "jwt.secret", "server.host", "server.mode", "server.port"}, paths)
 }
 
 // The registration policy is still read (until M3); the rate limits are

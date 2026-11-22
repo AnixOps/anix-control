@@ -16,7 +16,9 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 - Backend: Go module `github.com/AnixOps/anix-control/v5`; the toolchain is
   pinned to Go `1.26.11` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
-- Default database: SQLite, with PostgreSQL migration/dry-run tooling.
+- Database: PostgreSQL by default (every real deployment); SQLite only for
+  trials, chosen explicitly with `database.driver: sqlite`. Control never
+  falls back to SQLite by itself ([Database](docs/reference/configuration.md#database)).
 - Current release: `v5.0.10`, the 5.0 stable release ([upgrading from 4.2.x](docs/UPGRADE.md#upgrading-from-42x-to-500-rc1)).
   The 18 official packages under `packages/` are built into the Control
   binary, which installs, upgrades and enables them at every start; there is

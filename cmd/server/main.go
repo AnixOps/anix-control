@@ -414,7 +414,7 @@ func run() int {
 
 	// 打印环境信息
 	driver := strings.ToLower(cfg.Database.Driver)
-	if driver == "" || driver == "sqlite" || driver == "sqlite3" {
+	if driver == "sqlite" || driver == "sqlite3" {
 		cfg.Database.Database = resolveSQLitePath(cfg.Database.Database, resolvedConfigPath)
 		log.Printf("SQLite DB path: %s", cfg.Database.Database)
 	} else {

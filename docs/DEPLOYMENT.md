@@ -413,7 +413,21 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 
 ### 数据库
 
-SQLite（默认，单实例简单部署）：
+PostgreSQL（默认，正式部署）：
+
+```yaml
+database:
+  driver: "postgres"   # 默认值；不写 driver 也是 PostgreSQL
+  host: "127.0.0.1"
+  port: 5432
+  database: "anix_control"
+  username: "anix_control"
+  password: "your_password"
+```
+
+连不上 PostgreSQL 时 Control 直接报错退出，说明连的是哪台、怎么配置，不会自己退回 SQLite。
+
+SQLite（仅试用，必须明确写 `driver: sqlite`）：
 
 ```yaml
 database:
@@ -422,18 +436,6 @@ database:
 ```
 
 SQLite 的连接参数是内置的，不是配置项：一个写连接加 4 个只读连接，WAL，`synchronous=NORMAL`，10 秒忙等待，事务以 `BEGIN IMMEDIATE` 开始；流量日志 `v2_server_log` 按小时合并，并由后台任务按保留期（400 天）分批清理。详见 [`reference/configuration.md`](reference/configuration.md) 与 [`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)。
-
-PostgreSQL（推荐生产）：
-
-```yaml
-database:
-  driver: "postgres"
-  host: "127.0.0.1"
-  port: 5432
-  database: "v2board"
-  username: "postgres"
-  password: "your_password"
-```
 
 从 SQLite 迁移到 PostgreSQL 时，不要直接改生产配置后启动。先按 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md) 做备份、dry run、导入、验证和 rollback 记录。
 

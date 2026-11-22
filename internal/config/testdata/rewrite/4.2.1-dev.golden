@@ -5,8 +5,7 @@
 # secrets it adopted are in data_dir/root.key, not in this file.
 grpc:
   port: 50052
-# Still read until PostgreSQL support ends (M2, P4): the panel keeps its
-# database (a PostgreSQL password stays here until then).
+# The panel's database (docs/reference/configuration.md, Database).
 database:
   database: /opt/anixops/control/config/data/v2board.dev.db
   driver: sqlite
@@ -16,7 +15,7 @@ New keys:
   grpc.port: 50052
 
 Kept:
-  database: still read until PostgreSQL support ends (M2, P4): the panel keeps its database (/opt/anixops/control/config/data/v2board.dev.db)
+  database: the panel keeps its database (/opt/anixops/control/config/data/v2board.dev.db)
 
 Dropped:
   admin.email: the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected

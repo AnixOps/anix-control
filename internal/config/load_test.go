@@ -303,22 +303,26 @@ func TestIgnoredKeysKeepTheBuiltInValue(t *testing.T) {
 	}
 }
 
-// The database section keeps its 4.x meaning while PostgreSQL is supported.
-func TestDatabaseSectionKeepsItsMeaning(t *testing.T) {
+// PostgreSQL is the default; SQLite only when the driver says so. A file's
+// database keys replace the section as a whole.
+func TestDatabaseDefaultsToPostgres(t *testing.T) {
 	loaded, _, err := LoadFile("", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "postgres", loaded.Database.Driver, "the container default")
+	assert.Equal(t, Defaults().Database, loaded.Database)
 
 	loaded, report, err := LoadFile(writeConfig(t, "domain: panel.example.com\n"), nil)
 	require.NoError(t, err)
 	assert.Empty(t, report.Deprecated)
-	assert.Equal(t, DatabaseConfig{}, loaded.Database, "a file without database keys is SQLite at its default path, as in 4.x")
+	assert.Equal(t, Defaults().Database, loaded.Database, "a file without database keys keeps the PostgreSQL defaults")
 
 	loaded, report, err = LoadFile(writeConfig(t, "database:\n  driver: sqlite\n  database: data/control.db\n"), []string{"ANIX_CONTROL_DATABASE_LOG_LEVEL=silent"})
 	require.NoError(t, err)
 	assert.Equal(t, DatabaseConfig{Driver: "sqlite", Database: "data/control.db", LogLevel: "silent"}, loaded.Database)
-	assert.Equal(t, []string{"database.database", "database.driver", "database.log_level"}, deprecatedPaths(report))
-	assert.Contains(t, report.Deprecated[1].Warning(), "still read until M2 (P4)")
+	assert.Empty(t, report.Deprecated)
+
+	loaded, _, err = LoadFile(writeConfig(t, "database:\n  host: db.internal\n  username: anix\n"), nil)
+	require.NoError(t, err)
+	assert.Equal(t, DatabaseConfig{Driver: "postgres", Host: "db.internal", Username: "anix"}, loaded.Database, "an empty driver is PostgreSQL")
 
 	loaded, _, err = LoadFile("", []string{"ANIX_CONTROL_DATABASE_HOST=db.internal", "ANIX_CONTROL_DATABASE_PASSWORD=pw"})
 	require.NoError(t, err)

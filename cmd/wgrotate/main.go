@@ -50,7 +50,7 @@ func run(args []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if driver := strings.ToLower(cfg.Database.Driver); driver == "" || driver == "sqlite" || driver == "sqlite3" {
+	if driver := strings.ToLower(cfg.Database.Driver); driver == "sqlite" || driver == "sqlite3" {
 		if !filepath.IsAbs(cfg.Database.Database) {
 			cfg.Database.Database = filepath.Join(filepath.Dir(resolvedConfig), cfg.Database.Database)
 		}

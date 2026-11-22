@@ -587,9 +587,10 @@ sudo anix-control config rewrite --in /opt/anixops/control/config/config.yaml \
 - The host of `agent_install.grpc_target` becomes `grpc.public_name` when it
   is not `domain`; `grpc.port`, `subscribe_path` (from `app.subscribe_path`),
   `listen` and `data_dir` are written when they are not the defaults.
-- The `database` section is kept, its SQLite path made absolute, while
-  PostgreSQL is supported (M2, P4); so are a closed or restricted
-  registration (`auth.registration.*`, until M3) and a cluster name other
+- The `database` section is kept, its SQLite path made absolute and an
+  empty driver written as `sqlite` (PostgreSQL is the default now); so are
+  a closed or restricted registration (`auth.registration.*`, until M3)
+  and a cluster name other
   than `default` (`module_runtime.cluster`, in every Agent identity).
 - Every other key is dropped and printed with the reason; the old file stays
   as `config.yaml.bak-<UTC time>` with its mode and owner.

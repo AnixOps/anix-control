@@ -41,4 +41,17 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_GRPC_EDGE_PROXIES` | `grpc.edge_proxies` | list |  |
 | `ANIX_CONTROL_SUBSCRIBE_PATH` | `subscribe_path` | string | `s` |
 | `ANIX_CONTROL_DATA_DIR` | `data_dir` | string | `/var/lib/anix-control` |
+| `ANIX_CONTROL_DATABASE_DRIVER` | `database.driver` | string | `postgres` |
+| `ANIX_CONTROL_DATABASE_HOST` | `database.host` | string | `127.0.0.1` |
+| `ANIX_CONTROL_DATABASE_PORT` | `database.port` | int | `5432` |
+| `ANIX_CONTROL_DATABASE_USERNAME` | `database.username` | string | `anix_control` |
+| `ANIX_CONTROL_DATABASE_PASSWORD` | `database.password` | string | secret, no default |
+| `ANIX_CONTROL_DATABASE_DATABASE` | `database.database` | string | `anix_control` |
+| `ANIX_CONTROL_DATABASE_DSN` | `database.dsn` | string | secret, no default |
+| `ANIX_CONTROL_DATABASE_SSLMODE` | `database.sslmode` | string | `disable` |
+| `ANIX_CONTROL_DATABASE_TIMEZONE` | `database.timezone` | string | `Asia/Shanghai` |
+| `ANIX_CONTROL_DATABASE_LOG_LEVEL` | `database.log_level` | string | `error` |
+| `ANIX_CONTROL_DATABASE_MAX_IDLE_CONNS` | `database.max_idle_conns` | int | `10` |
+| `ANIX_CONTROL_DATABASE_MAX_OPEN_CONNS` | `database.max_open_conns` | int | `50` |
+| `ANIX_CONTROL_DATABASE_CONN_MAX_LIFETIME` | `database.conn_max_lifetime` | int | `3600` |
 <!-- END GENERATED -->

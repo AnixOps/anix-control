@@ -344,3 +344,13 @@ func TestGet_AfterInit(t *testing.T) {
 	assert.NotNil(t, db2)
 	assert.Equal(t, db, db2)
 }
+
+// An unreachable PostgreSQL stops the start with what to do; nothing falls
+// back to SQLite.
+func TestOpenUnreachablePostgresSaysHowToConfigureIt(t *testing.T) {
+	_, err := Open(&config.DatabaseConfig{Driver: "postgres", Host: "127.0.0.1", Port: 1, Username: "anix_control", Database: "anix_control"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to connect PostgreSQL (host=127.0.0.1 port=1 db=anix_control user=anix_control)")
+	assert.Contains(t, err.Error(), "never falls back to SQLite")
+	assert.Contains(t, err.Error(), "database.driver: sqlite")
+}
