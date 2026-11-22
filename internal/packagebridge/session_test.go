@@ -3,17 +3,12 @@ package packagebridge
 import (
 	"context"
 	"errors"
-	"net"
-	"os"
-	"sync"
 	"testing"
 	"time"
 
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestSessionInvokesOnlyItsMintedRouteCapabilityOnce(t *testing.T) {
@@ -42,9 +37,8 @@ func TestSessionInvokesOnlyItsMintedRouteCapabilityOnce(t *testing.T) {
 		Body: []byte(`{"email":"u@example.test","password":"secret"}`), Deadline: deadline,
 	})
 	require.NoError(t, err)
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	response, err := client.Invoke(context.Background(), capability, "identity.auth.login", []byte(`{"email":"u@example.test","password":"secret"}`))
 	require.NoError(t, err)
@@ -80,9 +74,8 @@ func TestSessionRejectsOperationOutsideTheMintedRoute(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, session.Close()) })
 	capability, err := session.Mint(Request{RequestID: "request-8", RouteID: "identity.auth.login", Deadline: time.Now().Add(time.Second)})
 	require.NoError(t, err)
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	_, err = client.Invoke(context.Background(), capability, "identity.auth.register", []byte(`{}`))
 	require.ErrorIs(t, err, packagebridgesdk.ErrCapabilityRejected)
@@ -100,10 +93,9 @@ func TestSessionCloseInvalidatesOutstandingCapabilities(t *testing.T) {
 	require.NoError(t, err)
 	capability, err := session.Mint(Request{RequestID: "request-9", RouteID: "identity.auth.login", Deadline: time.Now().Add(time.Second)})
 	require.NoError(t, err)
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
 	require.NoError(t, session.Close())
-	t.Cleanup(func() { _ = client.Close() })
 
 	_, err = client.Invoke(context.Background(), capability, "identity.auth.login", []byte(`{}`))
 	require.Error(t, err)
@@ -136,8 +128,8 @@ func TestSessionRelaysWebSocketThroughMintedCapability(t *testing.T) {
 		RequestID: "request-ws-7", RouteID: "telemetry.monitor.ws", Method: "GET", Deadline: time.Now().Add(time.Second),
 	})
 	require.NoError(t, err)
-	stream, closeClient := sessionWebSocketClient(t, child)
-	t.Cleanup(closeClient)
+	stream, err := packagebridgev1.NewKernelPackageBridgeClient(child).OpenWebSocket(context.Background())
+	require.NoError(t, err)
 	require.NoError(t, stream.Send(&packagebridgev1.WebSocketFrame{Value: &packagebridgev1.WebSocketFrame_Open{Open: &packagebridgev1.WebSocketOpen{
 		Capability: capability, Operation: "telemetry.monitor.ws",
 	}}}))
@@ -166,28 +158,4 @@ func (s webSocketResolverStub) ResolveWebSocket(packageID, routeID, operation st
 		return nil, false
 	}
 	return s.handler, true
-}
-
-func sessionWebSocketClient(t *testing.T, file *os.File) (packagebridgev1.KernelPackageBridge_OpenWebSocketClient, func()) {
-	t.Helper()
-	connection, err := net.FileConn(file)
-	require.NoError(t, err)
-	require.NoError(t, file.Close())
-	var once sync.Once
-	grpcConnection, err := grpc.NewClient(
-		"passthrough:///package-bridge-session-test",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			used := false
-			once.Do(func() { used = true })
-			if !used {
-				return nil, net.ErrClosed
-			}
-			return connection, nil
-		}),
-	)
-	require.NoError(t, err)
-	stream, err := packagebridgev1.NewKernelPackageBridgeClient(grpcConnection).OpenWebSocket(context.Background())
-	require.NoError(t, err)
-	return stream, func() { require.NoError(t, grpcConnection.Close()) }
 }

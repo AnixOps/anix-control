@@ -30,9 +30,8 @@ func TestSessionServesKernelSettingsAsItsHost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, session.Close()) })
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	response, err := kernelsettingsv1.NewKernelSettingsClient(client.Conn()).GetSettings(context.Background(), &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
 	require.NoError(t, err)

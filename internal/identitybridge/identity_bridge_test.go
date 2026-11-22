@@ -135,9 +135,8 @@ func TestNewFactoryUsesTheRegisteredWebSocketRouteResolver(t *testing.T) {
 	session, child, err := factory.NewSession(packagebridge.HostIdentity{PackageID: "identity-platform", Version: "4.0.0", Generation: 7})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, session.Close()) })
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	capability, err := session.Mint(packagebridge.Request{
 		RequestID: "identity-factory-websocket-1", RouteID: routeID, Method: http.MethodGet,
 		PrincipalJSON: []byte(`{"actor_id":1,"admin":true,"package_id":"identity-platform"}`),

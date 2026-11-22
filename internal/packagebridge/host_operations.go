@@ -37,7 +37,7 @@ type PackageConfig struct {
 
 // HostOperations serves session-scoped RPCs. They carry no per-request
 // capability: the caller is authorized by the session identity, which the
-// kernel bound to the inherited socketpair when it started the host.
+// kernel bound to the session when it started the host.
 // Implementations must fence every call against the current installation.
 type HostOperations interface {
 	PackageConfig(ctx context.Context, host HostIdentity) (PackageConfig, error)

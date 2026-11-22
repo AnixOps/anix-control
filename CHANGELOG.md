@@ -71,6 +71,14 @@
   (`anix.agent.v1`, enrollment, the gRPC listener and its certificates) is
   unchanged. `plugins.control_host_runtime_dir` is still read but no longer
   used; it is retired in a later step.
+- The package bridge socketpair (2026-11 slimming, class C1c-2b): each host
+  reaches its bridge session and the kernel contracts (KernelIdentity,
+  KernelOrder, KernelSettings and the others) through an in-process
+  connection instead of gRPC over a Unix socketpair.
+  `packagebridgesdk.DialFile` and `Client.Close` are replaced by
+  `packagebridgesdk.NewClient`, and `modulesdk.InProcess.Bridge` is a
+  `grpc.ClientConnInterface`. Capabilities, fencing, limits and the bridge
+  behaviour are unchanged; the Agent transport is unchanged.
 
 ### Changed
 

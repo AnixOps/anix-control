@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
-	"os"
 	"runtime/debug"
 	"strings"
 
@@ -45,7 +44,7 @@ type Host struct {
 // built package.
 type InProcess struct {
 	Getenv func(string) string
-	Bridge *os.File
+	Bridge grpc.ClientConnInterface
 	// Logf, when set, replaces the host's default logger (log.Printf), so
 	// its lines name the package in Control's log.
 	Logf func(string, ...any)
@@ -95,11 +94,10 @@ func Run(ctx context.Context, options Options) error {
 	if options.Logf == nil {
 		options.Logf = log.Printf
 	}
-	bridge, err := packagebridgesdk.DialFile(ctx, inProcess.Bridge)
+	bridge, err := packagebridgesdk.NewClient(inProcess.Bridge)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = bridge.Close() }()
 	leaseID, err := newLeaseID()
 	if err != nil {
 		return err

@@ -99,7 +99,9 @@ can sign in until it is rebuilt with the set. Every binary ignores
 
 **Launch and attestation.** A built-in host runs inside Control, on its own
 goroutines (`ManagerConfig.InProcess`, `cmd/server` `runBuiltinHost`; slim
-audit C1a). It gets its end of the package bridge socketpair and the
+audit C1a). It gets its package bridge connection (an in-process
+`grpc.ClientConnInterface`, `modulesdk.InProcess.Bridge`, served by its
+generation's session through `internal/localgrpc`; slim audit C1c-2b) and the
 package environment, which it reads through `modulesdk.Host.Getenv`, not
 from Control's environment. It hands the `pluginhostsdk.Package` it built to
 the kernel (`modulesdk.InProcess.Ready`), and the kernel calls Dispatch,
@@ -322,7 +324,7 @@ the only way a host learns its modes: the lifecycle operation's
 configuration document is not read for them. Unlike `Invoke` and `OpenWebSocket`, session-scoped
 RPCs carry no per-request capability. The caller is authorized by the session
 identity, i.e. the package id, version and lifecycle generation that the
-kernel bound to the inherited socketpair when it started the host. Every call
+kernel bound to the host's bridge session when it started the host. Every call
 is fenced against the installation: a disabled package, another desired
 version, or another lifecycle generation gets `PermissionDenied`. A kernel
 without session operations answers `Unimplemented`, and hosts then keep every

@@ -197,8 +197,8 @@ type Supervisor struct {
 	stats   map[string]*HostStats
 }
 
-// hostBridge is the kernel side of a host's package bridge: the local
-// socketpair Session.
+// hostBridge is the kernel side of a host's package bridge: its
+// packagebridge.Session.
 type hostBridge interface {
 	Mint(packagebridge.Request) ([]byte, error)
 	Revoke([]byte)
