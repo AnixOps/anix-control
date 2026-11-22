@@ -55,6 +55,13 @@
 
 ### Changed
 
+- The built-in package hosts run inside the Control process (2026-11
+  slimming, class C1a) instead of as twelve `anix-control package-host <id>`
+  child processes. Requests, the package bridge, migrations, health,
+  restarts and the 内置包 page work as before; a panic while a host starts,
+  in its background work or in a request ends only that host or request.
+  Upgrade notes in
+  [`docs/UPGRADE.md`](docs/UPGRADE.md#the-built-in-package-hosts-run-inside-control).
 - The generated API document is committed once, as `docs/docs.go`
   (`docs/swagger.json` and `docs/swagger.yaml` are gone), and CI fails when
   it is out of date. `/swagger/doc.json` now comes from the binary, so binary

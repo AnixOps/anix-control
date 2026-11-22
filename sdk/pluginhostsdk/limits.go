@@ -29,7 +29,12 @@ const (
 // MaxResponseBytesFromEnvironment returns the response body limit configured
 // by the kernel, or zero (the SDK default) when the variable is unset.
 func MaxResponseBytesFromEnvironment() (int, error) {
-	raw := strings.TrimSpace(os.Getenv(MaxResponseBytesEnvironment))
+	return MaxResponseBytesFrom(os.Getenv)
+}
+
+// MaxResponseBytesFrom is MaxResponseBytesFromEnvironment over getenv.
+func MaxResponseBytesFrom(getenv func(string) string) (int, error) {
+	raw := strings.TrimSpace(getenv(MaxResponseBytesEnvironment))
 	if raw == "" {
 		return 0, nil
 	}

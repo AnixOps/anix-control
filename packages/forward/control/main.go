@@ -17,7 +17,7 @@ import (
 const PackageID = "forward"
 
 // Run serves the host for one release of the package until the kernel stops
-// it (SIGTERM) or ctx ends, as a child process the kernel supervises.
+// it: ctx ends (inside Control) or SIGTERM arrives (as a child process).
 func Run(ctx context.Context, version string) error {
 	return modulesdk.Run(ctx, modulesdk.Options{
 		PackageID: PackageID, PackageVersion: version,

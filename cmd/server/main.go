@@ -21,6 +21,7 @@ import (
 	_ "github.com/AnixOps/anix-control/v5/docs" // swagger docs
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/branding"
+	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -37,6 +38,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/packages/builtin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -851,20 +853,31 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	if err != nil {
 		return nil, fmt.Errorf("configure package bridge: %w", err)
 	}
-	// Built-in package hosts execute this binary again: record its identity
-	// before the first one starts (docs/architecture/plugin-kernel-contract.md,
-	// "Built-in Packages"). The digest is the binary inside the release
-	// archive that SHA256SUMS.txt (signed by SHA256SUMS.txt.sig) covers.
+	// The start log names the running binary's digest, which operators
+	// compare with the verified release archive (docs/RELEASING.md).
 	if self, err := pluginhost.Self(); err != nil {
-		log.Printf("WARNING: the Control executable cannot be recorded, so no built-in package host can start: %v", err)
+		log.Printf("WARNING: the Control executable cannot be recorded: %v", err)
 	} else {
-		log.Printf("Control executable %s (SHA-256 %s): built-in package hosts run this file", self.Path, self.SHA256)
+		log.Printf("Control executable %s (SHA-256 %s)", self.Path, self.SHA256)
 	}
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
 		BridgeFactory: bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 		PackageEnvironment: identityHostEnvironment(cfg),
+		// Built-in package hosts run inside Control
+		// (docs/architecture/plugin-kernel-contract.md, "Built-in Packages").
+		InProcess: runBuiltinHost,
 	})
+}
+
+// runBuiltinHost serves one release of a built-in package inside Control,
+// after the same version check `package-host` makes.
+func runBuiltinHost(ctx context.Context, packageID, version string) error {
+	version, err := builtinpkg.HostVersion(packageID, version)
+	if err != nil {
+		return err
+	}
+	return builtin.Run(ctx, packageID, version)
 }
 
 // identityHostEnvironment gives the local identity-platform host its signing

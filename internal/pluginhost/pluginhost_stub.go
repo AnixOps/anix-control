@@ -152,6 +152,8 @@ type ManagerConfig struct {
 	// PackageEnvironment adds "NAME=value" entries to one package's local
 	// host environment.
 	PackageEnvironment map[string][]string
+	// InProcess runs a built-in host inside Control.
+	InProcess func(ctx context.Context, packageID, version string) error
 }
 
 type Supervisor struct{}

@@ -5,10 +5,9 @@
 It owns:
 - public web UI and panel API (`/api/v2`, routed through the signed-package gateway)
 - the v4 plugin kernel: signed package catalog, releases, installations,
-  operations, and deployments under `/api/v3`, plus the package host processes
-  that serve `packages/*`. Every official package is built into the binary:
-  its host is a child process of the same binary (`anix-control package-host
-  <id>`), and the start-up bootstrap installs, upgrades and enables the set
+  operations, and deployments under `/api/v3`, plus the package hosts that
+  serve `packages/*`. Every official package is built into the binary: its
+  host runs inside the Control process, and the start-up bootstrap installs, upgrades and enables the set
   (`docs/architecture/plugin-kernel-contract.md`, "Built-in Packages"). The
   hosts always run; an administrator sees and restarts them in 系统设置 →
   内置包, and nothing imports, upgrades or switches route modes. Control does not

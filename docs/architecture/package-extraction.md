@@ -58,8 +58,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   handler/service**.
 - **Built in (M2, P6).** Every package host is now a library
   (`packages/<id>/control`, `packages/shared/controlhost`) linked into the
-  Control binary through `packages/builtin`, and runs as a child process of
-  the same binary (`anix-control package-host <id>`). Every official package,
+  Control binary through `packages/builtin`, and runs inside the Control
+  process (slim audit C1a; earlier releases ran it as a child process,
+  `anix-control package-host <id>`). Every official package,
   `order`, `payment` and `affiliate` included (the editions are gone), is
   embedded as a slim signed package and installed, upgraded and enabled at
   every start ([`plugin-kernel-contract.md`](plugin-kernel-contract.md#built-in-packages)).
