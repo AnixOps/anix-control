@@ -95,7 +95,7 @@ func TestInProcessHostGetsTheChildEnvironment(t *testing.T) {
 func TestInProcessHostPanicFailsOnlyItsStart(t *testing.T) {
 	manager, err := NewManager(ManagerConfig{
 		RuntimeDir: shortHostTempDir(t), BridgeFactory: knowledgeBridge(t), StartupTimeout: 5 * time.Second,
-		InProcess:  func(context.Context, string, string) error { panic("broken package") },
+		InProcess: func(context.Context, string, string) error { panic("broken package") },
 	})
 	require.NoError(t, err)
 	manager.logf = t.Logf
