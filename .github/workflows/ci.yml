@@ -1644,7 +1644,9 @@ jobs:
             sudo apt-get install -y -qq --no-install-recommends "${missing[@]}"
           fi
 
-      - name: Build Control, the Agent and the suite
+      # Control is built by the suite itself: it embeds the built-in package
+      # set signed with the key the run generates.
+      - name: Build the Agent and the suite
         shell: bash
         env:
           GOWORK: 'off'
@@ -1653,14 +1655,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
-          go build -o "${E2E_BIN}/anix-control" ./cmd/server
           go -C anix-agent build -trimpath -tags anixcore \
             -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.8-e2e" \
             -o "${E2E_BIN}/anix-agent" .
-          for arch in amd64 arm64; do
-            GOOS=linux GOARCH="${arch}" go -C anix-agent build -trimpath -buildvcs=false \
-              -o "${E2E_BIN}/machine-telemetry-linux-${arch}" ./cmd/machine-telemetry
-          done
           go test -c -o "${E2E_BIN}/agente2e.test" ./internal/tests/agente2e
 
       - name: Run the suite on PostgreSQL

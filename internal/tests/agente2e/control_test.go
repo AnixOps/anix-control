@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -53,7 +51,7 @@ func quoted(value string) string {
 	return string(encoded)
 }
 
-func writeControlConfig(t *testing.T, dir string, keys testPKI, identityPackageDir string, apiPort, grpcPort int, postgresDSN string) (string, string) {
+func writeControlConfig(t *testing.T, dir string, keys testPKI, apiPort, grpcPort int, postgresDSN string) (string, string) {
 	t.Helper()
 	database := ""
 	sqlitePath := ""
@@ -64,7 +62,7 @@ func writeControlConfig(t *testing.T, dir string, keys testPKI, identityPackageD
 		database = "  driver: sqlite\n  database: " + quoted(sqlitePath) + "\n  log_level: silent\n"
 	}
 	// The operator keys, and the deprecated keys this release still reads:
-	// the database, the test's package key and identity package, the gRPC
+	// the database, the key the embedded test packages are signed with, the gRPC
 	// listener without a domain (its own test-CA certificate), the CA key
 	// (adopted into data_dir/root.key at the start), closed registration
 	// and the inert flux runtime. The first administrator claims the panel
@@ -79,7 +77,6 @@ database:
     enabled: false
 plugins:
   official_public_key: %s
-  identity_bootstrap_package_dir: %s
 grpc:
   enabled: true
   host: "127.0.0.1"
@@ -92,7 +89,7 @@ forward_runtime:
   backend: clean_agent
   clean_agent:
     legacy_bridge_enabled: false
-`, apiPort, quoted(filepath.Join(dir, "data")), database, quoted(keys.SigningPublicKey), quoted(identityPackageDir), grpcPort,
+`, apiPort, quoted(filepath.Join(dir, "data")), database, quoted(keys.SigningPublicKey), grpcPort,
 		quoted(keys.ServerCertFile), quoted(keys.ServerKeyFile), quoted(keys.CAKEK))
 	path := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(config), 0o600))
@@ -219,43 +216,6 @@ func (c *control) API(t *testing.T, method, path string, body any, out any) {
 func (c *control) TryAPI(t *testing.T, method, path string, body any) (int, []byte) {
 	t.Helper()
 	return c.do(t, method, path, body, true)
-}
-
-// InstallPackages puts the signed packages where the start-up bootstrap
-// puts the built-in ones: a registered release, its artifact and an enabled
-// Control installation, written while Control is stopped; the restart
-// starts their hosts, and InstallPackages signs in again and waits until
-// they are healthy.
-// Control has no route that imports or installs a package any more (the
-// built-in packages install at every start), and this suite's packages are
-// full packages signed with the suite's key.
-func (c *control) InstallPackages(t *testing.T, publicKey string, pkgs ...signedPackage) {
-	t.Helper()
-	key, err := service.ParseOfficialPluginPublicKey(publicKey)
-	require.NoError(t, err)
-	c.proc.Stop(t, 10*time.Second)
-	for _, pkg := range pkgs {
-		release, err := service.RegisterPluginRelease(c.db, string(pkg.Manifest), pkg.Signature, key)
-		require.NoError(t, err, pkg.ID)
-		_, err = service.StorePluginArtifact(c.db, release.ID, pkg.Artifact)
-		require.NoError(t, err, pkg.ID)
-		require.NoError(t, c.db.Transaction(func(tx *gorm.DB) error {
-			if err := service.LockPluginInstallationTarget(tx, "control"); err != nil {
-				return err
-			}
-			if err := service.ValidatePluginInstallationPlan(tx, *release, "control", true, 0); err != nil {
-				return err
-			}
-			return tx.Create(&model.PluginInstallation{
-				PluginID: pkg.ID, Target: "control", DesiredVersion: pkg.Version, State: "pending", Enabled: true, LifecycleGeneration: 1,
-			}).Error
-		}), pkg.ID)
-	}
-	c.Start(t)
-	c.Login(t)
-	for _, pkg := range pkgs {
-		c.WaitInstallation(t, pkg.ID, "control", pkg.Version)
-	}
 }
 
 type installation struct {
