@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/entitlement"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -21,10 +19,6 @@ import (
 //	node_type, type, host, server_port, server_name, tls, network,
 //	cipher, server_key, flow, tls_settings, network_settings,
 //	send_through, routes, base_config, 以及 custom_config 覆盖的任意字段
-//
-// SS2022 (2022-blake3-*) 的 server_key 若 Settings 未显式给出, 按老 XBoard 算法
-// 从节点 created_at 派生 (子节点用父节点 created_at), 与订阅端 DeriveSS2022ServerKey
-// 一致, 节点端使用下发的同一个值。
 //
 // The protocol's secrets are read through the node credential split and
 // checked first: a protocol whose secrets fail validation is reported
@@ -136,29 +130,12 @@ func buildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 	case "snell":
 		buildSnellConfig(config, protocolConfig)
 	case "shadowsocks":
-		cipherStr := "aes-256-gcm"
-		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {
-			cipherStr = c
-			config["cipher"] = c
-		} else if m, ok := protocolConfig["method"].(string); ok && m != "" {
-			cipherStr = m
-			config["cipher"] = m
-		} else {
-			config["cipher"] = cipherStr
+		config["cipher"] = "aes-256-gcm"
+		if cipher := firstStringSetting(protocolConfig, "cipher", "method"); cipher != "" {
+			config["cipher"] = cipher
 		}
 		if serverKey, ok := protocolConfig["server_key"]; ok {
 			config["server_key"] = serverKey
-		} else if strings.HasPrefix(cipherStr, "2022-blake3-") {
-			// SS2022: 老库不存 server_key, 从节点 created_at 派生。子节点用父节点
-			// created_at, 与 XBoard Server::generateServerPassword 一致。
-			createdAt := node.CreatedAt
-			if node.ParentID != nil {
-				var parentCreatedAt = lookupParentCreatedAt(*node.ParentID)
-				if !parentCreatedAt.IsZero() {
-					createdAt = parentCreatedAt
-				}
-			}
-			config["server_key"] = DeriveSS2022ServerKey(createdAt, cipherStr)
 		}
 	}
 
@@ -212,14 +189,6 @@ func NormalizeNodeType(nodeType string) string {
 	default:
 		return t
 	}
-}
-
-// lookupParentCreatedAt 查父节点 created_at (给子节点 SS2022 server_key 派生用)。
-func lookupParentCreatedAt(parentID uint) time.Time {
-	var createdAt time.Time
-	database.Get().Model(&model.Node{}).Where("id = ?", parentID).
-		Select("created_at").Scan(&createdAt)
-	return createdAt
 }
 
 func configValue(config map[string]any, key string, defaultValue any) any {

@@ -1,0 +1,4 @@
+-- 0041_ss2022_server_keys: a Go-only step. Each Shadowsocks 2022 protocol
+-- without a server_key gets, as its stored secret, the key Control used to
+-- derive for it at every read (storeSS2022ServerKeys in
+-- ss2022_server_keys.go).

@@ -2,7 +2,6 @@ package service
 
 import (
 	"bytes"
-	"crypto/md5" // #nosec G501 -- legacy XBoard/V2bX SS2022 server_key compatibility requires MD5.
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -12,7 +11,6 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -1140,22 +1138,6 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		if sk, ok := parsed.Settings["server_key"].(string); ok && sk != "" {
 			parsed.ServerKey = sk
 		}
-
-		// SS2022 (2022-blake3-*): 老 XBoard/V2bX 从节点 created_at 派生 server_key,
-		// 老库从不存储它。若 Settings 里没有显式给出, 就按同款算法补上, 否则订阅端
-		// 会退回普通 SS 明文格式导致客户端连不上。子节点(中转)用父节点的 created_at,
-		// 与 XBoard `Server::generateServerPassword` 一致。
-		if parsed.ServerKey == "" && strings.HasPrefix(parsed.Cipher, "2022-blake3-") {
-			createdAt := node.CreatedAt
-			if node.ParentID != nil {
-				var parentCreatedAt time.Time
-				if err := s.db.Model(&model.Node{}).Where("id = ?", *node.ParentID).
-					Select("created_at").Scan(&parentCreatedAt).Error; err == nil && !parentCreatedAt.IsZero() {
-					createdAt = parentCreatedAt
-				}
-			}
-			parsed.ServerKey = DeriveSS2022ServerKey(createdAt, parsed.Cipher)
-		}
 	}
 
 	if parsed.Type == string(model.ProtocolWireGuard) {
@@ -1200,20 +1182,6 @@ func ss2022KeyLen(cipher string) int {
 		return 16
 	}
 	return 32
-}
-
-// DeriveSS2022ServerKey 复刻老 XBoard `Helper::getServerKey($timestamp, $len)`:
-// base64(substr(md5(unix秒的十进制字符串), 0, len))。md5 输出取 hex 字符串的前
-// len 个字符(不是字节), 再 base64。节点端使用 Control 下发的同一个 server_key。
-// 导出供节点运行配置复用, 保证订阅端和节点端算出的值一致。
-func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
-	keyLen := ss2022KeyLen(cipher)
-	sum := md5.Sum([]byte(strconv.FormatInt(createdAt.Unix(), 10))) // #nosec G401 -- legacy XBoard/V2bX SS2022 server_key compatibility requires MD5.
-	hexStr := hex.EncodeToString(sum[:])                            // 32 位 hex 字符串
-	if keyLen > len(hexStr) {
-		keyLen = len(hexStr)
-	}
-	return base64.StdEncoding.EncodeToString([]byte(hexStr[:keyLen]))
 }
 
 // ============ 管理员方法 ============

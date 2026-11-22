@@ -30,11 +30,16 @@ The names inherited from V2Board are no longer used:
 | `bin/v2board` link and the `/opt/v2board` layout of the installer | removed; `install.sh update` deletes the link |
 | `/home/v2board/.ssh` in the container | `/home/anixops/.ssh` |
 | the 51 database tables prefixed `v2_`, their `idx_v2_*` indexes, constraints and sequences | `v5_` (migration `0040_table_prefix`) |
+| the Shadowsocks 2022 server key computed from a node's creation time (md5 of its Unix seconds) | the key stored once per protocol (migration `0041_ss2022_server_keys`); new protocols get a random key |
 
-Still unchanged:
+Still unchanged, on purpose:
 
-- column names that came with the tables (for example `u`, `d` and
-  `transfer_enable` of `v5_user`);
+- column names that came with the tables (for example `u`, `d`,
+  `transfer_enable` and `commission_balance` of `v5_user`). They are data
+  names, not code: the same names are the JSON fields of the user API
+  (`json:"u"`, `json:"d"`, `json:"transfer_enable"`), which the user pages,
+  client apps and scripts read. Renaming them would break every API consumer
+  for no functional gain; no V2Board code is behind them;
 - the HTTP API versions `/api/v2` to `/api/v5`, which are Control's own;
 - PostgreSQL database and role names an operator chose, for example
   `anix_control_v2board`: renaming a database is an operator decision.

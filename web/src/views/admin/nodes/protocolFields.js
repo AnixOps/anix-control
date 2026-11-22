@@ -12,7 +12,8 @@
 //            edited as JSON text; see parseJsonObject)
 //   warn     (protocol) => i18n hint keys to show instead of the hint
 //   options  select: the values ('' means unset); labels come from i18n
-//   generate text: () => a random value, offered by a button next to the field
+//   generate text: (protocol) => a random value, offered by a button next to
+//            the field and filled in when the field shows up empty
 //   show     (protocol) => whether the field applies
 // The same registry serves the node protocol sheet, the node group template
 // and the subscription group editors; ANX adds its fields here.
@@ -112,6 +113,7 @@ export const DEFAULT_REALITY_TARGET = 'www.apple.com'
 const isTls = (p) => Number(p.tls) > 0
 const isReality = (p) => Number(p.tls) === 2
 const takesTransportPath = (p) => ['ws', 'h2', 'httpupgrade'].includes(p.transport) && ['vless', 'vmess', 'trojan'].includes(p.type)
+const ssMethod = (p) => readField(p, { section: 'settings', key: 'method', keys: ['cipher', 'method'] }) || ''
 const isStreamProtocol = (p) => ['vless', 'vmess', 'trojan'].includes(p.type)
 
 export const PROTOCOL_FIELDS = Object.freeze([
@@ -124,9 +126,12 @@ export const PROTOCOL_FIELDS = Object.freeze([
     section: 'settings', key: 'method', keys: ['cipher', 'method'], kind: 'select', options: SS_METHODS,
     default: 'aes-256-gcm', show: p => p.type === 'shadowsocks'
   },
+  // Shadowsocks 2022: the server key, random base64 of the cipher's key
+  // length; switching to a 2022 cipher fills it (fillGenerated).
   {
-    section: 'settings', key: 'server_key', kind: 'password', hintKey: 'serverKey',
-    show: p => p.type === 'shadowsocks' && String(readField(p, { section: 'settings', key: 'method', keys: ['cipher', 'method'] }) || '').startsWith('2022-blake3-')
+    section: 'settings', key: 'server_key', kind: 'text', hintKey: 'serverKey',
+    generate: p => base64Bytes(String(ssMethod(p)).includes('128') ? 16 : 32),
+    show: p => p.type === 'shadowsocks' && String(ssMethod(p)).startsWith('2022-blake3-')
   },
   { section: 'settings', key: 'up_mbps', kind: 'number', min: 0, max: 100000, show: p => p.type === 'hysteria2' },
   { section: 'settings', key: 'down_mbps', kind: 'number', min: 0, max: 100000, show: p => p.type === 'hysteria2' },
@@ -254,23 +259,33 @@ export function writeField(protocol, field, value) {
   return { ...protocol, [field.section]: section }
 }
 
-// The settings of type that are random values (a Snell PSK), made anew.
-export function generatedSettingsFor(type) {
-  const fields = PROTOCOL_FIELDS.filter(field => field.section === 'settings' && field.generate && field.show({ type, tls: 0, transport: 'tcp' }))
-  return Object.fromEntries(fields.map(field => [field.key, field.generate()]))
+// The settings of type that are random values (a Snell PSK, a Shadowsocks
+// 2022 server key), made anew for settings.
+export function generatedSettingsFor(type, settings = {}) {
+  const protocol = { type, tls: 0, transport: 'tcp', settings }
+  const fields = PROTOCOL_FIELDS.filter(field => field.section === 'settings' && field.generate && field.show(protocol))
+  return Object.fromEntries(fields.map(field => [field.key, field.generate(protocol)]))
+}
+
+// protocol with every generated field that shows and is empty filled in,
+// except the field being edited (an admin may clear it to type their own).
+export function fillGenerated(protocol, edited) {
+  return PROTOCOL_FIELDS.reduce((next, field) => field.generate && field !== edited && field.show(next) && !readField(next, field)
+    ? writeField(next, field, field.generate(next))
+    : next, protocol)
 }
 
 // What a freshly chosen protocol type starts with: settings that must have a
 // value (a Shadowsocks method, a TUIC congestion control, a Snell PSK).
 export function defaultSettingsFor(type) {
-  const settings = generatedSettingsFor(type)
+  const settings = {}
   for (const field of PROTOCOL_FIELDS) {
     if (field.section === 'settings' && field.default !== undefined && field.show({ type, tls: 0, transport: 'tcp' })) {
       settings[field.key] = field.default
     }
   }
   if (type === 'hysteria2') Object.assign(settings, { up_mbps: 100, down_mbps: 100 })
-  return settings
+  return { ...generatedSettingsFor(type, settings), ...settings }
 }
 
 // What switching to Reality starts with when the protocol has no target yet:
@@ -296,4 +311,11 @@ function hexBytes(count) {
   const bytes = new Uint8Array(count)
   globalThis.crypto.getRandomValues(bytes)
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+// count random bytes in standard base64.
+function base64Bytes(count) {
+  const bytes = new Uint8Array(count)
+  globalThis.crypto.getRandomValues(bytes)
+  return btoa(String.fromCharCode(...bytes))
 }

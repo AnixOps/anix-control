@@ -70,6 +70,27 @@ pre-migration backup with the previous release, as for every migration; a
 SQLite configuration that the update wrote `database.database` into keeps
 working with it. Nothing changes in the API or the Agent protocol.
 
+### Shadowsocks 2022 Server Keys Are Stored
+
+A Shadowsocks 2022 protocol (a `2022-blake3-*` cipher) whose settings had no
+`server_key` used to get one computed at every read from its node's creation
+time, by the formula of the panel Control's first databases were imported
+from. The migration `0041_ss2022_server_keys` stores that same key as the
+protocol's secret, once, and Control no longer computes any key.
+
+- **Clients and nodes** keep the key they hold: subscriptions and the node
+  configuration read the stored key, byte for byte the one computed before.
+- **A new or edited Shadowsocks 2022 protocol needs a `server_key`.** The
+  admin form fills a random one of the cipher's length when a 2022 cipher is
+  chosen; an API client that saves such a protocol without one gets
+  `a Shadowsocks 2022 cipher needs a server_key`.
+- The protocol's settings show the secret placeholder in place of the key,
+  as for every other node secret.
+
+**Rollback.** As for `0040_table_prefix`: restore the pre-migration backup
+with the previous release. The stored keys equal the computed ones, so a
+client never notices either way.
+
 ## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
 
 identity-platform serves logins, registration, MFA and the user

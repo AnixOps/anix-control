@@ -136,8 +136,10 @@ export function wireGuardFormFromSettings(settings = {}) {
 }
 
 // A template of GET /admin/protocol-templates as editor JSON. A template
-// cannot carry a generated setting (a Snell PSK), so it is made here.
+// cannot carry a generated setting (a Snell PSK, a Shadowsocks 2022 server
+// key), so it is made here.
 export function templateToJson(tpl) {
+  const settings = parseObject(tpl.settings)
   return {
     type: tpl.type,
     port: tpl.default_port,
@@ -145,7 +147,7 @@ export function templateToJson(tpl) {
     transport: tpl.transport || 'tcp',
     enable: 1,
     show: 1,
-    settings: { ...generatedSettingsFor(tpl.type), ...parseObject(tpl.settings) },
+    settings: { ...generatedSettingsFor(tpl.type, settings), ...settings },
     tls_settings: parseObject(tpl.tls_settings),
     transport_settings: parseObject(tpl.transport_settings),
     reality_settings: parseObject(tpl.reality_settings)
