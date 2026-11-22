@@ -1,5 +1,6 @@
 import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { ADMIN_PAGE_SECTIONS } from './sections'
+import { ADMIN_MENU_ITEMS, USER_MENU_ITEMS } from '@/extensions'
 
 // Navigation config: the one place that says what the shells show.
 //
@@ -82,7 +83,11 @@ export const ADMIN_MENU = Object.freeze([
       { id: 'invite', to: '/admin/invite', icon: 'invite', labelKey: 'shell.admin.items.invite', edition: 'commercial' }
     ]
   }
-])
+].map(group => Object.freeze({
+  ...group,
+  // The commercial edition's items (extensions/index.js) join their group.
+  items: [...group.items, ...ADMIN_MENU_ITEMS.filter(item => item.group === group.id)]
+})))
 
 // Sections of settings-style pages: navigation/sections.js (kept apart so
 // the page titles in the entry chunk do not pull in this file).
@@ -114,6 +119,8 @@ export const USER_MENU = Object.freeze([
   { id: 'traffic', to: '/user/traffic', icon: 'traffic', labelKey: 'shell.user.items.traffic' },
   { id: 'plans', to: '/user/plans', icon: 'plans', labelKey: 'shell.user.items.plans', edition: 'commercial' },
   { id: 'orders', to: '/user/orders', icon: 'orders', labelKey: 'shell.user.items.orders', edition: 'commercial' },
+  // The commercial edition's items (extensions/index.js).
+  ...USER_MENU_ITEMS,
   { id: 'account', to: USER_ACCOUNT_PATH, icon: 'account', labelKey: 'shell.user.items.account', tab: true }
 ])
 

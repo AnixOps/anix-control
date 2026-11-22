@@ -77,6 +77,7 @@ var operatorKeys = []Key{
 	{Path: "grpc.public_name", Description: "Only when domain sits behind a CDN: another name that reaches this machine directly, for the nodes' gRPC (mutual TLS cannot cross a CDN)."},
 	{Path: "grpc.edge_proxies", Description: "Non-empty: a reverse proxy on another machine (its IPs or CIDRs) terminates the nodes' TLS, with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires tls.mode external and no certificate files."},
 	{Path: "subscribe_path", Description: "The subscription path (/<subscribe_path>/:token). Change it only to keep links already handed out working.", field: "app.subscribe_path"},
+	{Path: "source_url", Description: "The source code address the web app links to (the AGPL-3.0 offer of the source to the panel's users). Point it at your repository when you run modified code."},
 	{Path: "data_dir", Description: "The data directory: the root key (root.key) and the backups (backups/). Absolute."},
 	{Path: "database.driver", Description: "postgres (default; an empty driver is postgres) or sqlite (trials only: set it explicitly). Control does not fall back to SQLite when PostgreSQL is unreachable: it stops with an error."},
 	{Path: "database.host", Description: "PostgreSQL host, or the directory of its Unix socket."},

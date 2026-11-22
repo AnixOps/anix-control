@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -40,6 +41,7 @@ const (
 	refusalDeletedGroup = "group_deleted"
 	refusalExpiredToken = "token_expired"
 	refusalMaxNodes     = "max_nodes"
+	refusalQuota        = "quota"
 )
 
 var fingerprintPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -186,6 +188,12 @@ func (s *Service) Join(ctx context.Context, request JoinRequest) (Joined, error)
 				if counts.Live >= int64(group.MaxNodes) {
 					return &joinRefusal{reason: refusalMaxNodes, group: &group}
 				}
+			}
+			if err := quota.Allow(tx, quota.Nodes); err != nil {
+				if errors.Is(err, quota.ErrExceeded) {
+					return &joinRefusal{reason: refusalQuota, group: &group}
+				}
+				return err
 			}
 			created, after, err := s.createNode(tx, group, request)
 			if err != nil {

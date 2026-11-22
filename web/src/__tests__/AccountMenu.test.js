@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
 import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
+import { applyPublicConfig, resetEdition } from '@/composables/useEdition'
 import i18n from '@/i18n'
 import AccountMenu from '@/components/shell/AccountMenu.vue'
 
@@ -36,6 +37,18 @@ describe('AccountMenu.vue', () => {
 
   afterEach(() => {
     document.documentElement.removeAttribute('data-theme')
+    resetEdition()
+  })
+
+  it('links the source code (source_url) for users and administrators', async () => {
+    const user = userEvent.setup()
+    applyPublicConfig({ edition: 'community', source_url: 'https://source.example.test/fork' })
+    useUserStore().login('token', { id: 7, email: 'lin@example.test', is_admin: false })
+    await renderMenu({ role: 'user', variant: 'avatar', showAbout: false, accountPath: '/user/account' })
+    await user.click(screen.getByRole('button', { name: 'Account menu: lin@example.test' }))
+    const link = within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Source code' })
+    expect(link.getAttribute('href')).toBe('https://source.example.test/fork')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
   })
 
   it('names the trigger and lists 账户, 外观, 语言, 关于 and 退出 in order', async () => {

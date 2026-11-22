@@ -22,6 +22,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -143,6 +144,9 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		if invite != nil && invite.InviterID != nil {
 			inviteUserID = invite.InviterID
 		}
+		if err := quota.Allow(tx, quota.Users); err != nil {
+			return err
+		}
 		user := service.NewSubscriberUser(email, UnusableLegacyPassword)
 		user.InviteUserID = inviteUserID
 		user.IsAdmin, user.IsStaff = boolInt(request.GetIsAdmin()), boolInt(request.GetIsStaff())
@@ -167,6 +171,9 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		}
 		if errors.Is(err, errEmailTaken) {
 			return nil, status.Error(codes.AlreadyExists, "email belongs to another subscriber")
+		}
+		if errors.Is(err, quota.ErrExceeded) {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		var refusal inviteRefusal
 		if errors.As(err, &refusal) {

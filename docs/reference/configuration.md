@@ -36,6 +36,7 @@ domain: panel.example.com
 | `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
 | `grpc.edge_proxies` | empty | Non-empty: a reverse proxy on another machine (its addresses, IPs or CIDRs) terminates the nodes' TLS with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires `tls.mode` `external` and no certificate files. The recommended layout: [two hosts](../guide/deploy-two-hosts.md). |
 | `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
+| `source_url` | `https://github.com/AnixOps/anix-control` | The source code address the web app links to (the AGPL-3.0 offer of the source to the panel's users, [LICENSING.md](../../LICENSING.md)). Point it at your repository when you run modified code. |
 | `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`). Absolute. |
 
 [Panel Address, Listeners And Certificates](#panel-address-listeners-and-certificates)

@@ -46,6 +46,10 @@ type Config struct {
 	// obtains in tls.mode acme, and the name nodes dial for gRPC unless
 	// grpc.public_name says otherwise.
 	Domain string `yaml:"domain"`
+	// SourceURL is the source code address the web app links to, the
+	// AGPL-3.0 offer of the running version's source to its network users.
+	// An operator who changes the code points it at their own repository.
+	SourceURL string `yaml:"source_url"`
 	// Listen is the plain HTTP address of tls.mode external, where a CDN or
 	// a reverse proxy that terminates TLS sends the whole host. Empty uses
 	// server.host:server.port (127.0.0.1:8080 by default) and, with the

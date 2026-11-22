@@ -4,6 +4,7 @@ import { BUILTIN_PACKAGES_PATH, resolveLegacyControlRedirect } from '@/router/co
 import { loadEdition, routeAllowedByEdition } from '@/composables/useEdition'
 import { scrollBehavior } from '@/router/scroll'
 import { loadMessageGroup } from '@/i18n'
+import { ADMIN_ROUTES, USER_ROUTES } from '@/extensions'
 
 // Layouts: lazy, so the login page does not load the shells (and the
 // component library they use) before anyone has signed in.
@@ -141,6 +142,8 @@ const routes = [
         path: '',
         redirect: '/user/dashboard'
       },
+      // The commercial edition's pages (extensions/index.js).
+      ...USER_ROUTES,
       {
         path: ':pathMatch(.*)*',
         component: StatusPage,
@@ -394,6 +397,8 @@ const routes = [
         name: 'admin-index',
         redirect: '/admin/dashboard'
       },
+      // The commercial edition's pages (extensions/index.js).
+      ...ADMIN_ROUTES,
       {
         path: ':pathMatch(.*)*',
         component: StatusPage,

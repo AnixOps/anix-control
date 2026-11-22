@@ -11,8 +11,10 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/quota"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestJoinCreatesACleanNode(t *testing.T) {
@@ -445,4 +447,26 @@ func TestJoinNotifiesAfterTheCommit(t *testing.T) {
 	title, content, _ := approved.Notification()
 	assert.Equal(t, fmt.Sprintf("节点已重新接入：hk-01 (%s)", joined.Node), title)
 	assert.Contains(t, content, "198.51.100.1")
+}
+
+func TestJoinRefusedByTheQuotaIsAudited(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, f *fixture) {
+		group, token := f.createGroup(t, GroupInput{Name: "licensed"})
+		quota.Check = func(_ *gorm.DB, kind quota.Kind) error {
+			return fmt.Errorf("%w: %s", quota.ErrExceeded, kind)
+		}
+		t.Cleanup(func() { quota.Check = nil })
+
+		_, err := f.join(t, JoinRequest{Token: token, Hostname: "x", PublicAddresses: []string{"203.0.113.60"}, PeerAddress: "198.51.100.78"})
+		assert.ErrorIs(t, err, ErrJoinRejected)
+		var nodes int64
+		require.NoError(t, f.db.Model(&model.Node{}).Count(&nodes).Error)
+		assert.Zero(t, nodes)
+		entries := f.audits(t, AuditActionJoinRejected)
+		require.Len(t, entries, 1)
+		var content map[string]any
+		require.NoError(t, json.Unmarshal([]byte(entries[0].Content), &content))
+		assert.Equal(t, refusalQuota, content["reason"])
+		assert.EqualValues(t, group.ID, content["group_id"])
+	})
 }

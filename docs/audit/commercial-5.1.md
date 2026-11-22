@@ -16,6 +16,7 @@
 | 2026-11-12 | license 格式与校验放在私有共享库（ANIX1 离线 token，Ed25519） | 项目所有者授权，开发执行 | 私有仓库 PR |
 | 2026-11-22 02:39 | 采纳 5 条实施建议：AGPL 只用于本仓库；授权型 CLA + “贡献永远开源”反向承诺；没有 license 时行为等同社区版、更新期外的版本在升级前拦下；公开承诺“已开源功能不挪到商业版”；规则先于实现公开 | 项目所有者 | 项目讨论中的决策卡片 |
 | 2026-11-22 02:44 | 第 1 步两个 PR 审阅通过，可以合并 | 项目所有者 | 项目讨论记录 |
+| 2026-11-22 12:55 | 暂不设立公司，签约主体问题搁置；第 2 至 4 步不需要主体，第 5 步（开始销售）前或第一位外部贡献者签署 CLA 前必须解决 | 项目所有者 | 项目讨论记录 |
 
 ## 2. 实施步骤与证据
 
@@ -24,10 +25,34 @@
 | 1a | 许可说明、CLA、贡献指南、NOTICE、CLA 检查、ROADMAP 清单 | [#569](https://github.com/AnixOps/anix-control/pull/569) | `714b913` | [CI/CD Pipeline 44977323101](https://github.com/AnixOps/anix-control/actions/runs/44977323101) success；[CLA 44977323178](https://github.com/AnixOps/anix-control/actions/runs/44977323178) success（head `bc8608a`） | 已合并 2026-11-22 |
 | 1b | 官网“授权与价格”页 `/licensing`（`/pricing` 跳转） | [AnixOps-website#21](https://github.com/AnixOps/AnixOps-website/pull/21) | `54099ea` | [Build 44977472571](https://github.com/AnixOps/AnixOps-website/actions/runs/44977472571) success（head `4a9a572`） | 已合并 2026-11-22 |
 | 1c | CLA 检查加固 + 本审计记录 | [#571](https://github.com/AnixOps/anix-control/pull/571) | — | 首次运行 [CLA 44981496387](https://github.com/AnixOps/anix-control/actions/runs/44981496387) 失败：新检查把 AI 编码助手账号 `claude` 的提交判为未签署，证明规则 1 生效；随后补充 AI 账号规则与 PR 作者检查 | 进行中 |
-| 2 | 公开仓库扩展点：新建前配额检查（社区版放行）、前端路由与菜单扩展点、页脚“源代码”链接 | — | — | — | 未开始 |
+| 1c（补记） | 上一行的合并结果 | [#571](https://github.com/AnixOps/anix-control/pull/571) | `b2d6c87` | [CI/CD Pipeline 44981674797](https://github.com/AnixOps/anix-control/actions/runs/44981674797) success；[CLA 44981674779](https://github.com/AnixOps/anix-control/actions/runs/44981674779) success（head `71b23cf`） | 已合并 2026-11-22 03:47 |
+| 1d | 商业私有仓库对齐公开 main：路由配置合并脚本、测试、表名前缀 `v2_` → `v5_`，`PUBLIC_REF` 固定到 `5b2d889` | 私有仓库 PR #4 | `2eef094` | 私有仓库 CI 45023150216 success（head `fa53b5a`） | 已合并 2026-11-22 12:46 |
+| 2 | 公开仓库扩展点：新建前配额检查（社区版放行）、前端路由与菜单扩展点、页脚“源代码”链接 | 见下方第 2 步说明 | — | — | 进行中 |
 | 3 | 商业版接入 license、授权页、前端商业页面移出 | — | — | — | 未开始 |
 | 4 | `LICENSE` 改为 AGPL-3.0 | — | — | — | 未开始 |
 | 5 | 发布 5.1.0 | — | — | — | 未开始 |
+
+### 第 2 步说明
+
+新建入口的范围是逐个查代码得到的（2026-11-22，公开 main `5b2d889`）：
+
+| 对象 | 入口 | 检查位置 | 被拒绝时 |
+| --- | --- | --- | --- |
+| 用户 | 身份平台 `CreateSubscriber`（注册和管理员新建都走这里：`packages/identity-platform/native` 的 `auth.go`、`admin.go`，拒绝原因原样显示给操作者） | `internal/kernelidentity/server.go`，事务内写入前 | gRPC `FailedPrecondition` |
+| 节点 | 管理员手动添加 `POST /admin/nodes` | `internal/service/node_service.go` `CreateNode` 事务内 | HTTP 403 |
+| 节点 | 节点组加入（Agent 用 join token 自动加入） | `internal/nodegroup/join.go`，新建节点前；重新加入已有节点不检查 | 与其他拒绝相同的回答，审计记录原因 `quota` |
+| 节点 | 转发节点 `CreateForwardNode` | `internal/kernelforward/nodes.go` `createNodeTx` | gRPC `FailedPrecondition` |
+
+不检查的入口：第一个管理员的认领（`internal/adminclaim`，只在没有管理员时可用）。
+
+“源代码”链接：配置项 `source_url`（默认本仓库地址）经 `GET /api/v4/public/config` 下发，登录页和账户菜单（用户与管理员都有）显示。
+只接受 `http(s)` 地址。改了代码对外提供服务的运营者把它指向自己的仓库（AGPL-3.0 第 13 条）。
+
+前端扩展点：`web/src/extensions/index.js` 导出商业版追加的路由和菜单项，社区版四个列表都为空；商业版构建时用自己的文件覆盖。
+现有的商业页面仍在公开仓库，按 edition 隐藏，第 3 步移出。
+
+本地验证（提交前，开发容器内）：上述 Go 包 `go test` 通过；前端 `vitest run` 135 个文件 1314 个测试通过；`eslint` 无报错；
+`check_commercial_boundary_test.py` 通过。合并依据以 PR 的 GitHub Actions 结果为准。
 
 ## 3. 对外承诺与保证方式
 
@@ -39,6 +64,13 @@
 | 超限或更新期结束只影响新建 | 私有库 `Guard.Allow(kind, current)` 只在新建前调用，不涉及已有对象（库内 `TestGuard` 覆盖上限、更新期、无 license 三种拒绝）；待第 3 步接入后加端到端测试 | 库已实现；接入未开始 |
 | 没有 license 时等同社区版 | 待第 3 步：调整私有库当前“无 license 拒绝一切”的零值行为 | 未实现，已知差异 |
 | 已发布的 5.0.x 永久 MIT | 已发布的标签和发布包附带 MIT `LICENSE`，无法撤回 | 成立 |
+
+第 2 步之后的更新（不改上表，按日期追加）：
+
+- 2026-11-22，承诺 1（不限量）：`internal/quota` 是新建用户和节点前唯一的检查点，`quota.Check` 为空时一律放行。
+  `TestNoPublicCodeSetsTheCheck` 扫描整个仓库的非测试 Go 文件，任何公开代码给 `quota.Check` 赋值都会让测试失败；
+  四个入口各有一个测试证明检查发生在写入之前、被拒绝时不新建也不改动已有对象。
+- 2026-11-22，承诺 4（只影响新建）：检查只在新建事务里、写入新行之前调用；更新、删除、续期、节点重新加入（rejoin）都不经过它。
 
 ## 4. CLA 流程
 
@@ -75,3 +107,4 @@ AGPL 切换和商业授权的前提是：除上游声明保留的部分外，本
 | license 签发专用密钥对（与发版签名密钥分开） | 项目所有者生成，私钥只存私有仓库 Secret | 第 3 步需要公钥 |
 | 是否把 CLA 检查设为 `main` 的必需检查 | 项目所有者（仓库规则设置） | 不设为必需时依赖评审 |
 | 官网 PR 的 Cloudflare 预览构建在 0 秒内失败 | 项目所有者（Cloudflare 面板配置） | 与本项改动无关；以 GitHub `Build` 检查为准 |
+| 商业版的 `TestPublicConfigReportsTheCommercialEdition` 等测试需要跟上新增的 `source_url` 字段 | 开发（下次商业仓库同步） | 公开仓库合并本步后，商业仓库前移 `PUBLIC_REF` 时处理 |
