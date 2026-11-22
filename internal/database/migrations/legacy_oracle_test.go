@@ -322,7 +322,7 @@ func retiredKernelModels() []any {
 		&retiredAuthorizedKey{},                        // 0025_drop_registration_keys
 		&retiredCleanAgent{}, &retiredNodeCredential{}, // 0027_drop_node_credentials
 		&retiredMFALoginAttempt{}, &retiredIdentityCutoverEvent{}, // 0034_drop_identity_leftovers
-		&retiredKernelForwardRoute{}, // 0036_forward_routes_as_lines
+		&retiredKernelForwardRoute{},                                               // 0036_forward_routes_as_lines
 		&retiredPluginWebUIAsset{}, &retiredTopology{}, &retiredTopologyRevision{}, // 0042_drop_topology_and_plugin_leftovers
 		&retiredTopologyVertex{}, &retiredTopologyEdge{}, &retiredTopologyDeployment{},
 		&retiredTopologyDeploymentStep{}, &retiredTopologyObservedState{},
