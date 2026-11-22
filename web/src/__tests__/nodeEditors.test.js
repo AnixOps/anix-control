@@ -3,7 +3,7 @@
 // node data helpers.
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { PROTOCOL_FIELDS, anxDestBehaviorsWarnings, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { PROTOCOL_FIELDS, anxDestBehaviorsWarnings, anxDestWarnings, defaultSettingsFor, fieldsFor, fillGenerated, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
 import { transportProblem, transportsFor } from '@/views/admin/nodes/protocolCapabilities'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
@@ -201,6 +201,28 @@ describe('protocol form fields', () => {
     stored.protocolForm.mode = 'visual'
     expect(stored.protocolForm).toMatchObject({ type: 'trojan', port: 8443, tls: 1, transport: 'ws' })
     expect(stored.protocolModel.value.transport_settings).toEqual({ path: '/w' })
+  })
+})
+
+describe('Shadowsocks 2022 server key', () => {
+  const methodField = PROTOCOL_FIELDS.find(field => field.key === 'method')
+  const keyField = PROTOCOL_FIELDS.find(field => field.key === 'server_key')
+  const keyLength = (protocol) => atob(readField(protocol, keyField)).length
+
+  it('is generated with the key length of the cipher when a 2022 cipher is chosen', () => {
+    const plain = { type: 'shadowsocks', tls: 0, transport: 'tcp', settings: defaultSettingsFor('shadowsocks') }
+    expect(plain.settings.server_key).toBeUndefined()
+    const aes128 = fillGenerated(writeField(plain, methodField, '2022-blake3-aes-128-gcm'), methodField)
+    expect(keyLength(aes128)).toBe(16)
+    const aes256 = fillGenerated(writeField(plain, methodField, '2022-blake3-aes-256-gcm'), methodField)
+    expect(keyLength(aes256)).toBe(32)
+    expect(readField(aes256, keyField)).not.toBe(readField(fillGenerated(writeField(plain, methodField, '2022-blake3-aes-256-gcm'), methodField), keyField))
+  })
+
+  it('keeps an existing key and lets the admin clear it', () => {
+    const protocol = { type: 'shadowsocks', settings: { method: '2022-blake3-aes-256-gcm', server_key: 'own' } }
+    expect(readField(fillGenerated(protocol, methodField), keyField)).toBe('own')
+    expect(readField(fillGenerated(writeField(protocol, keyField, ''), keyField), keyField)).toBe('')
   })
 })
 

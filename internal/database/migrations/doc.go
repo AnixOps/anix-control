@@ -165,4 +165,8 @@
 //     primary key and foreign key constraints and id sequences named after
 //     them (table_prefix.go); the node secret split's records follow. The
 //     steps above name the tables as they were when they ran.
+//   - 0041_ss2022_server_keys: a Shadowsocks 2022 protocol without a
+//     server_key gets, as a stored secret, the key earlier releases derived
+//     from its node's created_at (ss2022_server_keys.go); Control derives
+//     no key from then on.
 package migrations

@@ -17,8 +17,7 @@ func TestTablePrefixStepRenamesTheTablesWithTheirData(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, open opener) {
 		ctx := context.Background()
 		history := steps(t)
-		at := len(history) - 1
-		require.Equal(t, "0040_table_prefix", history[at].ID())
+		at := stepIndex(t, history, "0040_table_prefix")
 		db := open(t)
 		_, err := migrations.RunSteps(ctx, db, history[:at], migrateOptions())
 		require.NoError(t, err)
@@ -32,9 +31,8 @@ func TestTablePrefixStepRenamesTheTablesWithTheirData(t *testing.T) {
 		}
 		assert.Equal(t, "v2_knowledge", migrations.TableIn(db, "v5_knowledge"))
 
-		result, err := migrations.Migrate(ctx, db, migrateOptions())
+		_, err = migrations.RunSteps(ctx, db, history[:at+1], migrateOptions())
 		require.NoError(t, err)
-		require.Equal(t, []string{"0040_table_prefix"}, result.Applied)
 
 		assert.Equal(t, "v5_knowledge", migrations.TableIn(db, "v5_knowledge"))
 		assert.Equal(t, "v5_line", migrations.TableIn(db, "v5_line"), "a table the step did not rename")

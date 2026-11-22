@@ -1180,23 +1180,6 @@ func TestGenerateNodeIDUsesStableSHA256Digest(t *testing.T) {
 	assert.Len(t, got, 16)
 }
 
-// TestDeriveSS2022ServerKey 校验 SS2022 server_key 派生与老 XBoard
-// Helper::getServerKey($timestamp,$len) 一致: base64(substr(md5(unix秒),0,len))。
-// 期望值用 python/php 手算: md5("1782409707")="b2980b593a367c3ed259d307b50a12a9"。
-func TestDeriveSS2022ServerKey(t *testing.T) {
-	createdAt := time.Unix(1782409707, 0)
-
-	// aes-256-gcm → 前 32 个 hex 字符
-	assert.Equal(t,
-		"YjI5ODBiNTkzYTM2N2MzZWQyNTlkMzA3YjUwYTEyYTk=",
-		DeriveSS2022ServerKey(createdAt, "2022-blake3-aes-256-gcm"))
-
-	// aes-128-gcm → 前 16 个 hex 字符
-	assert.Equal(t,
-		"YjI5ODBiNTkzYTM2N2MzZQ==",
-		DeriveSS2022ServerKey(createdAt, "2022-blake3-aes-128-gcm"))
-}
-
 // NotificationServiceTestSuite 通知服务测试套件
 type NotificationServiceTestSuite struct {
 	ServiceTestSuite

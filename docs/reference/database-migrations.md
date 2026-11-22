@@ -149,6 +149,7 @@ every migration has both files; afterwards only the SQLite file remains.
 | `0005_backups` | Creates `v5_backup`, one row per backup bundle in `<data_dir>/backups` with the result of its latest verification ([`backups.md`](backups.md)) |
 | `0006_destination_stats` | Creates `v5_destination_stat`, each user's traffic by destination domain, node and hour ([`destination-stats.md`](destination-stats.md)) |
 | `0040_table_prefix` | Renames the 51 tables Control kept from V2Board (`v2_*`) to the `v5_` prefix, with their `idx_` indexes and, on PostgreSQL, the primary key and foreign key constraints and id sequences named after them; the three rows of `v4_kernel_node_secret_split` follow. Data, columns, grants and views stay. The steps above name the tables as they were when they ran ([`../UPGRADE.md`](../UPGRADE.md#table-names-lose-the-v2_-prefix)) |
+| `0041_ss2022_server_keys` | Go-only. Stores, for every Shadowsocks 2022 protocol (a `2022-blake3-*` cipher) without a `server_key`, the key earlier releases derived at every read from its node's `created_at` (the parent node's for a relay), as a `v4_kernel_protocol_secret` row with the placeholder in `settings`. Nodes and subscriptions keep the key their clients hold; Control derives nothing from then on ([`../UPGRADE.md`](../UPGRADE.md#shadowsocks-2022-server-keys-are-stored)) |
 
 ## Adding A Migration
 
