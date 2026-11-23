@@ -13,11 +13,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func bindingSession(t *testing.T, identity HostIdentity, handler OperationHandler) *GenerationSession {
+func bindingSession(t *testing.T, identity HostIdentity, handler OperationHandler) *Session {
 	t.Helper()
 	allowlist, err := NewAllowlistWithFallback(nil, Operation{PackageID: identity.PackageID, RouteID: "proxy.admin.nodes.post", Name: "proxy.admin.nodes.post", Handler: handler})
 	require.NoError(t, err)
-	session, err := NewGenerationSession(identity, allowlist, SessionOptions{})
+	session, _, err := NewSession(identity, allowlist)
 	require.NoError(t, err)
 	return session
 }

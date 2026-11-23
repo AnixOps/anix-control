@@ -64,7 +64,7 @@ func (s *Session) GetPackageConfig(ctx context.Context, request *packagebridgev1
 	return s.getPackageConfig(ctx, request)
 }
 
-func (s *GenerationSession) getPackageConfig(ctx context.Context, _ *packagebridgev1.GetPackageConfigRequest) (*packagebridgev1.GetPackageConfigResponse, error) {
+func (s *Session) getPackageConfig(ctx context.Context, _ *packagebridgev1.GetPackageConfigRequest) (*packagebridgev1.GetPackageConfigResponse, error) {
 	operations, identity, err := s.hostOperationContext()
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (s *Session) LeaseStorage(ctx context.Context, request *packagebridgev1.Lea
 	return s.leaseStorage(ctx, request)
 }
 
-func (s *GenerationSession) leaseStorage(ctx context.Context, _ *packagebridgev1.LeaseStorageRequest) (*packagebridgev1.LeaseStorageResponse, error) {
+func (s *Session) leaseStorage(ctx context.Context, _ *packagebridgev1.LeaseStorageRequest) (*packagebridgev1.LeaseStorageResponse, error) {
 	operations, identity, err := s.hostOperationContext()
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func (s *GenerationSession) leaseStorage(ctx context.Context, _ *packagebridgev1
 	}, nil
 }
 
-func (s *GenerationSession) hostOperationContext() (HostOperations, HostIdentity, error) {
+func (s *Session) hostOperationContext() (HostOperations, HostIdentity, error) {
 	if s == nil {
 		return nil, HostIdentity{}, status.Error(codes.Unavailable, "package bridge is closed")
 	}
