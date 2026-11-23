@@ -33,7 +33,11 @@ DRAFT_PACKAGES: frozenset[str] = frozenset({"anixops.network.v1"})
 
 # Protobuf packages removed with what served them: their lines may go.
 # v2board: the node services third-party node software used, removed in 5.0.
-RETIRED_PACKAGES: frozenset[str] = frozenset({"v2board"})
+# anix.pluginhost.v1: the kernel-to-host protocol; the kernel calls built-in
+# hosts directly since slim audit C1c-2a, and no other host exists.
+# anixops.modulepki.v1: network module enrollment, removed with the remote
+# module runtime (slim audit B4); never served in production.
+RETIRED_PACKAGES: frozenset[str] = frozenset({"v2board", "anix.pluginhost.v1", "anixops.modulepki.v1"})
 
 
 def golden_lines(text: str) -> set[str]:

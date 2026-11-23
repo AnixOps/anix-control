@@ -450,65 +450,6 @@ field anix.agent.v1.UserDelta.upserts = 4 repeated anix.agent.v1.NodeUser
 field anix.agent.v1.UserTraffic.download_bytes = 3 optional uint64
 field anix.agent.v1.UserTraffic.upload_bytes = 2 optional uint64
 field anix.agent.v1.UserTraffic.user_id = 1 optional uint64
-field anix.pluginhost.v1.DispatchRequest.bridge_capability = 12 optional bytes
-field anix.pluginhost.v1.DispatchRequest.deadline_unix_millis = 10 optional int64
-field anix.pluginhost.v1.DispatchRequest.idempotency_key = 5 optional string
-field anix.pluginhost.v1.DispatchRequest.method = 7 optional string
-field anix.pluginhost.v1.DispatchRequest.package_id = 1 optional string
-field anix.pluginhost.v1.DispatchRequest.package_version = 2 optional string
-field anix.pluginhost.v1.DispatchRequest.principal_json = 9 optional bytes
-field anix.pluginhost.v1.DispatchRequest.request_body = 8 optional bytes
-field anix.pluginhost.v1.DispatchRequest.request_host = 14 optional string
-field anix.pluginhost.v1.DispatchRequest.request_id = 4 optional string
-field anix.pluginhost.v1.DispatchRequest.request_metadata_json = 11 optional bytes
-field anix.pluginhost.v1.DispatchRequest.request_scheme = 13 optional string
-field anix.pluginhost.v1.DispatchRequest.route_generation = 3 optional uint64
-field anix.pluginhost.v1.DispatchRequest.route_id = 6 optional string
-field anix.pluginhost.v1.DispatchResponse.failure_code = 5 optional string
-field anix.pluginhost.v1.DispatchResponse.headers = 3 repeated anix.pluginhost.v1.Header
-field anix.pluginhost.v1.DispatchResponse.operation_id = 4 optional string
-field anix.pluginhost.v1.DispatchResponse.response_body = 2 optional bytes
-field anix.pluginhost.v1.DispatchResponse.status_code = 1 optional uint32
-field anix.pluginhost.v1.DrainRequest.deadline_unix_millis = 2 optional int64
-field anix.pluginhost.v1.DrainRequest.route_generation = 1 optional uint64
-field anix.pluginhost.v1.DrainResponse.drained = 1 optional bool
-field anix.pluginhost.v1.DrainResponse.in_flight = 2 optional uint64
-field anix.pluginhost.v1.Header.name = 1 optional string
-field anix.pluginhost.v1.Header.value = 2 optional string
-field anix.pluginhost.v1.HealthRequest.route_generation = 1 optional uint64
-field anix.pluginhost.v1.HealthResponse.details_json = 3 optional string
-field anix.pluginhost.v1.HealthResponse.healthy = 1 optional bool
-field anix.pluginhost.v1.HealthResponse.lease_id = 2 optional string
-field anix.pluginhost.v1.MigrationRequest.bridge_capability = 6 optional bytes
-field anix.pluginhost.v1.MigrationRequest.checkpoint = 4 optional string
-field anix.pluginhost.v1.MigrationRequest.deadline_unix_millis = 7 optional int64
-field anix.pluginhost.v1.MigrationRequest.migration_id = 3 optional string
-field anix.pluginhost.v1.MigrationRequest.package_id = 1 optional string
-field anix.pluginhost.v1.MigrationRequest.package_version = 2 optional string
-field anix.pluginhost.v1.MigrationRequest.route_generation = 5 optional uint64
-field anix.pluginhost.v1.MigrationResponse.checkpoint = 1 optional string
-field anix.pluginhost.v1.MigrationResponse.complete = 3 optional bool
-field anix.pluginhost.v1.MigrationResponse.failure_code = 4 optional string
-field anix.pluginhost.v1.MigrationResponse.validation_digest = 2 optional string
-field anix.pluginhost.v1.ResumeRequest.route_generation = 1 optional uint64
-field anix.pluginhost.v1.ResumeResponse.resumed = 1 optional bool
-field anix.pluginhost.v1.WebSocketClose.code = 1 optional uint32
-field anix.pluginhost.v1.WebSocketClose.reason = 2 optional string
-field anix.pluginhost.v1.WebSocketFrame.close = 3 optional anix.pluginhost.v1.WebSocketClose oneof value
-field anix.pluginhost.v1.WebSocketFrame.data = 2 optional bytes oneof value
-field anix.pluginhost.v1.WebSocketFrame.open = 1 optional anix.pluginhost.v1.WebSocketOpen oneof value
-field anix.pluginhost.v1.WebSocketOpen.bridge_capability = 10 optional bytes
-field anix.pluginhost.v1.WebSocketOpen.deadline_unix_millis = 8 optional int64
-field anix.pluginhost.v1.WebSocketOpen.idempotency_key = 7 optional string
-field anix.pluginhost.v1.WebSocketOpen.package_id = 1 optional string
-field anix.pluginhost.v1.WebSocketOpen.package_version = 2 optional string
-field anix.pluginhost.v1.WebSocketOpen.principal_json = 5 optional bytes
-field anix.pluginhost.v1.WebSocketOpen.request_host = 12 optional string
-field anix.pluginhost.v1.WebSocketOpen.request_id = 6 optional string
-field anix.pluginhost.v1.WebSocketOpen.request_metadata_json = 9 optional bytes
-field anix.pluginhost.v1.WebSocketOpen.request_scheme = 11 optional string
-field anix.pluginhost.v1.WebSocketOpen.route_generation = 3 optional uint64
-field anix.pluginhost.v1.WebSocketOpen.route_id = 4 optional string
 field anixops.forward.v1.ApplyResult.applied = 3 optional bool
 field anixops.forward.v1.ApplyResult.errors = 4 repeated anixops.forward.v1.HopError
 field anixops.forward.v1.ApplyResult.generation = 1 optional uint64
@@ -1481,20 +1422,6 @@ field anixops.kerneltelemetry.v1.GetDashboardResponse.total_orders = 6 optional 
 field anixops.kerneltelemetry.v1.GetDashboardResponse.total_revenue = 9 optional int64
 field anixops.kerneltelemetry.v1.GetDashboardResponse.total_traffic_used = 15 optional int64
 field anixops.kerneltelemetry.v1.GetDashboardResponse.total_users = 1 optional int64
-field anixops.modulepki.v1.EnrollRequest.cluster = 3 optional string
-field anixops.modulepki.v1.EnrollRequest.csr_der = 4 optional bytes
-field anixops.modulepki.v1.EnrollRequest.enrollment_credential = 1 optional string
-field anixops.modulepki.v1.EnrollRequest.package_id = 2 optional string
-field anixops.modulepki.v1.EnrollResponse.certificate = 1 optional anixops.modulepki.v1.IssuedCertificate
-field anixops.modulepki.v1.GetTrustBundleResponse.trust_bundle_der = 1 repeated bytes
-field anixops.modulepki.v1.IssuedCertificate.certificate_der = 1 optional bytes
-field anixops.modulepki.v1.IssuedCertificate.intermediate_der = 2 repeated bytes
-field anixops.modulepki.v1.IssuedCertificate.not_after_unix = 5 optional int64
-field anixops.modulepki.v1.IssuedCertificate.renew_after_unix = 6 optional int64
-field anixops.modulepki.v1.IssuedCertificate.spiffe_id = 4 optional string
-field anixops.modulepki.v1.IssuedCertificate.trust_bundle_der = 3 repeated bytes
-field anixops.modulepki.v1.RenewRequest.csr_der = 1 optional bytes
-field anixops.modulepki.v1.RenewResponse.certificate = 1 optional anixops.modulepki.v1.IssuedCertificate
 field anixops.network.v1.AnxLineSettings.carrier_order = 9 repeated string
 field anixops.network.v1.AnxLineSettings.egress = 7 optional string
 field anixops.network.v1.AnxLineSettings.faketcp_addr = 5 optional string
@@ -1739,12 +1666,6 @@ rpc anix.agent.v1.AgentEnrollment.GetTrustBundle(anix.agent.v1.GetAgentTrustBund
 rpc anix.agent.v1.AgentEnrollment.IssueLinkCertificate(anix.agent.v1.IssueLinkCertificateRequest) returns (anix.agent.v1.IssueLinkCertificateResponse)
 rpc anix.agent.v1.AgentEnrollment.Join(anix.agent.v1.JoinRequest) returns (anix.agent.v1.JoinResponse)
 rpc anix.agent.v1.AgentEnrollment.Renew(anix.agent.v1.RenewAgentCertificateRequest) returns (anix.agent.v1.RenewAgentCertificateResponse)
-rpc anix.pluginhost.v1.ControlPackageHost.Dispatch(anix.pluginhost.v1.DispatchRequest) returns (anix.pluginhost.v1.DispatchResponse)
-rpc anix.pluginhost.v1.ControlPackageHost.Drain(anix.pluginhost.v1.DrainRequest) returns (anix.pluginhost.v1.DrainResponse)
-rpc anix.pluginhost.v1.ControlPackageHost.Health(anix.pluginhost.v1.HealthRequest) returns (anix.pluginhost.v1.HealthResponse)
-rpc anix.pluginhost.v1.ControlPackageHost.Migrate(anix.pluginhost.v1.MigrationRequest) returns (anix.pluginhost.v1.MigrationResponse)
-rpc anix.pluginhost.v1.ControlPackageHost.OpenWebSocket(stream anix.pluginhost.v1.WebSocketFrame) returns (stream anix.pluginhost.v1.WebSocketFrame)
-rpc anix.pluginhost.v1.ControlPackageHost.Resume(anix.pluginhost.v1.ResumeRequest) returns (anix.pluginhost.v1.ResumeResponse)
 rpc anixops.forward.v1.ForwardControl.CreateDnsBinding(anixops.forward.v1.CreateDnsBindingRequest) returns (anixops.forward.v1.CreateDnsBindingResponse)
 rpc anixops.forward.v1.ForwardControl.CreateDnsProvider(anixops.forward.v1.CreateDnsProviderRequest) returns (anixops.forward.v1.CreateDnsProviderResponse)
 rpc anixops.forward.v1.ForwardControl.CreateForwardNode(anixops.forward.v1.CreateForwardNodeRequest) returns (anixops.forward.v1.CreateForwardNodeResponse)
@@ -1817,9 +1738,6 @@ rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic(anixops.kernelsubs
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup(anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest) returns (anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges(anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest) returns (stream anixops.kernelsubscriber.v1.SubscriberChange)
 rpc anixops.kerneltelemetry.v1.KernelTelemetry.GetDashboard(anixops.kerneltelemetry.v1.GetDashboardRequest) returns (anixops.kerneltelemetry.v1.GetDashboardResponse)
-rpc anixops.modulepki.v1.ModulePKI.Enroll(anixops.modulepki.v1.EnrollRequest) returns (anixops.modulepki.v1.EnrollResponse)
-rpc anixops.modulepki.v1.ModulePKI.GetTrustBundle(anixops.modulepki.v1.GetTrustBundleRequest) returns (anixops.modulepki.v1.GetTrustBundleResponse)
-rpc anixops.modulepki.v1.ModulePKI.Renew(anixops.modulepki.v1.RenewRequest) returns (anixops.modulepki.v1.RenewResponse)
 rpc anixops.packagebridge.v1.KernelPackageBridge.Bind(anixops.packagebridge.v1.BindRequest) returns (anixops.packagebridge.v1.BindResponse)
 rpc anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig(anixops.packagebridge.v1.GetPackageConfigRequest) returns (anixops.packagebridge.v1.GetPackageConfigResponse)
 rpc anixops.packagebridge.v1.KernelPackageBridge.Heartbeat(anixops.packagebridge.v1.HeartbeatRequest) returns (anixops.packagebridge.v1.HeartbeatResponse)
