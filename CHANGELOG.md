@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.0.12 - 2026-11-23
+
 ### Removed
 
 - `plugins.control_host_runtime_dir` (2026-11 slimming, class C1c-3): no
