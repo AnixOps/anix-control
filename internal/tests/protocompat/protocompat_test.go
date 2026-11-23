@@ -25,10 +25,8 @@ import (
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
-	_ "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
-	_ "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -39,7 +37,6 @@ var update = flag.Bool("update", false, "rewrite the golden file with additive c
 // contractPackages are the protobuf packages whose wire format is a contract.
 var contractPackages = []string{
 	"anix.agent.v1",
-	"anix.pluginhost.v1",
 	"anixops.forward.v1",
 	"anixops.identity.v1",
 	"anixops.kernelorder.v1",
@@ -48,7 +45,6 @@ var contractPackages = []string{
 	"anixops.kernelsettings.v1",
 	"anixops.kernelsubscriber.v1",
 	"anixops.kerneltelemetry.v1",
-	"anixops.modulepki.v1",
 	"anixops.network.v1",
 	"anixops.packagebridge.v1",
 }

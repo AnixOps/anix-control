@@ -43,7 +43,7 @@ class ProtoGoldenTest(unittest.TestCase):
         base = BASE + "rpc v2board.NodeService.GetConfig(v2board.NodeConfigRequest) returns (v2board.NodeConfigResponse)\n"
         self.assertEqual([], gate.removed(base, BASE))
         self.assertEqual(1, len(gate.removed(base, BASE, retired=frozenset())))
-        self.assertEqual(frozenset({"v2board"}), gate.RETIRED_PACKAGES)
+        self.assertEqual(frozenset({"v2board", "anix.pluginhost.v1", "anixops.modulepki.v1"}), gate.RETIRED_PACKAGES)
 
     def test_forward_is_frozen(self) -> None:
         self.assertNotIn("anixops.forward.v1", gate.DRAFT_PACKAGES)

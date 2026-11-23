@@ -148,6 +148,8 @@ containers that enrolled with the kernel CA (`ModulePKI`), bound to a kernel
 module listener (`module_runtime.listen`, `:7443`) and served the host
 protocol over mTLS. Production never enabled that runtime, and it was
 removed: every package runs inside Control (`plugin-kernel-contract.md`).
-The protobuf contracts `sdk/api/modulepki/v1` and the
-`KernelPackageBridge.Bind`/`Heartbeat` RPCs stay in the append-only
-contract golden file (`contracts/proto/descriptors.golden`), unserved.
+The protobuf contract `sdk/api/modulepki/v1` is retired with it
+(`config/scripts/check_proto_golden.py`, `RETIRED_PACKAGES`). The
+`KernelPackageBridge.Bind`/`Heartbeat` RPCs stay in the append-only contract
+golden file (`contracts/proto/descriptors.golden`), unserved, because their
+package is still live.

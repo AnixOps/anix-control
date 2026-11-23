@@ -380,7 +380,7 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:${PATH}"
-          contracts=(pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent)
+          contracts=(packagebridge identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent)
           for contract in "${contracts[@]}"; do
             bash "sdk/api/${contract}/gen.sh"
           done
