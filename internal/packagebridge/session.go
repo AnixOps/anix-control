@@ -287,10 +287,13 @@ type capability struct {
 	request Request
 }
 
-// GenerationSession is the kernel-side state of one package host generation:
-// its identity, the one-shot capabilities minted for its requests, and the
-// operations it may call. The host reaches it through its Session.
-type GenerationSession struct {
+// Session is the kernel side of one package host generation's bridge: its
+// identity, the one-shot capabilities minted for its requests and the
+// operations it may call. The host reaches it, and the kernel contracts of
+// its generation, only through the in-process connection NewSession returns.
+type Session struct {
+	packagebridgev1.UnimplementedKernelPackageBridgeServer
+
 	mu                sync.Mutex
 	identity          HostIdentity
 	handler           *Allowlist
@@ -299,71 +302,7 @@ type GenerationSession struct {
 	maxResponseBody   int64
 	hostOperations    HostOperations
 	closed            bool
-	draining          bool
-}
-
-// NewGenerationSession returns the state of one host generation.
-func NewGenerationSession(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*GenerationSession, error) {
-	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
-		return nil, errors.New("package bridge session is invalid")
-	}
-	var webSocketResolver WebSocketOperationResolver
-	if len(webSocketResolvers) > 0 {
-		webSocketResolver = webSocketResolvers[0]
-	}
-	return &GenerationSession{
-		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
-		maxResponseBody: options.responseLimit(), hostOperations: options.HostOperations,
-	}, nil
-}
-
-// Identity returns the generation's host identity.
-func (g *GenerationSession) Identity() HostIdentity {
-	if g == nil {
-		return HostIdentity{}
-	}
-	return g.identity
-}
-
-// Closed reports whether the generation is fenced.
-func (g *GenerationSession) Closed() bool {
-	if g == nil {
-		return true
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.closed
-}
-
-// SetDraining records whether the kernel is draining the generation; remote
-// instances learn it from their heartbeat.
-func (g *GenerationSession) SetDraining(draining bool) {
-	if g == nil {
-		return
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.draining = draining
-}
-
-// Draining reports whether the kernel is draining the generation.
-func (g *GenerationSession) Draining() bool {
-	if g == nil {
-		return false
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.draining
-}
-
-// Session serves one host's bridge in process: the connection it returns
-// reaches the bridge and the kernel contracts of this generation only, and
-// is never addressable by anything else.
-type Session struct {
-	packagebridgev1.UnimplementedKernelPackageBridgeServer
-
-	*GenerationSession
-	channel *localgrpc.Channel
+	channel           *localgrpc.Channel
 }
 
 var _ packagebridgev1.KernelPackageBridgeServer = (*Session)(nil)
@@ -374,13 +313,19 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 
 // NewSessionWithOptions is NewSession with explicit payload limits.
 func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*Session, grpc.ClientConnInterface, error) {
-	generation, err := NewGenerationSession(identity, handler, options, webSocketResolvers...)
-	if err != nil {
-		return nil, nil, err
+	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
+		return nil, nil, errors.New("package bridge session is invalid")
 	}
-	session := &Session{GenerationSession: generation, channel: &localgrpc.Channel{
-		ServerContext: func(ctx context.Context) context.Context { return withGeneration(ctx, generation) },
-	}}
+	session := &Session{
+		identity: identity, handler: handler, capabilities: make(map[string]capability),
+		maxResponseBody: options.responseLimit(), hostOperations: options.HostOperations,
+	}
+	if len(webSocketResolvers) > 0 {
+		session.webSocketResolver = webSocketResolvers[0]
+	}
+	session.channel = &localgrpc.Channel{
+		ServerContext: func(ctx context.Context) context.Context { return withGeneration(ctx, session) },
+	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.channel, session)
 	if options.KernelIdentity != nil {
 		kernelidentityv1.RegisterKernelIdentityServer(session.channel, options.KernelIdentity(identity))
@@ -408,7 +353,7 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 
 // Mint creates an opaque one-shot capability for a dispatch already admitted
 // by the kernel. It is not an authority token that a package can fabricate.
-func (s *GenerationSession) Mint(request Request) ([]byte, error) {
+func (s *Session) Mint(request Request) ([]byte, error) {
 	if s == nil || !safeIdentifier(request.RequestID) || !safeIdentifier(request.RouteID) || request.Deadline.IsZero() || !request.Deadline.After(time.Now()) {
 		return nil, ErrCapabilityRejected
 	}
@@ -426,13 +371,6 @@ func (s *GenerationSession) Mint(request Request) ([]byte, error) {
 }
 
 func (s *Session) Invoke(ctx context.Context, request *packagebridgev1.InvokeRequest) (*packagebridgev1.InvokeResponse, error) {
-	if s == nil {
-		return nil, status.Error(codes.Unavailable, "package bridge is closed")
-	}
-	return s.invoke(ctx, request)
-}
-
-func (s *GenerationSession) invoke(ctx context.Context, request *packagebridgev1.InvokeRequest) (*packagebridgev1.InvokeResponse, error) {
 	if request == nil || len(request.GetCapability()) != capabilityBytes || !safeIdentifier(request.GetOperation()) {
 		return nil, capabilityStatusError()
 	}
@@ -473,13 +411,6 @@ func (s *GenerationSession) invoke(ctx context.Context, request *packagebridgev1
 }
 
 func (s *Session) OpenWebSocket(stream packagebridgev1.KernelPackageBridge_OpenWebSocketServer) error {
-	if s == nil {
-		return status.Error(codes.Unavailable, "package bridge is closed")
-	}
-	return s.openWebSocket(stream)
-}
-
-func (s *GenerationSession) openWebSocket(stream packagebridgev1.KernelPackageBridge_OpenWebSocketServer) error {
 	if stream == nil {
 		return status.Error(codes.InvalidArgument, "package bridge WebSocket stream is required")
 	}
@@ -515,7 +446,7 @@ func (s *GenerationSession) openWebSocket(stream packagebridgev1.KernelPackageBr
 	return status.Error(codes.Internal, "package bridge WebSocket operation failed")
 }
 
-func (s *GenerationSession) take(raw []byte, operation string) (capability, error) {
+func (s *Session) take(raw []byte, operation string) (capability, error) {
 	if s == nil {
 		return capability{}, ErrBridgeClosed
 	}
@@ -538,7 +469,7 @@ func (s *GenerationSession) take(raw []byte, operation string) (capability, erro
 	return issued, nil
 }
 
-func (s *GenerationSession) takeWebSocket(raw []byte, operation string) (capability, WebSocketOperationHandler, error) {
+func (s *Session) takeWebSocket(raw []byte, operation string) (capability, WebSocketOperationHandler, error) {
 	if s == nil {
 		return capability{}, nil, ErrBridgeClosed
 	}
@@ -572,7 +503,7 @@ func (s *GenerationSession) takeWebSocket(raw []byte, operation string) (capabil
 // Peek returns the request a live capability was minted for, without
 // consuming it: minted by this generation, not yet consumed or revoked, and
 // before its deadline. KernelNodeOps verifies request bindings with it.
-func (s *GenerationSession) Peek(raw []byte) (Request, bool) {
+func (s *Session) Peek(raw []byte) (Request, bool) {
 	if s == nil || len(raw) != capabilityBytes {
 		return Request{}, false
 	}
@@ -593,7 +524,7 @@ func (s *GenerationSession) Peek(raw []byte) (Request, bool) {
 // path when a request's secrets cannot be sealed. The operation must be one
 // the generation's allowlist binds to the request's route, as for a
 // capability.
-func (s *GenerationSession) ServeLegacy(ctx context.Context, request Request, operation string) (Response, error) {
+func (s *Session) ServeLegacy(ctx context.Context, request Request, operation string) (Response, error) {
 	if s == nil {
 		return Response{}, ErrBridgeClosed
 	}
@@ -621,7 +552,7 @@ func (s *GenerationSession) ServeLegacy(ctx context.Context, request Request, op
 
 // Revoke removes an unconsumed capability once the outer package-host
 // dispatch returns. Calling it after a successful bridge call is harmless.
-func (s *GenerationSession) Revoke(raw []byte) {
+func (s *Session) Revoke(raw []byte) {
 	if s == nil || len(raw) != capabilityBytes {
 		return
 	}
@@ -632,26 +563,16 @@ func (s *GenerationSession) Revoke(raw []byte) {
 	}
 }
 
-// Close fences the generation: unconsumed capabilities are dropped and every
-// later call is rejected.
-func (s *GenerationSession) Close() error {
-	if s == nil {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	s.capabilities = nil
-	return nil
-}
-
-// Close fences the generation, ends the calls in flight and refuses later
-// ones.
+// Close fences the generation: unconsumed capabilities are dropped, the
+// calls in flight end and every later call is refused.
 func (s *Session) Close() error {
 	if s == nil {
 		return nil
 	}
-	_ = s.GenerationSession.Close()
+	s.mu.Lock()
+	s.closed = true
+	s.capabilities = nil
+	s.mu.Unlock()
 	s.channel.Close()
 	return nil
 }

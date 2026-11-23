@@ -13,7 +13,7 @@ var ErrBindingRejected = errors.New("package bridge request binding rejected")
 type generationContextKey struct{}
 
 // withGeneration records on a call's context the generation it arrived on.
-func withGeneration(ctx context.Context, generation *GenerationSession) context.Context {
+func withGeneration(ctx context.Context, generation *Session) context.Context {
 	return context.WithValue(ctx, generationContextKey{}, generation)
 }
 
@@ -22,7 +22,7 @@ func withGeneration(ctx context.Context, generation *GenerationSession) context.
 // only on the generation the call arrived on (its session), without consuming it. Contracts that act
 // for a v2 request (KernelNodeOps) verify their RequestBinding with it.
 func BoundRequest(ctx context.Context, raw []byte) (HostIdentity, Request, error) {
-	generation, _ := ctx.Value(generationContextKey{}).(*GenerationSession)
+	generation, _ := ctx.Value(generationContextKey{}).(*Session)
 	if generation == nil {
 		return HostIdentity{}, Request{}, ErrBindingRejected
 	}
@@ -30,5 +30,5 @@ func BoundRequest(ctx context.Context, raw []byte) (HostIdentity, Request, error
 	if !ok {
 		return HostIdentity{}, Request{}, ErrBindingRejected
 	}
-	return generation.Identity(), request, nil
+	return generation.identity, request, nil
 }
