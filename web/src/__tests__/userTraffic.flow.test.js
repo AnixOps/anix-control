@@ -40,7 +40,7 @@ describe('User 访问统计 page', () => {
     expect(within(list).getByText('Video')).toBeTruthy()
     expect(within(list).getByText('Messaging')).toBeTruthy()
     expect(list.textContent).toContain('66.7%')
-    expect(screen.getByText('Records are kept for 30 days, then deleted.')).toBeTruthy()
+    expect(screen.getByText('Records are kept for 30 days.')).toBeTruthy()
 
     await user.click(screen.getByText('7 days'))
     await waitFor(() => expect(mockGetMine).toHaveBeenLastCalledWith({ hours: 168, limit: 200 }))
@@ -49,7 +49,7 @@ describe('User 访问统计 page', () => {
   it('says when the statistics are off and when there is nothing yet', async () => {
     mockGetMine.mockResolvedValue({ categories: [], domains: [], domain_count: 0, settings: { enabled: false, retention_days: 30 } })
     render(Traffic)
-    expect(await screen.findByText('Your administrator turned site statistics off: nothing new is recorded.')).toBeTruthy()
+    expect(await screen.findByText('Site statistics are disabled. No new data is recorded.')).toBeTruthy()
     expect((await screen.findAllByText('No sites visited in this period')).length).toBeGreaterThan(0)
   })
 })

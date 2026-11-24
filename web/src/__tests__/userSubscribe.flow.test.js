@@ -218,7 +218,7 @@ describe('User Subscribe flow', () => {
 
     await user.type(password, 'wrong')
     await user.click(within(dialog).getByRole('button', { name: 'Reset link' }))
-    expect(await within(dialog).findByText('That password is not correct.')).toBeTruthy()
+    expect(await within(dialog).findByText('The password is incorrect.')).toBeTruthy()
     expect(mockResetSubscription).toHaveBeenLastCalledWith({ password: 'wrong' })
 
     await user.clear(password)
@@ -228,7 +228,7 @@ describe('User Subscribe flow', () => {
     const newLink = `${window.location.protocol}//${window.location.host}/s/sub-token-2`
     expect(within(done).getByLabelText('New subscription link').value).toBe(newLink)
     expect(within(done).getByRole('img', { name: 'QR code of your subscription link' })).toBeTruthy()
-    expect(toastMessages('success')).toEqual(['Subscription link reset. Import it again on all your devices.'])
+    expect(toastMessages('success')).toEqual(['Subscription link reset. Import it again on all devices.'])
     // The page shows the new link and reloads its data; there is no ticket.
     expect(screen.getByLabelText('Subscription link', { selector: '#subscribe-link' }).value).toBe(newLink)
     expect(useUserStore().userInfo.token).toBe('sub-token-2')
@@ -257,7 +257,7 @@ describe('User Subscribe flow', () => {
     // The sixth digit submits; a wrong code clears the boxes.
     await user.keyboard('123456')
     await waitFor(() => expect(mockResetSubscription).toHaveBeenCalledWith({ code: '123456', method: 'totp' }))
-    expect(await within(dialog).findByText('That code is not correct or has expired.')).toBeTruthy()
+    expect(await within(dialog).findByText('The code is incorrect or has expired.')).toBeTruthy()
     await waitFor(() => expect(within(dialog).getAllByLabelText(/^Digit \d of 6$/).map(box => box.value).join('')).toBe(''))
 
     await user.click(within(dialog).getByRole('button', { name: 'Use a recovery code' }))
@@ -320,7 +320,7 @@ describe('User Subscribe flow', () => {
     useUserStore().login('jwt', { id: 7, email: 'lin@example.com' })
     mockGetSubscription.mockResolvedValue(ok({ plan_id: null }))
     await renderPage()
-    expect(await screen.findByRole('heading', { name: 'You don’t have a subscription link yet.' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'No subscription link.' })).toBeTruthy()
     expect(screen.queryByRole('img', { name: /QR code/ })).toBeNull()
   })
 })

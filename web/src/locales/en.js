@@ -146,9 +146,9 @@ export default {
       message: 'Message'
     },
     ticketPriority: {
-      low: 'Low (general inquiries)',
+      low: 'Low (general inquiry)',
       medium: 'Medium (usage issue)',
-      high: 'High (service unavailable / urgent issue)'
+      high: 'High (service outage)'
     },
     periods: {
       month: 'Monthly',
@@ -165,7 +165,7 @@ export default {
       loadFailed: 'Load failed',
       submitFailed: 'Submit failed',
       invalidCoupon: 'Invalid coupon code',
-      paymentPending: 'Payment is still being integrated. Please try again later.'
+      paymentPending: 'Payment is not available.'
     }
   },
   pageTitles: {

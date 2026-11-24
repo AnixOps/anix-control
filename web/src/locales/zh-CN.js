@@ -146,9 +146,9 @@ export default {
       message: '内容'
     },
     ticketPriority: {
-      low: '低（一般建议）',
-      medium: '中（使用遇到困难）',
-      high: '高（无法使用/紧急故障）'
+      low: '低（一般咨询）',
+      medium: '中（使用问题）',
+      high: '高（服务中断）'
     },
     periods: {
       month: '月付',
@@ -165,7 +165,7 @@ export default {
       loadFailed: '加载失败',
       submitFailed: '提交失败',
       invalidCoupon: '无效的优惠码',
-      paymentPending: '支付功能正在集成中，敬请期待'
+      paymentPending: '支付功能暂未开放'
     }
   },
   pageTitles: {
@@ -219,10 +219,10 @@ export default {
   app: {
     meta: {
       defaultDescription: `${CONTROL_NAME} 统一管理订阅交付、支付账单、节点编排、Agent 运行时与转发运维。`,
-      loginDescription: `登录 ${CONTROL_NAME}，继续管理订阅、账单、节点与转发运行时。`,
+      loginDescription: `登录 ${CONTROL_NAME}，管理订阅、账单、节点与转发运行时。`,
       userDescription: `${CONTROL_NAME} 用户中心，查看订阅、工单、套餐与账单记录。`,
       adminDescription: `${CONTROL_NAME} 管理后台，用于用户、账单、节点、通知与系统运维。`,
-      forwardDescription: `${CONTROL_NAME} 转发运维工作台，覆盖 Local Runtime、Ansible Machines、拓扑、隧道与运行时诊断。`
+      forwardDescription: `${CONTROL_NAME} 转发运维：本地运行时、Ansible 机器、拓扑、隧道与诊断。`
     }
   },
   layout: {

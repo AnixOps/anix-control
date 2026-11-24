@@ -4,9 +4,9 @@
 export default {
   claim: {
     pageTitle: 'Create the first administrator',
-    signInHint: 'This panel has no administrator yet. Run {command} on the server and open the link it prints.',
+    signInHint: 'No administrator exists. Run {command} on the server and open the printed link.',
     title: 'Create the first administrator',
-    subtitle: 'This panel has no administrator yet. Choose the email and password you will sign in with.',
+    subtitle: 'Set the administrator sign-in email and password.',
     loading: 'Checking the link…',
     email: 'Email',
     password: 'Password',
@@ -15,31 +15,31 @@ export default {
     submit: 'Create administrator',
     done: {
       title: 'Administrator created',
-      subtitle: 'Signing you in…'
+      subtitle: 'Signing in…'
     },
-    created: 'Administrator created. Sign in with your new password.',
+    created: 'Administrator created. Sign in with the new password.',
     missing: {
       title: 'Open the claim link',
-      body: 'This page needs the link the server printed. For a new link, run this on the server:'
+      body: 'This page requires the claim link printed by the server. Run this on the server to obtain one:'
     },
     none: {
       title: 'No claim in progress',
-      body: 'There is nothing to set up here. If you manage this panel, sign in.'
+      body: 'Nothing to set up. Administrators can sign in.'
     },
     expired: {
       title: 'This link has expired',
-      body: 'A claim link works for 24 hours. Run this on the server, then open the new link it prints:'
+      body: 'A claim link is valid for 24 hours. Run this on the server to obtain a new link:'
     },
     invalid: {
       title: 'This link is not valid',
-      body: 'A newer link may have replaced it. Run this on the server, then open the new link it prints:'
+      body: 'The link may have been replaced. Run this on the server to obtain a new link:'
     },
     toSignIn: 'Go to sign in',
     errors: {
       passwordShort: 'Use at least {min} characters.',
-      passwordLong: 'Use a shorter password (at most 72 bytes).',
-      emailTaken: 'An account with this email already exists. Use another email.',
-      identity: 'The sign-in service is not reachable right now. Nothing was changed; try again in a minute.',
+      passwordLong: 'The password must be at most 72 bytes.',
+      emailTaken: 'This email is already in use.',
+      identity: 'The sign-in service is unavailable. Nothing was changed. Try again later.',
       failed: 'Could not create the administrator: {message}'
     }
   }

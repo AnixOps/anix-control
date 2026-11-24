@@ -6,22 +6,22 @@ export default {
   auth: {
     signIn: {
       title: 'Sign in to AnixOps Control',
-      subtitle: 'Manage your subscription, nodes and forwards.',
+      subtitle: 'Subscriptions, nodes and forwarding.',
       email: 'Email',
       password: 'Password',
       submit: 'Sign in',
-      noAccount: 'New here?',
+      noAccount: 'No account?',
       register: 'Create an account'
     },
     register: {
       title: 'Create your account',
-      subtitle: 'Sign up to get your subscription link.',
+      subtitle: 'Register to obtain a subscription link.',
       email: 'Email',
       password: 'Password',
       passwordHelp: 'At least 6 characters.',
       confirm: 'Confirm password',
       invite: 'Invite code',
-      inviteHelp: 'No invite code? Ask your administrator for one.',
+      inviteHelp: 'Invite codes are issued by the administrator.',
       submit: 'Create account',
       haveAccount: 'Already have an account?',
       signIn: 'Sign in',
@@ -29,24 +29,24 @@ export default {
     },
     mfa: {
       title: 'Two-factor authentication',
-      description: 'Enter the 6-digit code your authenticator app shows for {email}.',
+      description: 'Enter the 6-digit code for {email}.',
       code: '6-digit code',
       submit: 'Verify',
       back: 'Back',
       useRecovery: 'Use a recovery code',
       recoveryTitle: 'Use a recovery code',
-      recoveryDescription: 'Enter one of the recovery codes you saved when you turned on two-factor authentication. Each code works once.',
+      recoveryDescription: 'Enter a recovery code. Each code can be used once.',
       recovery: 'Recovery code',
       useCode: 'Use your authenticator instead'
     },
     enroll: {
-      title: 'Turn on two-factor authentication first',
-      description: 'Your administrator requires two-factor authentication to sign in, and {email} doesn’t have it on yet.',
-      stepsTitle: 'What to do',
-      step1: 'Ask your administrator to pause the requirement in Two-factor policy.',
-      step2: 'Sign in, open Account, turn on two-factor authentication and save your recovery codes.',
-      step3: 'Let your administrator know, so they can turn the requirement back on.',
-      app: 'You need an authenticator app, such as 1Password, Google Authenticator or Microsoft Authenticator.',
+      title: 'Two-factor authentication required',
+      description: 'Two-factor authentication is required to sign in. It is not enabled for {email}.',
+      stepsTitle: 'Steps',
+      step1: 'Ask the administrator to pause the requirement in Two-factor policy.',
+      step2: 'Sign in, open Account, turn on two-factor authentication and save the recovery codes.',
+      step3: 'Ask the administrator to restore the requirement.',
+      app: 'An authenticator app is required, such as 1Password, Google Authenticator or Microsoft Authenticator.',
       back: 'Back to sign in'
     },
     errors: {
@@ -57,13 +57,13 @@ export default {
       passwordMismatch: 'The passwords do not match.',
       inviteRequired: 'Enter your invite code.',
       codeIncomplete: 'Enter all 6 digits.',
-      codeInvalid: 'That code is not correct. Check that your phone’s clock is right, then enter the newest code.',
-      recoveryFormat: 'A recovery code has 8 letters or digits, like ABCD-1234.',
-      recoveryInvalid: 'That recovery code is not correct or was already used.',
+      codeInvalid: 'The code is incorrect. Check the device clock and enter the latest code.',
+      recoveryFormat: 'A recovery code has 8 letters or digits, for example ABCD-1234.',
+      recoveryInvalid: 'The recovery code is incorrect or already used.',
       rateLimited: 'Too many attempts. Try again in a few minutes.',
       signInFailed: 'Could not sign in: {message}',
       registerFailed: 'Could not create the account: {message}',
-      network: 'Could not reach the server. Check your connection and try again.'
+      network: 'Could not reach the server. Check the network connection and try again.'
     },
     dev: {
       title: 'Development mode',
@@ -79,15 +79,15 @@ export default {
       greeting: 'Hello, {name}',
       greetingAnonymous: 'Hello',
       summary: {
-        active: 'Your subscription is active, with {percent} of your traffic left.',
-        low: 'Only {percent} of your traffic is left.',
-        exhausted: 'You’ve used all your traffic, so the subscription is paused.',
-        expired: 'Your subscription expired on {date}.',
-        none: 'You don’t have a subscription yet.'
+        active: 'Subscription active. {percent} of traffic remaining.',
+        low: '{percent} of traffic remaining.',
+        exhausted: 'Traffic exhausted. The subscription is paused.',
+        expired: 'Subscription expired on {date}.',
+        none: 'No subscription.'
       },
       next: {
-        community: 'Ask your administrator to set one up or renew it.',
-        commercial: 'Choose a plan to get started.'
+        community: 'Contact the administrator to activate or renew.',
+        commercial: 'Choose a plan.'
       },
       ring: {
         label: '{remaining} of {total} traffic left',
@@ -116,7 +116,7 @@ export default {
       },
       copyLink: 'Copy subscription link',
       copied: 'Subscription link copied',
-      copyFailed: 'Could not copy automatically. Open Subscription to copy the link by hand.',
+      copyFailed: 'Could not copy automatically. Copy the link on the Subscription page.',
       importToClient: 'Import to a client',
       buyPlan: 'Choose a plan',
       orders: 'My orders',
@@ -127,18 +127,18 @@ export default {
       help: {
         title: 'Help Center',
         all: 'All articles',
-        empty: 'No help articles yet.'
+        empty: 'No help articles.'
       },
       tickets: {
         title: 'Recent tickets',
         new: 'New ticket',
         all: 'All tickets',
-        empty: 'No tickets yet. When something goes wrong, contact support here.'
+        empty: 'No tickets.'
       }
     },
     subscribe: {
       title: 'Subscription',
-      description: 'Import your subscription link into a client to use every node. Treat the link like a password and don’t share it.',
+      description: 'Import the subscription link into a client. The link is a credential; do not share it.',
       link: 'Subscription link',
       linkHelp: 'Clients update the subscription on their own schedule.',
       domain: 'Subscription domain',
@@ -152,7 +152,7 @@ export default {
         label: 'QR code of your subscription link',
         caption: 'Scan with a client on your phone'
       },
-      missing: 'You don’t have a subscription link yet.',
+      missing: 'No subscription link.',
       loadFailed: 'Could not load your subscription.',
       anx: {
         title: 'AnixOps Net (ANX edition)',
@@ -169,27 +169,27 @@ export default {
         },
         downloadLabel: 'Download {os} {name}',
         testflight: 'Join TestFlight',
-        testflightAsk: 'Installed through TestFlight. Ask support for an invitation.',
+        testflightAsk: 'Installed through TestFlight. Contact support for an invitation.',
         verify: 'Download links carry your subscription token. Do not share them. Checksums:'
       },
       clients: {
         title: 'Import to a client',
-        hint: 'Opens the client if it’s installed',
+        hint: 'Opens the installed client',
         import: 'Import',
         copy: 'Copy link',
         copied: 'Copied the {name} link',
-        copyFailed: 'Could not copy automatically. Copy the subscription link above by hand.',
+        copyFailed: 'Could not copy automatically. Copy the subscription link above manually.',
         importLabel: 'Import to {name}',
         copyLabel: 'Copy the {name} subscription link',
         allPlatforms: 'All platforms'
       },
       formats: {
         title: 'Other formats',
-        description: 'If your client isn’t listed above, pick a format it supports, then copy the link or preview the content.',
+        description: 'Copy the link or preview the content in a format the client supports.',
         format: 'Format',
         preview: 'Preview',
         previewTitle: '{format} subscription content',
-        previewDescription: 'This is what a client receives. It includes node passwords, so don’t share it.',
+        previewDescription: 'The content a client receives. It includes node passwords; do not share it.',
         previewEmpty: 'The subscription is empty.',
         previewFailed: 'Could not load the subscription ({reason}).',
         download: 'Download',
@@ -214,12 +214,12 @@ export default {
       danger: {
         title: 'Danger zone',
         resetTitle: 'Reset subscription link',
-        resetDescription: 'If your link leaks, a reset stops the old link at once, and every device has to import the new one.',
+        resetDescription: 'The old link stops working immediately. Every device must import the new link.',
         resetAction: 'Reset link…',
         dialogTitle: 'Reset your subscription link?',
-        dialogPassword: 'The old link stops working at once. Enter your current password to confirm it’s you.',
-        dialogCode: 'The old link stops working at once. Enter the 6-digit code from your authenticator app.',
-        dialogRecovery: 'The old link stops working at once. Enter one of your recovery codes; each code works once.',
+        dialogPassword: 'The old link stops working immediately. Enter the current password to confirm.',
+        dialogCode: 'The old link stops working immediately. Enter the 6-digit code.',
+        dialogRecovery: 'The old link stops working immediately. Enter a recovery code; each code can be used once.',
         checking: 'Checking two-factor authentication…',
         password: 'Current password',
         code: 'Verification code',
@@ -228,20 +228,20 @@ export default {
         useCode: 'Use a verification code',
         cancel: 'Cancel',
         confirm: 'Reset link',
-        done: 'Subscription link reset. Import it again on all your devices.',
+        done: 'Subscription link reset. Import it again on all devices.',
         doneTitle: 'Subscription link reset',
-        doneDescription: 'The old link no longer works. Import the new link on each device, or scan the QR code.',
+        doneDescription: 'The old link is no longer valid. Import the new link on each device or scan the QR code.',
         newLink: 'New subscription link',
         close: 'Done',
         errors: {
           password: 'Enter your current password.',
-          passwordWrong: 'That password is not correct.',
+          passwordWrong: 'The password is incorrect.',
           code: 'Enter the 6-digit code.',
-          codeWrong: 'That code is not correct or has expired.',
-          recoveryFormat: 'A recovery code has 8 letters or digits, like ABCD-1234.',
-          recoveryWrong: 'That recovery code is not correct or was already used.',
+          codeWrong: 'The code is incorrect or has expired.',
+          recoveryFormat: 'A recovery code has 8 letters or digits, for example ABCD-1234.',
+          recoveryWrong: 'The recovery code is incorrect or already used.',
           rateLimited: 'Too many attempts. Try again in an hour.',
-          network: 'Can’t reach the server',
+          network: 'Cannot reach the server',
           failed: 'The link was not reset: {message}'
         }
       }
@@ -255,27 +255,27 @@ export default {
       uncategorized: 'Other',
       articles: '{n} article | {n} articles',
       results: 'Results for “{query}”',
-      noResults: 'No articles match “{query}”. Try another word.',
+      noResults: 'No articles match “{query}”.',
       clearSearch: 'Clear search',
-      empty: 'No help articles yet. They appear here once your administrator publishes them.',
+      empty: 'No help articles.',
       updated: 'Updated {date}',
       back: 'Help Center',
       prev: 'Previous',
       next: 'Next',
       toc: 'In this article',
       notFound: 'Article not found',
-      notFoundHint: 'It may have been removed or hidden.',
+      notFoundHint: 'The article may have been removed or hidden.',
       loadFailed: 'Could not load the help articles.',
-      contact: 'Didn’t find an answer?',
+      contact: 'No answer found?',
       contactAction: 'Open a ticket'
     },
     tickets: {
       title: 'Tickets',
-      description: 'Contact support when something goes wrong. Replies show up here.',
+      description: 'Support requests and replies.',
       new: 'New ticket',
       list: 'My tickets',
-      empty: 'No tickets yet',
-      emptyHint: 'When something goes wrong, open a ticket to contact support.',
+      empty: 'No tickets',
+      emptyHint: 'Open a ticket to contact support.',
       select: 'Select a ticket to read the conversation.',
       status: {
         open: 'Open',
@@ -291,19 +291,19 @@ export default {
       subject: 'Subject',
       subjectPlaceholder: 'Describe the problem in one line',
       message: 'Details',
-      messageHelp: 'Include your device, client and when it happened, so support can find the cause faster.',
+      messageHelp: 'Include the device, client and time of the problem.',
       submit: 'Send ticket',
-      created: 'Ticket sent. Support will reply soon.',
+      created: 'Ticket sent.',
       reply: 'Reply',
       replyPlaceholder: 'Write a reply…',
       send: 'Send',
       sendHint: 'Press Ctrl + Enter to send',
       close: 'Close ticket…',
       closeTitle: 'Close the ticket “{subject}”?',
-      closeMessage: 'You can’t reply after closing it. Open a new ticket if you need more help.',
+      closeMessage: 'A closed ticket cannot be replied to. Open a new ticket for further help.',
       closeConfirm: 'Close ticket',
       closed: 'Ticket closed',
-      closedNote: 'This ticket is closed. Open a new ticket if you need more help.',
+      closedNote: 'This ticket is closed. Open a new ticket for further help.',
       me: 'You',
       support: 'Support',
       backToList: 'My tickets',
@@ -321,7 +321,7 @@ export default {
     },
     plans: {
       title: 'Plans',
-      description: 'Pick the plan that fits. You can renew any time before it expires.',
+      description: 'Plans and renewal.',
       period: 'Billing period',
       periods: {
         month: 'Monthly',
@@ -347,7 +347,7 @@ export default {
       devices: 'Up to {n} device at a time | Up to {n} devices at a time',
       buy: 'Buy',
       empty: 'No plans on sale',
-      emptyHint: 'Plans appear here once your administrator lists them.',
+      emptyHint: 'Plans appear here once listed.',
       loadFailed: 'Could not load the plans.',
       checkout: {
         title: 'Review your order',
@@ -364,7 +364,7 @@ export default {
         submit: 'Place order',
         back: 'Back',
         created: 'Order placed. Pay for it in Orders.',
-        couponInvalid: 'This coupon is not valid for this plan.',
+        couponInvalid: 'The coupon is invalid or does not apply to this plan.',
         failed: 'The order was not placed: {message}'
       }
     },
@@ -381,11 +381,11 @@ export default {
       },
       categories: {
         title: 'Traffic types',
-        description: 'Classified by destination domain: encrypted traffic only shows the domain, so types are estimates.'
+        description: 'Classified by destination domain. Types are estimates.'
       },
       domains: {
         title: 'Sites visited',
-        description: 'By registrable domain (www.example.com counts as example.com), most traffic first.',
+        description: 'By registrable domain, most traffic first.',
         label: 'Sites visited',
         domain: 'Site',
         category: 'Type',
@@ -409,22 +409,22 @@ export default {
     },
     traffic: {
       title: 'Site statistics',
-      description: 'The sites you reached through the nodes and your traffic by type (video, messaging, downloads and more). Only domains are recorded, never full addresses or content.',
+      description: 'Sites reached through the nodes and traffic by type. Only domains are recorded, not addresses or content.',
       rangeLabel: 'Period',
       range: {
         '24h': '24 hours',
         '7d': '7 days',
         '30d': '30 days'
       },
-      retention: 'Records are kept for {days} days, then deleted.',
-      off: 'Your administrator turned site statistics off: nothing new is recorded.',
+      retention: 'Records are kept for {days} days.',
+      off: 'Site statistics are disabled. No new data is recorded.',
       empty: 'No sites visited in this period',
-      emptyHint: 'Browsing through the nodes shows up here within an hour.'
+      emptyHint: 'Records appear within an hour of use.'
     },
     orders: {
       title: 'Orders',
-      description: 'What you bought and whether it’s paid.',
-      empty: 'No orders yet',
+      description: 'Purchases and payment status.',
+      empty: 'No orders',
       emptyHint: 'Orders appear here after you choose a plan.',
       browse: 'Choose a plan',
       loadFailed: 'Could not load your orders.',
@@ -447,7 +447,7 @@ export default {
       unknownPlan: 'Plan no longer offered',
       details: 'Details',
       pay: 'Pay',
-      payPending: 'Online payment isn’t available yet. Contact your administrator to pay.',
+      payPending: 'Online payment is not available. Contact the administrator to pay.',
       detail: {
         title: 'Order details',
         tradeNo: 'Order number',

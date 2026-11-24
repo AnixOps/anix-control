@@ -64,10 +64,10 @@ export default {
       clearSelection: '取消选择',
       bulkActions: '对所选项的操作',
       loading: '正在加载{label}…',
-      loadFailed: '列表没有加载出来',
-      empty: '这里还没有内容',
+      loadFailed: '列表加载失败',
+      empty: '暂无内容',
       noMatches: '没有结果',
-      noMatchesHint: '换个关键词，或清除筛选条件。',
+      noMatchesHint: '请更换关键词或清除筛选条件。',
       clearFilters: '清除筛选'
     },
     pagination: {
@@ -88,7 +88,7 @@ export default {
       detailsCopied: '已复制错误详情'
     },
     copy: {
-      failed: '无法自动复制，已选中内容，请按 Ctrl+C 或 ⌘C 复制。'
+      failed: '无法自动复制，内容已选中，请按 Ctrl+C 或 ⌘C 复制。'
     },
     menu: {
       region: '菜单'
@@ -100,7 +100,7 @@ export default {
     confirm: {
       title: '确认操作',
       typeToConfirm: '输入 {name} 以确认',
-      failed: '操作没有完成：{reason}'
+      failed: '操作未完成：{reason}'
     },
     status: {
       online: '在线',

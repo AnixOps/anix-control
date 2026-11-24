@@ -76,7 +76,7 @@ describe('Account.vue', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Turn on two-factor authentication' })
     // Scan the code, or type the key by hand.
     expect(await within(dialog).findByRole('img', { name: 'QR code for setting up two-factor authentication' })).toBeTruthy()
-    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key instead/).value).toBe('JBSWY3DPEHPK3PXP'))
+    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key manually/).value).toBe('JBSWY3DPEHPK3PXP'))
     expect(within(dialog).getByRole('link', { name: 'Open in an authenticator on this device' }).getAttribute('href')).toMatch(/^otpauth:\/\/totp\//)
 
     // One box per digit; the first one takes a one-time-code autofill.
@@ -96,7 +96,7 @@ describe('Account.vue', () => {
     await user.keyboard('3456')
     await waitFor(() => expect(api.enableTotp).toHaveBeenCalledWith('123456'))
 
-    const codes = await screen.findByRole('dialog', { name: 'Save your recovery codes' })
+    const codes = await screen.findByRole('dialog', { name: 'Save the recovery codes' })
     expect(within(codes).getAllByRole('listitem').map(item => item.textContent)).toEqual(['1111-2222', '3333-4444'])
     expect(within(codes).getByRole('button', { name: 'Download' })).toBeTruthy()
     expect(await screen.findByText('On')).toBeTruthy()
@@ -109,7 +109,7 @@ describe('Account.vue', () => {
     await renderPage()
     await user.click(await screen.findByRole('button', { name: 'Turn on two-factor authentication' }))
     const dialog = await screen.findByRole('dialog', { name: 'Turn on two-factor authentication' })
-    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key instead/).value).toBe('ABC'))
+    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key manually/).value).toBe('ABC'))
     expect(within(dialog).queryByRole('link')).toBeNull()
   })
 
@@ -123,11 +123,11 @@ describe('Account.vue', () => {
     await user.click(await screen.findByRole('button', { name: 'Turn off…' }))
     const dialog = await screen.findByRole('dialog', { name: 'Turn off two-factor authentication?' })
     await user.click(within(dialog).getByRole('button', { name: 'Turn off' }))
-    expect(await within(dialog).findByText('Enter your current password')).toBeTruthy()
+    expect(await within(dialog).findByText('Enter the current password')).toBeTruthy()
 
     await user.type(within(dialog).getByLabelText(/Current password/), 'wrong')
     await user.click(within(dialog).getByRole('button', { name: 'Turn off' }))
-    expect(await within(dialog).findByText('That didn’t work: invalid password')).toBeTruthy()
+    expect(await within(dialog).findByText('The operation did not complete: invalid password')).toBeTruthy()
 
     await user.clear(within(dialog).getByLabelText(/Current password/))
     await user.type(within(dialog).getByLabelText(/Current password/), 'secret')
@@ -146,7 +146,7 @@ describe('Account.vue', () => {
     await user.click(await screen.findByRole('button', { name: 'New recovery codes…' }))
     const confirm = await screen.findByRole('alertdialog', { name: 'Create new recovery codes?' })
     await user.click(within(confirm).getByRole('button', { name: 'Create new codes' }))
-    const codes = await screen.findByRole('dialog', { name: 'Save your recovery codes' })
+    const codes = await screen.findByRole('dialog', { name: 'Save the recovery codes' })
     expect(within(codes).getByText('9999-0000')).toBeTruthy()
     expect(api.regenerateBackupCodes).toHaveBeenCalledTimes(1)
   })

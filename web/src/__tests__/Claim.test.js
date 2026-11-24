@@ -83,7 +83,7 @@ describe('Claim.vue', () => {
     render(Claim)
     await fill(userEvent.setup())
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'))
-    expect(toastMessages('success')).toContain('Administrator created. Sign in with your new password.')
+    expect(toastMessages('success')).toContain('Administrator created. Sign in with the new password.')
     expect(useUserStore().token).toBe('')
   })
 
@@ -118,7 +118,7 @@ describe('Claim.vue', () => {
 
     mockSubmit.mockRejectedValueOnce(refusal(409, 'email_taken'))
     await user.click(screen.getByRole('button', { name: 'Create administrator' }))
-    expect(await screen.findByText('An account with this email already exists. Use another email.')).toBeTruthy()
+    expect(await screen.findByText('This email is already in use.')).toBeTruthy()
 
     mockSubmit.mockRejectedValueOnce(refusal(429, 'rate_limited'))
     await user.click(screen.getByRole('button', { name: 'Create administrator' }))
@@ -158,7 +158,7 @@ describe('Claim.vue', () => {
     mockStatus.mockResolvedValue(false)
     render(Claim)
     expect(await screen.findByRole('heading', { level: 1, name: 'No claim in progress' })).toBeTruthy()
-    expect(screen.getByText('There is nothing to set up here. If you manage this panel, sign in.')).toBeTruthy()
+    expect(screen.getByText('Nothing to set up. Administrators can sign in.')).toBeTruthy()
     expect(screen.queryByLabelText(/^Email/)).toBeNull()
     expect(screen.queryByText(/claim-link/)).toBeNull()
   })
