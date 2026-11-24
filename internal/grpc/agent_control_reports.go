@@ -247,13 +247,19 @@ func (s *AgentControlGRPCServer) applyTrafficReport(node agentcontrol.AgentNode,
 	if err := s.touchNode(node); err != nil {
 		slog.Warn("failed to update node heartbeat before traffic report", "component", "agent-control", "node", node.String(), "error", err)
 	}
-	rate := 1.0
-	if current, err := s.nodeService.GetNode(uint(node.ID)); err == nil {
-		rate = current.Rate
+	// The node's rate and group decide what counts: without them the batch
+	// is not counted now but resent (CT-005), never counted at a guessed rate.
+	current, err := s.nodeService.GetNode(uint(node.ID))
+	if err != nil {
+		return false, fmt.Errorf("read node %s: %w", node.String(), err)
 	}
-	applied, err := s.reports.server.RecordAgentTrafficReport(node.Kind, uint(node.ID), report.BatchId, traffics, rate)
+	applied, refused, err := s.reports.server.RecordAgentTrafficReport(node.Kind, current, report.BatchId, traffics)
 	if err != nil || !applied {
 		return applied, err
+	}
+	if len(refused) > 0 {
+		slog.Warn("agent traffic for users the node does not serve was not counted", "component", "agent-control",
+			"node", node.String(), "batch_id", report.BatchId, "reason", "traffic_user_not_served", "users", refused)
 	}
 	// The online set is current state, not a delta: a replayed batch older
 	// than the node's current set leaves it, and the node's count, alone.

@@ -1,12 +1,13 @@
 package service
 
 import (
-	"github.com/AnixOps/anix-control/v5/internal/online"
+	"slices"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentreports"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -140,19 +141,47 @@ func trafficUsers(traffics map[uint][2]int64) []uint {
 // record (internal/agentreports) is claimed in the transaction that applies
 // the traffic. It reports whether this call applied the batch; false means a
 // committed transaction applied it before, and nothing was counted again.
-func (s *ServerService) RecordAgentTrafficReport(nodeKind string, nodeID uint, batchID string, traffics map[uint][2]int64, rate float64) (bool, error) {
+//
+// Only the users the node serves are counted: those of the node's plan
+// group (every user when the node has none), the set its user list follows
+// (ActiveUsersForNodeQuery), whether active or not, so an expired or
+// over-quota user's late traffic still counts. The users left out, of
+// another group or unknown, are answered in refused (CT-004).
+func (s *ServerService) RecordAgentTrafficReport(nodeKind string, node *model.Node, batchID string, traffics map[uint][2]int64) (applied bool, refused []uint, err error) {
 	now := time.Now()
-	var plan *nodeTrafficReportPlan
+	served := make(map[uint][2]int64, len(traffics))
 	if len(traffics) > 0 {
-		var err error
-		plan, err = planNodeTrafficReport(model.ServerType("node"), nodeID, traffics, rate, now)
+		ids := make([]uint, 0, len(traffics))
+		for id := range traffics {
+			ids = append(ids, id)
+		}
+		query := s.db.Model(&model.User{}).Where("id IN ?", ids)
+		if node.GroupID != nil {
+			query = query.Where("group_id = ?", *node.GroupID)
+		}
+		var known []uint
+		if err := query.Pluck("id", &known).Error; err != nil {
+			return false, nil, err
+		}
+		for _, id := range known {
+			served[id] = traffics[id]
+		}
+		for _, id := range ids {
+			if _, ok := served[id]; !ok {
+				refused = append(refused, id)
+			}
+		}
+		slices.Sort(refused)
+	}
+	var plan *nodeTrafficReportPlan
+	if len(served) > 0 {
+		plan, err = planNodeTrafficReport(model.ServerType("node"), node.ID, served, node.Rate, now)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 	}
-	applied := false
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		seen, err := agentreports.ClaimTx(tx, nodeKind, nodeID, batchID, agentreports.KindTraffic, now)
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		seen, err := agentreports.ClaimTx(tx, nodeKind, node.ID, batchID, agentreports.KindTraffic, now)
 		if err != nil || seen {
 			return err
 		}
@@ -162,10 +191,11 @@ func (s *ServerService) RecordAgentTrafficReport(nodeKind string, nodeID uint, b
 		}
 		return plan.applyTx(tx)
 	})
-	if err == nil && applied {
-		subscriber.RecordOnline(s.db, trafficUsers(traffics), now)
+	if err != nil || !applied {
+		return false, nil, err
 	}
-	return applied, err
+	subscriber.RecordOnline(s.db, trafficUsers(served), now)
+	return true, refused, nil
 }
 
 // nodeTrafficReportPlan is a validated node traffic report, ready to apply

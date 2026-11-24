@@ -2,14 +2,15 @@ package service
 
 import (
 	"fmt"
-	"github.com/AnixOps/anix-control/v5/internal/online"
 	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -64,17 +65,54 @@ func TestRefusedTrafficReportRecordsNothing(t *testing.T) {
 // again, which the kernel had applied, marks no one.
 func TestAgentTrafficReportRecordsTheUsersSeenOnline(t *testing.T) {
 	svc, db := activityService(t)
-	applied, err := svc.RecordAgentTrafficReport("node", 7, "batch-1", map[uint][2]int64{2: {1, 1}}, 1)
+	node := &model.Node{ID: 7, Rate: 1}
+	applied, refused, err := svc.RecordAgentTrafficReport("node", node, "batch-1", map[uint][2]int64{2: {1, 1}})
 	require.NoError(t, err)
 	require.True(t, applied)
+	require.Empty(t, refused)
 	require.Equal(t, []uint{2}, seenOnline(t, db))
 
 	require.NoError(t, db.Exec("DELETE FROM v4_kernel_user_activity").Error)
 	subscriber.ResetActivityThrottleForTest(db)
-	applied, err = svc.RecordAgentTrafficReport("node", 7, "batch-1", map[uint][2]int64{2: {1, 1}}, 1)
+	applied, _, err = svc.RecordAgentTrafficReport("node", node, "batch-1", map[uint][2]int64{2: {1, 1}})
 	require.NoError(t, err)
 	require.False(t, applied)
 	require.Empty(t, seenOnline(t, db))
+}
+
+// A node's traffic counts only for the users it serves: those of its plan
+// group, active or not; another group's users and unknown ids are refused
+// and the rest of the batch counts (CT-004).
+func TestAgentTrafficReportCountsOnlyTheNodesUsers(t *testing.T) {
+	svc, db := activityService(t)
+	group, other := uint(5), uint(6)
+	require.NoError(t, db.Model(&model.User{}).Where("id IN ?", []uint{1, 2}).Update("group_id", group).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", 3).Update("group_id", other).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", 2).Update("banned", 1).Error)
+
+	node := &model.Node{ID: 7, Rate: 2, GroupID: &group}
+	applied, refused, err := svc.RecordAgentTrafficReport("node", node, "batch-1",
+		map[uint][2]int64{1: {10, 20}, 2: {1, 1}, 3: {100, 100}, 99: {5, 5}})
+	require.NoError(t, err)
+	require.True(t, applied)
+	assert.Equal(t, []uint{3, 99}, refused)
+
+	used := func(id uint) [2]int64 {
+		var user model.User
+		require.NoError(t, db.First(&user, id).Error)
+		return [2]int64{user.U, user.D}
+	}
+	assert.Equal(t, [2]int64{20, 40}, used(1), "counted at the node's rate")
+	assert.Equal(t, [2]int64{2, 2}, used(2), "a banned user's traffic still counts")
+	assert.Equal(t, [2]int64{0, 0}, used(3), "another group's user is untouched")
+
+	// A node without a group serves every known user.
+	applied, refused, err = svc.RecordAgentTrafficReport("node", &model.Node{ID: 7, Rate: 1}, "batch-2",
+		map[uint][2]int64{3: {1, 1}, 99: {1, 1}})
+	require.NoError(t, err)
+	require.True(t, applied)
+	assert.Equal(t, []uint{99}, refused)
+	assert.Equal(t, [2]int64{1, 1}, used(3))
 }
 
 // An alive report marks the users with a connection, and not the ones it
