@@ -85,7 +85,7 @@ func (f *trafficReportFixture) report(n int, sequence int64, random *rand.Rand) 
 		traffics[user] = [2]int64{random.Int63n(1 << 24), random.Int63n(1 << 26)}
 	}
 	node := f.nodeIDs[n]
-	if _, err := f.server.RecordAgentTrafficReport("node", node, fmt.Sprintf("bench-%d-%d", n, sequence), traffics, 1); err != nil {
+	if _, _, err := f.server.RecordAgentTrafficReport("node", &model.Node{ID: node, Rate: 1}, fmt.Sprintf("bench-%d-%d", n, sequence), traffics); err != nil {
 		return err
 	}
 	return f.nodes.UpdateOnlineUsers(node, len(traffics))

@@ -290,6 +290,30 @@ func TestAgentControlTrafficReportTransientFailureGetsNoAck(t *testing.T) {
 	require.NoError(t, stream.CloseSend())
 }
 
+// CT-005: a batch whose node cannot be read is not counted at a guessed
+// rate but left for the resend, which counts it once at the node's rate.
+func TestAgentControlTrafficReportWaitsForTheNodesRate(t *testing.T) {
+	environment := newReportsTestEnvironment(t)
+	nodeID := uint32(environment.node.ID)
+	require.NoError(t, database.GetDB().Model(&model.Node{}).Where("id = ?", environment.node.ID).Update("rate", 3).Error)
+	stream, helloAck := openReportsSession(t, environment, reportCapabilities())
+
+	require.NoError(t, database.GetDB().Migrator().DropTable(&model.NodeProtocol{}))
+	report := &agentv1pb.TrafficReport{BatchId: "node:proxy-1:boot-a:1", Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 10, DownloadBytes: 20}}}
+	require.NoError(t, stream.Send(trafficMessage("traffic-1", nodeID, report)))
+	expectHeartbeatAck(t, stream, nodeID, helloAck.SessionId, "heartbeat-1")
+	upload, _ := userCounters(t, 7)
+	assert.Zero(t, upload, "nothing was counted")
+
+	requireAutoMigrate(t, &model.NodeProtocol{})
+	require.NoError(t, stream.Send(trafficMessage("traffic-1-again", nodeID, report)))
+	ack := expectReportAck(t, stream, "traffic-1-again")
+	assert.True(t, ack.Applied)
+	upload, download := userCounters(t, 7)
+	assert.Equal(t, [2]int64{30, 60}, [2]int64{upload, download})
+	require.NoError(t, stream.CloseSend())
+}
+
 // A batch refused for good is acknowledged with applied false and an error,
 // nothing is counted, and the stream stays open.
 func TestAgentControlTrafficReportRefusedForGood(t *testing.T) {
