@@ -177,7 +177,7 @@ describe('route editor', () => {
     await flushPromises()
     await wrapper.get('[data-testid="forward-save"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="forward-conflict"]').text()).toContain('Someone else changed this route (revision 7 → 8)')
+    expect(wrapper.get('[data-testid="forward-conflict"]').text()).toContain('This route was changed elsewhere (revision 7 → 8)')
     expect(wrapper.get('#fwd-f-name').element.value).toBe('renamed')
     const firstKey = api.updateRoute.mock.calls[0][2].idempotencyKey
 

@@ -67,7 +67,7 @@ test('a provider write by an administrator who is not a super administrator', as
   await sheet.getByLabel('Name').fill('cf-2')
   await sheet.getByLabel('API token').fill('token')
   await page.getByTestId('forward-dns-provider-save').click()
-  await expect(page.getByTestId('forward-dns-forbidden')).toHaveText('Only a super administrator may add, change or delete DNS providers.')
+  await expect(page.getByTestId('forward-dns-forbidden')).toHaveText('Only super administrators can add, change or delete DNS providers.')
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('forward-dns-readonly')).toBeVisible()
   await expect(page.getByTestId('forward-dns-add')).toBeDisabled()
@@ -84,7 +84,7 @@ test('binds a copied two-entry route’s hostname after creating it', async ({ p
   await page.getByLabel('Target 1 port').fill('443')
 
   const picker = page.getByTestId('forward-dns-picker')
-  await picker.getByRole('switch', { name: 'Keep this hostname on the healthy entries' }).click()
+  await picker.getByRole('switch', { name: 'Point at healthy entries' }).click()
   await picker.getByRole('combobox', { name: 'DNS provider' }).click()
   await page.getByRole('option', { name: /cloudflare-main/ }).click()
   await expect(picker.getByLabel('Zone')).toHaveValue('example.net')
@@ -113,7 +113,7 @@ test('the binding picker shows Required only after a field was left and keeps th
   await page.getByLabel('Entry hostname').fill('ha.example.net')
 
   const picker = page.getByTestId('forward-dns-picker')
-  await picker.getByRole('switch', { name: 'Keep this hostname on the healthy entries' }).click()
+  await picker.getByRole('switch', { name: 'Point at healthy entries' }).click()
   // A fresh form: nothing is flagged yet, and the zone is the guess.
   await expect(picker.getByLabel('Zone')).toHaveValue('example.net')
   await expect(picker.getByText('Required', { exact: true })).toHaveCount(0)
@@ -148,12 +148,12 @@ test('a binding that is on but incomplete says why Save is disabled', async ({ p
   // Turn the binding on and never visit the provider: Save waits, and the
   // note under the switch (a polite status, not an error) says for what.
   const picker = page.getByTestId('forward-dns-picker')
-  await picker.getByRole('switch', { name: 'Keep this hostname on the healthy entries' }).click()
+  await picker.getByRole('switch', { name: 'Point at healthy entries' }).click()
   const hint = picker.getByTestId('forward-dns-incomplete')
-  await expect(hint).toHaveText('Save waits for the DNS binding: DNS provider. Complete it, or turn the binding off.')
+  await expect(hint).toHaveText('The DNS binding is incomplete: DNS provider. Complete it or turn it off.')
   await expect(hint).toHaveAttribute('role', 'status')
   await expect(save).toBeDisabled()
-  await expect(save).toHaveAccessibleDescription(/Save waits for the DNS binding: DNS provider/)
+  await expect(save).toHaveAccessibleDescription(/The DNS binding is incomplete: DNS provider/)
   // The phone bar's Save (hidden at this width) is described by it too.
   await expect(page.locator('.editor-phonebar button').first()).toHaveAttribute('aria-describedby', await hint.getAttribute('id'))
   // The untouched fields are not flagged.

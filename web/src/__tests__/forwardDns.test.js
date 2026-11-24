@@ -222,7 +222,7 @@ describe('DNS provider sheet', () => {
     await flushPromises()
     await inBody('[data-testid="forward-dns-provider-save"]').trigger('click')
     await flushPromises()
-    expect(inBody('[data-testid="forward-dns-forbidden"]').text()).toBe('Only a super administrator may add, change or delete DNS providers.')
+    expect(inBody('[data-testid="forward-dns-forbidden"]').text()).toBe('Only super administrators can add, change or delete DNS providers.')
     expect(wrapper.emitted('forbidden')).toHaveLength(1)
     expect(inBody('[data-testid="forward-dns-provider-save"]').attributes('disabled')).toBeDefined()
   })
@@ -235,7 +235,7 @@ describe('DNS provider sheet', () => {
     await inBody('input[data-credential-field="api_token"]').setValue('tok')
     await inBody('[data-testid="forward-dns-provider-save"]').trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain('Control has no key-encryption key')
+    expect(document.body.textContent).toContain('No credential encryption key is configured')
   })
 })
 
@@ -304,7 +304,7 @@ describe('entry HA card', () => {
     const wrapper = mountCard()
     await flushPromises()
     expect(wrapper.get('[data-testid="forward-entry-ha-state"]').text()).toBe('Degraded')
-    expect(wrapper.text()).toContain('No entry is healthy')
+    expect(wrapper.text()).toContain('No healthy entry')
     // Server addresses are masked until the administrator reveals them.
     expect(wrapper.text()).toContain('203.*.*.41')
     expect(wrapper.text()).not.toContain('203.0.113.41')
@@ -409,7 +409,7 @@ describe('route editor binding picker (D14)', () => {
     api.createDnsBinding.mockResolvedValue({ binding: { ...BINDING } })
     const wrapper = await mountEditor()
     expect(wrapper.find('[data-testid="forward-dns-picker"]').exists()).toBe(true)
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     // No provider yet: saving waits for one.
     expect(wrapper.get('[data-testid="forward-save"]').attributes('disabled')).toBeDefined()
@@ -434,7 +434,7 @@ describe('route editor binding picker (D14)', () => {
     const wrapper = await mountEditor()
     expect(component(wrapper, UiSelect, 'DNS provider')).toBeUndefined()
     expect(wrapper.get('[data-testid="forward-dns-identity"]').text()).toContain('cloudflare-main · Cloudflare')
-    expect(wrapper.text()).toContain('Provider, zone, name and mode cannot change')
+    expect(wrapper.text()).toContain('Provider, zone, name and mode cannot be changed')
     component(wrapper, UiSwitch, 'Paused').vm.$emit('update:modelValue', true)
     await flushPromises()
     await wrapper.get('[data-testid="forward-save"]').trigger('click')
@@ -454,7 +454,7 @@ describe('route editor binding picker (D14)', () => {
 
   it('shows no Required error on a freshly enabled binding, only after the field was left', async () => {
     const wrapper = await mountEditor()
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     const picker = wrapper.get('[data-testid="forward-dns-picker"]')
     // The provider is required and empty, so Save waits: but no error yet.
@@ -474,13 +474,13 @@ describe('route editor binding picker (D14)', () => {
     expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
     expect(save().attributes('aria-describedby')).toBeUndefined()
 
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     // On, the provider never visited: Save waits and the note says for what.
     const picker = wrapper.get('[data-testid="forward-dns-picker"]')
     const hint = wrapper.get('[data-testid="forward-dns-incomplete"]')
     expect(save().attributes('disabled')).toBeDefined()
-    expect(hint.text()).toBe('Save waits for the DNS binding: DNS provider. Complete it, or turn the binding off.')
+    expect(hint.text()).toBe('The DNS binding is incomplete: DNS provider. Complete it or turn it off.')
     expect(hint.attributes('role')).toBe('status')
     // Both Save buttons (page header, phone bar) are described by it.
     for (const button of [save(), phoneSave()]) {
@@ -510,7 +510,7 @@ describe('route editor binding picker (D14)', () => {
     component(wrapper, UiSelect, 'DNS provider').vm.$emit('update:modelValue', '')
     await flushPromises()
     expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(true)
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', false)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', false)
     await flushPromises()
     expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
     expect(save().attributes('aria-describedby')).toBeUndefined()
@@ -518,7 +518,7 @@ describe('route editor binding picker (D14)', () => {
 
   it('moves the zone with the entry hostname until the user types one', async () => {
     const wrapper = await mountEditor()
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     const zone = () => wrapper.get('#fwd-f-dns-zone').element.value
     expect(zone()).toBe('example.net')
@@ -535,7 +535,7 @@ describe('route editor binding picker (D14)', () => {
 
   it('shows the CNAME target to copy in CNAME mode', async () => {
     const wrapper = await mountEditor()
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     wrapper.findAllComponents({ name: 'UiRadioGroup' }).find(item => item.props('label') === 'Mode').vm.$emit('update:modelValue', 'DNS_BINDING_MODE_CNAME')
     await flushPromises()
@@ -549,13 +549,13 @@ describe('route editor binding picker (D14)', () => {
   it('reports a failed binding write after the route saved', async () => {
     api.createDnsBinding.mockRejectedValue(new ForwardApiError({ status: 409, code: 'refused', violations: [{ field: 'binding.route_id', code: 'binding_exists' }] }))
     const wrapper = await mountEditor()
-    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    component(wrapper, UiSwitch, 'Point at healthy entries').vm.$emit('update:modelValue', true)
     await flushPromises()
     component(wrapper, UiSelect, 'DNS provider').vm.$emit('update:modelValue', '1')
     await flushPromises()
     await wrapper.get('[data-testid="forward-save"]').trigger('click')
     await flushPromises()
-    expect(toastMessages('error')[0]).toContain('The route is saved, but its DNS binding was not')
+    expect(toastMessages('error')[0]).toContain('The route was saved, but the DNS binding was not')
     expect(router.push).toHaveBeenCalledWith('/admin/forward/routes/01J')
   })
 })
@@ -644,7 +644,7 @@ describe('binding picker: errors wait for the user, the zone follows the hostnam
     const wrapper = mountPicker({ errors: { ttl: 'From 1 to 86400 seconds.', zone: 'Required', provider_id: 'Required' } })
     await flushPromises()
     const hint = wrapper.get('[data-testid="forward-dns-incomplete"]')
-    expect(hint.text()).toBe('Save waits for the DNS binding: DNS provider, Zone, TTL. Complete it, or turn the binding off.')
+    expect(hint.text()).toBe('The DNS binding is incomplete: DNS provider, Zone, TTL. Complete it or turn it off.')
     expect(hint.attributes('id')).toBe(model.DNS_HINT_ID)
     expect(hint.attributes('role')).toBe('status')
     // No field was visited, so none of them is flagged.
