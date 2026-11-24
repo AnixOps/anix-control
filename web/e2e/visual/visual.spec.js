@@ -89,7 +89,7 @@ const SHOTS = [
   ['admin-dashboard-error', [DESKTOP]]
 ]
 
-// Text caret, the QR code's random-looking modules stay (same token), but
+// Text caret, the QR code's modules stay (same token), but
 // anything marked data-visual-mask is hidden behind a solid box.
 const MASKS = page => [page.locator('[data-visual-mask]')]
 

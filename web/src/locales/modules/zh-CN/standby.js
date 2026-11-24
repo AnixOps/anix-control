@@ -1,11 +1,11 @@
-// 节点区域的「过境应急」页：跨境链路被封时，一键切到公开协议备用通道，再一键切回。
+// 节点区域的「过境应急」页：跨境链路不可达时，一键切到公开协议备用通道，再一键切回。
 // 与 en/standby.js 键相同。
 export default {
   standby: {
     nav: '过境应急',
     page: {
       title: '过境应急通道',
-      description: '每条跨境链路（ANX-A）都可以备好两档公开协议通道：第一档 VLESS + REALITY + Vision，第二档 VLESS + XHTTP（走自有域名的真实 TLS 前置）。链路被封时一键切过去，恢复后一键切回。',
+      description: '每条跨境链路（ANX-A）都可以备好两档公开协议通道：第一档 VLESS + REALITY + Vision，第二档 VLESS + XHTTP（走自有域名的真实 TLS 前置）。链路不可达时一键切过去，恢复后一键切回。',
       prepare: '准备通道…',
       allReality: '全部切到第一档',
       allXhttp: '全部切到第二档',

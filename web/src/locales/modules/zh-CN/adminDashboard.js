@@ -129,12 +129,12 @@ export default {
         },
         crossBorderDown: {
           title: '跨境链路 {name} 自 {date} 起不通',
-          hint: '到「节点 → 过境应急」把它切到第一档（REALITY），第一档也被封再切第二档（XHTTP）。步骤见 docs/guide/cross-border-standby.md。',
+          hint: '到「节点 → 过境应急」把它切到第一档（REALITY），第一档也不可达再切第二档（XHTTP）。步骤见 docs/guide/cross-border-standby.md。',
           switched: '流量已切到备用通道 {tier}。链路恢复后到「过境应急」切回原链路。'
         },
         crossBorderWide: {
           title: '{total} 条跨境链路中有 {n} 条同时不通',
-          hint: '多条链路同时被封，说明针对的是 ANX-A 外衣本身而不是单个地址。按人工预案全部切到第一档或第二档，然后记录现象。'
+          hint: '多条链路同时不通，不是单个地址的问题。按人工预案全部切到第一档或第二档，然后记录现象。'
         }
       },
       nodesFailed: '无法加载节点状态',

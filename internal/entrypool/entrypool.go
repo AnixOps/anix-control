@@ -1,6 +1,6 @@
 // Package entrypool deals node entries (internal/nodeentry) out to
 // subscribers in pools, so a leaked subscription exposes only its pool's
-// addresses and can be traced back (anx docs/FUTURE-IMPROVEMENTS.md F-55):
+// addresses and can be traced back:
 //
 //   - An entry with a pool is offered only to the subscribers of that pool;
 //     an entry without one to every subscriber, but only on nodes that have

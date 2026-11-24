@@ -287,7 +287,7 @@ export default {
       networkMode: 'Transport mode',
       networkModeHelp: 'The kind of link Control sets up from the previous hop\'s device to this one.',
       modeJacket: 'ANX with the A2 jacket',
-      modeJacketHelp: 'Looks like TLS, on TCP port 24443; use it across borders',
+      modeJacketHelp: 'TCP port 24443; for lines that are not trusted',
       modeLine: 'Bare ANX-Line',
       modeLineHelp: 'No jacket, TCP or QUIC on port 24445; trusted lines only (IX, private line, domestic)',
       modeReverse: 'Dial-back',

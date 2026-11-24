@@ -277,8 +277,8 @@ Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
 - To use it, set `agent_install.artifact_dir` and let the reverse proxy in
   front of Control accept uploads of a few hundred MB on
   `/api/v4/kernel/client-releases` (nginx `client_max_body_size`).
-- ANX licensing on the panel side, off by default (`internal/entitlement`,
-  anx spec §2.4.1). A generic feature entitlement with `anx` as its first
+- ANX licensing on the panel side, off by default (`internal/entitlement`).
+  A generic feature entitlement with `anx` as its first
   feature: the panel's license CA, derived from the root key, signs a
   7-day ANX device certificate when a client refreshes its subscription with
   `X-AnixOps-Device`, while the plan includes ANX or the account's one trial
@@ -410,17 +410,16 @@ Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
 
 ### Changed
 
-- ANX `dest_behavior` / `dest_behaviors` accept the TLS session resumption
-  keys that `anx-lab dest-probe` now prints (`ticket_lifetime`, `ticket_ids`,
-  `ticket_prefix`, `ticket_reuse`, `resume_exts`, `resume_flight`,
-  `resume_tickets`, `resume_ticket_ids`, `bad_binder`; anx #216 / #220), so
-  its whole line can be pasted. A non-zero `ticket_lifetime` without
+- ANX `dest_behavior` / `dest_behaviors` accept the session resumption
+  keys (`ticket_lifetime`, `ticket_ids`, `ticket_prefix`, `ticket_reuse`,
+  `resume_exts`, `resume_flight`, `resume_tickets`, `resume_ticket_ids`,
+  `bad_binder`), so a whole line can be pasted. A non-zero `ticket_lifetime` without
   `ticket_ids` and `resume_exts` is refused, as anx-node would not start.
 - Dev builds run on a manual dispatch of `dev-release.yml` only, no longer
   after every green `main` or every three hours, and only the newest one is
   kept, so the Releases page holds real releases.
-- 节点协议表单里 ANX 的设置按用途分成“伪装站点”“国内入口”和默认折叠的“高级设置”三组，说明较长的字段一行一个。
-- ANX 协议表单默认只显示端口和伪装站点（域名、目标站）；“国内入口”“握手外观调优”“高级设置”折叠起来，改过默认值时自动展开，折叠组里有提示时在标题旁标出。TLS 和传输都固定的协议不再单独显示“传输与安全”一节（摘要栏已写明）。
+- 节点协议表单里 ANX 的设置按用途分成“回落目标”“用户入口”和默认折叠的“高级设置”三组，说明较长的字段一行一个。
+- ANX 协议表单默认只显示端口和回落目标（域名、目标站）；“用户入口”“握手调优”“高级设置”折叠起来，改过默认值时自动展开，折叠组里有提示时在标题旁标出。TLS 和传输都固定的协议不再单独显示“传输与安全”一节（摘要栏已写明）。
 - On pull requests the browser accessibility sweeps run two theme and
   viewport combinations (light desktop, dark phone) instead of four; the
   full lane still runs all four.
@@ -588,36 +587,29 @@ Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
 - l2 reverse links hand the egress the rendezvous key an Agent reports as
   `anx_reverse_a2` (a copy of its anx-server key that does not rotate), and
   the anx-server key when an older Agent reports none. The anx-server key
-  can then rotate (anx §2.6) without breaking those links.
+  can then rotate without breaking those links.
 
 - ANX nodes with a dest list take per-dest behavior (`dest_behaviors`: dest
-  `host:port` to its overrides on top of `dest_behavior`, usually that site's
-  `session_tickets` and `flight_records`). Control sends only the entries of
+  `host:port` to its overrides on top of `dest_behavior`). Control sends only the entries of
   the current dest list (anx-node refuses others; stale ones stay stored and
   the form flags them), and the missing site data warning checks each dest on
-  its merged behavior. Needs an anx-node with per-dest behavior (anx #208)
+  its merged behavior. Needs an anx-node with per-dest behavior
   and the matching Agent.
 
-- The ANX protocol form takes the cover site's TLS stack preset
-  (`dest_stack`: openssl, boringssl, go, rustls) and per-key overrides
-  (`dest_behavior`, anx spec §4 item 6). `dest_behavior` takes the
-  `"dest_behavior": {…}` line `anx-lab dest-probe` prints as is; Control
-  checks its keys and value shapes and sends both to the Agent only when set.
-  The form warns while a node with a dest lacks `session_tickets` or
-  `flight_records` (the site's own data; `"none"` counts as measured), and
-  when `dest` lists several sites, since that data fits only the first. Needs
+- The ANX protocol form takes `dest_stack` (openssl, boringssl, go, rustls)
+  and `dest_behavior` (a whole `"dest_behavior": {…}` line or an object);
+  Control checks its keys and value shapes and sends both to the Agent only
+  when set. The form warns while a node with a dest lacks `session_tickets`
+  or `flight_records` (`"none"` counts as set), and when `dest` lists
+  several sites. Needs
   the matching Agent.
 
-- The ANX protocol form takes a bare jacket TCP port (`bare_listen_port`,
-  anx spec §5.2): random-looking bytes for users dialing a domestic entry,
-  with forward secrecy, post-quantum keys and revocable devices that
-  SS-2022 lacks. Cross-border nodes must not open it (on-path traffic
-  classifiers flag fully random traffic), so Control accepts it only with `allow_no_sni`, the mode
-  domestic entries run, and on a port other than `wg_listen_port`. Control
+- The ANX protocol form takes a bare jacket TCP port (`bare_listen_port`).
+  Control accepts it only with `allow_no_sni`, and on a port other than
+  `wg_listen_port`. Control
   sends it to the Agent only when set; the AnixOps Net subscription adds
   `bare_port` to the `anx://` link (moved through NAT entries like
-  `wg_port`, dropped by entries and routes that do not carry it), and
-  clients try wg, then bare, then no-SNI A2. Needs an anx-node whose ANX
+  `wg_port`, dropped by entries and routes that do not carry it). Needs an anx-node whose ANX
   inbound serves the bare jacket and the matching Agent; the TCP port has to
   be open in the node's firewall.
 - Server IP addresses are masked on the admin pages by default
@@ -704,7 +696,7 @@ Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
   Panabit iWAN line), before nodes subscribers dial across the border
   directly. Within each kind the group's order is unchanged, so a group's
   first entry, and the default of clients that start on it, is a trunk node
-  whenever the group has one (anx FUTURE-IMPROVEMENTS F-51, 默认路径规则).
+  whenever the group has one (默认路径规则).
   No node is removed and no node configuration changes.
 - The AnixOps Net subscription (`format=anixops`) puts a
   `#anixops:path=trunk` line before each trunk node's link. Clients that do
@@ -1059,20 +1051,17 @@ number their patches independently; a fix to 5.0.0 is 5.0.1, not a hotfix.
   subscriptions leave `sni` out of the `anx://` link so clients dial the
   IP; needs an anx-node newer than alpha.7), turning traffic shaping off
   (`shape_plain`) and max streams per session (`max_streams`, 1 to 65535,
-  default 256). Security shows as the A2 borrowed handshake instead of
-  "no TLS". Control sends the new options to the Agent only when set, so
+  default 256). Security shows as the A2 jacket instead of "no TLS". Control sends the new options to the Agent only when set, so
   nodes on an older anx-node keep working; needs the matching Agent.
 - The network model runs kind `anx` (the A2 jacket) reversed as well
-  (`anx_line.reverse`, anx ANX-LINE-REVERSE §6.4): the overseas accepting
+  (`anx_line.reverse`): the accepting
   device opens no port and dials back to the dialing device's
   `reverse_host:reverse_port` as the jacket's client, on c1. Its plan
   carries the dialing device's `server_public`, and the path waits until
   that device has reported its ANX-Line server key.
-- The ANX protocol form takes a WireGuard-shaped UDP port (`wg_listen_port`,
-  the anx wg jacket) for users dialing a domestic entry; it backs up the
-  no-SNI A2 mode. Control sends it to the Agent only when set, and the
-  AnixOps Net subscription adds `wg_port` to the `anx://` link so clients
-  try that port first and fall back to A2. The UDP port has to be open in
+- The ANX protocol form takes a wg jacket UDP port (`wg_listen_port`).
+  Control sends it to the Agent only when set, and the AnixOps Net
+  subscription adds `wg_port` to the `anx://` link. The UDP port has to be open in
   the node's firewall. Needs an anx-node with the wg jacket and the matching
   Agent.
 - Hotfixes: `.github/workflows/hotfix.yml` ships a fix merged to `main` as
@@ -4450,7 +4439,7 @@ when coming from a release candidate.
   questions P1–P10, all decided by the owner on 2026-10-04 (separate
   `anixops-relay.service`; plaintext only on administrator routes between
   `link=iepl|iplc` nodes; nftables RAW handover in v4.3). H23 is recorded
-  as decided (the protocol in both editions). Camouflage stays reserved for
+  as decided (the protocol in both editions). Section 8 stays reserved for
   the owner. Documentation only.
 - **Forward v4 API and command line (F5a, owner decision H23).** The forward
   package serves `/api/v4/forward/*` on the kernel's `ForwardControl`

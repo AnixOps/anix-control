@@ -21,7 +21,7 @@ import (
 //     link's query (after the base64 body of a vmess:// link);
 //   - a node reached through a domestic ingress and a shared trunk
 //     (ParsedNode.Path trunk) follows a "#anixops:path=trunk" line, which
-//     the App picks by default (anx docs FUTURE-IMPROVEMENTS F-51).
+//     the App picks by default.
 //
 // Older App versions skip iwan:// links, ignore via and skip the # line
 // as a comment.
@@ -98,10 +98,8 @@ func iwanLink(node *model.ParsedNode) string {
 // A node whose server has not reported its public key has no link yet. A
 // node in the A2 no-SNI mode (settings allow_no_sni) has no sni: the client
 // then sends a ClientHello without SNI. A node with the wg jacket on
-// (settings wg_listen_port) adds wg_port, and clients try that UDP port first
-// and fall back to A2 (jacket auto, the client default). A node with the bare
-// jacket on (settings bare_listen_port, domestic entries only) adds bare_port;
-// clients in auto try wg, then bare, then A2.
+// (settings wg_listen_port) adds wg_port, and one with the bare jacket on
+// (settings bare_listen_port) adds bare_port.
 func anxLink(node *model.ParsedNode) string {
 	noSNI, _ := node.Settings["allow_no_sni"].(bool)
 	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || (node.ServerName == "" && !noSNI) {

@@ -1,4 +1,4 @@
-// The node area's cross-border standby page: switch a blocked cross-border
+// The node area's cross-border standby page: switch an unreachable cross-border
 // link to a public-protocol standby channel and back in one click. Same
 // keys as zh-CN/standby.js.
 export default {
@@ -6,7 +6,7 @@ export default {
     nav: 'Standby',
     page: {
       title: 'Cross-border standby',
-      description: 'Each cross-border link (ANX-A) can have two public-protocol channels ready: tier 1 VLESS + REALITY + Vision, tier 2 VLESS + XHTTP behind a real TLS front on our own domain. Switch a blocked link over in one click, and back once it recovers.',
+      description: 'Each cross-border link (ANX-A) can have two public-protocol channels ready: tier 1 VLESS + REALITY + Vision, tier 2 VLESS + XHTTP behind a real TLS front on our own domain. Switch an unreachable link over in one click, and back once it recovers.',
       prepare: 'Prepare channels…',
       allReality: 'All to tier 1',
       allXhttp: 'All to tier 2',

@@ -1,16 +1,14 @@
-// Package l2standby is the cross-border emergency channel (anx
-// docs/FUTURE-IMPROVEMENTS.md F-54 items 1 and 4): for every cross-border
+// Package l2standby is the cross-border emergency channel: for every cross-border
 // transport of the network model (kind anx, the A2 jacket; not trusted)
 // Control keeps public-protocol standby channels ready, one per pair of
 // proxy nodes the transport's paths join (the user ingress node and the
 // node the path leaves from), in two tiers:
 //
 //   - reality: VLESS + REALITY + Vision to a relay port of the exit node.
-//     Quickest, but the same borrowed-handshake family as A2: it covers a
-//     fault of the A2 implementation, not a rule against the family.
+//     Quickest to switch to.
 //   - xhttp: VLESS over XHTTP to our own domain on the exit node, through
 //     a TLS front (nginx with a real certificate) that proxies a path to the
-//     relay on loopback. A different family from A2.
+//     relay on loopback.
 //
 // Nothing runs while a channel is on standby. Switching a transport to a
 // tier makes that tier's channels active: the source node gets a catch-all
@@ -610,8 +608,7 @@ func newUUID() string {
 
 // SwitchInput moves transports to a tier.
 type SwitchInput struct {
-	// Transports to switch; All switches every cross-border transport
-	// (A2 targeted as a whole).
+	// Transports to switch; All switches every cross-border transport.
 	Transports []string `json:"transports"`
 	All        bool     `json:"all"`
 	// Tier is reality, xhttp, or off (back to the transport).

@@ -129,12 +129,12 @@ export default {
         },
         crossBorderDown: {
           title: 'Cross-border link {name} down since {date}',
-          hint: 'Switch it to tier 1 (REALITY) under Nodes → Standby, tier 2 (XHTTP) if tier 1 is blocked too. Steps: docs/guide/cross-border-standby.md.',
+          hint: 'Switch it to tier 1 (REALITY) under Nodes → Standby, tier 2 (XHTTP) if tier 1 is unreachable too. Steps: docs/guide/cross-border-standby.md.',
           switched: 'Its traffic runs on the {tier} standby channel. Switch back under Standby once the link is up.'
         },
         crossBorderWide: {
           title: '{n} of {total} cross-border links are down at once',
-          hint: 'Several links blocked together means the ANX-A jacket itself is targeted, not one address. Follow the manual plan: switch all to tier 1 or tier 2, then record what you saw.'
+          hint: 'Several links down together is not a single-address fault. Follow the manual plan: switch all to tier 1 or tier 2, then record what you saw.'
         }
       },
       nodesFailed: 'Couldn’t load node status',

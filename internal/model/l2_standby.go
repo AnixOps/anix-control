@@ -2,16 +2,14 @@ package model
 
 import "time"
 
-// Tiers of a cross-border standby channel (internal/l2standby, anx
-// docs/FUTURE-IMPROVEMENTS.md F-54 item 1).
+// Tiers of a cross-border standby channel (internal/l2standby).
 const (
 	// L2StandbyTierReality: VLESS + REALITY + Vision to the exit node's
-	// relay port. Quickest to switch to, but the same borrowed-handshake
-	// family as the A2 jacket: it covers a fault of A2 itself.
+	// relay port. Quickest to switch to.
 	L2StandbyTierReality = "reality"
 	// L2StandbyTierXHTTP: VLESS over XHTTP behind a TLS front (nginx with a
 	// real certificate for XHTTPDomain) on the exit node; the relay listens
-	// on loopback. A different family from A2.
+	// on loopback.
 	L2StandbyTierXHTTP = "xhttp"
 )
 

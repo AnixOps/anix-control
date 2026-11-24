@@ -61,7 +61,7 @@ const (
 	// channel, warning once it is switched (internal/l2standby).
 	KindCrossBorderLinkDown = "cross_border_link_down"
 	// KindCrossBorderWideOutage: half or more of at least two cross-border
-	// transports are down at once, the sign of a targeted jacket.
+	// transports are down at once.
 	KindCrossBorderWideOutage = "cross_border_wide_outage"
 )
 

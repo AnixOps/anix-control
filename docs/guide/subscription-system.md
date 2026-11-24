@@ -164,7 +164,7 @@ type SubscriptionTemplate struct {
     // 服务器配置
     Server           string  // 服务器地址
     Port             int     // 端口
-    ServerName       *string // SNI/伪装域名
+    ServerName       *string // SNI 域名
     
     // TLS 配置
     TLS              int     // 0=无, 1=TLS, 2=Reality

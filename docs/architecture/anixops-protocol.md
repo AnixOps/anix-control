@@ -26,7 +26,7 @@ contract slots it builds on (`ENGINE_ANIXOPS`,
 (`docs/architecture/forward-sdk.md` section 6.4).
 
 > 中文摘要：AnixOps 中继协议只用于节点之间的转发链路（入口 → 中转 → 出口），由 Control 下发配置，
-> 客户端和目标永远不直接使用它。本文只写安全传输部分，伪装相关内容留给 owner（第 8 节）。
+> 客户端和目标永远不直接使用它。本文只写安全传输部分，第 8 节留给 owner。
 > - **安全**：TLS 1.3 双向认证，用 H28 的转发链路证书；拨号方同时校验 DNS 名（`server_name`）和
 >   SPIFFE URI（`peer_identity`），监听方校验对端 URI 属于 `ingress_peers`，这是 gost 做不到的逐身份绑定。
 >   只用 Go 标准库密码学，不自创算法；不开 TLS 0-RTT 早期数据（防重放），会话恢复默认关闭。
@@ -52,7 +52,7 @@ contract slots it builds on (`ENGINE_ANIXOPS`,
 5. [Carriers](#5-carriers)
 6. [Integration](#6-integration)
 7. [Performance, observability and operations](#7-performance-observability-and-operations)
-8. [Reserved: camouflage (owner to author)](#8-reserved-camouflage-owner-to-author)
+8. [Reserved (owner to author)](#8-reserved-owner-to-author)
 9. [Plan, risks and decisions](#9-plan-risks-and-decisions)
 
 ## 1. Goals, non-goals and deployment
@@ -93,7 +93,7 @@ contract slots it builds on (`ENGINE_ANIXOPS`,
   needed. The plaintext carrier (section 5.3) is for trusted links that need
   multiplexing, per-hop accounting or UDP aggregation.
 - Interoperability with gost or any third-party relay protocol.
-- Camouflage: section 8 is reserved for the owner.
+- Section 8 is reserved for the owner.
 
 ### 1.3 Deployment model
 
@@ -1114,7 +1114,7 @@ meet them.
   nodes), `quota_exceeded` results, certificate lifetime under one day
   (renewal is failing).
 
-## 8. Reserved: camouflage (owner to author)
+## 8. Reserved (owner to author)
 
 This section is intentionally left for the owner to specify.
 

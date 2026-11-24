@@ -118,7 +118,7 @@ func (h *EntitlementsHandler) view(db *gorm.DB, settings entitlement.Settings) (
 
 // Get godoc
 // @Summary A licensed feature's settings
-// @Description The ANX licensing settings (anx spec §2.4.1): whether licensing is on, whether nodes require a license, the trial length, the plans that include ANX (empty = every plan), the license CA's public key (empty without a root key) and the device counts. Off by default.
+// @Description The ANX licensing settings: whether licensing is on, whether nodes require a license, the trial length, the plans that include ANX (empty = every plan), the license CA's public key (empty without a root key) and the device counts. Off by default.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth

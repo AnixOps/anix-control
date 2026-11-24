@@ -1,6 +1,5 @@
 // Package clientreport takes the connection outcomes AnixOps Net clients
-// report about the nodes of their subscription (anx
-// docs/FUTURE-IMPROVEMENTS.md F-55 item 1, the W2 client thread): per node,
+// report about the nodes of their subscription: per node,
 // how many connections worked, fell back, timed out, were refused or reset
 // (before or after the handshake), lost their keepalive, and whether the
 // client gave up on the node. Counts only, never a destination. Reports

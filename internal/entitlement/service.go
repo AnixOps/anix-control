@@ -186,7 +186,7 @@ func (s *Service) ANXNodeLicense() (ca string, require bool, err error) {
 }
 
 // ANXRevoked lists the revoked ANX devices whose last license has not run
-// out, as "<user_id hex>:<device_id hex>" (anx spec §2.4.1): the ANX nodes
+// out, as "<user_id hex>:<device_id hex>": the ANX nodes
 // refuse those licenses (license_revoked). A device is revoked per user, so
 // the same device of another account keeps working.
 func (s *Service) ANXRevoked() ([]string, error) {

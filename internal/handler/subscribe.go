@@ -135,7 +135,7 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 }
 
 // setANXLicense answers the client's ANX license request while ANX
-// licensing is on (internal/entitlement, anx spec §2.4.1): the license
+// licensing is on (internal/entitlement): the license
 // CA's public key always, so a client knows to ask, and for a device named
 // by X-AnixOps-Device its license and status. A failure leaves the
 // subscription as it is: the license is renewed on the next refresh.

@@ -229,6 +229,15 @@ Default: add a changelog fragment and update the doc the change affects.
 - **Direct edits.** Bullets under `## Unreleased` in `CHANGELOG.md` are still
   accepted and are released with the fragments; new changes use a fragment.
 
+## Public Wording Of ANX
+
+This repository is public and ANX is closed source. Name and drive ANX only
+through the fields, flags and names of the anix-agent
+`contracts/anx/BOUNDARY.md`; never cite the private spec, roadmap, tools or
+pull requests, and never explain a mechanism or why it exists. CI step
+"Public wording" (`config/scripts/check_public_wording.sh`) enforces the
+patterns; neutral terms are `.github/scripts/neutral_terms.py`.
+
 ## Version Bumps
 
 A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by

@@ -725,7 +725,7 @@ export async function getNetworkModel() {
   return unwrap(await v4({ url: '/kernel/network', method: 'get' }))
 }
 
-// Feature licensing (internal/entitlement, anx spec §2.4.1), off by default.
+// Feature licensing (internal/entitlement), off by default.
 // Only the feature 'anx' exists. GET answers { feature, enabled, require,
 // trial_days, plan_ids ([] = every plan), ca (hex, '' without a root key),
 // root_key, devices: { total, seated, revoked }, validity_days,

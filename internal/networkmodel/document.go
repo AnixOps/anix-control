@@ -128,14 +128,13 @@ type Egress struct {
 // ingress port carries c1 (TCP); QUICPort and FakeTCPPort offer c2 and c3
 // on the same host.
 //
-// Reverse turns the dial around (anx docs ANX-LINE-REVERSE): the accepting
+// Reverse turns the dial around: the accepting
 // device opens no port and dials ReverseHost:ReversePort, a reverse
 // listener on the dialing device, which runs the link over those
 // connections. The accepting device then needs no hop ingress port. Bare
 // anx_line runs reversed on l1; kind anx (the A2 jacket) on c1, the
-// accepting device dialing back as the jacket's client (anx
-// ANX-LINE-REVERSE §6.4): pick a reverse_port off 80 / 443 on a domestic
-// cloud, whose filing checks drop unfiled server names there.
+// accepting device dialing back as the jacket's client; reverse_port
+// defaults to DefaultReversePort.
 type AnxLine struct {
 	CarrierOrder []string `json:"carrier_order,omitempty"`
 	Multipath    bool     `json:"multipath,omitempty"`

@@ -54,8 +54,7 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
 // ReverseA2KeyKind is the kind of the reverse A2 rendezvous key an Agent
 // reports (anix-agent anxserver.ReverseA2PublicKind): a copy of its
-// anx-server key that does not rotate (anx §2.6), since l2 egresses pin it
-// and have no grace period.
+// anx-server key that does not rotate, since l2 egresses pin it.
 const ReverseA2KeyKind = "anx_reverse_a2"
 
 func Plan(doc *Document, keys map[string]string, devices map[string]Device, forwards []Forward) (*Result, error) {
@@ -306,7 +305,7 @@ func checkTransportKind(v *violations, field string, transport *Transport) {
 		options = &AnxLine{}
 	}
 	if options.Reverse {
-		// kind anx runs reversed too (anx ANX-LINE-REVERSE §6.4): the
+		// kind anx runs reversed too: the
 		// accepting device dials back as the A2 jacket's client, on c1
 		// (the kind's own checks below).
 		if transport.Kind != network.TransportAnxLine && transport.Kind != KindAnx {
@@ -318,8 +317,7 @@ func checkTransportKind(v *violations, field string, transport *Transport) {
 		if options.ReverseHost == "" {
 			v.add(field+".anx_line.reverse_host", "a reversed link needs the dialing device's address")
 		}
-		// c3 dials back over fake TCP to reverse_port + 1, IPv4 only (anx
-		// ANX-LINE-REVERSE §6.2).
+		// c3 dials back to reverse_port + 1, IPv4 only.
 		for _, carrier := range options.CarrierOrder {
 			if carrier != "c3" && carrier != "faketcp" {
 				continue
@@ -501,7 +499,7 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	if options.Reverse {
 		// The accepting end dials back; no carrier addresses either way.
 		// c2 / c3 in the order dial back too, on the reverse port (UDP) and
-		// the next TCP port (anx ANX-LINE-REVERSE §6.3); none is c1 only.
+		// the next TCP port; none is c1 only.
 		anx.Reverse = true
 		if len(anx.CarrierOrder) == 0 {
 			anx.CarrierOrder = []string{"c1"}
@@ -521,8 +519,7 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 		} else {
 			anx.ReverseDial = net.JoinHostPort(options.ReverseHost, p)
 			if anx.Egress == "l2" {
-				// l2 dials back as the A2 jacket's client (anx
-				// ANX-LINE-REVERSE §6.4): its short auth is to the dialing
+				// l2 dials back as the A2 jacket's client, to the dialing
 				// device's rendezvous key. Agents that keep that key apart
 				// from the rotating server key report it as anx_reverse_a2;
 				// older ones serve the rendezvous with the server key.

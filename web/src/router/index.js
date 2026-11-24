@@ -297,7 +297,7 @@ const routes = [
         meta: { layout: 'wide', titleKey: 'pageTitles.admin.forwardEgress' }
       },
       {
-        // 过境应急: the cross-border standby channels (F-54), a kernel API
+        // 过境应急: the cross-border standby channels, a kernel API
         // of its own that needs no forward package.
         path: 'forward/standby',
         component: ForwardStandby,
