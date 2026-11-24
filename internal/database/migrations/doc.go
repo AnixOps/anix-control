@@ -173,4 +173,6 @@
 //     lifecycle plan, plugin WebUI asset and remote module runtime tables,
 //     and v3_kernel_operation's topology and lifecycle plan columns, go
 //     with the features the 2026-11 slimming audit removed.
+//   - 0043_lease_generation: v4_kernel_lease.generation, the fencing token
+//     leader work checks in the transaction of its writes (internal/lease).
 package migrations

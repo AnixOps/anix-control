@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -574,17 +575,22 @@ func (w *Worker) updateNode(ctx context.Context, node *model.AgentUpgradeNode, f
 	next := *node
 	change(&next)
 	next.UpdatedAt = w.Service.now()
-	result := w.Service.DB.WithContext(ctx).Model(&model.AgentUpgradeNode{}).Where("id = ? AND state IN ?", node.ID, from).
-		Select("state", "from_version", "operation_id", "session_id", "rollback_operation_id", "error_code", "error",
-			"offered_at", "handed_off_at", "reconnected_at", "finished_at", "rollback_sent_at", "updated_at").
-		Updates(&next)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 1 {
-		*node = next
-	}
-	return nil
+	return w.Service.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lease.Check(tx); err != nil {
+			return err
+		}
+		result := tx.Model(&model.AgentUpgradeNode{}).Where("id = ? AND state IN ?", node.ID, from).
+			Select("state", "from_version", "operation_id", "session_id", "rollback_operation_id", "error_code", "error",
+				"offered_at", "handed_off_at", "reconnected_at", "finished_at", "rollback_sent_at", "updated_at").
+			Updates(&next)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 1 {
+			*node = next
+		}
+		return nil
+	})
 }
 
 // update changes the campaign while it still has the status it was read
@@ -595,6 +601,9 @@ func (w *Worker) update(ctx context.Context, campaign *model.AgentUpgradeCampaig
 	change(&next)
 	next.UpdatedAt = w.Service.now()
 	return w.Service.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lease.Check(tx); err != nil {
+			return err
+		}
 		result := tx.Model(&model.AgentUpgradeCampaign{}).Where("id = ? AND status = ? AND current_batch = ?", campaign.ID, before, campaign.CurrentBatch).
 			Select("*").Omit("id", "created_at").Updates(&next)
 		if result.Error != nil {

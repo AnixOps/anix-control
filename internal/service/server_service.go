@@ -311,7 +311,10 @@ func recordServerStatTx(tx *gorm.DB, serverType model.ServerType, serverID uint,
 			RecordType: recordType,
 			RecordAt:   recordAt,
 		}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&stat).Error
+		// v5_stat_server has no unique key on the period: two concurrent
+		// first reports of a node add two rows, and readers sum the rows
+		// of a period (nodeDailyTraffic), so nothing is lost.
+		return tx.Create(&stat).Error
 	default:
 		return err
 	}

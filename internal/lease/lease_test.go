@@ -33,33 +33,33 @@ func TestTryAcquireGrantsOneHolderUntilExpiry(t *testing.T) {
 	start := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
 	ttl := 30 * time.Second
 
-	ok, err := TryAcquire(ctx, db, "workers", "a", ttl, start)
+	_, ok, err := TryAcquire(ctx, db, "workers", "a", ttl, start)
 	require.NoError(t, err)
 	assert.True(t, ok, "a free lease is granted")
 
-	ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(10*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(10*time.Second))
 	require.NoError(t, err)
 	assert.False(t, ok, "a held lease is refused")
 
-	ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(20*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(20*time.Second))
 	require.NoError(t, err)
 	assert.True(t, ok, "the holder renews")
 
-	ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(45*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(45*time.Second))
 	require.NoError(t, err)
 	assert.False(t, ok, "the renewal extended the lease")
 
-	ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(51*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "b", ttl, start.Add(51*time.Second))
 	require.NoError(t, err)
 	assert.True(t, ok, "an expired lease is taken over")
 
 	require.NoError(t, Release(ctx, db, "workers", "a", start.Add(52*time.Second)), "releasing a lease you lost is a no-op")
-	ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(53*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(53*time.Second))
 	require.NoError(t, err)
 	assert.False(t, ok)
 
 	require.NoError(t, Release(ctx, db, "workers", "b", start.Add(54*time.Second)))
-	ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(54*time.Second))
+	_, ok, err = TryAcquire(ctx, db, "workers", "a", ttl, start.Add(54*time.Second))
 	require.NoError(t, err)
 	assert.True(t, ok, "a released lease is free immediately")
 }
@@ -164,7 +164,7 @@ func TestPostgresConcurrentAcquireGrantsOneHolder(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			ok, err := TryAcquire(context.Background(), db, "workers", "holder-"+string(rune('a'+i)), time.Minute, now)
+			_, ok, err := TryAcquire(context.Background(), db, "workers", "holder-"+string(rune('a'+i)), time.Minute, now)
 			assert.NoError(t, err)
 			if ok {
 				granted.Add(1)
@@ -173,6 +173,17 @@ func TestPostgresConcurrentAcquireGrantsOneHolder(t *testing.T) {
 	}
 	wg.Wait()
 	assert.EqualValues(t, 1, granted.Load())
+
+	// The fence reads the row FOR SHARE and judges expiry by now().
+	var winner Record
+	require.NoError(t, db.Take(&winner, "name = ?", "workers").Error)
+	fenced := context.WithValue(context.Background(), fenceKey{}, fence{"workers", winner.Holder, winner.Generation})
+	assert.NoError(t, db.WithContext(fenced).Transaction(func(tx *gorm.DB) error { return Check(tx) }))
+	stale := context.WithValue(context.Background(), fenceKey{}, fence{"workers", winner.Holder, winner.Generation + 1})
+	assert.ErrorIs(t, db.WithContext(stale).Transaction(func(tx *gorm.DB) error { return Check(tx) }), ErrLost)
+	databaseNow, err := DatabaseNow(context.Background(), db)
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now(), databaseNow, time.Minute)
 }
 
 // A leader that cannot renew stops its work before the lease can expire.
@@ -205,4 +216,85 @@ func TestElectorStopsWorkWhenRenewalsFail(t *testing.T) {
 	}
 	// Leadership is cleared after the work returns.
 	require.Eventually(t, func() bool { return !elector.IsLeader() }, 2*time.Second, 10*time.Millisecond)
+}
+
+// ARC-003: the generation is raised each time the lease changes holder,
+// not on renewals.
+func TestTryAcquireRaisesTheGenerationOnATakeover(t *testing.T) {
+	db := openSQLite(t)
+	ctx := context.Background()
+	start := time.Date(2026, 11, 24, 0, 0, 0, 0, time.UTC)
+	ttl := 30 * time.Second
+	steps := []struct {
+		holder     string
+		at         time.Duration
+		generation int64
+	}{
+		{"a", 0, 1},                // first holder
+		{"a", 10 * time.Second, 1}, // renewal
+		{"b", 50 * time.Second, 2}, // takeover after expiry
+		{"a", 90 * time.Second, 3}, // taken back
+	}
+	for _, step := range steps {
+		generation, ok, err := TryAcquire(ctx, db, "workers", step.holder, ttl, start.Add(step.at))
+		require.NoError(t, err)
+		require.True(t, ok)
+		assert.Equal(t, step.generation, generation, "%s at %s", step.holder, step.at)
+	}
+}
+
+// ARC-003: a leader's write fails with ErrLost once another process took
+// its lease, or once the lease expired; writes outside leader work pass.
+func TestCheckFencesTheWritesOfALostLeader(t *testing.T) {
+	db := openSQLite(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	generation, ok, err := TryAcquire(ctx, db, "workers", "a", time.Minute, now)
+	require.NoError(t, err)
+	require.True(t, ok)
+	leader := context.WithValue(ctx, fenceKey{}, fence{"workers", "a", generation})
+	check := func(ctx context.Context) error {
+		return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return Check(tx) })
+	}
+
+	assert.NoError(t, check(leader), "the holder writes")
+	assert.NoError(t, check(ctx), "a write outside leader work is not fenced")
+
+	require.NoError(t, Release(ctx, db, "workers", "a", now))
+	assert.ErrorIs(t, check(leader), ErrLost, "an expired lease fences")
+
+	_, ok, err = TryAcquire(ctx, db, "workers", "b", time.Minute, now)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.ErrorIs(t, check(leader), ErrLost, "another holder fences")
+
+	require.NoError(t, Release(ctx, db, "workers", "b", now))
+	_, ok, err = TryAcquire(ctx, db, "workers", "a", time.Minute, now)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.ErrorIs(t, check(leader), ErrLost, "the old generation stays fenced after the lease is taken back")
+}
+
+// ARC-003: leader work runs with its lease's fence.
+func TestElectorWorkCarriesItsFence(t *testing.T) {
+	db := openSQLite(t)
+	elector := &Elector{DB: db, Name: "workers", Holder: "a", TTL: time.Minute}
+	checked := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go elector.Run(ctx, func(ctx context.Context) {
+		fenced, ok := ctx.Value(fenceKey{}).(fence)
+		if !ok || fenced.generation != 1 {
+			checked <- assert.AnError
+			return
+		}
+		checked <- db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return Check(tx) })
+		<-ctx.Done()
+	})
+	select {
+	case err := <-checked:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("elector never led")
+	}
 }

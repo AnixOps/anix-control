@@ -20,6 +20,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
@@ -472,6 +473,9 @@ func (i *Issuer) store(ctx context.Context, issuedFor model.ReverseProxy, certPE
 	notAfter := leaf.NotAfter.UTC()
 	actor := Actor{Name: "system:acme"}
 	return i.Service.write(ctx, actor, func(tx *gorm.DB) (string, *model.ReverseProxy, error) {
+		if err := lease.Check(tx); err != nil {
+			return "", nil, err
+		}
 		var current model.ReverseProxy
 		if err := tx.First(&current, issuedFor.ID).Error; err != nil {
 			return "", nil, err

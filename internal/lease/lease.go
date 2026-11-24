@@ -21,15 +21,21 @@ import (
 )
 
 // Record is one named lease. Holder owns it until ExpiresAt; the holder
-// renews it well before then. The schema migrations create its table
-// (internal/database/migrations).
+// renews it well before then. Generation is raised each time the lease
+// changes holder: the fencing token of Check. The schema migrations create
+// its table (internal/database/migrations).
 type Record struct {
 	Name       string    `gorm:"primaryKey;size:100"`
 	Holder     string    `gorm:"size:200;not null;default:''"`
 	ExpiresAt  time.Time `gorm:"not null;index"`
 	AcquiredAt time.Time
 	RenewedAt  time.Time
+	Generation int64 `gorm:"not null;default:0"`
 }
+
+// ErrLost refuses a write of leader work whose lease another process holds
+// now, or that expired.
+var ErrLost = errors.New("lease lost: another Control process leads this work")
 
 // TableName keeps the lease table with the other kernel tables.
 func (Record) TableName() string { return "v4_kernel_lease" }
@@ -50,12 +56,14 @@ func InstanceID() string {
 }
 
 // TryAcquire takes or renews the lease for holder when it is free, expired,
-// or already held by holder. It reports whether holder owns the lease now.
-func TryAcquire(ctx context.Context, db *gorm.DB, name, holder string, ttl time.Duration, now time.Time) (bool, error) {
+// or already held by holder. It reports whether holder owns the lease now,
+// and the lease's generation, raised when holder took it from another.
+func TryAcquire(ctx context.Context, db *gorm.DB, name, holder string, ttl time.Duration, now time.Time) (int64, bool, error) {
 	if name == "" || holder == "" || ttl <= 0 {
-		return false, errors.New("lease name, holder and ttl are required")
+		return 0, false, errors.New("lease name, holder and ttl are required")
 	}
 	acquired := false
+	var generation int64
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		seed := Record{Name: name, ExpiresAt: time.Unix(0, 0).UTC()}
 		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "name"}}, DoNothing: true}).Create(&seed).Error; err != nil {
@@ -69,8 +77,10 @@ func TryAcquire(ctx context.Context, db *gorm.DB, name, holder string, ttl time.
 			return nil
 		}
 		updates := map[string]any{"holder": holder, "expires_at": now.Add(ttl), "renewed_at": now}
+		generation = current.Generation
 		if current.Holder != holder {
-			updates["acquired_at"] = now
+			generation++
+			updates["acquired_at"], updates["generation"] = now, generation
 		}
 		if err := tx.Model(&Record{}).Where("name = ?", name).Updates(updates).Error; err != nil {
 			return err
@@ -78,7 +88,55 @@ func TryAcquire(ctx context.Context, db *gorm.DB, name, holder string, ttl time.
 		acquired = true
 		return nil
 	})
-	return acquired, err
+	return generation, acquired, err
+}
+
+// DatabaseNow is the database's clock (PostgreSQL now()), so that every
+// Control process judges a lease's expiry by one clock, whatever its host's
+// clock says. A SQLite database is a file on one host, opened by processes
+// on that host: there the process clock is the database clock.
+func DatabaseNow(ctx context.Context, db *gorm.DB) (time.Time, error) {
+	if db.Dialector.Name() != "postgres" {
+		return time.Now().UTC(), nil
+	}
+	var now time.Time
+	err := db.WithContext(ctx).Raw("SELECT now()").Scan(&now).Error
+	return now.UTC(), err
+}
+
+type fenceKey struct{}
+
+type fence struct {
+	name, holder string
+	generation   int64
+}
+
+// Check fences a write of leader work (backend review ARC-003): called in
+// the write's transaction, it reads the lease the work runs under (locked
+// against a takeover until the transaction ends, on PostgreSQL) and returns
+// ErrLost unless this process still holds it, at the generation it led
+// with, unexpired by the database clock. A write that does not come from
+// leader work (an administrator's request) has no lease and passes.
+func Check(tx *gorm.DB) error {
+	f, ok := tx.Statement.Context.Value(fenceKey{}).(fence)
+	if !ok {
+		return nil
+	}
+	var current Record
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("name = ?", f.name).Take(&current).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrLost
+		}
+		return err
+	}
+	now, err := DatabaseNow(tx.Statement.Context, tx)
+	if err != nil {
+		return err
+	}
+	if current.Holder != f.holder || current.Generation != f.generation || !current.ExpiresAt.After(now) {
+		return ErrLost
+	}
+	return nil
 }
 
 // Release gives the lease up early if holder still owns it, so another
@@ -117,11 +175,22 @@ func (e *Elector) setLeader(value bool) {
 	e.mu.Unlock()
 }
 
-func (e *Elector) now() time.Time {
+// clock is the time lease rows are written and judged by: the database
+// clock, or Now in tests. How long the leader went without a renewal is
+// measured on the process clock (lead), which needs no database.
+func (e *Elector) clock(ctx context.Context) (time.Time, error) {
 	if e.Now != nil {
-		return e.Now()
+		return e.Now(), nil
 	}
-	return time.Now().UTC()
+	return DatabaseNow(ctx, e.DB)
+}
+
+func (e *Elector) tryAcquire(ctx context.Context) (int64, bool, error) {
+	now, err := e.clock(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	return TryAcquire(ctx, e.DB, e.Name, e.Holder, e.TTL, now)
 }
 
 // Run blocks until ctx is done. Whenever the process holds the lease it runs
@@ -132,15 +201,19 @@ func (e *Elector) Run(ctx context.Context, work func(ctx context.Context)) {
 	defer running.Delete(e.Name)
 	interval := e.TTL / 3
 	for {
-		acquired, err := TryAcquire(ctx, e.DB, e.Name, e.Holder, e.TTL, e.now())
+		generation, acquired, err := e.tryAcquire(ctx)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("lease %s: acquire failed: %v", e.Name, err)
 		}
 		if acquired {
-			e.lead(ctx, work, interval)
+			e.lead(ctx, work, interval, generation)
 			if ctx.Err() != nil {
 				releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				if err := Release(releaseCtx, e.DB, e.Name, e.Holder, e.now()); err != nil {
+				now, err := e.clock(releaseCtx)
+				if err == nil {
+					err = Release(releaseCtx, e.DB, e.Name, e.Holder, now)
+				}
+				if err != nil {
 					log.Printf("lease %s: release failed: %v", e.Name, err)
 				}
 				cancel()
@@ -155,12 +228,13 @@ func (e *Elector) Run(ctx context.Context, work func(ctx context.Context)) {
 	}
 }
 
-func (e *Elector) lead(ctx context.Context, work func(ctx context.Context), interval time.Duration) {
-	log.Printf("lease %s: acquired by %s", e.Name, e.Holder)
+func (e *Elector) lead(ctx context.Context, work func(ctx context.Context), interval time.Duration, generation int64) {
+	log.Printf("lease %s: acquired by %s (generation %d)", e.Name, e.Holder, generation)
 	e.setLeader(true)
 	defer e.setLeader(false)
 
-	workCtx, stopWork := context.WithCancel(ctx)
+	// The work's writes that call Check are fenced by this generation.
+	workCtx, stopWork := context.WithCancel(context.WithValue(ctx, fenceKey{}, fence{e.Name, e.Holder, generation}))
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -171,7 +245,7 @@ func (e *Elector) lead(ctx context.Context, work func(ctx context.Context), inte
 		<-done
 	}()
 
-	lastRenewed := e.now()
+	lastRenewed := time.Now()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -182,10 +256,15 @@ func (e *Elector) lead(ctx context.Context, work func(ctx context.Context), inte
 			return
 		case <-ticker.C:
 		}
-		renewed, err := TryAcquire(ctx, e.DB, e.Name, e.Holder, e.TTL, e.now())
+		current, renewed, err := e.tryAcquire(ctx)
 		switch {
+		case err == nil && renewed && current != generation:
+			// It expired and was taken back after another holder: the
+			// work restarts under the new generation.
+			log.Printf("lease %s: taken again at generation %d; restarting leader work", e.Name, current)
+			return
 		case err == nil && renewed:
-			lastRenewed = e.now()
+			lastRenewed = time.Now()
 		case err == nil && !renewed:
 			log.Printf("lease %s: lost to another process; stopping leader work", e.Name)
 			return
@@ -194,8 +273,8 @@ func (e *Elector) lead(ctx context.Context, work func(ctx context.Context), inte
 				return
 			}
 			log.Printf("lease %s: renew failed: %v", e.Name, err)
-			if e.now().Sub(lastRenewed) >= e.TTL*2/3 {
-				log.Printf("lease %s: could not renew for %s; stopping leader work", e.Name, e.now().Sub(lastRenewed))
+			if time.Since(lastRenewed) >= e.TTL*2/3 {
+				log.Printf("lease %s: could not renew for %s; stopping leader work", e.Name, time.Since(lastRenewed))
 				return
 			}
 		}
