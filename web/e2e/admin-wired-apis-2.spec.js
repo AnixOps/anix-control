@@ -43,7 +43,7 @@ test.describe('node traffic', () => {
     await expect(page.locator('[data-summary="up"]')).toContainText(/GB/)
     await expect(page.locator('[data-summary="total"]')).toContainText(/GB/)
     // The plot is named and summarised for screen readers.
-    await expect(chart.getByRole('img', { name: /Traffic of tw-01, the last 24 hours: .* uploaded and .* downloaded\. Busiest hour/ })).toBeVisible()
+    await expect(chart.getByRole('img', { name: /Traffic of tw-01, the last 24 hours: .* uploaded, .* downloaded\. Peak hour/ })).toBeVisible()
 
     // The same numbers as a table.
     await chart.getByRole('button', { name: 'View as table' }).click()
@@ -85,7 +85,7 @@ test.describe('node traffic', () => {
   test('says so when there is no traffic, and when it cannot be loaded, with Try again', async ({ page }) => {
     await openScreen(page, 'admin-node-traffic-empty', { clock: true })
     await expect(page.getByText('No traffic in this range')).toBeVisible()
-    await expect(page.getByText(/Hourly history only goes back as far as the traffic log is kept/)).toBeVisible()
+    await expect(page.getByText(/Hourly data follows the traffic log retention/)).toBeVisible()
   })
 
   test('shows the error of a failed load and loads again on Try again', async ({ page }) => {
@@ -140,7 +140,7 @@ test.describe('rotate Agent credentials', () => {
     await page.getByTestId('rotate-credentials').click()
     const confirm = page.getByRole('alertdialog', { name: 'Rotate the credentials of tw-01?' })
     await expect(confirm).toBeVisible()
-    await expect(confirm).toContainText('Every Agent certificate, enrollment and forward link certificate of this node is revoked')
+    await expect(confirm).toContainText('All Agent certificates, enrollments and forward link certificates of this node are revoked')
     // Nothing is sent before the button.
     expect(requests.to('/api/v4/kernel/agents/rotate-credentials', 'POST')).toHaveLength(0)
     await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused()
@@ -161,7 +161,7 @@ test.describe('rotate Agent credentials', () => {
     const field = result.getByLabel('One-time credential')
     await expect(field).toHaveValue(FIXTURE_CREDENTIAL)
     await expect(field).toHaveAttribute('type', 'password')
-    await expect(result.getByTestId('rotate-warning')).toContainText('Treat it like a password')
+    await expect(result.getByTestId('rotate-warning')).toContainText('Treat it as a password')
     await expect(result.getByTestId('rotate-expiry')).toContainText('Valid until')
     await result.getByRole('button', { name: 'Copy credential' }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(FIXTURE_CREDENTIAL)

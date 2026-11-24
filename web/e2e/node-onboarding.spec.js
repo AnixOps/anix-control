@@ -37,7 +37,7 @@ test.describe('the node page has one entry point', () => {
     for (const gone of ['Registration key', 'Deploy parent nodes', 'Add node']) {
       await expect(header.getByRole('button', { name: gone })).toHaveCount(0)
     }
-    await expect(page.getByTestId('approval-banner')).toContainText('1 machine(s) wait for your approval')
+    await expect(page.getByTestId('approval-banner')).toContainText('1 machine(s) awaiting approval')
   })
 
   test('shows the default group’s command, asking for nothing, and the readiness check came first', async ({ page }) => {
