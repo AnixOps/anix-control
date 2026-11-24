@@ -39,7 +39,7 @@ rollback, CI link.
 | CT-010 | Revocation bounds written read-modify-write without a lock | held | [#600](https://github.com/AnixOps/anix-control/pull/600) | 7148a17 |
 | ARC-001 | One synchronous send path per Agent stream | held (per node only) | [#603](https://github.com/AnixOps/anix-control/pull/603) | 52fa842 |
 | ARC-002 | Session ownership per process | held (documented limit) | none: deferred to the HA work (owner) | — |
-| ARC-003 | Lease without fencing | held | this pull request | — |
+| ARC-003 | Lease without fencing | held | [#604](https://github.com/AnixOps/anix-control/pull/604) | 14862da |
 
 ## Decisions
 
@@ -209,6 +209,15 @@ required checks green; links are the workflow runs):
 - #600: [45319237105](https://github.com/AnixOps/anix-control/actions/runs/45319237105).
   The PostgreSQL job (shard 1/4) ran
   `TestConcurrentRevocationsKeepTheHighestBounds`: PASS.
+
+- #603 (ARC-001): [45440976073](https://github.com/AnixOps/anix-control/actions/runs/45440976073),
+  every required check green on the first head (ccf7c7b).
+- #604 (ARC-003, migration 0043): [45444915483](https://github.com/AnixOps/anix-control/actions/runs/45444915483)
+  on the final head 03937ea, every required check green, the four
+  Package Storage PostgreSQL shards included. Deviations on the first head
+  (7a44ad9): Go Lint Gate failed on staticcheck QF1008 in
+  `lease.DatabaseNow` (fixed in 03937ea); the CLA job failed on a GitHub
+  API HTTP 502 while listing the commits and passed on its one re-run.
 
 Agent (required checks green on the final heads; the owner approved each merge):
 
