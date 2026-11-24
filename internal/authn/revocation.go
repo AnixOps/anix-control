@@ -53,58 +53,47 @@ func (r Revocation) validate() error {
 
 // Write records a revocation with db, which may be a transaction, so that
 // the change that caused it and the revocation commit together. Bounds only
-// move forward. Call Store.Remember after the commit to apply it at once.
+// move forward, also under concurrent writes: the user's row is created if
+// missing, then locked, merged and updated in one transaction (CT-010). Call
+// Store.Remember after the commit to apply it at once.
 func Write(db *gorm.DB, r Revocation) error {
 	if err := r.validate(); err != nil {
 		return err
 	}
 	now := time.Now()
-	if !r.NotBefore.IsZero() || r.TokenVersion > 0 {
-		row := model.IdentityRevocation{
-			UserID: r.UserID, TokenVersion: r.TokenVersion, NotBefore: r.NotBefore, Reason: r.Reason, UpdatedAt: now,
-		}
-		if row.NotBefore.IsZero() {
-			row.NotBefore = time.Unix(0, 0)
-		}
-		if bound := r.identityNotBefore(); !bound.IsZero() {
-			row.IdentityNotBefore = &bound
-		}
-		var existing model.IdentityRevocation
-		err := db.Where("user_id = ?", r.UserID).Take(&existing).Error
-		switch {
-		case err == nil:
-			if existing.NotBefore.After(row.NotBefore) {
-				row.NotBefore = existing.NotBefore
-			}
-			if existing.TokenVersion > row.TokenVersion {
-				row.TokenVersion = existing.TokenVersion
-			}
-			if existing.IdentityNotBefore != nil && (row.IdentityNotBefore == nil || existing.IdentityNotBefore.After(*row.IdentityNotBefore)) {
-				row.IdentityNotBefore = existing.IdentityNotBefore
-			}
-			if err := db.Model(&model.IdentityRevocation{}).Where("user_id = ?", r.UserID).Updates(map[string]any{
-				"token_version": row.TokenVersion, "not_before": row.NotBefore, "identity_not_before": row.IdentityNotBefore,
-				"reason": row.Reason, "updated_at": now,
+	return db.Transaction(func(tx *gorm.DB) error {
+		if !r.NotBefore.IsZero() || r.TokenVersion > 0 {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.IdentityRevocation{
+				UserID: r.UserID, NotBefore: time.Unix(0, 0), UpdatedAt: now,
 			}).Error; err != nil {
 				return err
 			}
-		case errors.Is(err, gorm.ErrRecordNotFound):
-			if err := db.Create(&row).Error; err != nil {
+			var row model.IdentityRevocation
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ?", r.UserID).Take(&row).Error; err != nil {
 				return err
 			}
-		default:
-			return err
+			if r.NotBefore.After(row.NotBefore) {
+				row.NotBefore = r.NotBefore
+			}
+			row.TokenVersion = max(row.TokenVersion, r.TokenVersion)
+			if bound := r.identityNotBefore(); !bound.IsZero() && (row.IdentityNotBefore == nil || bound.After(*row.IdentityNotBefore)) {
+				row.IdentityNotBefore = &bound
+			}
+			if err := tx.Model(&model.IdentityRevocation{}).Where("user_id = ?", r.UserID).Updates(map[string]any{
+				"token_version": row.TokenVersion, "not_before": row.NotBefore, "identity_not_before": row.IdentityNotBefore,
+				"reason": r.Reason, "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
 		}
-	}
-	if r.SessionID != "" {
-		row := model.IdentitySessionRevocation{
-			SessionID: r.SessionID, UserID: r.UserID, ExpiresAt: r.SessionExpiresAt, Reason: r.Reason, CreatedAt: now,
+		if r.SessionID != "" {
+			row := model.IdentitySessionRevocation{
+				SessionID: r.SessionID, UserID: r.UserID, ExpiresAt: r.SessionExpiresAt, Reason: r.Reason, CreatedAt: now,
+			}
+			return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
 		}
-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // identityNotBefore is the bound a revocation sets for identity tokens: its
