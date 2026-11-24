@@ -21,10 +21,10 @@ rollback, CI link.
 
 | ID | Finding | Verdict on main | Pull request | Merge |
 | -- | ------- | --------------- | ------------ | ----- |
-| AG-001 | A traffic window spooled in parts lost the unspooled part (rolled back into a counter that was already reset) | held | [agent #179](https://github.com/AnixOps/anix-agent/pull/179) | awaiting owner |
-| AG-002 | Core counter rollback contract: read-and-reset, then a rollback that the core could not honour | held | [agent #179](https://github.com/AnixOps/anix-agent/pull/179) | awaiting owner |
-| AG-003 | Spool: a failed write dropped older batches; an undeletable file left the index and disk disagreeing | held | agent, next PR after #179 | queued |
-| AG-004 | Hot reload removed the running node before checking the new TLS certificate | held | agent, next PR after #179 | queued |
+| AG-001 | A traffic window spooled in parts lost the unspooled part (rolled back into a counter that was already reset) | held | [agent #179](https://github.com/AnixOps/anix-agent/pull/179) | agent d359e2d |
+| AG-002 | Core counter rollback contract: read-and-reset, then a rollback that the core could not honour | held | [agent #179](https://github.com/AnixOps/anix-agent/pull/179) | agent d359e2d |
+| AG-003 | Spool: a failed write dropped older batches; an undeletable file left the index and disk disagreeing | held | [agent #180](https://github.com/AnixOps/anix-agent/pull/180) | agent 54e6d49 |
+| AG-004 | Hot reload removed the running node before checking the new TLS certificate | held | [agent #180](https://github.com/AnixOps/anix-agent/pull/180) | agent 54e6d49 |
 | AG-005 | Core adapter holds its lock across management API calls | held | none: assessed below | — |
 | CT-001 | Online IP sets never expired (`Expire` ignored sets, no LRU) | held | [#595](https://github.com/AnixOps/anix-control/pull/595) | 359f00b |
 | CT-002 | Online lookups scanned the cache with a wildcard `KEYS` | held | [#595](https://github.com/AnixOps/anix-control/pull/595) | 359f00b |
@@ -161,7 +161,14 @@ required checks green; links are the workflow runs):
   The PostgreSQL job (shard 1/4) ran
   `TestConcurrentRevocationsKeepTheHighestBounds`: PASS.
 
-Agent #179: [45313339316](https://github.com/AnixOps/anix-agent/actions/runs/45313339316),
-[45313339405](https://github.com/AnixOps/anix-agent/actions/runs/45313339405); required
-checks green, govulncheck red for a newly published advisory in a
-dependency (GO-2026-6974), to be fixed by a dependency update.
+Agent (required checks green on the final heads; the owner approved each merge):
+
+- #179: [45313339316](https://github.com/AnixOps/anix-agent/actions/runs/45313339316),
+  [45313339405](https://github.com/AnixOps/anix-agent/actions/runs/45313339405).
+  govulncheck was red on that head and on `main` for a newly published
+  advisory in a dependency (GO-2026-6974).
+- #180: [45325644744](https://github.com/AnixOps/anix-agent/actions/runs/45325644744)
+  (go test + proto check, govulncheck),
+  [45325644723](https://github.com/AnixOps/anix-agent/actions/runs/45325644723)
+  (builds). #180 also updates go.opentelemetry.io/otel to v1.47.0, which
+  fixes GO-2026-6974: govulncheck is green from it on.
