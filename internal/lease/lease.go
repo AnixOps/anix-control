@@ -96,7 +96,7 @@ func TryAcquire(ctx context.Context, db *gorm.DB, name, holder string, ttl time.
 // clock says. A SQLite database is a file on one host, opened by processes
 // on that host: there the process clock is the database clock.
 func DatabaseNow(ctx context.Context, db *gorm.DB) (time.Time, error) {
-	if db.Dialector.Name() != "postgres" {
+	if db.Name() != "postgres" {
 		return time.Now().UTC(), nil
 	}
 	var now time.Time
