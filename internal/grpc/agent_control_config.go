@@ -138,9 +138,19 @@ func pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, 
 		return nil
 	}
 	force := false
-	if trigger == configTriggerHello {
+	switch trigger {
+	case configTriggerHello:
 		applied, err := kernelnodeops.ConfigApplied(ctx, db, node, row)
 		force = err == nil && !applied
+	case configTriggerRefresh:
+		// A snapshot the agent could not apply for a passing reason
+		// (config_apply_failed) is sent again at each refresh until it
+		// applies; one it refused as invalid waits for a new revision
+		// (CT-009).
+		status, found, err := kernelnodeops.LoadConfigStatus(ctx, db, node)
+		force = err == nil && found && !status.ReportedApplied &&
+			status.ReportedRevision == row.Revision && status.ReportedHash == row.ConfigHash &&
+			status.ReportedErrorCode == agentcontrol.ConfigErrorCodeApplyFailed
 	}
 	_, err = connection.sendConfig(kernelnodeops.ConfigSnapshotOf(row), force, trigger)
 	return err

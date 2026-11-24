@@ -411,6 +411,39 @@ func TestAgentControlConfigRefresh(t *testing.T) {
 	require.Eventually(t, func() bool { return snapshotsSent(configTriggerRefresh) > before }, 5*time.Second, 5*time.Millisecond)
 }
 
+// A snapshot the agent failed to apply for a passing reason is sent again
+// by the refresher without a reconnect; one refused as invalid is not
+// (CT-009).
+func TestAgentControlConfigRefreshRetriesAFailedApply(t *testing.T) {
+	env := newConfigTestEnvironment(t)
+	setConfigRefreshInterval(20 * time.Millisecond)
+	t.Cleanup(func() { setConfigRefreshInterval(defaultConfigRefreshInterval) })
+	row := env.desiredConfig(t)
+	_, err := kernelnodeops.RecordConfigStatus(context.Background(), database.GetDB(), env.agentNode(), "earlier-session",
+		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+	require.NoError(t, err)
+	session := openConfigSession(t, env, row.Revision)
+	session.heartbeat()
+	require.Empty(t, session.untilHeartbeatAck())
+
+	report := func(code string) {
+		_, err := kernelnodeops.RecordConfigStatus(context.Background(), database.GetDB(), env.agentNode(), "earlier-session",
+			&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Error: "failed", ErrorCode: code}, time.Now())
+		require.NoError(t, err)
+	}
+	report(agentcontrol.ConfigErrorCodeApplyFailed)
+	snapshot := session.next().GetConfig()
+	require.NotNil(t, snapshot, "the failed snapshot is sent again")
+	assert.Equal(t, row.Revision, snapshot.ConfigRevision)
+
+	report(agentcontrol.ConfigErrorCodeInvalid)
+	session.heartbeat()
+	session.untilHeartbeatAck()        // resends already on their way
+	time.Sleep(100 * time.Millisecond) // several refreshes
+	session.heartbeat()
+	assert.Empty(t, session.untilHeartbeatAck(), "an invalid snapshot is not sent again")
+}
+
 // The metrics: snapshots by trigger, statuses by result and the lagging
 // nodes; no gauge when the tables are missing.
 func TestWriteAgentConfigPrometheus(t *testing.T) {
