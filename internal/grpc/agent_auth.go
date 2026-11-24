@@ -54,9 +54,12 @@ type agentPrincipal struct {
 	SPIFFEID string
 }
 
-// recheck tells whether a long-lived stream may go on: the certificate must not have expired or been revoked since
-// (revocation answers are cached for at most 30 s).
-func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincipal) error {
+// recheck tells whether a long-lived stream may go on: the certificate must
+// not have expired or been revoked since (revocation answers are cached for
+// at most 30 s). A failed revocation check keeps the stream for at most
+// agentRecheckGrace after verified, the time of the last check that
+// succeeded, which recheck advances.
+func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincipal, verified *time.Time) error {
 	pki := a.pki()
 	if pki == nil {
 		return nil
@@ -66,13 +69,21 @@ func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincip
 	}
 	revoked, err := pki.IsRevoked(ctx, principal.Serial, principal.Node)
 	if err != nil {
-		return nil // keep the stream through a transient database error
+		if time.Since(*verified) < agentRecheckGrace {
+			return nil
+		}
+		return status.Errorf(codes.Unavailable, "agent certificate status unknown since %s: %v", verified.UTC().Format(time.RFC3339), err)
 	}
 	if revoked {
 		return refuseAgent(agentcontrol.ErrorCodeCertRevoked, codes.Unauthenticated, "agent client certificate revoked")
 	}
+	*verified = time.Now()
 	return nil
 }
+
+// agentRecheckGrace is how long a stream outlives failed revocation checks
+// (a database outage) before it is closed.
+const agentRecheckGrace = 5 * time.Minute
 
 // peerCertificateChain returns the raw client certificate chain of the
 // call's TLS connection, or the one an edge proxy vouched for

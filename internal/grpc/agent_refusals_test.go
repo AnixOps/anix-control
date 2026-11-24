@@ -139,12 +139,13 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, []string{agentcontrol.ErrorCodeEnrollmentRejected}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 
 	// A certificate revoked while its stream is open ends the stream at
-	// the next heartbeat; then new streams, renewal and the trust bundle
-	// refuse it as revoked.
-	stream, helloAck, err := openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
+	// the server's next check, though the agent sends nothing (CT-003);
+	// then new streams, renewal and the trust bundle refuse it as revoked.
+	defer func(previous time.Duration) { agentStreamRecheck = previous }(agentStreamRecheck)
+	agentStreamRecheck = 50 * time.Millisecond
+	stream, _, err := openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
 	require.NoError(t, err)
 	require.NoError(t, service.NewNodeService().UpdateNode(l.proxy.ID, map[string]any{"status": model.NodeStatusDisabled}))
-	require.NoError(t, stream.Send(heartbeatMessage("heartbeat", uint32(l.proxy.ID), helloAck.SessionId)))
 	code, trailer = refusedTrailer(t, stream)
 	assert.Equal(t, codes.Unauthenticated, code)
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertRevoked}, trailer)
@@ -190,8 +191,23 @@ func TestAgentCertificateExpiredAndWrongClusterCodes(t *testing.T) {
 	principal, ok, err := (&AgentAuthenticator{PKI: l.pki}).certificatePrincipal(tlsPeerContext(certificate))
 	require.NoError(t, err)
 	require.True(t, ok)
+	verified := time.Now()
+	require.NoError(t, (&AgentAuthenticator{PKI: l.pki}).recheck(ctx, principal, &verified))
+
+	// A failed revocation check keeps the stream through the grace, then
+	// ends it (CT-003).
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	uncached := principal
+	uncached.Serial = "not-cached"
+	verified = time.Now().Add(-agentRecheckGrace + time.Minute)
+	require.NoError(t, (&AgentAuthenticator{PKI: l.pki}).recheck(canceled, uncached, &verified))
+	verified = time.Now().Add(-agentRecheckGrace)
+	err = (&AgentAuthenticator{PKI: l.pki}).recheck(canceled, uncached, &verified)
+	assert.Equal(t, codes.Unavailable, status.Code(err))
+
 	principal.NotAfter = time.Now().Add(-time.Second)
-	err = (&AgentAuthenticator{PKI: l.pki}).recheck(ctx, principal)
+	err = (&AgentAuthenticator{PKI: l.pki}).recheck(ctx, principal, &verified)
 	assert.Equal(t, agentcontrol.ErrorCodeCertExpired, refusalCode(err))
 
 	// The module CA signs another cluster's agent identity only in a test.

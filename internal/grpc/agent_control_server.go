@@ -806,6 +806,36 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	return err
 }
 
+// agentStreamRecheck is how often an open stream's certificate is checked
+// again (tests shorten it).
+var agentStreamRecheck = 30 * time.Second
+
+type receivedAgentMessage struct {
+	message *agentv1pb.AgentToControl
+	err     error
+}
+
+// receiveAgentMessages receives the stream's messages in the background,
+// so that the stream's loop also serves its timers. It stops after the
+// first error, or when the stream's context ends with the handler.
+func receiveAgentMessages(stream agentv1pb.AgentControlService_ControlStreamServer) <-chan receivedAgentMessage {
+	messages := make(chan receivedAgentMessage, 1)
+	go func() {
+		for {
+			message, err := stream.Recv()
+			select {
+			case messages <- receivedAgentMessage{message, err}:
+			case <-stream.Context().Done():
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return messages
+}
+
 // wrongNode refuses an envelope whose node_id is not the stream's node
 // (agent_cert_wrong_node: the certificate named another node).
 func wrongNode(_ agentPrincipal, message string) error {
@@ -954,13 +984,39 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		defer stopAliveList()
 	}
 
+	// The server checks the session itself, whatever the agent sends: the
+	// certificate every agentStreamRecheck (a revoked or expired one ends
+	// the stream within a minute, revocation answers being cached 30 s),
+	// and the agent's liveness (nothing received for three heartbeat
+	// intervals ends it).
+	messages := receiveAgentMessages(stream)
+	recheck := time.NewTicker(agentStreamRecheck)
+	defer recheck.Stop()
+	idleLimit := 3 * time.Duration(s.heartbeatInterval(agentNode, connection.forwardNegotiated)) * time.Second
+	idle := time.NewTimer(idleLimit)
+	defer idle.Stop()
+	verified := time.Now()
 	for {
-		message, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
+		var message *agentv1pb.AgentToControl
+		select {
+		case received := <-messages:
+			if received.err == io.EOF {
 				return nil
 			}
-			return err
+			if received.err != nil {
+				return received.err
+			}
+			message = received.message
+			idle.Reset(idleLimit)
+		case <-recheck.C:
+			if err := s.auth.recheck(stream.Context(), principal, &verified); err != nil {
+				return err
+			}
+			continue
+		case <-idle.C:
+			return status.Errorf(codes.DeadlineExceeded, "agent sent nothing for %s", idleLimit)
+		case <-stream.Context().Done():
+			return stream.Context().Err()
 		}
 		if !manager.isCurrent(connection) {
 			return status.Error(codes.Aborted, "agent stream replaced by a newer session")
@@ -981,9 +1037,8 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 			if payload.Heartbeat.SessionId != connection.SessionID {
 				return status.Error(codes.FailedPrecondition, "heartbeat session_id does not match")
 			}
-			// A certificate revoked or expired while the stream is open
-			// ends it at the next heartbeat.
-			if err := s.auth.recheck(stream.Context(), principal); err != nil {
+			// The certificate is checked again at each heartbeat as well.
+			if err := s.auth.recheck(stream.Context(), principal, &verified); err != nil {
 				return err
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
