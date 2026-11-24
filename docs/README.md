@@ -98,6 +98,7 @@ Use this tree like NodeX:
 - [`audit/concurrency-risk.md`](audit/concurrency-risk.md)
 - [`audit/performance-risk.md`](audit/performance-risk.md)
 - [`audit/test-gap.md`](audit/test-gap.md)
+- [`audit/backend-review-2026-11.md`](audit/backend-review-2026-11.md): 2026-11 backend review remediation
 
 ## Rule Of Thumb
 
