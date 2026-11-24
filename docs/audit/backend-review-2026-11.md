@@ -73,22 +73,37 @@ Revisit when the core serves inbounds from more than one endpoint.
 
 ### ARC-001: one send path per Agent stream
 
-`AgentControlConnection.send` holds a per-connection mutex around
+`AgentControlConnection.send` held a per-connection mutex around
 `stream.Send`.
 
 - The mutex is per connection. Control never sends to several nodes in one
   goroutine: the approval push starts one goroutine per connection, and the
   session listing only copies state. So a slow node delays only its own
   messages.
-- On that node, a heartbeat acknowledgement can wait behind a large user
-  snapshot page. gRPC flow control bounds the wait, and keepalive ends a
-  dead peer.
+- On that node, though, a write blocked by flow control (the Agent stopped
+  reading while its TCP connection stays up, which keepalive does not
+  detect) blocked every sender of the session, including the receive loop,
+  which writes the heartbeat and report acknowledgements: nothing ended
+  the session until the connection died.
 
-Proposal, for when one stream carries enough data to matter: a writer
-goroutine per session, with a bounded queue in which control messages
-(heartbeat and report acknowledgements, cancellations) go ahead of bulk
-pages, and a slow-consumer cutoff that ends the session. `sendMu` is not
-removed: concurrent `Send` on one stream is not allowed.
+Changed (2026-11-24, owner: "方案直接开始执行"), in
+`internal/grpc/agent_control_writer.go`:
+
+- one writer goroutine per session performs every `stream.Send`;
+- acknowledgements (heartbeat, report, maintenance) are written before
+  waiting bulk messages; operations stay in the bulk lane, so a
+  cancellation never overtakes the operation it cancels;
+- a write blocked for 2 minutes ends the session, and every waiting
+  sender, the receive loop included, is released at once with that error;
+- senders still wait for their write and get the stream's error, as
+  before, so the callers' error handling is unchanged. The proposal's
+  bounded queue is therefore the number of waiting senders (a handful per
+  session); no message buffer was added. `sendMu` stays: it orders
+  desired-state changes with their writes.
+
+Tests: `TestAgentWriterWritesAcknowledgementsBeforeWaitingBulk`,
+`TestAgentWriterEndsTheSessionOnAStuckWrite`,
+`TestAgentWriterEndsTheSessionOnASendError`.
 
 ### ARC-002: session ownership is per process
 

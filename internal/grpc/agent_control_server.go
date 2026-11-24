@@ -89,8 +89,12 @@ type AgentControlConnection struct {
 	agentMetrics   map[string]float64
 	agentMetricsAt time.Time
 	stream         agentv1pb.AgentControlService_ControlStreamServer
-	sendMu         sync.Mutex
-	stateMu        sync.RWMutex
+	// sendMu orders desired-state changes with their writes (dispatch,
+	// cancellation, replay); the writer serializes the writes themselves.
+	sendMu     sync.Mutex
+	writerOnce sync.Once
+	out        *agentWriter
+	stateMu    sync.RWMutex
 	// configNegotiated is whether the session negotiated config.v1; set
 	// before the session is registered. Under configMu, configRevision is
 	// the configuration revision the agent has (its Hello's, then the last
@@ -108,10 +112,14 @@ type AgentControlConnection struct {
 	networkNegotiated bool
 }
 
+// send writes message through the session's writer (agent_control_writer.go).
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
-	c.sendMu.Lock()
-	defer c.sendMu.Unlock()
-	return c.stream.Send(message)
+	return c.writer().write(message)
+}
+
+func (c *AgentControlConnection) writer() *agentWriter {
+	c.writerOnce.Do(func() { c.out = newAgentWriter(c.stream) })
+	return c.out
 }
 
 func (c *AgentControlConnection) touch(observedRevision uint64) {
@@ -459,7 +467,7 @@ func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint
 			DesiredOperation: cloned,
 		},
 	}
-	if err := connection.stream.Send(message); err != nil {
+	if err := connection.send(message); err != nil {
 		connection.sendMu.Unlock()
 		m.removePending(key, waiter)
 		return nil, fmt.Errorf("send desired operation: %w", err)
@@ -524,7 +532,7 @@ func (m *AgentControlManager) CancelOperation(ctx context.Context, nodeID uint32
 	if desired == nil || desired.Revision != revision {
 		return fmt.Errorf("operation %q is not active at revision %d", operationID, revision)
 	}
-	return connection.stream.Send(&agentv1pb.ControlToAgent{
+	return connection.send(&agentv1pb.ControlToAgent{
 		RequestId: newAgentControlID("cancel"), NodeId: nodeID, Revision: revision, SentAtUnixMs: time.Now().UnixMilli(),
 		Payload: &agentv1pb.ControlToAgent_DesiredOperation{DesiredOperation: &agentv1pb.DesiredOperation{
 			OperationId: operationID, Kind: "operation.cancel", Revision: revision,
@@ -679,7 +687,7 @@ func (m *AgentControlManager) replayDesiredLocked(connection *AgentControlConnec
 			current.PayloadJson = append(current.PayloadJson[:0], replayed.PayloadJson...)
 		}
 		m.mu.Unlock()
-		if err := connection.stream.Send(&agentv1pb.ControlToAgent{
+		if err := connection.send(&agentv1pb.ControlToAgent{
 			RequestId:    newAgentControlID("replay"),
 			NodeId:       connection.NodeID,
 			Revision:     replayed.Revision,
@@ -908,6 +916,8 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		principal:        principal,
 		stream:           stream,
 	}
+	// The writer stops with the handler (both defers: whichever path returns).
+	defer connection.writer().end(errAgentSessionEnded)
 	connection.ServerCapabilities = s.sessionCapabilities(principal, hello.Capabilities)
 	// An Agent outside the protocol revisions this Control serves still
 	// connects (an upgrade campaign reaches it on this stream); the node
@@ -990,6 +1000,9 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	// and the agent's liveness (nothing received for three heartbeat
 	// intervals ends it).
 	messages := receiveAgentMessages(stream)
+	// Ending the writer first releases senders waiting on a stuck write, so
+	// the stops above do not wait for them.
+	defer connection.writer().end(errAgentSessionEnded)
 	recheck := time.NewTicker(agentStreamRecheck)
 	defer recheck.Stop()
 	idleLimit := 3 * time.Duration(s.heartbeatInterval(agentNode, connection.forwardNegotiated)) * time.Second
@@ -1017,6 +1030,8 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 			return status.Errorf(codes.DeadlineExceeded, "agent sent nothing for %s", idleLimit)
 		case <-stream.Context().Done():
 			return stream.Context().Err()
+		case <-connection.writer().ended:
+			return connection.writer().err
 		}
 		if !manager.isCurrent(connection) {
 			return status.Error(codes.Aborted, "agent stream replaced by a newer session")
