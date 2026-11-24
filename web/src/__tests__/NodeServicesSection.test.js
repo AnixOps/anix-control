@@ -121,7 +121,7 @@ describe('NodeServicesSection', () => {
     telemetry.getNodeServices.mockResolvedValueOnce(table({ supported: false, unsupported_reason: 'cgroup v1', units: [], summary: { total: 0, failed: 0, active: 0, inactive: 0 } }))
     const { unmount } = renderSection()
     const unsupported = await screen.findByTestId('services-unsupported')
-    expect(unsupported.textContent).toContain('This node can’t report its services')
+    expect(unsupported.textContent).toContain('This node cannot report its services')
     expect(unsupported.textContent).toContain('Reason: cgroup v1')
     unmount()
 
@@ -177,7 +177,7 @@ describe('NodeServicesSection', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Services settings' })
     await user.click(within(dialog).getByTestId('save-services'))
     expect(await within(dialog).findByRole('alert')).toBeTruthy()
-    expect(within(dialog).getByRole('alert').textContent).toContain('The settings changed elsewhere')
+    expect(within(dialog).getByRole('alert').textContent).toContain('The settings were changed elsewhere')
     await waitFor(() => expect(telemetry.getNodeServices).toHaveBeenCalledTimes(2))
   })
 
@@ -186,7 +186,7 @@ describe('NodeServicesSection', () => {
     telemetry.getNodeServices.mockRejectedValueOnce(Object.assign(new Error('Request failed'), { response: { status: 502 } }))
     telemetry.getNodeServices.mockResolvedValue(table())
     renderSection()
-    expect(await screen.findByText('Couldn’t load the services')).toBeTruthy()
+    expect(await screen.findByText('Could not load the services')).toBeTruthy()
     await user.click(document.querySelector('[data-error-retry]'))
     expect(await screen.findByText('nginx.service')).toBeTruthy()
   })

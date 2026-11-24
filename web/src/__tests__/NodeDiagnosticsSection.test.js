@@ -80,7 +80,7 @@ describe('NodeDiagnosticsSection', () => {
     kernelApi.getKernelNodeDiagnostics.mockResolvedValue(listing({ diagnostics: false, actions: [], agent_version: '4.1.9' }))
     renderSection()
     const empty = await screen.findByTestId('diagnostics-unsupported')
-    expect(empty.textContent).toContain('Agent 4.1.9 does not run diagnostics')
+    expect(empty.textContent).toContain('Agent 4.1.9 does not support diagnostics')
     expect(screen.queryByTestId('diagnostics-status')).toBeNull()
   })
 
@@ -196,7 +196,7 @@ describe('NodeDiagnosticsSection', () => {
 
     kernelApi.runKernelNodeDiagnostic.mockRejectedValueOnce(refusal(409, 'diagnostic_busy'))
     await userEvent.click(screen.getByTestId('diagnostics-status'))
-    await waitFor(() => expect(screen.getByTestId('diagnostics-error').textContent).toContain('Another diagnostic of this node is running'))
+    await waitFor(() => expect(screen.getByTestId('diagnostics-error').textContent).toContain('Another diagnostic is running on this node'))
 
     kernelApi.runKernelNodeDiagnostic.mockRejectedValueOnce(refusal(502, 'agent_error', 'busy'))
     await userEvent.click(screen.getByTestId('diagnostics-status'))

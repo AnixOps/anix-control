@@ -173,7 +173,7 @@ describe('NodeDetail', () => {
       kernelApi.getKernelAgentTransports.mockResolvedValue(entry({ last_certificate: certificate({ renew_after: '2000-01-01T00:00:00Z' }) }))
       await renderPage()
       const notice = await screen.findByTestId('node-certificate-overdue')
-      expect(notice.textContent).toContain('has not renewed it in time')
+      expect(notice.textContent).toContain('did not renew its certificate')
       expect(screen.getByTestId('node-certificate-state').textContent).toBe('Renewal overdue')
     })
 
@@ -185,7 +185,7 @@ describe('NodeDetail', () => {
       }))
       await renderPage()
       expect((await screen.findByTestId('node-certificate-state')).textContent).toBe('Revoked')
-      expect(screen.getByTestId('node-certificate-revoked').textContent).toContain('has to enroll again')
+      expect(screen.getByTestId('node-certificate-revoked').textContent).toContain('must enroll again')
       expect(screen.getByTestId('node-certificate-revoked-at').textContent).toContain('2026-10-03')
       expect(screen.getByTestId('node-certificate-revoke-reason').textContent).toContain('node disabled')
       expect(screen.getByTestId('node-connection').textContent).toBe('Offline')
@@ -193,7 +193,7 @@ describe('NodeDetail', () => {
 
     it('says so when Control has no Agent record of the node', async () => {
       await renderPage()
-      expect((await screen.findByTestId('node-agent-empty')).textContent).toContain('No Agent record yet')
+      expect((await screen.findByTestId('node-agent-empty')).textContent).toContain('No Agent record')
     })
 
     it('does not hold the node page up, and a failed call is a row with Retry', async () => {
@@ -202,7 +202,7 @@ describe('NodeDetail', () => {
       await renderPage()
       expect(await screen.findByRole('heading', { level: 1, name: 'hk-01' })).toBeTruthy()
       const failed = await screen.findByTestId('node-agent-error')
-      expect(failed.textContent).toContain('Couldn’t load the Agent connection')
+      expect(failed.textContent).toContain('Could not load the Agent connection')
       expect(screen.getByText('v1.4.2')).toBeTruthy()
       kernelApi.getKernelAgentTransports.mockResolvedValueOnce(entry())
       await user.click(within(failed).getByRole('button', { name: 'Retry' }))
@@ -251,7 +251,7 @@ describe('NodeDetail', () => {
     it('does not break the page when the traffic cannot be read', async () => {
       kernelApi.getKernelNodeTraffic.mockRejectedValue({ response: { status: 404, data: { error: { code: 'not_found', message: 'node not found' } } } })
       await renderPage('/admin/nodes/5?section=traffic')
-      expect(await screen.findByText('Couldn’t load the traffic')).toBeTruthy()
+      expect(await screen.findByText('Could not load the traffic')).toBeTruthy()
       expect(screen.getByText('node not found')).toBeTruthy()
       expect(screen.getByRole('heading', { level: 1, name: 'hk-01' })).toBeTruthy()
     })
@@ -281,7 +281,7 @@ describe('NodeDetail', () => {
       api.getNode.mockResolvedValue({ code: 0, data: { ...node, status: 3 } })
       await renderPage('/admin/nodes/5?section=credentials')
       expect((await screen.findByRole('button', { name: 'Rotate credentials…' })).disabled).toBe(true)
-      expect(screen.getByText('This node is disabled. Enable it first, then rotate its credentials.')).toBeTruthy()
+      expect(screen.getByText('This node is disabled. Enable it first.')).toBeTruthy()
     })
   })
 
@@ -415,7 +415,7 @@ describe('NodeDetail', () => {
       nodes: [{ node: 'proxy-5', certificate_state: 'revoked', last_certificate: { serial: 'ab12', not_after: '2026-10-08T00:00:00Z', revoked_at: '2026-10-03T12:00:00Z' }, connection: { type: 'offline' } }]
     })
     await renderPage('/admin/nodes/5?section=deploy')
-    expect((await screen.findByTestId('deploy-certificate-notice')).textContent).toContain('no longer works')
+    expect((await screen.findByTestId('deploy-certificate-notice')).textContent).toContain('certificate is invalid')
   })
 
   it('disables a node with the edit body and status 3 after a confirmation', async () => {
@@ -458,14 +458,14 @@ describe('NodeDetail', () => {
   it('says when the node does not exist', async () => {
     api.getNode.mockRejectedValue({ response: { status: 404, data: { message: '节点不存在' } } })
     await renderPage('/admin/nodes/99')
-    expect(await screen.findByText('Node #99 doesn’t exist')).toBeTruthy()
+    expect(await screen.findByText('Node #99 does not exist')).toBeTruthy()
   })
 
   it('offers a retry when the node does not load', async () => {
     const user = userEvent.setup()
     api.getNode.mockRejectedValueOnce({ response: { status: 502, data: { message: 'bad gateway' } } })
     await renderPage()
-    expect(await screen.findByText('Couldn’t load this node')).toBeTruthy()
+    expect(await screen.findByText('Could not load this node')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'hk-01' })).toBeTruthy()
   })

@@ -3,13 +3,13 @@
 export default {
   nodeExitPolicy: {
     title: '出口策略',
-    description: '客户端经这个节点访问互联网时，节点拒绝哪些目标。',
+    description: '经该节点访问时拒绝的目标。',
     loading: '正在加载出口策略',
     loadFailed: '无法加载出口策略',
     blockMainland: '拒绝中国大陆目标',
-    blockMainlandHelp: '默认关闭。开启后节点拒绝所有访问中国大陆地址的连接，误发到这里的大陆流量会失败，而不是从境外绕出。需要 5.0.2 及以上的 Agent 和内核，旧版本会忽略。',
+    blockMainlandHelp: '默认关闭。开启后拒绝访问中国大陆地址的连接。需 Agent 和内核 5.0.2 及以上。',
     blocked: '已拒绝 {n} 次连接，最近一次在 {date}。',
-    none: '还没有上报被拒绝的连接。',
+    none: '暂无被拒绝的连接。',
     saveFailed: '无法保存出口策略'
   }
 }

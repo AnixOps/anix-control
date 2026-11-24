@@ -31,7 +31,7 @@ describe('NodeReachSection', () => {
     expect((await screen.findByTestId('node-reach-views')).textContent).toContain('Domestic unreachable')
     await userEvent.click(screen.getByRole('radio', { name: 'Overseas vantage' }))
     expect(kernelApi.setKernelReachVantages).toHaveBeenCalledWith([{ node_id: 1, region: 'domestic' }, { node_id: 4, region: 'overseas' }])
-    expect(await screen.findByText(/starts once this node's Agent is connected/)).toBeTruthy()
+    expect(await screen.findByText(/Probing starts once the Agent is connected/)).toBeTruthy()
   })
 
   it('shows a save error', async () => {

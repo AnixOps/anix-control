@@ -2,7 +2,7 @@
 export default {
   realityTargets: {
     title: 'Reality targets',
-    description: "The node's own Agent probes candidate Reality targets (dest and SNI); they are ranked, one is recommended, and you can apply it to the node's Reality protocols.",
+    description: "The node Agent probes candidate Reality targets (dest and SNI), ranks them and recommends one to apply to the node's Reality protocols.",
     refresh: 'Refresh',
     loading: 'Loading targets…',
     loadFailed: 'Could not load the targets',
@@ -20,20 +20,20 @@ export default {
     probe: {
       title: 'Probe',
       offline: "Probing needs the node's Agent connected to Control.",
-      unsupported: 'This Agent cannot probe targets. Upgrade the node’s Agent to use it.',
-      unsupportedVersion: 'Agent {version} cannot probe targets. Upgrade the node’s Agent to use it.',
+      unsupported: 'This Agent does not support target probing. Upgrade it.',
+      unsupportedVersion: 'Agent {version} does not support target probing. Upgrade it.',
       candidates: 'Your candidates',
-      candidatesHint: 'Host names or host:port, separated by spaces, commas or lines; probed before the built-in list.',
+      candidatesHint: 'Host names or host:port, separated by spaces, commas or new lines. Probed before the built-in list.',
       withDefaults: 'Also probe the built-in list ({count})',
       run: 'Probe',
-      running: 'The node is probing each candidate; this can take over a minute…'
+      running: 'Probing; this can take about a minute…'
     },
     recommended: {
       title: 'Recommended'
     },
     results: {
       title: 'Results',
-      none: 'No probes yet.',
+      none: 'No probes.',
       handshake: 'Handshake {ms} ms',
       cdn: 'CDN: {cdn}',
       usedBy: 'Used by {count} other nodes'
@@ -58,14 +58,14 @@ export default {
     },
     auto: {
       title: 'Automatic selection',
-      description: 'Every 6 hours the node rechecks its current targets and the built-in candidates; a current target that fails twice in a row (the second check 15 minutes later) is replaced with the recommended one. A probe without an answer is not a failure, and a target that still works is never replaced for a better score. Every switch is in the operation log.',
+      description: 'Every 6 hours, the current targets and built-in candidates are rechecked. A current target that fails twice in a row (15 minutes apart) is replaced with the recommended one. Switches are recorded in the operation log.',
       nextRun: 'Next check: {time}',
       nextRunSoon: 'Next check: within minutes',
       lastRun: 'Last check: {time}',
       outcome: 'Outcome: {outcome}',
       lastSwitch: 'Last automatic switch: {time}',
       confirmTitle: 'Turn on automatic selection?',
-      confirmMessage: 'A switch changes the SNI and dest of this node\'s Reality protocols; clients must refresh their subscription to reach the new target.',
+      confirmMessage: 'Switching changes the SNI and dest of the Reality protocols on this node. Clients must refresh their subscription.',
       confirm: 'Turn on'
     },
     apply: {
@@ -73,15 +73,15 @@ export default {
       toProtocol: 'Apply to {name}',
       inUse: 'In use',
       title: 'Change the target of {name} to {target}?',
-      message: 'SNI and dest change from {from} to {target}; the private key and other settings stay. The node picks up the change itself; clients must refresh their subscription or they cannot connect.',
+      message: 'SNI and dest change from {from} to {target}; other settings are unchanged. Clients must refresh their subscription.',
       confirm: 'Apply',
-      done: 'The target of {name} is now {target}. Ask users to refresh their subscription.'
+      done: 'The target of {name} is now {target}. Users must refresh their subscription.'
     },
     errors: {
       node_offline: "The node's Agent is offline.",
       reality_probe_unsupported: 'This Agent cannot probe targets.',
-      probe_busy: 'This node is already probing; wait for it to finish.',
-      target_not_probed: 'This node has not probed this target successfully yet. Probe it first.',
+      probe_busy: 'This node is already probing. Try again later.',
+      target_not_probed: 'This target has not been probed successfully. Probe it first.',
       protocol_not_found: 'The Reality protocol was not found.',
       invalid_params: 'Invalid parameters: {message}',
       unknown: 'The operation failed. Try again later.'
