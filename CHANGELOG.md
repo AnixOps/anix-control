@@ -2,6 +2,109 @@
 
 ## Unreleased
 
+## 5.0.13 - 2026-11-24
+
+Installs Agent v5.0.11 on nodes (`config/AGENT_RELEASE`). Carries migration
+`0043_lease_generation`: back the database up before the upgrade; rollback
+is restoring that backup and the previous release.
+
+### Changed
+
+- Comments, documents and admin form text describe ANX only through its
+  public boundary names: no private spec or roadmap references, no mechanism
+  or rationale. The ANX form groups read 回落目标 / Fallback target, 用户入口 /
+  User entry and 握手调优 / Handshake tuning; field names, stored settings and
+  behavior are unchanged. CI step "Public wording"
+  (`config/scripts/check_public_wording.sh`) keeps it that way.
+- Migration `0043_lease_generation` adds `v4_kernel_lease.generation`
+  (additive). Back the database up before the upgrade; a previous release
+  does not open a database with this step.
+- Documented and tested the accounting time of Agent traffic: a batch
+  counts in the day, month and quota period in which Control applies it,
+  including a batch resent after a long outage. The report window's end
+  time only orders online sets. No behaviour change.
+
+### Removed
+
+- The memory cache's set operations (`SAdd`, `SCard`, `Expire`, `Keys`) and
+  the unused `ServerService.GetUserOnlineCount`, whose pattern never matched.
+- The protobuf contracts `anix.pluginhost.v1` (`sdk/api/pluginhost/v1`, the
+  kernel-to-host protocol, unused since the kernel calls the built-in hosts
+  directly) and `anixops.modulepki.v1` (`sdk/api/modulepki/v1`, network
+  module enrollment, never served in production) are retired: their generated
+  code and their lines in `contracts/proto/descriptors.golden` are gone, and
+  `check_proto_golden.py` lists them as retired. The Agent contract and every
+  other contract are unchanged.
+
+### Fixed
+
+- Each Agent control stream has one writer: heartbeat, report and
+  maintenance acknowledgements are written before waiting configuration,
+  user, alive-list and operation messages, and an Agent that stops reading
+  its stream for 2 minutes has its session ended, so the stream's receive
+  loop and the senders waiting on it no longer block until the connection
+  dies (backend review ARC-001).
+- A configuration snapshot an Agent could not apply for a passing reason
+  (`config_apply_failed`, for example a port still in use) is sent again
+  at each configuration refresh (every minute) until it applies, instead
+  of waiting for a reconnect or the next configuration change. A snapshot
+  the Agent refused as invalid (`config_invalid`) is not resent until the
+  configuration changes.
+- Leases are fenced (backend review ARC-003): a lease's generation is
+  raised each time another Control process takes it, and the singleton
+  work's high-risk writes (Agent upgrade campaigns, reverse proxy
+  certificates, automatic Reality target switches) check holder,
+  generation and expiry in their transaction, so a process that lost the
+  lease writes nothing more. Lease times come from the database clock
+  (PostgreSQL `now()`), not from each host's clock.
+- A node's online users expire 5 minutes after its last traffic report.
+  The sets used to stay in memory until the next report of the same node,
+  so a node that went offline kept its users online for the device limit
+  (alive list) indefinitely, outside the cache's size limit. Each node's
+  set is now replaced as a whole and only by a report whose window ends no
+  earlier than the current one's, so a replayed older batch no longer
+  brings back users who have left, and readers never see a half-written
+  set.
+- The dashboard's online user count counts the users online on any node.
+  It read a set nothing wrote and always showed 0.
+- Concurrent sign-outs, password changes or bans of one user no longer lose
+  a revocation. Writing a user's revocation bounds read the row and wrote
+  it back without a lock, so on PostgreSQL a later commit could restore an
+  older token version or not-before time (re-validating tokens that had
+  been revoked), and two first revocations of a user could fail on the
+  primary key. The row is now created if missing, locked, merged and
+  updated in one transaction; the bounds only move forward.
+- A node's traffic report is not counted at rate 1 when the node's rate
+  cannot be read. The batch is now left unacknowledged (or acknowledged as
+  `report_unavailable` to Agents that negotiated it) and counted once, at
+  the node's rate, when the Agent resends it.
+- A node's rate is applied to reported traffic in integer arithmetic: the
+  rate to 1/1000 and the result rounded down to the byte, exactly for
+  every 64-bit counter (floating point lost the last bytes of counters
+  above 2^53). A user's or batch's total that would pass the 64-bit
+  counters is refused with `report_counter_overflow` instead of wrapping
+  to a negative number. A rate that is not a positive number counts as 1.
+
+### Security
+
+- An open Agent control stream is checked by Control itself, not only when
+  the Agent sends a heartbeat: the client certificate is checked again
+  every 30 seconds (with the 30-second revocation cache, a revoked or
+  expired certificate ends the stream within a minute), and a stream that
+  has sent nothing for three heartbeat intervals (60 s, or 180 s on
+  forward nodes) is closed. A revocation check that fails, for example
+  while the database is down, keeps the stream for at most 5 minutes after
+  the last check that succeeded instead of indefinitely.
+- `github.com/gorilla/websocket` moves to the upstream fix of GO-2026-6278
+  (weak mask key PRNG), `v1.5.4-0.20240701034025-d67f41855da4`.
+- A node's traffic report counts only for the users the node serves: the
+  users of the node's plan group (every user when the node has no group),
+  whether active, expired, over quota or banned. Entries for users of
+  another group or unknown ids are not counted, the rest of the batch is,
+  and the agent-control log records the node, batch id and user ids with
+  reason `traffic_user_not_served`. Traffic of a user moved to another
+  group is counted only if it reaches Control before the move.
+
 ## 5.0.12 - 2026-11-23
 
 ### Removed
