@@ -267,6 +267,37 @@ func TestAgentControlTrafficReportAppliedOnce(t *testing.T) {
 	require.NoError(t, stream.CloseSend())
 }
 
+// A batch is counted when it arrives, not when its window ended (CT-007):
+// a batch resent after an outage that crossed a month lands in this month.
+func TestAgentControlTrafficReportCountsAtArrival(t *testing.T) {
+	environment := newReportsTestEnvironment(t)
+	nodeID := uint32(environment.node.ID)
+	stream, helloAck := openReportsSession(t, environment, reportCapabilities())
+
+	before := time.Now()
+	window := before.AddDate(0, -2, 0)
+	require.NoError(t, stream.Send(trafficMessage("late", nodeID, &agentv1pb.TrafficReport{
+		BatchId:         "node:proxy-1:boot-a:1",
+		Users:           []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 10, DownloadBytes: 20}},
+		WindowEndUnixMs: window.UnixMilli(),
+	})))
+	assert.True(t, expectReportAck(t, stream, "late").Applied)
+	after := time.Now()
+
+	monthStart := func(at time.Time) int64 {
+		at = at.In(time.Local)
+		return time.Date(at.Year(), at.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
+	}
+	var month model.StatServer
+	require.NoError(t, database.GetDB().Where("server_id = ? AND record_type = ?", environment.node.ID, "m").First(&month).Error)
+	assert.Contains(t, []int64{monthStart(before), monthStart(after)}, month.RecordAt)
+	var log model.TrafficLog
+	require.NoError(t, database.GetDB().Where("server_id = ? AND user_id = ?", environment.node.ID, 7).First(&log).Error)
+	assert.GreaterOrEqual(t, log.LogAt, model.TrafficLogBucketStart(before.Unix()))
+	expectHeartbeatAck(t, stream, nodeID, helloAck.SessionId, "heartbeat-end")
+	require.NoError(t, stream.CloseSend())
+}
+
 // A batch the kernel cannot record for now gets no acknowledgement and the
 // stream stays open; the resend is applied once the fault is gone.
 func TestAgentControlTrafficReportTransientFailureGetsNoAck(t *testing.T) {

@@ -127,6 +127,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/packagecompat": 0.6,
         "internal/tests/forwardv4": 0.5,
         "internal/agentreports": 0.1,
+        # Not measured in CI yet: the concurrent revocation test (CT-010).
+        "internal/authn": 1.0,
     },
 }
 

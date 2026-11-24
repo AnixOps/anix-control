@@ -1709,6 +1709,12 @@ advertised them.
     ids, so a move could count it twice. Data produced while the stream is
     down for longer than a grace period (5 minutes) goes to the legacy
     path as new batches.
+  - **Accounting time is arrival time** (CT-007, owner decision
+    2026-11-24). A batch counts in the day, month and traffic-log bucket in
+    which Control applies it, not in the one its `window_end_unix_ms`
+    names. A batch resent after a long outage therefore lands in the
+    current period; a user's quota and reset follow the same rule.
+    `window_end_unix_ms` only orders online sets (`internal/online`).
 - **Online IPs.** They ride in `TrafficReport.online` and feed the same
   alive set that UniProxy feeds.
 - **Logs.** `LogBatch` goes into `v5_node_log` (as `NodeLogService`), with
