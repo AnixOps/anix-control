@@ -36,7 +36,7 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live Control gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '8943ec7512e93f6adc9a870f499bea2ee86372da'   # anix-agent v5.0.9
+  AGENT_REF: '9b493edbb5770ed78f2545efe92a6b929ddbfd2f'   # anix-agent v5.0.11
   # The networkcore_anixops commit whose anixcore the cross-repository E2E
   # runs as the Agent's node kernel.
   NETWORKCORE_REF: 'c0418ad48313045bf3c07691a8d083c6ddaf2252'
@@ -1662,7 +1662,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go -C anix-agent build -trimpath -tags anixcore \
-            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.9-e2e" \
+            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.11-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           go test -c -o "${E2E_BIN}/agente2e.test" ./internal/tests/agente2e
 
