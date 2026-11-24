@@ -215,15 +215,15 @@ describe('UiDataTable', () => {
     const onRetry = vi.fn()
     const onClear = vi.fn()
     const { rerender } = render(UiDataTable, {
-      props: { columns: COLUMNS, rows: [], label: 'Users', error: new Error('boom'), errorTitle: 'Users didn’t load', onRetry, 'onClear-filters': onClear }
+      props: { columns: COLUMNS, rows: [], label: 'Users', error: new Error('boom'), errorTitle: 'Could not load the users', onRetry, 'onClear-filters': onClear }
     })
     expect(screen.getByRole('alert').textContent).toContain('boom')
-    expect(screen.getByRole('heading', { name: 'Users didn’t load' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Could not load the users' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
 
-    await rerender({ error: null, emptyTitle: 'No users yet' })
-    expect(screen.getByRole('heading', { name: 'No users yet' })).toBeTruthy()
+    await rerender({ error: null, emptyTitle: 'No users' })
+    expect(screen.getByRole('heading', { name: 'No users' })).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
 
     await rerender({ filtered: true })
@@ -234,7 +234,7 @@ describe('UiDataTable', () => {
 
   it('reads the message of the kernel\'s { error: { code, message } } answers, not the object', async () => {
     const failure = { response: { status: 503, data: { error: { code: 'database_unavailable', message: 'the database is unavailable' } } }, message: 'Request failed with status code 503' }
-    render(UiDataTable, { props: { columns: COLUMNS, rows: [], label: 'Users', error: failure, errorTitle: 'Users didn’t load' } })
+    render(UiDataTable, { props: { columns: COLUMNS, rows: [], label: 'Users', error: failure, errorTitle: 'Could not load the users' } })
     expect(screen.getByRole('alert').textContent).toContain('the database is unavailable')
     expect(screen.getByRole('alert').textContent).not.toContain('database_unavailable')
     expect(screen.getByRole('alert').textContent).not.toContain('[object Object]')

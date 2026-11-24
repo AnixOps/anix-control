@@ -21,7 +21,7 @@ export default {
       allUsers: 'All users',
       settings: {
         title: 'Site statistics',
-        description: 'Nodes report each user\'s traffic by destination domain. Users see their own statistics on their Site statistics page. Off by default; turning it off stops recording at once.',
+        description: 'Nodes report each user\'s traffic by destination domain; users see their own records on the Site statistics page. Off by default; turning it off stops recording immediately.',
         enabled: 'Record site statistics',
         enabledHint: 'Needs anix-agent with destinations.v1 on the nodes.',
         retention: 'Keep for',
@@ -37,13 +37,13 @@ export default {
     categories: {
       qos: {
         title: 'QoS: priorities and caps',
-        description: 'Give each traffic category a priority: when a link is busy the low classes (downloads by default) yield, when it is idle they run at full speed. Chosen domains can be capped per user, such as Steam downloads. The settings reach the nodes with their configuration within about a minute and need an anixcore with qos.',
+        description: 'Priorities per traffic category: on a busy link, low classes (downloads by default) yield; on an idle link they run at full speed. Selected domains can be capped per user. Settings reach the nodes within about a minute and require anixcore with qos.',
         enabled: 'Enable QoS',
         enabledHint: 'Off, the nodes neither prioritize nor cap by category.',
         priorities: 'Priority of each category',
         priority: { high: 'High', normal: 'Normal', low: 'Low' },
         defaultEgress: 'Node download bandwidth',
-        defaultEgressHelp: 'The nodes\' link capacity for node-wide scheduling; 0 schedules within the users\' speed limits only.',
+        defaultEgressHelp: 'Node link capacity for node-wide scheduling; 0 schedules within user speed limits only.',
         minShare: 'Low priority floor',
         minShareHelp: 'The least share of a busy link a low class keeps, 1–90%.',
         nodeEgress: 'Download bandwidth of single nodes',
@@ -74,11 +74,11 @@ export default {
       },
       rules: {
         title: 'Custom rules',
-        description: 'Custom rules win over the remote sources and the built-in rules, apply at once and to the recorded history too. Point a domain at “Web” to take it out of a built-in category.',
+        description: 'Custom rules take precedence over remote sources and built-in rules, apply immediately and reclassify recorded history.',
         label: 'Custom category rules',
         add: 'Add rule',
         edit: 'Edit rule',
-        emptyTitle: 'No custom rules yet',
+        emptyTitle: 'No custom rules',
         emptyDescription: 'Traffic is classified by the built-in rules and the remote sources.',
         loadFailed: 'Could not load the rules',
         kind: 'Kind',
@@ -101,11 +101,11 @@ export default {
       },
       sources: {
         title: 'Remote sources',
-        description: 'Lists of domains and networks fetched from a URL on a schedule, the whole list in one category. Plain lists, v2fly domain-list-community (domain:, full:), Clash rules (DOMAIN-SUFFIX, IP-CIDR) and Clash rule providers are read. A failed fetch keeps the previous list.',
+        description: 'Domain and network lists fetched on a schedule, each list in one category. Supports plain lists, v2fly domain-list-community, Clash rules and Clash rule providers. A failed fetch keeps the previous list.',
         label: 'Remote sources',
         add: 'Add source',
         edit: 'Edit source',
-        emptyTitle: 'No remote sources yet',
+        emptyTitle: 'No remote sources',
         emptyDescription: 'For example https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/netflix as Video.',
         name: 'Name',
         url: 'URL',
@@ -116,7 +116,7 @@ export default {
         refreshHelp: '1 to 168 hours.',
         entries: 'Entries',
         fetchedAt: 'Last fetch',
-        never: 'Not fetched yet',
+        never: 'Not fetched',
         status: 'Status',
         ok: 'OK',
         failed: 'Failed',
@@ -134,7 +134,7 @@ export default {
       },
       builtin: {
         title: 'Built-in rules',
-        description: 'The rules built into Control, updated with each release; custom rules and remote sources override them.',
+        description: 'Rules built into Control, updated with each release. Custom rules and remote sources override them.',
         counts: '{domains} domains · {networks} networks · {protocols} protocols',
         show: 'Show',
         hide: 'Hide'
@@ -180,16 +180,16 @@ export default {
         view: 'View traffic',
         openNode: 'Open node page',
         title: 'Traffic of {name}',
-        description: 'Upload and download over time. The node page has its protocols, credentials and logs.'
+        description: 'Upload and download over time.'
       },
       waiting: 'Waiting for the first node snapshot',
       waitingDescription: 'Node status shows here in real time once connected.',
-      empty: 'No nodes yet',
-      emptyDescription: 'Once you add a node, its CPU, memory and online users show here live.',
+      empty: 'No nodes',
+      emptyDescription: 'CPU, memory and online users of added nodes appear here live.',
       offlineTitle: 'The live connection dropped',
-      offlineDescription: 'Couldn’t reach the live monitor. It reconnects on its own.',
+      offlineDescription: 'Could not reach the live monitor. It reconnects on its own.',
       reconnectNow: 'Reconnect now',
-      unsupported: 'This browser doesn’t support WebSocket'
+      unsupported: 'This browser does not support WebSocket'
     },
     traffic: {
       user: 'User',
@@ -202,7 +202,7 @@ export default {
         peak: 'Peak hour',
         latestReport: 'Last report',
         latestReportHint: 'When a node last wrote a traffic log',
-        noReport: 'No traffic reports yet'
+        noReport: 'No traffic reports'
       },
       chart: {
         title: 'Hourly traffic',
@@ -215,8 +215,8 @@ export default {
       },
       empty: 'No traffic data in the selected range',
       emptyWithLatest: 'The last report was {time}. Check the node processes and the report path.',
-      emptyNever: 'No node has reported traffic yet.',
-      loadFailed: 'Couldn’t load traffic',
+      emptyNever: 'No node has reported traffic.',
+      loadFailed: 'Could not load traffic',
       ranking: {
         title: 'Top users by traffic',
         description: 'Pick a user to see their traffic in the chart above.',
@@ -225,7 +225,7 @@ export default {
         user: 'User',
         traffic: 'Traffic',
         empty: 'No user traffic in the selected range',
-        loadFailed: 'Couldn’t load the user ranking'
+        loadFailed: 'Could not load the user ranking'
       }
     }
   }

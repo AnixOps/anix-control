@@ -270,7 +270,7 @@ describe('Users dialogs and feedback', () => {
       await renderPage()
       const bar = await selectAll(userEv)
       await userEv.click(within(bar).getByRole('button', { name: 'Ban' }))
-      await waitFor(() => expect(toastMessages('error')).toEqual(['No user was banned. 1 not found; your own account can’t be banned.']))
+      await waitFor(() => expect(toastMessages('error')).toEqual(['No user was banned. 1 not found; your own account cannot be banned.']))
       expect(toasts('error')[0].action).toBeFalsy()
     })
 
@@ -427,7 +427,7 @@ describe('Users dialogs and feedback', () => {
     expect(api.getUserList.mock.calls.length).toBe(calls + 1)
     await waitFor(() => expect(screen.queryByText('lin@example.test')).toBeNull())
     expect(screen.getByText('full@example.test')).toBeTruthy()
-    expect(screen.getByText(/narrows the users on this page only/)).toBeTruthy()
+    expect(screen.getByText(/filters the users on this page only/)).toBeTruthy()
   })
 
   it('searches by email after a pause and on Enter', async () => {
@@ -443,7 +443,7 @@ describe('Users dialogs and feedback', () => {
     api.getUserList.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { response: { status: 502, data: { msg: 'bad gateway' } } }))
     render(Harness)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('Users didn’t load')
+    expect(alert.textContent).toContain('Could not load the users')
     expect(alert.textContent).toContain('bad gateway')
     await userEv.click(within(alert).getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('lin@example.test')).toBeTruthy()

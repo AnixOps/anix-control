@@ -173,7 +173,7 @@ describe('Admin notifications', () => {
       await flushPromises()
       wrapper.vm.emailConfig.host = 'smtp.save.test'
       await wrapper.vm.saveEmailSettings()
-      expect(toastMessages('error')).toEqual(['Couldn’t save: smtp config rejected'])
+      expect(toastMessages('error')).toEqual(['Could not save: smtp config rejected'])
       expect(wrapper.vm.emailDirty).toBe(true)
     })
 
@@ -202,7 +202,7 @@ describe('Admin notifications', () => {
         type: 'email',
         recipient: 'ops@example.com',
         subject: 'Test e-mail',
-        content: 'This is a test e-mail. If you received it, the e-mail settings work.'
+        content: 'Test e-mail. The e-mail settings work.'
       })
       expect(toastMessages('success')).toEqual(['Test e-mail sent to ops@example.com'])
     })

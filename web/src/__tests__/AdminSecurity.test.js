@@ -128,7 +128,7 @@ describe('MFA policy validation', () => {
     wrapper.vm.config.methods.totp = false
     wrapper.vm.config.max_attempts = 11
     await flushPromises()
-    expect(wrapper.vm.methodsError).toBe('With two-factor authentication on, keep at least one method.')
+    expect(wrapper.vm.methodsError).toBe('Keep at least one method while two-factor authentication is on.')
     expect(wrapper.vm.errors.max_attempts).toBe('Enter a whole number from 1 to 10')
     await wrapper.vm.saveConfig()
     expect(adminApi.updateMFAConfig).not.toHaveBeenCalled()

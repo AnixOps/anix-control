@@ -236,7 +236,7 @@ describe('Admin invite codes', () => {
     adminApi.getInviteCodes.mockRejectedValueOnce(new Error('bad gateway'))
     renderPage()
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('Invite codes didn’t load')
+    expect(alert.textContent).toContain('Could not load the invite codes')
     await user.click(within(alert).getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('a1b2c3d4')).toBeTruthy()
   })

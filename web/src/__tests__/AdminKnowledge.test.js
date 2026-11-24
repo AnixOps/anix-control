@@ -90,7 +90,7 @@ describe('Admin Knowledge', () => {
     async function renderPage(list = [article]) {
       adminApi.getKnowledgeList.mockResolvedValue({ data: list })
       render(Harness)
-      await screen.findByText(list[0]?.title || 'No articles yet')
+      await screen.findByText(list[0]?.title || 'No articles')
     }
 
     async function rowAction(user, name, title = 'Reset password') {
@@ -198,9 +198,9 @@ describe('Admin Knowledge', () => {
       adminApi.getKnowledgeList.mockRejectedValueOnce(new Error('bad gateway')).mockResolvedValueOnce({ data: [] })
       render(Harness)
       const alert = await screen.findByRole('alert')
-      expect(alert.textContent).toContain('Articles didn’t load')
+      expect(alert.textContent).toContain('Could not load the articles')
       await user.click(within(alert).getByRole('button', { name: 'Try again' }))
-      expect(await screen.findByRole('heading', { name: 'No articles yet' })).toBeTruthy()
+      expect(await screen.findByRole('heading', { name: 'No articles' })).toBeTruthy()
     })
   })
 })

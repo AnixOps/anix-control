@@ -166,7 +166,7 @@ describe('Admin API tokens', () => {
     kernelApi.listKernelApiTokens.mockResolvedValue([])
     const { user } = await renderPage()
     expect(await screen.findByRole('heading', { level: 3, name: 'No API tokens' })).toBeTruthy()
-    expect(screen.getByText(/shown once, when you create it/)).toBeTruthy()
+    expect(screen.getByText(/shown only once, at creation/)).toBeTruthy()
     await user.click(screen.getByTestId('api-tokens-empty-create'))
     expect(await screen.findByRole('dialog', { name: 'Create an API token' })).toBeTruthy()
   })
@@ -174,7 +174,7 @@ describe('Admin API tokens', () => {
   it('shows the load error with Try again, and loads again on it', async () => {
     kernelApi.listKernelApiTokens.mockRejectedValueOnce(refusal(503, 'database_unavailable', 'the database is unavailable'))
     const { user } = await renderPage()
-    expect(await screen.findByText('Couldn’t load the API tokens')).toBeTruthy()
+    expect(await screen.findByText('Could not load the API tokens')).toBeTruthy()
     expect(screen.queryByTestId('api-tokens-quota')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('row', { name: /nightly export/ })).toBeTruthy()
@@ -184,7 +184,7 @@ describe('Admin API tokens', () => {
   it('turns Create off, and says why, at 25 active tokens', async () => {
     kernelApi.listKernelApiTokens.mockResolvedValue(Array.from({ length: 25 }, (_, index) => row(index + 10)))
     await renderPage()
-    expect((await screen.findByTestId('api-tokens-quota')).textContent).toBe('You hold the maximum of 25 active tokens. Revoke one to create another.')
+    expect((await screen.findByTestId('api-tokens-quota')).textContent).toBe('The limit of 25 active tokens is reached. Revoke one to create another.')
     expect(screen.getByTestId('api-token-create-open').disabled).toBe(true)
   })
 
@@ -199,7 +199,7 @@ describe('Admin API tokens', () => {
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'brand new')
     kernelApi.listKernelApiTokens.mockResolvedValue([ACTIVE, row(8, { name: 'brand new' })])
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    await screen.findByRole('dialog', { name: 'Your new API token' })
+    await screen.findByRole('dialog', { name: 'New API token' })
     await waitFor(() => expect(kernelApi.listKernelApiTokens).toHaveBeenCalledTimes(2))
     // The result dialog is still open over the page.
     expect(await screen.findByRole('row', { name: /brand new/, hidden: true })).toBeTruthy()
@@ -215,8 +215,8 @@ describe('Admin API tokens', () => {
     it('asks first, names the token and what happens, and sends nothing until the danger button', async () => {
       const { user } = await renderPage()
       const dialog = await openRevoke(user, 'nightly export')
-      expect(dialog.textContent).toMatch(/stops working at once/)
-      expect(dialog.textContent).toMatch(/can’t be undone/)
+      expect(dialog.textContent).toMatch(/stops working immediately/)
+      expect(dialog.textContent).toMatch(/cannot be undone/)
       expect(kernelApi.revokeKernelApiToken).not.toHaveBeenCalled()
       // Cancel has the focus; the button says what it does.
       expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }))
@@ -250,7 +250,7 @@ describe('Admin API tokens', () => {
       const { user } = await renderPage()
       const dialog = await openRevoke(user, 'nightly export')
       await user.click(within(dialog).getByRole('button', { name: 'Revoke token' }))
-      expect((await within(dialog).findByRole('alert')).textContent).toContain('Couldn’t revoke the token: database operation failed')
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('Could not revoke the token: database operation failed')
       expect(screen.getByRole('alertdialog')).toBeTruthy()
       expect(toastMessages('success')).toEqual([])
     })
@@ -260,7 +260,7 @@ describe('Admin API tokens', () => {
       const { user } = await renderPage()
       const dialog = await openRevoke(user, 'nightly export')
       await user.click(within(dialog).getByRole('button', { name: 'Revoke token' }))
-      expect((await within(dialog).findByRole('alert')).textContent).toContain('This token no longer exists, or it isn’t yours. The list has been refreshed.')
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('The token no longer exists or belongs to another administrator. The list has been refreshed.')
       await waitFor(() => expect(kernelApi.listKernelApiTokens).toHaveBeenCalledTimes(2))
     })
 

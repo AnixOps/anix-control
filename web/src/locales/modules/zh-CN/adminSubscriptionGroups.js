@@ -2,7 +2,7 @@
 export default {
   adminSubscriptionGroups: {
     title: '订阅分组',
-    subtitle: '分组决定用户的订阅里有哪些节点：节点模板、关联的节点协议，以及订阅输出。',
+    subtitle: '分组决定订阅包含的节点：节点模板、关联节点协议与订阅输出。',
     createGroup: '新建分组',
     search: '搜索分组',
     filters: { label: '按状态筛选' },
@@ -22,8 +22,8 @@ export default {
       priority: '优先级'
     },
     empty: {
-      title: '还没有订阅分组',
-      description: '新建一个分组，再为它添加节点模板或关联节点协议。'
+      title: '暂无订阅分组',
+      description: '新建分组后添加节点模板或关联节点协议。'
     },
     actions: {
       open: '打开分组',
@@ -36,7 +36,7 @@ export default {
       fallbackTitle: '订阅分组',
       sections: '分组分区',
       more: '更多操作',
-      notFound: '找不到这个分组',
+      notFound: '分组不存在',
       notFoundDescription: '它可能已被删除。',
       backToList: '返回订阅分组',
       tabs: {
@@ -50,26 +50,26 @@ export default {
     overview: {
       title: '分组',
       share: '分享与预览',
-      shareHelp: '订阅链接使用你自己的订阅令牌，只用于检查分组的输出。'
+      shareHelp: '订阅链接使用当前管理员的订阅令牌，仅用于检查分组输出。'
     },
     members: {
       title: '成员',
       users: '用户',
       enabledUsers: '有效用户',
       plans: '关联套餐',
-      help: '数量是被直接授予该分组的用户。用户也会通过套餐（社区版称订阅模板）或主分组到达分组，他们不计入数量，也不在名单里。',
+      help: '仅统计直接授予该分组的用户，经套餐（社区版为订阅模板）或主分组获得的用户不计入。',
       listTitle: '直接成员',
-      listDescription: '被直接授予该分组的用户，最近授予的在前。',
+      listDescription: '直接授予该分组的用户，按授予时间倒序。',
       search: '搜索邮箱',
       filterLabel: '按成员资格筛选',
       status: { active: '有效', expired: '已过期' },
       banned: '已封禁',
       never: '永不过期',
       findInUsers: '在用户中查找',
-      loadFailed: '成员没有加载出来',
+      loadFailed: '成员加载失败',
       empty: {
-        title: '没有直接成员',
-        description: '被直接授予该分组的用户会显示在这里。'
+        title: '暂无直接成员',
+        description: '显示直接授予该分组的用户。'
       },
       table: {
         label: '分组成员',
@@ -102,8 +102,8 @@ export default {
     },
     links: {
       title: '{name} 的订阅链接',
-      description: '使用你自己的订阅令牌，每种格式一个链接。',
-      noToken: '你的账户还没有订阅令牌，无法生成链接。'
+      description: '使用当前管理员的订阅令牌，每种格式一个链接。',
+      noToken: '当前账户无订阅令牌，无法生成链接。'
     },
     templates: {
       title: '节点模板',
@@ -133,14 +133,14 @@ export default {
       enabled: '启用',
       enableNamed: '启用 {name}',
       copyLink: '复制链接',
-      empty: '还没有节点模板',
-      emptyDescription: '添加一个，它会出现在这个分组的订阅里。',
+      empty: '暂无节点模板',
+      emptyDescription: '添加后将出现在该分组的订阅中。',
       loadFailed: '无法加载节点模板'
     },
     nodeEdit: {
       open: '编辑节点',
       title: '编辑订阅节点',
-      description: '修改“{group}”订阅中该协议生成的节点。只影响这个分组的订阅，源节点不变；留空的字段沿用源值。',
+      description: '修改“{group}”订阅中该协议生成的节点，仅影响该分组，源节点不变；留空字段沿用源值。',
       name: '名称',
       server: '地址 (域名或 IP)',
       port: '端口',
@@ -157,15 +157,15 @@ export default {
       saveFailed: '无法保存节点修改',
       badPort: '端口需在 1-65535',
       badJson: '高级 JSON 无效',
-      empty: '该协议当前没有可编辑的节点（节点可能离线）'
+      empty: '该协议暂无可编辑的节点（节点可能离线）'
     },
     layout: {
       open: '排序与名称',
       title: '排序与显示名称',
-      description: '拖动调整“{group}”订阅中节点的顺序，并设置订阅里显示的名称。',
+      description: '拖动调整“{group}”订阅中的节点顺序，并设置显示名称。',
       listLabel: '节点协议顺序',
       displayName: '显示名称',
-      defaultHelp: '未设置显示名称，订阅中使用默认名称',
+      defaultHelp: '未设置显示名称，使用默认名称',
       handle: '拖动 {name} 调整顺序',
       handleHelp: '拖动排序，或聚焦后按 ↑ / ↓',
       moveUp: '上移',
@@ -180,12 +180,12 @@ export default {
     },
     protocols: {
       title: '节点协议',
-      description: '关联到分组的生产节点协议。只有在节点管理中设为可见的协议才能关联。',
+      description: '关联至分组的生产节点协议。仅可关联在节点管理中设为可见的协议。',
       manage: '管理关联',
       manageTitle: '管理关联的节点协议',
       manageDescription: '选择要放进“{group}”的节点协议。',
       pool: '可关联的节点协议',
-      poolEmpty: '没有可关联的节点协议。先在节点管理中把协议设为可见。',
+      poolEmpty: '暂无可关联的节点协议。请先在节点管理中将协议设为可见。',
       selectAll: '全选',
       selectedCount: '已选 {count} 个',
       linkedTo: '已在：{groups}',
@@ -205,18 +205,18 @@ export default {
       online: '在线',
       offline: '离线',
       goToNode: '前往节点',
-      empty: '还没有关联的节点协议',
-      emptyDescription: '关联节点协议后，它们会出现在这个分组的订阅里。',
+      empty: '暂无关联的节点协议',
+      emptyDescription: '关联后将出现在该分组的订阅中。',
       loadFailed: '无法加载节点协议',
       availableLoadFailed: '无法加载可关联的节点协议'
     },
     output: {
       title: '订阅输出',
-      description: '客户端拿到的内容，由服务器按所选格式生成。',
+      description: '服务器按所选格式生成的客户端内容。',
       format: '格式',
       download: '下载',
-      empty: '没有内容',
-      emptyDescription: '这个分组还没有可输出的节点。',
+      empty: '暂无内容',
+      emptyDescription: '该分组暂无可输出的节点。',
       loadFailed: '无法生成订阅输出'
     },
     formats: {
@@ -234,10 +234,10 @@ export default {
     },
     confirm: {
       deleteGroupTitle: '删除订阅分组 {name}？',
-      deleteGroupMessage: '分组的节点模板和协议关联会一起删除，分组里的用户不再收到这些节点。此操作无法撤销。',
+      deleteGroupMessage: '分组的节点模板与协议关联将一并删除，组内用户将不再获得这些节点。此操作无法撤销。',
       deleteGroupAction: '删除分组',
       deleteTemplateTitle: '删除节点模板 {name}？',
-      deleteTemplateMessage: '这个节点会从分组的订阅中消失。此操作无法撤销。',
+      deleteTemplateMessage: '该节点将从分组订阅中移除。此操作无法撤销。',
       deleteTemplateAction: '删除节点模板'
     },
     messages: {
@@ -251,7 +251,7 @@ export default {
       updateFailed: '更新失败',
       copied: '已复制',
       copyFailed: '复制失败',
-      copyFallback: '服务器没有返回合并结果，已复制由节点模板合并的内容。'
+      copyFallback: '服务器未返回合并结果，已复制节点模板合并内容。'
     }
   }
 }

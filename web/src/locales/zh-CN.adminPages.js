@@ -53,7 +53,7 @@ export default {
   },
   adminPayment: {
     title: '支付',
-    subtitle: '用户付款用的网关、每一笔支付和收入统计。',
+    subtitle: '支付网关、支付记录与收入统计。',
     tabs: {
       label: '支付分区',
       gateways: '支付网关',
@@ -78,8 +78,8 @@ export default {
         maxAmount: '最大金额',
         status: '状态'
       },
-      empty: '还没有支付网关',
-      emptyDescription: '添加一个网关，用户才能付款购买套餐。'
+      empty: '暂无支付网关',
+      emptyDescription: '添加网关后，用户方可付款购买套餐。'
     },
     records: {
       label: '支付记录',
@@ -102,8 +102,8 @@ export default {
         amount: '金额',
         status: '状态'
       },
-      empty: '还没有支付记录',
-      emptyDescription: '用户为订单付款后，记录会出现在这里。'
+      empty: '暂无支付记录',
+      emptyDescription: '用户付款后显示于此。'
     },
     stats: {
       totalAmount: '总收入',
@@ -149,13 +149,13 @@ export default {
     },
     confirm: {
       deleteTitle: '删除支付网关 {name}？',
-      deleteMessage: '用户将无法再通过这个网关付款。此操作无法撤销。',
+      deleteMessage: '删除后用户将无法通过该网关付款。此操作无法撤销。',
       deleteAction: '删除网关'
     },
     messages: {
-      fetchGatewaysFailed: '支付网关没有加载出来',
-      fetchRecordsFailed: '支付记录没有加载出来',
-      fetchStatsFailed: '支付统计没有加载出来',
+      fetchGatewaysFailed: '支付网关加载失败',
+      fetchRecordsFailed: '支付记录加载失败',
+      fetchStatsFailed: '支付统计加载失败',
       invalidConfigJson: '配置 JSON 格式错误',
       gatewaySaveSuccess: '网关保存成功',
       gatewaySaveFailed: '网关保存失败: {message}',
@@ -171,16 +171,16 @@ export default {
   adminMfa: {
     config: {
       enabled: '\u542f\u7528\u591a\u56e0\u7d20\u8ba4\u8bc1',
-      enabledHelp: '\u542f\u7528\u540e\uff0c\u7528\u6237\u53ef\u9009\u62e9\u5f00\u542f MFA \u4fdd\u62a4\u8d26\u6237\u5b89\u5168',
+      enabledHelp: '启用后用户可开启 MFA',
       required: '\u5f3a\u5236\u542f\u7528 MFA',
-      requiredHelp: '\u5f3a\u5236\u6240\u6709\u7528\u6237\u542f\u7528 MFA\uff0c\u5426\u5219\u65e0\u6cd5\u4f7f\u7528\u670d\u52a1',
+      requiredHelp: '所有用户须启用 MFA 方可使用服务',
       methods: '\u652f\u6301\u7684\u8ba4\u8bc1\u65b9\u5f0f',
       backupCodesCount: '\u6062\u590d\u7801\u6570\u91cf',
-      backupCodesHelp: '\u7528\u6237\u542f\u7528 MFA \u65f6\u751f\u6210\u7684\u6062\u590d\u7801\u6570\u91cf',
+      backupCodesHelp: '启用 MFA 时生成的恢复码数量',
       maxAttempts: '\u767b\u5f55\u5c1d\u8bd5\u9650\u5236',
-      maxAttemptsHelp: '\u8d85\u8fc7\u9650\u5236\u5c06\u4e34\u65f6\u9501\u5b9a\u8d26\u6237',
+      maxAttemptsHelp: '超过限制将临时锁定账户',
       lockoutDuration: '\u9501\u5b9a\u65f6\u957f (\u5206\u949f)',
-      lockoutDurationHelp: '\u767b\u5f55\u5931\u8d25\u8d85\u8fc7\u9650\u5236\u540e\u7684\u9501\u5b9a\u65f6\u95f4'
+      lockoutDurationHelp: '登录失败超限后的锁定时长'
     },
     methods: {
       totp: 'TOTP (Google Authenticator / Authy)',
@@ -188,10 +188,10 @@ export default {
       email: '\u90ae\u7bb1\u9a8c\u8bc1\u7801'
     },
     info: {
-      totpBody: '\u57fa\u4e8e\u65f6\u95f4\u7684\u4e00\u6b21\u6027\u5bc6\u7801\uff0c\u7528\u6237\u53ef\u4f7f\u7528 Google Authenticator\u3001Authy \u7b49\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u7ed1\u5b9a\u3002',
-      backupBody: '\u5f53\u7528\u6237\u65e0\u6cd5\u4f7f\u7528\u8ba4\u8bc1\u5668\u65f6\uff0c\u53ef\u4f7f\u7528\u6062\u590d\u7801\u767b\u5f55\u3002\u6bcf\u4e2a\u6062\u590d\u7801\u53ea\u80fd\u4f7f\u7528\u4e00\u6b21\u3002',
-      lockoutBody: '\u8fde\u7eed\u591a\u6b21 MFA \u9a8c\u8bc1\u5931\u8d25\u5c06\u89e6\u53d1\u8d26\u6237\u9501\u5b9a\uff0c\u9632\u6b62\u66b4\u529b\u7834\u89e3\u3002',
-      userOpsBody: '用户在自己的「账户」页开启、关闭两步验证，并重新生成恢复码。'
+      totpBody: '基于时间的一次性密码，支持 Google Authenticator、Authy 等应用扫码绑定。',
+      backupBody: '认证器不可用时可使用恢复码登录，每个恢复码仅可使用一次。',
+      lockoutBody: 'MFA 连续验证失败将锁定账户。',
+      userOpsBody: '用户在“账户”页开启或关闭两步验证，并重新生成恢复码。'
     },
     messages: {
       fetchFailed: '\u83b7\u53d6 MFA \u914d\u7f6e\u5931\u8d25',
@@ -202,7 +202,7 @@ export default {
   },
   adminTemplates: {
     title: '订阅模板',
-    subtitle: '免费的订阅模板：流量额度、速率和设备限制，以及授予的订阅分组。分配给用户即可生效。',
+    subtitle: '免费订阅模板：流量额度、速率与设备限制，以及授予的订阅分组。分配给用户后生效。',
     filters: {
       search: '搜索模板'
     },
@@ -213,14 +213,14 @@ export default {
       create: '新建模板'
     },
     empty: {
-      title: '还没有订阅模板',
-      description: '创建模板后分配给用户，用户就能获得流量和订阅分组。'
+      title: '暂无订阅模板',
+      description: '模板分配给用户后，用户获得相应流量与订阅分组。'
     },
     detail: {
       description: '模板 ID {id}'
     },
     labels: {
-      noGroupsHint: '这个模板还没有授予订阅分组。'
+      noGroupsHint: '该模板未授予订阅分组。'
     },
     planModal: {
       createTitle: '新建订阅模板',
@@ -232,7 +232,7 @@ export default {
         name: '请输入模板名称'
       },
       help: {
-        show: '关闭后，用户看不到这个模板。'
+        show: '关闭后用户不可见该模板。'
       }
     },
     assignModal: {
@@ -255,7 +255,7 @@ export default {
   },
   adminPlans: {
     title: '套餐',
-    subtitle: '用户可以购买的套餐：流量额度、速率和设备限制、价格，以及授予的订阅分组。',
+    subtitle: '可购买套餐：流量额度、速率与设备限制、价格，以及授予的订阅分组。',
     filters: {
       search: '搜索套餐'
     },
@@ -277,8 +277,8 @@ export default {
       removeGroupNamed: '移除分组 {name}'
     },
     empty: {
-      title: '还没有套餐',
-      description: '创建套餐后，用户就能购买流量并获得订阅分组。'
+      title: '暂无套餐',
+      description: '用户购买套餐后获得相应流量与订阅分组。'
     },
     detail: {
       description: '套餐 ID {id}',
@@ -301,7 +301,7 @@ export default {
       },
       help: {
         zeroUnlimited: '0 表示不限制。',
-        show: '关闭后，用户在购买页看不到这个套餐；已购买的用户不受影响。'
+        show: '关闭后购买页不显示该套餐，已购用户不受影响。'
       }
     },
     assignModal: {
@@ -329,7 +329,7 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} 台',
       noGroups: '无',
-      noGroupsHint: '这个套餐还没有授予订阅分组。',
+      noGroupsHint: '该套餐未授予订阅分组。',
       onSale: '在售',
       offSale: '已下架'
     },
@@ -360,11 +360,11 @@ export default {
   },
   adminUsers: {
     title: '用户',
-    subtitle: '账户、订阅和流量。选中一个用户查看详情。',
+    subtitle: '账户、订阅与流量。选择用户查看详情。',
     filters: {
       searchEmail: '搜索邮箱',
       label: '按状态筛选',
-      exhaustedHint: '「流量用尽」只筛选本页的用户，服务器没有这个筛选条件。'
+      exhaustedHint: '“流量用尽”仅筛选本页用户。'
     },
     table: {
       label: '用户列表',
@@ -381,7 +381,7 @@ export default {
     },
     lastOnline: {
       never: '从未在线',
-      neverHint: '还没有任何节点上报过该用户。',
+      neverHint: '暂无节点上报该用户。',
       loading: '加载中',
       unavailable: '暂不可用'
     },
@@ -402,8 +402,8 @@ export default {
       viewTraffic: '最近 30 天流量'
     },
     empty: {
-      title: '还没有用户',
-      description: '添加第一个用户后，就能给他分配订阅。'
+      title: '暂无用户',
+      description: '添加用户后可分配订阅。'
     },
     detail: {
       description: 'ID {id} · 注册于 {date}',
@@ -412,7 +412,7 @@ export default {
       activity: '活动',
       actions: '操作',
       danger: '危险操作',
-      dangerFooter: '重置订阅链接后，所有客户端都要重新导入；重置流量无法撤销。'
+      dangerFooter: '重置订阅链接后所有客户端须重新导入；重置流量无法撤销。'
     },
     editModal: {
       title: '编辑用户',
@@ -458,12 +458,12 @@ export default {
     },
     confirm: {
       resetSubscribeTitle: '重置 {email} 的订阅链接？',
-      resetSubscribeMessage: '旧链接会立即失效，用户需要重新导入订阅。此操作无法撤销。',
+      resetSubscribeMessage: '原链接立即失效，用户须重新导入订阅。此操作无法撤销。',
       resetSubscribeAction: '重置订阅链接'
     },
     copyDialog: {
       title: '复制订阅链接',
-      description: '无法自动复制，请手动复制下面的链接。',
+      description: '自动复制失败，请手动复制以下链接。',
       label: '订阅链接'
     },
     resetFlow: {
@@ -506,15 +506,15 @@ export default {
     bulk: {
       requestFailed: '批量操作失败：{message}',
       banPartial: '{total} 个用户中 {done} 个已封禁。',
-      banNone: '没有用户被封禁。',
+      banNone: '未封禁任何用户。',
       unbanPartial: '{total} 个用户中 {done} 个已解封。',
-      unbanNone: '没有用户被解封。',
+      unbanNone: '未解封任何用户。',
       undoPartial: '{count} 个用户未能恢复。',
       resetTitle: '重置 {count} 个用户的流量？',
-      resetMessage: '所选用户的已用流量都会归零，此操作无法撤销。',
+      resetMessage: '所选用户的已用流量将清零。此操作无法撤销。',
       resetDone: '已重置 {count} 个用户的流量',
       resetPartial: '{total} 个用户中 {done} 个已重置流量。',
-      resetNone: '没有用户的流量被重置。'
+      resetNone: '未重置任何用户的流量。'
     },
     messages: {
       actionFailed: '操作失败',
@@ -522,7 +522,7 @@ export default {
       passwordTooShort: '密码长度至少 6 位',
       userCreated: '用户创建成功',
       createFailed: '创建失败',
-      fetchUsersFailed: '用户列表没有加载出来',
+      fetchUsersFailed: '用户列表加载失败',
       bulkBanned: '已封禁 {count} 个用户',
       bulkUnbanned: '已解封 {count} 个用户',
       fetchStatsFailed: '获取统计失败',
@@ -554,23 +554,23 @@ export default {
     filters: { label: '按服务作用域筛选', allScopes: '全部服务作用域' },
     table: { group: '访问组', scope: '作用域', state: '状态' },
     states: { enabled: '已启用', disabled: '已禁用' },
-    groups: { title: '访问组', empty: '这个作用域还没有访问组', emptyAll: '还没有访问组', emptyDescription: '访问组在一个服务作用域内，为其中的用户和套餐授予资源权限和配额策略。', noDescription: '暂无说明', directUnion: '直接成员和套餐成员按允许并集计算。' },
+    groups: { title: '访问组', empty: '该作用域暂无访问组', emptyAll: '暂无访问组', emptyDescription: '访问组在服务作用域内为用户和套餐授予资源权限与配额策略。', noDescription: '暂无说明', directUnion: '直接成员和套餐成员按允许并集计算。' },
     detail: { title: '访问组', loading: '正在加载访问组详情…', group: '访问组', danger: '危险操作' },
     members: { title: '用户成员', userID: '用户 ID', empty: '暂无直接用户成员' },
     plans: { title: '套餐成员', planID: '套餐 ID', empty: '暂无套餐成员' },
     grants: { title: '资源授权', resourceType: '资源类型', resourceID: '资源 ID', permissions: '权限 JSON', empty: '暂无资源授权' },
     quotas: { title: '配额策略', key: '策略键', policy: '策略 JSON', empty: '暂无配额策略' },
-    resolver: { title: '有效授权预览', description: '预览一个用户、可选套餐和服务作用域在服务端的允许并集结果。', userID: '用户 ID', planID: '套餐 ID（可选）', scope: '服务作用域', result: '命中 {count} 个已启用访问组', none: '没有命中已启用访问组', policySummary: '当前生效 {grants} 条授权和 {quotas} 条配额策略。' },
+    resolver: { title: '有效授权预览', description: '预览指定用户、套餐与服务作用域的有效授权。', userID: '用户 ID', planID: '套餐 ID（可选）', scope: '服务作用域', result: '命中 {count} 个已启用访问组', none: '未命中已启用访问组', policySummary: '当前生效 {grants} 条授权和 {quotas} 条配额策略。' },
     editor: { createTitle: '新建访问组', editTitle: '编辑访问组', name: '组名称', description: '说明', enabled: '启用该访问组', scopeFixed: '已有访问组的作用域不能修改。' },
     messages: { groupCreated: '已创建访问组 {name}', groupSaved: '已保存访问组 {name}', groupEnabled: '已启用访问组 {name}', groupDisabled: '已禁用访问组 {name}', groupDeleted: '已删除访问组 {name}', memberAdded: '已添加用户 #{id}', memberRemoved: '已移除用户 #{id}', planAdded: '已添加套餐 #{id}', planRemoved: '已移除套餐 #{id}', grantAdded: '已添加资源授权', grantRemoved: '已移除资源授权', quotaSaved: '已保存配额策略', quotaRemoved: '已移除配额策略' },
-    confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受这条配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
+    confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受此配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
     errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }
   },
   agentUpgrades: {
     title: 'Agent 升级',
-    description: 'Control 按灰度批次推送 Agent 版本（5%、25%、100%，每批至少 30 分钟）；某一批失败超过 5% 时自动回滚该批。',
-    empty: '尚无 Agent 升级。超级管理员可执行：',
-    emptyShort: '尚无 Agent 升级。',
+    description: 'Agent 版本按 5%、25%、100% 分批推送，每批至少 30 分钟；单批失败率超过 5% 时自动回滚该批。',
+    empty: '暂无 Agent 升级。超级管理员可执行：',
+    emptyShort: '暂无 Agent 升级。',
     target: 'Agent {version}',
     batchOf: '第 {batch} / {total} 批',
     batchEnds: '最早 {time} 进入下一批',
@@ -582,9 +582,9 @@ export default {
     actions: { pause: '暂停', resume: '继续', abort: '中止', rollback: '中止并回滚' },
     confirm: {
       abortTitle: '中止升级到 {version}？',
-      abort: '不再向其他节点下发升级。已升级的节点保留新版本。',
+      abort: '停止向其余节点下发升级，已升级节点保留新版本。',
       rollbackTitle: '回滚升级到 {version}？',
-      rollback: '当前批次中已升级的节点将恢复到之前的版本，然后结束本次升级。'
+      rollback: '当前批次已升级节点恢复至原版本，并结束本次升级。'
     },
     loadFailed: '无法加载 Agent 升级'
   },

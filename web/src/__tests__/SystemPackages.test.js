@@ -140,6 +140,6 @@ describe('built-in packages section', () => {
 
     kernelApi.getKernelInstallations.mockRejectedValue(new Error('kernel unavailable'))
     wrapper = await mountSection()
-    expect(wrapper.text()).toContain('The built-in packages didn’t load')
+    expect(wrapper.text()).toContain('Could not load the built-in packages')
   })
 })

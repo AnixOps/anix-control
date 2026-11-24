@@ -81,7 +81,7 @@ describe('Admin Tickets', () => {
     adminApi.getTickets.mockRejectedValueOnce(new Error('bad gateway')).mockResolvedValueOnce({ code: 0, data: [] })
     render(Harness)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('Tickets didn’t load')
+    expect(alert.textContent).toContain('Could not load the tickets')
     expect(alert.textContent).toContain('bad gateway')
     await user.click(within(alert).getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'No tickets' })).toBeTruthy()
@@ -117,13 +117,13 @@ describe('Admin Tickets', () => {
     expect(within(panel).getByRole('alert').textContent).toBe('Write a reply first')
 
     await user.click(within(panel).getByRole('button', { name: 'Ask for details' }))
-    expect(within(panel).getByLabelText('Reply').value).toContain('which client and node')
+    expect(within(panel).getByLabelText('Reply').value).toContain('client and node in use')
     await user.click(within(panel).getByRole('button', { name: 'Send reply' }))
     expect((await within(panel).findByRole('alert')).textContent).toBe('offline')
 
     await user.click(within(panel).getByRole('button', { name: 'Send reply' }))
     await waitFor(() => expect(toastMessages('success')).toEqual(['Reply sent to ticket #9']))
-    expect(adminApi.replyTicket).toHaveBeenLastCalledWith({ ticket_id: 9, message: expect.stringContaining('which client and node') })
+    expect(adminApi.replyTicket).toHaveBeenLastCalledWith({ ticket_id: 9, message: expect.stringContaining('client and node in use') })
     expect(within(panel).getByLabelText('Reply').value).toBe('')
   })
 

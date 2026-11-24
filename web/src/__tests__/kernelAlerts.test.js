@@ -70,11 +70,11 @@ describe('kernel alerts on the dashboard', () => {
     const format = createFormatter('en')
     const failed = alertText({ kind: 'backup_verify_failed', subject: 'backups', status: 'active', detail: { file: 'anix-control-20261013T034107Z-daily.tar', created_at: '2026-10-13T03:41:07Z', error: 'integrity: ...' } }, { t, format })
     expect(failed.title).toBe('The backup anix-control-20261013T034107Z-daily.tar failed its verification')
-    expect(failed.hint).toContain('It would not restore')
+    expect(failed.hint).toContain('it cannot be restored')
     const stale = alertText({ kind: 'backup_stale', subject: 'backups', status: 'active', detail: { stale_after_hours: 36, last_verified_created_at: '2026-10-11T03:41:07Z' } }, { t, format })
     expect(stale.title).toBe('No verified backup in the last 36 hours')
-    expect(stale.hint).toContain('The newest verified backup was taken')
-    expect(alertText({ kind: 'backup_stale', status: 'active', detail: {} }, { t, format }).hint).toContain('no verified backup yet')
+    expect(stale.hint).toContain('Newest verified backup:')
+    expect(alertText({ kind: 'backup_stale', status: 'active', detail: {} }, { t, format }).hint).toContain('No verified backup.')
   })
 
   it('falls back to the server message for an unknown kind', () => {

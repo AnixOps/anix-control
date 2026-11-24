@@ -2,7 +2,7 @@
 export default {
   adminSubscriptionGroups: {
     title: 'Subscription groups',
-    subtitle: 'A group decides which nodes are in a user’s subscription: node templates, linked node protocols and the subscription output.',
+    subtitle: 'Groups define the nodes in a subscription: node templates, linked node protocols and the subscription output.',
     createGroup: 'New group',
     search: 'Search groups',
     filters: { label: 'Filter by state' },
@@ -22,8 +22,8 @@ export default {
       priority: 'Priority'
     },
     empty: {
-      title: 'No subscription groups yet',
-      description: 'Create a group, then add node templates or link node protocols to it.'
+      title: 'No subscription groups',
+      description: 'Create a group, then add node templates or link node protocols.'
     },
     actions: {
       open: 'Open group',
@@ -36,7 +36,7 @@ export default {
       fallbackTitle: 'Subscription group',
       sections: 'Group sections',
       more: 'More actions',
-      notFound: 'This group doesn’t exist',
+      notFound: 'This group does not exist',
       notFoundDescription: 'It may have been deleted.',
       backToList: 'Back to subscription groups',
       tabs: {
@@ -50,14 +50,14 @@ export default {
     overview: {
       title: 'Group',
       share: 'Share and preview',
-      shareHelp: 'Subscription links use your own subscription token; they are for checking the group’s output.'
+      shareHelp: 'Subscription links use the current administrator’s subscription token and are for checking the group output only.'
     },
     members: {
       title: 'Members',
       users: 'Users',
       enabledUsers: 'Active users',
       plans: 'Linked plans',
-      help: 'The counts are the users granted this group directly. Users also reach a group through a plan (a subscription template in the community edition) or their primary group; they are not counted or listed.',
+      help: 'Counts only users granted this group directly; users reaching it through a plan (subscription template in the community edition) or primary group are not counted.',
       listTitle: 'Direct members',
       listDescription: 'Users granted this group directly, newest grant first.',
       search: 'Search by email',
@@ -66,7 +66,7 @@ export default {
       banned: 'Banned',
       never: 'Never',
       findInUsers: 'Find in Users',
-      loadFailed: 'Couldn’t load the members',
+      loadFailed: 'Could not load the members',
       empty: {
         title: 'No direct members',
         description: 'Users granted this group directly appear here.'
@@ -102,8 +102,8 @@ export default {
     },
     links: {
       title: 'Subscription links of {name}',
-      description: 'One link per format, signed with your own subscription token.',
-      noToken: 'Your account has no subscription token yet, so there are no links.'
+      description: 'One link per format, signed with the current administrator’s subscription token.',
+      noToken: 'The current account has no subscription token, so no links are available.'
     },
     templates: {
       title: 'Node templates',
@@ -133,14 +133,14 @@ export default {
       enabled: 'Enabled',
       enableNamed: 'Enable {name}',
       copyLink: 'Copy link',
-      empty: 'No node templates yet',
-      emptyDescription: 'Add one and it appears in this group’s subscription.',
-      loadFailed: 'Couldn’t load the node templates'
+      empty: 'No node templates',
+      emptyDescription: 'Added templates appear in this group’s subscription.',
+      loadFailed: 'Could not load the node templates'
     },
     nodeEdit: {
       open: 'Edit nodes',
       title: 'Edit subscription nodes',
-      description: "Edit the nodes this protocol produces in “{group}”. Only this group's subscription changes, the source node is untouched; empty fields keep the source value.",
+      description: "Edit the nodes this protocol produces in “{group}”. Only this group's subscription changes; empty fields keep the source value.",
       name: 'Name',
       server: 'Address (domain or IP)',
       port: 'Port',
@@ -157,15 +157,15 @@ export default {
       saveFailed: 'Could not save the node edits',
       badPort: 'Port must be 1-65535',
       badJson: 'The advanced JSON is not valid',
-      empty: 'This protocol has no editable node right now (the node may be offline)'
+      empty: 'This protocol has no editable nodes (the node may be offline)'
     },
     layout: {
       open: 'Order & names',
       title: 'Order and display names',
-      description: 'Drag to set the order of the nodes in the subscription of “{group}”, and the name each one shows.',
+      description: 'Drag to order the nodes in the subscription of “{group}” and set their display names.',
       listLabel: 'Node protocol order',
       displayName: 'Display name',
-      defaultHelp: 'No display name: the subscription uses the default name',
+      defaultHelp: 'No display name set; the default name is used',
       handle: 'Drag {name} to reorder',
       handleHelp: 'Drag to reorder, or focus and press ↑ / ↓',
       moveUp: 'Move up',
@@ -191,7 +191,7 @@ export default {
       linkedTo: 'In: {groups}',
       save: 'Save links',
       saved: 'Linked node protocols updated',
-      saveFailed: 'Couldn’t update the linked node protocols',
+      saveFailed: 'Could not update the linked node protocols',
       node: 'Node',
       nodeIdFallback: 'Node #{id}',
       unknownNode: 'Unknown node',
@@ -207,8 +207,8 @@ export default {
       goToNode: 'Go to node',
       empty: 'No linked node protocols',
       emptyDescription: 'Linked node protocols appear in this group’s subscription.',
-      loadFailed: 'Couldn’t load the node protocols',
-      availableLoadFailed: 'Couldn’t load the node protocols that can be linked'
+      loadFailed: 'Could not load the node protocols',
+      availableLoadFailed: 'Could not load the node protocols that can be linked'
     },
     output: {
       title: 'Subscription output',
@@ -216,8 +216,8 @@ export default {
       format: 'Format',
       download: 'Download',
       empty: 'Nothing to show',
-      emptyDescription: 'This group has no nodes to output yet.',
-      loadFailed: 'Couldn’t render the subscription output'
+      emptyDescription: 'This group has no nodes to output.',
+      loadFailed: 'Could not render the subscription output'
     },
     formats: {
       auto: 'Automatic (by client)',
@@ -234,24 +234,24 @@ export default {
     },
     confirm: {
       deleteGroupTitle: 'Delete subscription group {name}?',
-      deleteGroupMessage: 'Its node templates and protocol links are deleted with it, and its users no longer receive these nodes. You can’t undo this.',
+      deleteGroupMessage: 'Its node templates and protocol links are deleted, and its users no longer receive these nodes. This cannot be undone.',
       deleteGroupAction: 'Delete group',
       deleteTemplateTitle: 'Delete node template {name}?',
-      deleteTemplateMessage: 'The node disappears from the group’s subscription. You can’t undo this.',
+      deleteTemplateMessage: 'The node is removed from the group’s subscription. This cannot be undone.',
       deleteTemplateAction: 'Delete node template'
     },
     messages: {
-      loadFailed: 'Couldn’t load the subscription groups',
+      loadFailed: 'Could not load the subscription groups',
       groupSaved: 'Subscription group saved',
       groupDeleted: 'Subscription group deleted',
       templateSaved: 'Node template saved',
       templateDeleted: 'Node template deleted',
-      saveFailed: 'Couldn’t save',
-      deleteFailed: 'Couldn’t delete',
-      updateFailed: 'Couldn’t update',
+      saveFailed: 'Could not save',
+      deleteFailed: 'Could not delete',
+      updateFailed: 'Could not update',
       copied: 'Copied',
-      copyFailed: 'Couldn’t copy',
-      copyFallback: 'The server returned no merged result, so the node templates were merged and copied.'
+      copyFailed: 'Could not copy',
+      copyFallback: 'The server returned no merged result; the merged node templates were copied.'
     }
   }
 }
