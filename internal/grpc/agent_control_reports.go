@@ -84,7 +84,7 @@ func reportRefusalCode(err error) string {
 		return agentcontrol.ReportErrorCodeBatchIDInvalid
 	case errors.Is(err, service.ErrNegativeTraffic), errors.Is(err, destinationstats.ErrInvalid):
 		return agentcontrol.ReportErrorCodeInvalid
-	case errors.Is(err, destinationstats.ErrOverflow):
+	case errors.Is(err, destinationstats.ErrOverflow), errors.Is(err, service.ErrTrafficOverflow):
 		return agentcontrol.ReportErrorCodeCounterOverflow
 	}
 	return ""
