@@ -491,6 +491,8 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	}
 	// 0030_ss2022_user_keys added v4_kernel_agent_transport.protocol_revision.
 	require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
+	// 0043_lease_generation added v4_kernel_lease.generation.
+	require.NoError(t, db.Exec("ALTER TABLE v4_kernel_lease DROP COLUMN generation").Error)
 }
 
 // undoTablePrefix gives the tables 0040_table_prefix renamed their names of

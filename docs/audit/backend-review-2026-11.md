@@ -15,7 +15,8 @@ rollback, CI link.
    fault can be reproduced in a test; the fix follows.
 3. Control pull requests merge on green required CI (standing owner
    authorization). Agent pull requests merge on the owner's word.
-4. No database migration was needed for any fix in this campaign.
+4. No database migration was needed for the fixes of the findings
+   AG-001 to CT-010. ARC-003 adds `0043_lease_generation` (additive).
 
 ## Findings
 
@@ -36,9 +37,9 @@ rollback, CI link.
 | CT-008 | Online set replaced key by key, not atomically, and with no version | held | [#595](https://github.com/AnixOps/anix-control/pull/595) | 359f00b |
 | CT-009 | A failed config apply was not retried until reconnect or the next change | held | [#599](https://github.com/AnixOps/anix-control/pull/599) | 1119312 |
 | CT-010 | Revocation bounds written read-modify-write without a lock | held | [#600](https://github.com/AnixOps/anix-control/pull/600) | 7148a17 |
-| ARC-001 | One synchronous send path per Agent stream | held (per node only) | none: assessed below | — |
-| ARC-002 | Session ownership per process | held (documented limit) | none: assessed below | — |
-| ARC-003 | Lease without fencing | held | none: assessed below | — |
+| ARC-001 | One synchronous send path per Agent stream | held (per node only) | [#603](https://github.com/AnixOps/anix-control/pull/603) | 52fa842 |
+| ARC-002 | Session ownership per process | held (documented limit) | none: deferred to the HA work (owner) | — |
+| ARC-003 | Lease without fencing | held | this pull request | — |
 
 ## Decisions
 
@@ -47,6 +48,12 @@ rollback, CI link.
   its window ended in. A batch resent after a long outage lands in the
   current day and month, and in the user's current quota period.
   `window_end_unix_ms` only orders online sets.
+
+- **Execute the proposals** (owner, 2026-11-24 16:37Z: "方案能不能直接开始执行"):
+  ARC-001 and ARC-003 were implemented as proposed below.
+- **ARC-002 waits for the HA work** (owner, 2026-11-24 16:41Z, decision
+  card: "等多实例 HA 工作开始再做"). Control stays single-instance until then.
+- **AG-005** keeps its assessment (no change): no proposal to execute.
 
 ## Assessed, not changed
 
@@ -118,19 +125,42 @@ same position: per process, and they need a shared store for HA.
 
 ### ARC-003: lease without fencing
 
-`internal/lease` takes and renews leases in a PostgreSQL transaction. A
-leader that fails to renew for 2/3 of the TTL stops its work, but stopping
-is cooperative, and lease times come from the process clock.
-
+`internal/lease` took and renewed leases in a PostgreSQL transaction. A
+leader that failed to renew for 2/3 of the TTL stopped its work, but
+stopping was cooperative, and lease times came from each process's clock.
 With one Control instance, two holders can only overlap during a rolling
-update. Proposal for HA:
+update.
 
-- a generation column in the lease row, raised on each acquisition;
-- the high-risk writers (certificate issuance, upgrade campaigns,
-  automatic configuration) check it in the same transaction as their write;
-- lease times taken from the database clock (`now()`).
+Changed (2026-11-24, owner: "方案直接开始执行"):
 
-This needs a schema migration, so it waits for the HA work.
+- migration `0043_lease_generation`: `v4_kernel_lease.generation`, raised
+  each time the lease changes holder (not on renewals);
+- leader work runs with a fence (lease, holder, generation) in its
+  context; `lease.Check(tx)`, in the transaction of a write, reads the
+  lease row (`FOR SHARE` on PostgreSQL, so a takeover waits for the write
+  to commit) and returns `ErrLost` unless this process still holds it at
+  that generation, unexpired by the database clock. Writes without a
+  fence (administrator requests) pass;
+- fenced writers: Agent upgrade campaign and node transitions
+  (`agentupgrade.Worker.update`, `updateNode`), the reverse proxies' ACME
+  certificate store (`reverseproxy.Issuer.store`), and the automatic
+  Reality target switch (`realitytarget.AutoWorker.RunNode`). The Reality
+  switch writes through the node service's own transaction, so its check
+  runs just before the switch, not inside it;
+- lease times come from the database clock (`now()` on PostgreSQL; on
+  SQLite, one host's file, the process clock). How long a leader went
+  without a renewal is measured on the process clock, which needs no
+  database. A renewal that finds the lease taken back at a new generation
+  restarts the work under it.
+
+Tests: `TestTryAcquireRaisesTheGenerationOnATakeover`,
+`TestCheckFencesTheWritesOfALostLeader`, `TestElectorWorkCarriesItsFence`,
+`TestPostgresConcurrentAcquireGrantsOneHolder` (extended: `FOR SHARE` and
+`now()` on PostgreSQL), `TestWorkerWritesNothingAfterItsLeaseIsTaken`
+(fails without the check: the stale leader's write lands).
+
+Release note: the next Control release carries `0043` with `0040`-`0042`;
+back the database up before the upgrade (`docs/UPGRADE.md`).
 
 ## Residual gaps
 
@@ -148,10 +178,14 @@ This needs a schema migration, so it waits for the HA work.
   database itself (PostgreSQL 22003) is reported as a transient error, so
   the batch is resent until the spool's age bound drops it. Not reachable
   with int64 counters below 2^63 bytes.
-- **`recordServerStatTx`** creates the day and month rows with
-  `ON CONFLICT DO NOTHING`. Two concurrent first reports of one node in the
-  same period could lose one increment. Reports of a node arrive on one
-  stream in order, so this needs two overlapping sessions of one node.
+- **`recordServerStatTx`** (corrected 2026-11-24). The first version of
+  this report said two concurrent first reports of a node in one period
+  could lose an increment through `ON CONFLICT DO NOTHING`. Checked again:
+  `v5_stat_server` has no unique key on (server, type, record type,
+  period), so the clause could only conflict on the generated id and never
+  fired. Two concurrent first reports add two rows, and the one reader
+  (`nodeDailyTraffic`) sums every row of a period: nothing is lost. The
+  dead clause was removed and the behaviour commented (no schema change).
 - **Test system** (review section 08). Added in this campaign: regression
   tests per finding, a PostgreSQL concurrency test (CT-010), fault
   injection for spool writes and deletes (AG-003), node reads (CT-005) and

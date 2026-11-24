@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -218,6 +219,11 @@ func (w *AutoWorker) RunNode(ctx context.Context, nodeID uint) error {
 	if report.Recommended == nil {
 		row.LastOutcome = fmt.Sprintf("current target failed (%s) and no candidate passed", strings.Join(names, ", "))
 		return w.save(ctx, row, next)
+	}
+	// The switch writes through the node service's own transaction, so
+	// the lease is checked just before it (backend review ARC-003).
+	if err := lease.Check(s.DB.WithContext(ctx)); err != nil {
+		return err
 	}
 	best := Candidate{ServerName: report.Recommended.ServerName, Port: report.Recommended.Port}
 	var switched []string

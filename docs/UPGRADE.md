@@ -167,6 +167,23 @@ kernel CA) and every other operation column stay.
 **Rollback.** As for `0040_table_prefix`: restore the pre-migration backup
 with the previous release.
 
+### Leases carry a fencing generation
+
+The migration `0043_lease_generation` adds the column `generation` to
+`v4_kernel_lease` (backend review ARC-003). The singleton-worker lease's
+generation is raised whenever another Control process takes it, and the
+work it runs (Agent upgrade campaigns, reverse proxy certificates,
+automatic Reality targets) checks holder, generation and expiry by the
+database clock in the transaction of its writes, so a process that lost
+the lease writes nothing more. Lease times now come from the database
+clock (PostgreSQL `now()`), not from each host's clock.
+
+The step only adds a column; nothing is converted. A previous release
+refuses to open a database with a step it does not know, so as for the
+other steps of this release: **back the database up before the upgrade**
+and roll back by restoring the pre-migration backup with the previous
+release.
+
 ### The built-in package hosts run inside Control
 
 Control no longer starts a child process per built-in package
