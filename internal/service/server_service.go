@@ -1,13 +1,10 @@
 package service
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentreports"
-	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
@@ -279,89 +276,29 @@ func recordServerStatTx(tx *gorm.DB, serverType model.ServerType, serverID uint,
 	}
 }
 
-// UpdateOnlineStatus 更新用户在线状态
-func (s *ServerService) UpdateOnlineStatus(serverType model.ServerType, serverID uint, userIPs map[uint][]string) error {
-	cacheKey := fmt.Sprintf("online:%s:%d", serverType, serverID)
-
-	// 清除旧的在线记录
-	oldKeys, err := cache.Keys(cacheKey + ":*")
-	if err != nil {
-		return fmt.Errorf("list online cache keys: %w", err)
+// UpdateOnlineStatus makes userIPs the node's online set as of window, the
+// end of the report window (zero: now), and marks its users seen online. It
+// answers false, changing nothing, for a set older than the node's current
+// one (internal/online).
+func (s *ServerService) UpdateOnlineStatus(serverID uint, window time.Time, userIPs map[uint][]string) bool {
+	if !online.Replace(serverID, window, userIPs) {
+		return false
 	}
-	if len(oldKeys) > 0 {
-		if err := cache.Del(oldKeys...); err != nil {
-			return fmt.Errorf("delete old online cache keys: %w", err)
-		}
-	}
-
-	// 记录新的在线IP
+	users := make([]uint, 0, len(userIPs))
 	for userID, ips := range userIPs {
 		if len(ips) > 0 {
-			key := fmt.Sprintf("%s:%d", cacheKey, userID)
-			if err := cache.SAdd(key, ipsToInterface(ips)...); err != nil {
-				return fmt.Errorf("store online ips for user %d: %w", userID, err)
-			}
-			if err := cache.Expire(key, 5*time.Minute); err != nil {
-				return fmt.Errorf("expire online ips for user %d: %w", userID, err)
-			}
+			users = append(users, userID)
 		}
 	}
-
-	online := make([]uint, 0, len(userIPs))
-	for userID, ips := range userIPs {
-		if len(ips) > 0 {
-			online = append(online, userID)
-		}
-	}
-	subscriber.RecordOnline(s.db, online, time.Now())
-	return nil
+	subscriber.RecordOnline(s.db, users, time.Now())
+	return true
 }
 
-// GetUserOnlineCount 获取用户在线IP数量（跨所有节点）
-func (s *ServerService) GetUserOnlineCount(userID uint) (int64, error) {
-	pattern := fmt.Sprintf("online:*:*:%d", userID)
-	keys, err := cache.Keys(pattern)
-	if err != nil {
-		return 0, err
-	}
-
-	var total int64
-	for _, key := range keys {
-		count, err := cache.SCard(key)
-		if err == nil {
-			total += count
-		}
-	}
-	return total, nil
-}
-
-// UserAliveCounts counts each user's online IPs across all nodes: the sets
-// UpdateOnlineStatus keeps per node and user (online:<type>:<node>:<user>),
-// added up per user. Users without any are left out. It is the source of
+// UserAliveCounts counts each user's online IPs across all nodes
+// (internal/online). Users without any are left out. It is the source of
 // the Agent Control stream's AliveList (alive.v1).
 func UserAliveCounts() (map[uint64]int, error) {
-	result := make(map[uint64]int)
-	// "online:*" and not "online:*:*:*": the memory cache matches a
-	// pattern by the prefix before its first "*" only.
-	keys, err := cache.Keys("online:*")
-	if err != nil {
-		return result, err
-	}
-	for _, key := range keys {
-		parts := strings.Split(key, ":")
-		if len(parts) != 4 || parts[0] != "online" {
-			continue
-		}
-		userID, err := strconv.ParseUint(parts[3], 10, 64)
-		if err != nil || userID == 0 {
-			continue
-		}
-		count, err := cache.SCard(key)
-		if err == nil && count > 0 {
-			result[userID] += int(count)
-		}
-	}
-	return result, nil
+	return online.Counts(), nil
 }
 
 func normalizeTrafficRate(rate float64) float64 {
@@ -369,12 +306,4 @@ func normalizeTrafficRate(rate float64) float64 {
 		return 1.0
 	}
 	return rate
-}
-
-func ipsToInterface(ips []string) []any {
-	result := make([]any, len(ips))
-	for i, ip := range ips {
-		result[i] = ip
-	}
-	return result
 }

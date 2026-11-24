@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"math"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -13,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -30,6 +29,7 @@ import (
 func newReportsTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	environment := newAgentControlTestEnvironment(t)
+	online.Reset()
 	requireAutoMigrate(t, &model.User{}, &model.TrafficLog{}, &model.StatServer{}, &model.NodeLog{},
 		&model.AgentReportBatch{}, &model.SubscriberRequest{}, &model.SubscriberChange{})
 	for _, id := range []uint{7, 8} {
@@ -239,15 +239,8 @@ func TestAgentControlTrafficReportAppliedOnce(t *testing.T) {
 		assert.Equal(t, [2]int64{1024, 2048}, [2]int64{stat.U, stat.D}, stat.RecordType)
 	}
 
-	// Online IPs are in the online set, one key per subscriber.
-	onlineKey := func(nodeID uint, userID uint) string { return fmt.Sprintf("online:%s:%d:%d", "", nodeID, userID) }
-	streamKeys, err := cache.Keys(fmt.Sprintf("online:%s:%d:*", "", environment.node.ID))
-	require.NoError(t, err)
-	sort.Strings(streamKeys)
-	assert.Equal(t, []string{onlineKey(environment.node.ID, 7), onlineKey(environment.node.ID, 9)}, streamKeys)
-	count, err := cache.SCard(onlineKey(environment.node.ID, 7))
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), count)
+	// Online IPs are in the node's online set.
+	assert.Equal(t, map[uint64]int{7: 2, 9: 1}, online.Counts())
 
 	// The replay is acknowledged as seen, and nothing is counted again.
 	require.NoError(t, stream.Send(trafficMessage("traffic-1-again", nodeID, report)))
@@ -267,12 +260,7 @@ func TestAgentControlTrafficReportAppliedOnce(t *testing.T) {
 	})))
 	ack = expectReportAck(t, stream, "traffic-2")
 	assert.True(t, ack.Applied)
-	streamKeys, err = cache.Keys(fmt.Sprintf("online:%s:%d:*", "", environment.node.ID))
-	require.NoError(t, err)
-	assert.Equal(t, []string{onlineKey(environment.node.ID, 7)}, streamKeys)
-	count, err = cache.SCard(onlineKey(environment.node.ID, 7))
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	assert.Equal(t, map[uint64]int{7: 1}, online.Counts())
 	upload, _ = userCounters(t, 7)
 	assert.Equal(t, int64(1024), upload)
 	expectHeartbeatAck(t, stream, nodeID, helloAck.SessionId, "heartbeat-end")

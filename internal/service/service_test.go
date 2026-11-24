@@ -1958,37 +1958,6 @@ func (s *ServerServiceTestSuite) TestBatchRecordTrafficLogRejectsNegativeTraffic
 	assert.Equal(s.T(), int64(0), count)
 }
 
-func (s *ServerServiceTestSuite) TestUpdateOnlineStatus() {
-	server := &model.ServerVMess{
-		BaseServer: model.BaseServer{
-			Name:       "Online Test",
-			Host:       "192.168.1.12",
-			ServerPort: 443,
-			Rate:       1.0,
-		},
-		Network: "tcp",
-	}
-	database.Get().Create(server)
-
-	userIPs := map[uint][]string{
-		1: {"192.168.1.100", "192.168.1.101"},
-		2: {"192.168.1.102"},
-	}
-
-	err := s.svc.UpdateOnlineStatus(model.ServerTypeVMess, server.ID, userIPs)
-	assert.NoError(s.T(), err)
-}
-
-func (s *ServerServiceTestSuite) TestGetUserOnlineCount() {
-	// Note: This test requires cache.Keys to support multi-wildcard patterns
-	// which the in-memory cache doesn't fully support. The test verifies
-	// the function runs without error, but count may be 0.
-	count, err := s.svc.GetUserOnlineCount(100)
-	assert.NoError(s.T(), err)
-	// Count may be 0 due to pattern matching limitations
-	_ = count
-}
-
 func TestServerService(t *testing.T) {
 	suite.Run(t, new(ServerServiceTestSuite))
 }

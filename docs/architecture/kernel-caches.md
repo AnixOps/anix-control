@@ -13,7 +13,7 @@ cache in its own memory (`internal/cache`, one per Control process):
 
 | Route | Package | Cache | Answer |
 |---|---|---|---|
-| `GET /api/v2/admin/dashboard` | machine-telemetry | `stats:dashboard`, 60 seconds | counts over `v5_user` (protected), `v5_order`, the four legacy `v5_server_*` tables and `v5_server_log`, the online users (the size of the alive set `alive:users`, kernel memory), and `cached_at` |
+| `GET /api/v2/admin/dashboard` | machine-telemetry | `stats:dashboard`, 60 seconds | counts over `v5_user` (protected), `v5_order`, the four legacy `v5_server_*` tables and `v5_server_log`, the online users (users online on any node, `internal/online`, kernel memory), and `cached_at` |
 | `GET /api/v2/user/subscription` | subscription | `user:subscription:<id>`, 30 seconds, also read by the legacy `GET /api/v2/user/dashboard` | the caller's e-mail, plan, traffic and expiry, the subscription link settings (read on every request, not cached), and `cached_at` |
 
 Both routes take `refresh=true` to rebuild the cached answer. `cached_at` is

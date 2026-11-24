@@ -19,11 +19,6 @@ func mustSet(t *testing.T, key string, value any, expiration time.Duration) {
 	require.NoError(t, Set(key, value, expiration))
 }
 
-func mustSAdd(t *testing.T, key string, members ...any) {
-	t.Helper()
-	require.NoError(t, SAdd(key, members...))
-}
-
 func mustGet(t *testing.T, key string) any {
 	t.Helper()
 	value, err := Get(key)
@@ -126,41 +121,6 @@ func TestDelete(t *testing.T) {
 	assertMissing(t, "delete_key")
 }
 
-func TestSCard(t *testing.T) {
-	mustSAdd(t, "set2", "a", "b", "c")
-
-	count, err := SCard("set2")
-	require.NoError(t, err)
-	assert.Equal(t, int64(3), count)
-}
-
-func TestKeys(t *testing.T) {
-	mustSet(t, "keys_test_key1", "v1", 0)
-	mustSet(t, "keys_test_key2", "v2", 0)
-	mustSet(t, "keys_other_key", "v3", 0)
-
-	keys, err := Keys("keys_test_*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-	assert.Contains(t, keys, "keys_test_key1")
-	assert.Contains(t, keys, "keys_test_key2")
-}
-
-func TestExpire(t *testing.T) {
-	mustSet(t, "expire_key", "value", 0)
-
-	err := Expire("expire_key", 100*time.Millisecond)
-	require.NoError(t, err)
-
-	// 立即应该存在
-	assertPresent(t, "expire_key")
-
-	// 等待过期
-	time.Sleep(150 * time.Millisecond)
-
-	assertMissing(t, "expire_key")
-}
-
 func TestGetGeneric(t *testing.T) {
 	mustSet(t, "generic_key", "string_value", 0)
 
@@ -179,9 +139,6 @@ func TestNilCacheSafety(t *testing.T) {
 	_ = Set("key", "value", 0)
 	_, _ = Get("key")
 	_ = Del("key")
-	_ = SAdd("set", "member")
-	_, _ = SCard("set")
-	_, _ = Keys("*")
 	_, err := Get("any_key")
 	assert.ErrorIs(t, err, ErrKeyNotFound)
 }

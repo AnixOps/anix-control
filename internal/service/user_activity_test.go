@@ -2,7 +2,9 @@ package service
 
 import (
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -79,7 +81,8 @@ func TestAgentTrafficReportRecordsTheUsersSeenOnline(t *testing.T) {
 // lists with none.
 func TestAliveReportRecordsTheUsersSeenOnline(t *testing.T) {
 	svc, db := activityService(t)
-	require.NoError(t, svc.UpdateOnlineStatus(model.ServerType("vmess"), 7, map[uint][]string{
+	online.Reset()
+	require.True(t, svc.UpdateOnlineStatus(7, time.Time{}, map[uint][]string{
 		1: {"198.51.100.1", "198.51.100.2"}, 2: {}, 3: {"198.51.100.3"},
 	}))
 	require.Equal(t, []uint{1, 3}, seenOnline(t, db))

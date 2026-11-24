@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"net"
 	"os"
 	"path/filepath"
@@ -104,12 +105,13 @@ func seededSnapshot(cachedAt time.Time) *service.DashboardStats {
 	}
 }
 
-// freshCache starts the kernel's cache afresh, with three users in the
-// alive set node reports keep.
+// freshCache starts the kernel's cache afresh, with three users online
+// on a node.
 func freshCache(t testing.TB) {
 	cache.InitMemory()
 	t.Cleanup(cache.CloseMemory)
-	require.NoError(t, cache.SAdd("alive:users", "1", "2", "3"))
+	online.Reset()
+	online.Replace(1, time.Time{}, map[uint][]string{1: {"192.0.2.1"}, 2: {"192.0.2.2"}, 3: {"192.0.2.3"}})
 }
 
 // seedDashboard writes rows that make every count of the snapshot nonzero:
@@ -178,6 +180,7 @@ func withSnapshot(cachedAt time.Time, ttl time.Duration) func(testing.TB, *gorm.
 // emptyDashboard has the tables, no rows and an empty alive set.
 func emptyDashboard(t testing.TB, _ *gorm.DB) {
 	cache.InitMemory()
+	online.Reset()
 	t.Cleanup(cache.CloseMemory)
 }
 
