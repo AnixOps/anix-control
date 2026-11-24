@@ -4,20 +4,20 @@
 export default {
   forwardDns: {
     nav: 'DNS',
-    superOnly: 'Only a super administrator may add, change or delete DNS providers.',
+    superOnly: 'Only super administrators can add, change or delete DNS providers.',
     page: {
       title: 'DNS providers',
-      description: 'The DNS accounts Control writes entry records through: it keeps each bound entry hostname on the healthy entry nodes.',
+      description: 'DNS accounts used to point bound entry hostnames at healthy entry nodes.',
       add: 'Add provider',
-      readOnly: 'You can view the providers. Only a super administrator may add, change or delete them.',
+      readOnly: 'Read-only. Only super administrators can add, change or delete providers.',
       loadFailed: 'Could not load the DNS providers',
-      emptyTitle: 'No DNS providers yet',
-      emptyDescription: 'Add the account of the DNS service that holds your entry hostnames, then bind a route’s entry hostname to it in the route editor.',
+      emptyTitle: 'No DNS providers',
+      emptyDescription: 'Add a DNS service account, then bind entry hostnames in the route editor.',
       defaultEndpoint: 'Provider default',
       missing: 'Missing: {names}',
       bindingCount: '{n} binding | {n} bindings',
       unused: 'Not used',
-      note: 'Credentials are write-only: Control seals them and never shows them again. Only their names are listed.',
+      note: 'Credentials are encrypted and never shown again; only names are listed.',
       edit: 'Edit…',
       editSuperOnly: 'Edit (super administrators only)',
       delete: 'Delete…',
@@ -34,32 +34,32 @@ export default {
     sheet: {
       createTitle: 'Add a DNS provider',
       editTitle: 'Edit {name}',
-      description: 'Give the credential access to the one zone Control writes, and nothing else.',
+      description: 'Grant the credential access to the target zone only.',
       name: 'Name',
       namePlaceholder: 'cloudflare-main',
       kind: 'Provider',
-      kindFixed: 'A provider’s kind cannot change. Add another provider instead.',
+      kindFixed: 'The provider kind cannot be changed after creation.',
       settings: 'Settings',
       credentials: 'Credentials',
-      credentialsHelp: 'Stored sealed on Control and never shown again.',
-      credentialsKeep: 'Stored credentials show as ********. Leave them to keep the stored values, or type a new value to replace one.',
+      credentialsHelp: 'Stored encrypted and never shown again.',
+      credentialsKeep: 'Stored credentials show as ********. Keep them to retain the values, or enter new values.',
       stored: 'Stored. Leave as is to keep it.',
       create: 'Add provider',
       save: 'Save'
     },
     kindHelp: {
-      DNS_PROVIDER_KIND_CLOUDFLARE: 'An API token with Zone → DNS → Edit and Zone → Zone → Read on your zone.',
-      DNS_PROVIDER_KIND_ALIDNS: 'A RAM user’s AccessKey with the alidns record actions on your domain.',
+      DNS_PROVIDER_KIND_CLOUDFLARE: 'An API token with Zone → DNS → Edit and Zone → Zone → Read on the zone.',
+      DNS_PROVIDER_KIND_ALIDNS: 'A RAM user AccessKey limited to alidns record actions on the domain.',
       DNS_PROVIDER_KIND_DNSPOD: 'A CAM sub-user’s SecretId and SecretKey with the dnspod record actions.',
       DNS_PROVIDER_KIND_HUAWEICLOUD: 'An IAM user’s access key (AK/SK) with the dns zone and recordset actions.',
-      DNS_PROVIDER_KIND_WEBHOOK: 'Control POSTs every change, signed with HMAC-SHA256, to your HTTPS endpoint.'
+      DNS_PROVIDER_KIND_WEBHOOK: 'Each change is signed with HMAC-SHA256 and POSTed to the HTTPS endpoint.'
     },
     config: {
       endpoint: 'API endpoint',
       url: 'Webhook URL'
     },
     configHelp: {
-      endpoint: 'Optional: a regional API host instead of the provider’s default.',
+      endpoint: 'Optional regional API host.',
       url: 'An https:// URL.'
     },
     configPlaceholder: {
@@ -80,7 +80,7 @@ export default {
     },
     delete: {
       title: 'Delete the provider {name}?',
-      message: 'Control forgets its credentials. Records it published stay at the provider.',
+      message: 'Its credentials are deleted. Published records remain at the provider.',
       confirm: 'Delete provider'
     },
     mode: {
@@ -88,17 +88,17 @@ export default {
       DNS_BINDING_MODE_CNAME: 'CNAME'
     },
     modeHint: {
-      DNS_BINDING_MODE_DDNS: 'Control writes the entry hostname’s records itself.',
-      DNS_BINDING_MODE_CNAME: 'Control writes a name it manages; you point the entry hostname at it once.'
+      DNS_BINDING_MODE_DDNS: 'Writes the entry hostname records directly.',
+      DNS_BINDING_MODE_CNAME: 'Writes a managed name; the entry hostname needs a one-time CNAME to it.'
     },
     binding: {
-      hostnameHelp: 'The one name clients use for this route’s entries. Bind it to a DNS provider below, or manage its records yourself.',
-      enable: 'Keep this hostname on the healthy entries',
-      enableHelp: 'Control updates the A/AAAA records through a DNS provider as entry nodes go down and come back.',
+      hostnameHelp: 'Common name clients use for the entries. Bind a DNS provider below, or manage the records manually.',
+      enable: 'Point at healthy entries',
+      enableHelp: 'A/AAAA records are updated as entry nodes fail and recover.',
       bound: 'Bound to a DNS provider',
       provider: 'DNS provider',
       providerPlaceholder: 'Choose a provider',
-      noProviders: 'No DNS provider yet.',
+      noProviders: 'No DNS provider.',
       manageProviders: 'Manage DNS providers',
       zone: 'Zone',
       zoneHelp: 'The provider’s zone the record is in.',
@@ -116,26 +116,26 @@ export default {
       },
       ttl: 'TTL',
       seconds: 's',
-      ttlHelp: 'The shortest your provider allows (60 by default).',
+      ttlHelp: 'Use the provider minimum (default 60).',
       vantage: 'Vantage node label',
-      vantageHelp: 'Optional. A key=value label (vantage=cn, say): the forwarding nodes with it dial every entry address from the clients’ side, and an address most of them cannot reach is left out of the records until it recovers.',
-      vantageFormat: 'Use a node label key=value, for example vantage=cn',
+      vantageHelp: 'Optional key=value label (such as vantage=cn). Nodes with this label probe each entry address; addresses most cannot reach are removed until they recover.',
+      vantageFormat: 'Format: key=value, for example vantage=cn',
       paused: 'Paused',
-      pausedHelp: 'Keep the published records and change nothing.',
-      cnameInstruction: 'Create this CNAME once where {host} is hosted: {host} → the managed name.',
+      pausedHelp: 'Keep the published records unchanged.',
+      cnameInstruction: 'Create this CNAME in the DNS of {host}: {host} → managed name.',
       cnameTarget: 'CNAME target',
       copy: 'Copy',
-      immutable: 'Provider, zone, name and mode cannot change. To move the binding, unbind it on the route page (deleting the records) and bind again.',
-      mismatch: 'The binding writes {name}. In DDNS mode its name cannot change: unbind on the route page and bind the new hostname.',
+      immutable: 'Provider, zone, name and mode cannot be changed. To change them, unbind on the route page and bind again.',
+      mismatch: 'This binding writes {name}, which cannot change in DDNS mode. Unbind on the route page and bind again.',
       needsHostname: 'Set the entry hostname first.',
       required: 'Required',
-      saveBlocked: 'Save waits for the DNS binding: {fields}. Complete it, or turn the binding off.',
+      saveBlocked: 'The DNS binding is incomplete: {fields}. Complete it or turn it off.',
       fieldsSeparator: ', ',
       incompleteShort: 'DNS binding incomplete',
       outsideZone: 'The name must be inside the zone.',
       typeRequired: 'Choose at least one record type.',
       ttlRange: 'From 1 to {max} seconds.',
-      saveFailed: 'The route is saved, but its DNS binding was not: {message}'
+      saveFailed: 'The route was saved, but the DNS binding was not: {message}'
     },
     card: {
       title: 'Entry high availability',
@@ -144,8 +144,8 @@ export default {
       edit: 'Edit binding',
       unbind: 'Unbind…',
       unbindSuperOnly: 'Only a super administrator may unbind',
-      unboundHost: '{host} is not bound to a DNS provider: you manage its records.',
-      unboundNoHost: 'This route has no entry hostname. Set one in the editor to bind it to a DNS provider.',
+      unboundHost: '{host} is not bound to a DNS provider; records are managed manually.',
+      unboundNoHost: 'This route has no entry hostname. Set one in the editor to bind it.',
       bind: 'Bind to DNS',
       setHostname: 'Set entry hostname',
       lastError: 'Last error',
@@ -166,18 +166,18 @@ export default {
       keepPublished: 'None healthy: published kept',
       entries: 'Entry nodes',
       noAddress: 'No public address',
-      unreachable: 'Unreachable from the vantage nodes: {addresses} ({n} vantage nodes), left out of the records',
+      unreachable: 'Unreachable from vantage nodes: {addresses} ({n} vantage nodes); removed from the records',
       inRotation: 'In rotation',
       outOfRotation: 'Out of rotation',
       joining: 'Healthy {n}/3, joining',
       leaving: 'Unhealthy {n}/3, leaving',
-      timing: 'Control evaluates every 10 s. A node leaves after 3 unhealthy evaluations and rejoins after 3 healthy ones. This card refreshes every 30 s.'
+      timing: 'Evaluated every 10 s: removed after 3 unhealthy results, restored after 3 healthy ones. Refreshes every 30 s.'
     },
     unbind: {
       title: 'Unbind {host}?',
-      description: 'Control stops maintaining the hostname’s records.',
+      description: 'The hostname records will no longer be maintained.',
       purge: 'Also delete the records Control published',
-      purgeHelp: 'Leave unchecked to keep the records at the provider as they are.',
+      purgeHelp: 'Unchecked keeps the records.',
       purgeFailedHint: 'The binding is kept. Retry, or unbind without deleting the records.',
       confirm: 'Unbind'
     },
@@ -194,14 +194,14 @@ export default {
     },
     stateHelp: {
       ok: 'The records are the healthy entries’ addresses.',
-      pending: 'Nothing published yet: no entry has been healthy since the binding was made.',
-      degraded: 'No entry is healthy: Control keeps the last published records rather than an empty set.',
-      error: 'The provider refused or failed. Control retries with back-off.',
-      rate_limited: 'The provider’s call budget is spent; the change waits a few seconds.',
-      paused: 'The binding, or the route, is paused or enforced: nothing changes.',
+      pending: 'Not published: no healthy entry since binding.',
+      degraded: 'No healthy entry; the last published records are kept.',
+      error: 'The provider refused or failed; retrying with back-off.',
+      rate_limited: 'The provider rate limit was reached; the change is delayed.',
+      paused: 'The binding or route is paused or enforced; no changes are made.',
       unbound: 'Not bound to a DNS provider.',
       route_missing: 'The route was deleted; unbind the hostname.',
-      hostname_mismatch: 'DDNS mode, and the route’s entry hostname is no longer the binding’s name. Unbind and bind again.'
+      hostname_mismatch: 'In DDNS mode, the entry hostname no longer matches the binding. Unbind and bind again.'
     },
     reason: {
       healthy: 'Healthy',
@@ -216,15 +216,15 @@ export default {
       vantage_unreachable: 'Unreachable from vantage'
     },
     codes: {
-      secret_store_unavailable: 'Control has no key-encryption key (module_runtime.ca_kek) to seal credentials with.',
-      provider_in_use: 'A route binding uses this provider. Unbind it first.',
+      secret_store_unavailable: 'No credential encryption key is configured (module_runtime.ca_kek).',
+      provider_in_use: 'This provider is used by a route binding. Unbind it first.',
       binding_exists: 'Another binding already uses this route, or this provider, zone and name.',
       name_taken: 'Another provider has this name.',
-      unknown_route: 'The route is not stored yet.',
+      unknown_route: 'The route is not saved.',
       unknown_provider: 'The DNS provider no longer exists.',
       entry_hostname_required: 'The route has no entry hostname.',
-      hostname_mismatch: 'In DDNS mode the record is the route’s entry hostname.',
-      immutable: 'Provider, zone, name and mode cannot change; unbind and bind again.'
+      hostname_mismatch: 'In DDNS mode, the record name must be the route entry hostname.',
+      immutable: 'Provider, zone, name and mode cannot be changed; unbind and bind again.'
     },
     errors: {
       dns_purge_failed: 'The DNS provider did not delete the records.'
