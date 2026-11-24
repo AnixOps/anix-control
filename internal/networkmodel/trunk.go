@@ -11,9 +11,7 @@ import (
 // internet over a trunk: an enabled user ingress on one of the node's lines
 // has an enabled path with at least one transport segment (ANX-Line or
 // ANX-A). Subscribers of such a node dial a domestic ingress and share the
-// cross-border link with other users, which hides the cross-layer RTT a
-// single user's direct connection shows (anx docs FUTURE-IMPROVEMENTS F-51,
-// 默认路径规则). Subscriptions put these nodes first.
+// cross-border link with other users (默认路径规则). Subscriptions put these nodes first.
 func TrunkProxyNodes(db *gorm.DB) (map[uint]bool, error) {
 	doc, err := LoadDocument(db)
 	if err != nil {

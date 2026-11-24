@@ -71,7 +71,7 @@ const (
 	LabelACMECache = "anixops acme cache v1"
 	// LabelLicenseCA derives the Ed25519 seed of the license CA that signs
 	// device licenses (internal/entitlement): the ANX nodes trust its public
-	// key as license_ca (anx spec §2.4.1).
+	// key as license_ca.
 	LabelLicenseCA = "anixops entitlement license ca v1"
 	// LabelFingerprint derives the bytes whose SHA-256 is the key's
 	// fingerprint (Key.Fingerprint): a backup manifest names its root key

@@ -21,8 +21,7 @@
 export const PROTOCOL_SECTIONS = Object.freeze(['settings', 'tls_settings', 'reality_settings', 'transport_settings'])
 
 // The group a section's fields show in; a field's own `group` wins (ANX
-// shows its cover site and folds the domestic entry, the look tuning and the
-// advanced settings away).
+// shows its fallback target and folds its other groups away).
 export const FIELD_GROUPS = Object.freeze({
   settings: 'protocol',
   transport_settings: 'transport',
@@ -45,17 +44,16 @@ export const VLESS_FLOWS = Object.freeze(['', 'xtls-rprx-vision'])
 // Snell (anixcore's snell inbound): obfs for versions 1 to 4, modes of version 6.
 export const SNELL_OBFS = Object.freeze(['', 'http'])
 export const SNELL_MODES = Object.freeze(['', 'unshaped', 'unsafe-raw'])
-// ANX-A (anx-node's anx inbound, A2 jacket): the cover site and the names and ALPN it answers with.
+// ANX-A (anx-node's anx inbound): the default fallback target, server names and ALPN.
 export const ANX_COVER = 'www.apple.com'
 export const ANX_ALPN = Object.freeze(['h2', 'http/1.1'])
 // Streams one ANX session may open: anx-node's default and its u16 limit.
 export const ANX_MAX_STREAMS = 256
 export const ANX_MAX_STREAMS_LIMIT = 65535
 
-// TLS stack presets of anx-node for the cover site (dest_stack).
+// dest_stack presets of anx-node.
 export const ANX_DEST_STACKS = Object.freeze(['openssl', 'boringssl', 'go', 'rustls'])
-// dest_behavior keys that hold the cover site's own data (anx spec §4 items
-// 8 and 9), measured by anx-lab dest-probe; "none" counts as measured.
+// dest_behavior keys each dest should carry; "none" counts as set.
 export const ANX_DEST_SITE_KEYS = Object.freeze(['session_tickets', 'flight_records'])
 
 // The entries of an ANX dest list ("host:port[,host:port…]"), split as
@@ -69,8 +67,7 @@ const objectOr = value => (value && typeof value === 'object' && !Array.isArray(
 const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
 
 // The warnings of an ANX protocol's dest_behavior: a dest lacks the site keys
-// in its merged behavior (dest_behavior, then dest_behaviors[dest]); the node
-// then looks unlike that dest whenever it cannot mirror it.
+// in its merged behavior (dest_behavior, then dest_behaviors[dest]).
 export function anxDestWarnings(protocol) {
   const settings = protocol?.settings || {}
   const common = objectOr(settings.dest_behavior)
@@ -87,8 +84,8 @@ export function anxDestBehaviorsWarnings(protocol) {
   return [...anxDestWarnings(protocol), ...(stale ? ['anxDestBehaviorsStale'] : [])]
 }
 
-// The object in text: a JSON object, or the line anx-lab dest-probe prints
-// ("dest_behavior": {…}, maybe with a trailing comma). null when it is not
+// The object in text: a JSON object, or a whole "key": {…} line (maybe with
+// a trailing comma). null when it is not
 // one yet (the form keeps the text until it parses).
 export function parseJsonObject(text, key) {
   let body = String(text || '').trim()
@@ -156,42 +153,37 @@ export const PROTOCOL_FIELDS = Object.freeze([
     placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
   },
   { section: 'settings', key: 'alpn', group: 'anxTuning', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
-  // The cover site's TLS stack preset and per-key overrides (anx spec §4
-  // item 6). dest_behavior takes the line anx-lab dest-probe prints; it
-  // should carry session_tickets and flight_records for the dest.
+  // dest_stack and dest_behavior (a whole "dest_behavior": {…} line or an
+  // object); dest_behavior should carry session_tickets and flight_records.
   { section: 'settings', key: 'dest_stack', group: 'anxTuning', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
   {
     section: 'settings', key: 'dest_behavior', group: 'anxTuning', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
     placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "122/1803/79/52"}', show: p => p.type === 'anx'
   },
-  // Per-dest overrides for a dest list (anx #208): { "host:port": {…} },
-  // usually each backup dest's session_tickets and flight_records.
+  // Per-dest overrides for a dest list: { "host:port": {…} }.
   {
     section: 'settings', key: 'dest_behaviors', group: 'anxTuning', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
     placeholder: '{"www.icloud.com:443": {"session_tickets": "none", "flight_records": "122/1803/79/52"}}', show: p => p.type === 'anx' && anxDests(p).length > 1
   },
-  // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and
-  // subscriptions leave the SNI out (clients dial the IP).
+  // No-SNI mode: subscriptions leave the SNI out (clients dial the IP).
   { section: 'settings', key: 'allow_no_sni', group: 'anxEntry', kind: 'switch', hintKey: 'anxAllowNoSni', show: p => p.type === 'anx' },
-  // Shaping (anx spec §6): VisionLike by default; plain only to debug.
+  // shape_plain: only to debug interop.
   { section: 'settings', key: 'shape_plain', group: 'anxAdvanced', kind: 'switch', hintKey: 'anxShapePlain', show: p => p.type === 'anx' },
   {
     section: 'settings', key: 'max_streams', group: 'anxAdvanced', kind: 'number', min: 1, max: ANX_MAX_STREAMS_LIMIT, hintKey: 'anxMaxStreams',
     placeholder: String(ANX_MAX_STREAMS), show: p => p.type === 'anx'
   },
-  // wg jacket (anx spec §5.1): a WireGuard-shaped UDP port beside the A2 TCP
-  // port, for users dialing a domestic entry; empty = off.
+  // wg jacket: a UDP port beside the TCP port; empty = off.
   {
     section: 'settings', key: 'wg_listen_port', group: 'anxEntry', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
-  // bare jacket (anx spec §5.2): a random-looking TCP port for users dialing a
-  // domestic entry only; Control requires the no-SNI mode. Empty = off.
+  // bare jacket: a TCP port; Control requires the no-SNI mode. Empty = off.
   {
     section: 'settings', key: 'bare_listen_port', group: 'anxEntry', kind: 'number', min: 1, max: 65535, hintKey: 'anxBareListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
-  // Handshake generation (anx spec §2.5): wire_gen 2 publishes the server key
+  // Handshake generation: wire_gen 2 publishes the server key
   // with "@2", so clients log in with the second generation; min_wire_gen 2
   // makes the node refuse the first. Empty = 1.
   {

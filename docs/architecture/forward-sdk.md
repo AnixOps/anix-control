@@ -1162,8 +1162,8 @@ authentication with the H28 link certificates and per-identity pinning of
 round trip (no TLS early data), TLS-over-TCP, QUIC and trusted-link
 plaintext carriers, native UDP with UDP-over-stream fallback, half-close,
 PROXY v2 toward targets, and an `anixops-relay` unit of its own. By the
-owner's scoping decision (2026-10-04) camouflage is not part of it: its
-section 8 is reserved for the owner.
+owner's scoping decision (2026-10-04) its section 8 is reserved for the
+owner.
 
 Phase A4 of that plan (the contract additions of `anixops-protocol.md`
 section 6.5) is merged into `forward.v1`, additions only, with new field
@@ -2492,7 +2492,7 @@ Agent-repository PRs are marked (agent).
 | | F5b | new forwarding UI: `/admin/forward/{overview,routes,inventory}` in the core app, shown with the forward package's v4 API; `can_delete` on the list answers, previews left out of the audit log (implemented; [`docs/design/forward-ui`](../design/forward-ui/README.md), [`docs/guide/forwarding.md`](../guide/forwarding.md)) | L | H16 |
 | | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables (implemented) | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
-| F6 | A0 | AnixOps relay transport design (`anixops-protocol.md`; secure transport only, approved 2026-10-04; camouflage reserved for the owner) | M | H22 |
+| F6 | A0 | AnixOps relay transport design (`anixops-protocol.md`; secure transport only, approved 2026-10-04; section 8 reserved for the owner) | M | H22 |
 | | A1–A5 | v4.2 experimental prototype, off by default (`forward.anixops_experimental` on Control, `Forward.AnixOps.Enable` on the Agent): relay library, QUIC, driver and `anixops-relay` unit (agent), contract additions, benchmarks (`anixops-protocol.md` section 9) | L | H22 |
 | | A6 | v4.3 production: wire version 1 frozen | M | H22, owner sign-off |
 
@@ -2530,7 +2530,7 @@ when decided.
 | H19 | Agent auto-upgrade: batch sizes, rollback conditions, signature checks | 5% → 25% → 100% with at least 30 minutes per batch; roll back a batch when over 5% of its Agents do not reconnect within 10 minutes or fail to apply; artifacts signed with the release key (cosign) and verified by the Agent and the updater |
 | H20 | gost version pinning and process management; impact of dropping NodeX | Pin one gost v3 release per Agent release, shipped with the Agent; run it as `anixops-gost.service` owned by the Agent; announce NodeX's removal in v4.2's release notes and UPGRADE (NodeX nodes need the Agent installed) |
 | H21 | LB and failover defaults: circuit breaker, check interval, DDNS providers | Breaker 3 failures → skip 30 s; checks every 5 s with a 2 s timeout; least-conn re-weighting every 10 s; DDNS: Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, generic webhook |
-| H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Transport design written: [`anixops-protocol.md`](anixops-protocol.md), with its questions P1–P10 (decided 2026-10-04); camouflage reserved for the owner (its section 8). Prototype off by default and marked experimental in v4.2 |
+| H22 | AnixOps protocol design review (threat model, cryptography) | Transport design written: [`anixops-protocol.md`](anixops-protocol.md), with its questions P1–P10 (decided 2026-10-04); its section 8 reserved for the owner. Prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
 | H28 | Forward link certificates for encrypted gost links (F3b, AgentPKI): gost verifies a certificate chain and the dialled server name, not SPIFFE URIs, and must not hold the Agent's Control key | AgentPKI issues each forward node a separate link certificate: DNS name = the node's identity name (`forward-41`, the planner's default `server_name`), URI = its SPIFFE identity, serverAuth and clientAuth, from a link CA (a separate root) that signs nothing else, with the same lifetime and rotation as the Agent certificate. The Agent writes it, its own key and the link CA bundle to `/var/lib/anixops-gost/tls` and reloads gost on rotation. An operator-chosen `server_name` (a CDN name on WSS) then needs that name in the exit's link certificate, or stays unsupported. Per-identity matching of `ingress_peers` would need a gost plugin; source admission plus the link CA is the v4.2 boundary |
 
@@ -2588,8 +2588,8 @@ Decided by the owner (2026-10-04):
   9.3: a separate `anixops-relay.service`; plaintext only on
   administrator routes whose nodes are both labelled `link=iepl` or
   `link=iplc`; nftables `RAW` handover to anixops in v4.3, the v4.2
-  prototype anixops-to-anixops only; the rest as recommended). Camouflage
-  (section 8 of that document) is still reserved for the owner.
+  prototype anixops-to-anixops only; the rest as recommended). Section 8
+  of that document is still reserved for the owner.
 - **H23:** as recommended (section 12). Core forwarding, load balancing,
   failover and onboarding in both editions; user self-service, forwarding
   plans, billing multipliers and resellers commercial; the AnixOps relay

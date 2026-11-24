@@ -53,7 +53,7 @@ func protocolTemplates() []ProtocolTemplate {
 		{
 			Type:        "trojan",
 			Name:        "Trojan",
-			Description: "伪装成 HTTPS 流量，简单稳定",
+			Description: "基于 TLS 的 HTTPS 端口协议，简单稳定",
 			DefaultPort: 443,
 			TLS:         1,
 			Settings:    `{}`,
@@ -107,7 +107,7 @@ func protocolTemplates() []ProtocolTemplate {
 		{
 			Type:        "anx",
 			Name:        "ANX",
-			Description: "AnixOps 私有协议 ANX-A（A2 借用握手外衣，TCP），只有 AnixOps Net 客户端能连；节点需运行 anx-node 内核",
+			Description: "AnixOps 私有协议 ANX-A（A2 外衣，TCP），只有 AnixOps Net 客户端能连；节点需运行 anx-node 内核",
 			DefaultPort: 8443,
 			TLS:         0,
 			Settings:    `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2","http/1.1"]}`,

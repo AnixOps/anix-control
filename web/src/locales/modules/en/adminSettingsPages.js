@@ -51,7 +51,7 @@ export default {
         invalidDomains: 'Not valid domains: {domains}',
         domainsOnly: 'Serve subscriptions only on these domains',
         domainsOnlyHint: 'The panel’s own domain answers 404 on subscription paths.',
-        domainsOnlyHelp: 'Against blocking: give subscriptions their own domain (ideally behind a CDN), never shared with the panel or a node’s SNI. When one is blocked, switch to another; the panel is not affected. Needs at least one domain above.',
+        domainsOnlyHelp: 'Tip: give subscriptions their own domain (ideally behind a CDN), never shared with the panel or a node’s SNI. When one is unreachable, switch to another; the panel is not affected. Needs at least one domain above.',
         preview: 'Link preview',
         previewEmpty: 'Without alternate domains, links use the current host.',
         loadFailed: 'Couldn’t load the subscription domains',

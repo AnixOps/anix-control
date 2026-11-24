@@ -35,8 +35,7 @@ var crossBorderDown = map[networkv1.ComponentState]bool{
 // crossBorder finds cross-border transports (kind anx, not trusted) that
 // the devices at their ends have reported down for CrossBorderDownAfter,
 // and, when at least two transports exist and half or more of them are
-// down, the wide outage that says the jacket itself is targeted rather
-// than one address.
+// down, the wide outage (more than one address at fault).
 func (s *Scanner) crossBorder(ctx context.Context, now time.Time) ([]Finding, error) {
 	db := s.DB.WithContext(ctx)
 	if !db.Migrator().HasTable(&model.NetworkModel{}) || !db.Migrator().HasTable(&model.NetworkDevice{}) {
@@ -129,7 +128,7 @@ func (s *Scanner) crossBorder(ctx context.Context, now time.Time) ([]Finding, er
 	if len(links) >= 2 && len(down)*2 >= len(links) {
 		findings = append(findings, Finding{
 			Kind: KindCrossBorderWideOutage, Severity: model.KernelAlertCritical, SubjectKind: SubjectTransport, Subject: "all",
-			Message: truncate(fmt.Sprintf("%d of %d cross-border transports are down at once: the ANX-A jacket itself is likely targeted, not one address. Follow the manual plan of %s: switch all to reality (or xhttp), then report.",
+			Message: truncate(fmt.Sprintf("%d of %d cross-border transports are down at once, more than one address at fault. Follow the manual plan of %s: switch all to reality (or xhttp), then report.",
 				len(down), len(links), crossBorderRunbook), 500),
 			Detail: map[string]any{"down": down, "total": len(links), "runbook": crossBorderRunbook},
 		})

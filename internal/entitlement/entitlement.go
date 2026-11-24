@@ -1,12 +1,11 @@
 // Package entitlement licenses features to devices: the panel side of the
-// AnixOps licensing (anx spec §2.4.1, FUTURE-IMPROVEMENTS F-79 in the anx
-// repository).
+// AnixOps licensing.
 //
 // It is generic: a user is entitled to a feature (a name such as "anx")
 // through the plan, or for a few days through the account's trial, and each
 // device that uses the feature takes a seat out of the user's device limit.
 // What a license looks like belongs to the feature: for "anx" it is the
-// compact device certificate of anx spec §2.4, signed by the license CA
+// device certificate that anx-node checks, signed by the license CA
 // whose public key the ANX nodes trust as license_ca.
 //
 //   - The license CA is Ed25519, its seed derived from the root key
@@ -79,7 +78,7 @@ const (
 	// the old license has run out.
 	SeatWindow = LicenseValidity
 	// backdate is how far a license's not_before goes back, for clients
-	// whose clock is a little behind (anx spec §2.4).
+	// whose clock is a little behind.
 	backdate = 5 * time.Minute
 )
 
@@ -181,9 +180,8 @@ func LicenseCAPublicHex(ca ed25519.PrivateKey) string {
 // (service.ANXUserKey).
 const anxPanelUserKeyLabel = "anx/panel-user-key/v1"
 
-// ANXUserID is the ANX user_id of the user with uuid: the panel's user key
-// is HMAC-SHA-256(uuid, "anx/panel-user-key/v1") and anx spec §2.1 takes
-// user_id = HMAC-SHA-256(user_key, "anx/v1/user-id")[..8].
+// ANXUserID is the ANX user_id of the user with uuid, the one anx-node
+// derives from the user key the panel hands it (service.ANXUserKey).
 func ANXUserID(uuid string) ([8]byte, bool) {
 	var id [8]byte
 	uuid = strings.ToLower(strings.TrimSpace(uuid))

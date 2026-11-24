@@ -3,8 +3,7 @@ package model
 import "time"
 
 // EntryPoolPolicy is the single row (ID 1) of how node entries are dealt
-// out to subscribers (internal/entrypool, anx docs/FUTURE-IMPROVEMENTS.md
-// F-55): an entry with a pool is offered only to the subscribers of that
+// out to subscribers (internal/entrypool): an entry with a pool is offered only to the subscribers of that
 // pool; an entry without one to everyone outside the quarantine pool.
 type EntryPoolPolicy struct {
 	ID uint `gorm:"primaryKey;autoIncrement:false" json:"-"`

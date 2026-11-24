@@ -50,7 +50,7 @@ export default {
         invalidDomains: '这些不是有效的域名：{domains}',
         domainsOnly: '只在订阅域名上提供订阅',
         domainsOnlyHint: '面板自己的域名访问订阅路径时返回 404。',
-        domainsOnlyHelp: '防封建议：订阅用单独的域名（最好走 CDN），不要和面板、节点 SNI 共用；被封时换一个订阅域名即可，面板不受影响。需要先填写备用域名。',
+        domainsOnlyHelp: '建议：订阅用单独的域名（最好走 CDN），不要和面板、节点 SNI 共用；某个域名不可达时换一个订阅域名即可，面板不受影响。需要先填写备用域名。',
         preview: '链接预览',
         previewEmpty: '没有备用域名时，订阅链接使用当前访问域名。',
         loadFailed: '无法加载订阅域名',

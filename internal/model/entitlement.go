@@ -11,8 +11,7 @@ type EntitlementDevice struct {
 	UserID uint `gorm:"not null;uniqueIndex:idx_v5_entitlement_device_key,priority:1"`
 	// Feature is the licensed feature's name, such as "anx".
 	Feature string `gorm:"size:32;not null;uniqueIndex:idx_v5_entitlement_device_key,priority:2"`
-	// DeviceID is the hex of the feature's device identifier (for anx,
-	// SHA-256(alg ‖ public key)[..8], anx spec §2.4).
+	// DeviceID is the hex of the feature's device identifier.
 	DeviceID string `gorm:"size:64;not null;uniqueIndex:idx_v5_entitlement_device_key,priority:3"`
 	// Alg is the device key's algorithm ("ed25519", "p256").
 	Alg string `gorm:"size:16;not null"`

@@ -257,7 +257,7 @@ describe('Snell protocol', () => {
 describe('ANX protocol fields', () => {
   const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
 
-  it('takes the dest_behavior line dest-probe prints', () => {
+  it('takes a whole "dest_behavior": {…} line', () => {
     const object = { session_tickets: '266/266', flight_records: 'none', max_ccs: 32 }
     expect(parseJsonObject('"dest_behavior": {"session_tickets": "266/266", "flight_records": "none", "max_ccs": 32},', 'dest_behavior')).toEqual(object)
     expect(parseJsonObject('{"session_tickets": "266/266", "flight_records": "none", "max_ccs": 32}', 'dest_behavior')).toEqual(object)

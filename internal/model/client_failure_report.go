@@ -3,8 +3,7 @@ package model
 import "time"
 
 // ClientFailureReport is what one subscriber's clients reported about one
-// node in one hour on one kind of network (internal/clientreport, anx
-// docs/FUTURE-IMPROVEMENTS.md F-55 item 1): connection outcomes by cause,
+// node in one hour on one kind of network (internal/clientreport): connection outcomes by cause,
 // added up over the hour's reports. Counts only, never a destination.
 type ClientFailureReport struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`

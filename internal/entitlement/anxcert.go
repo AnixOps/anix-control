@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Device key algorithms (anx spec §2.4).
+// Device key algorithms.
 const (
 	AlgP256    byte = 1
 	AlgEd25519 byte = 2
@@ -77,12 +77,7 @@ func (d Device) ID() [8]byte {
 	return id
 }
 
-// ANXCert builds and signs the compact device certificate of anx spec §2.4:
-//
-//	v(1)=1 ‖ device_id(8) ‖ user_id(8) ‖ alg(1) ‖ pk_len(1) ‖ pk ‖
-//	not_before(4) ‖ not_after(4) ‖ ca_sig(64)
-//
-// with ca_sig = Ed25519(ca, "anx/v1/device-cert" ‖ everything before it).
+// ANXCert builds and signs the device certificate that anx-node checks.
 func ANXCert(ca ed25519.PrivateKey, userID [8]byte, d Device, notBefore, notAfter uint32) []byte {
 	id := d.ID()
 	tbs := make([]byte, 0, 1+8+8+2+len(d.PublicKey)+8+ed25519.SignatureSize)

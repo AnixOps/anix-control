@@ -212,8 +212,7 @@ type ParsedNode struct {
 	// node is reached through; only FormatAnixOps carries it.
 	Via string `json:"via,omitempty"`
 
-	// Path is how the subscriber's traffic crosses the border (anx docs
-	// FUTURE-IMPROVEMENTS F-51, 默认路径规则): NodePathTrunk when the node
+	// Path is the subscriber's path to the node (默认路径规则): NodePathTrunk when the node
 	// is a domestic ingress whose cross-border leg is a link many users
 	// share; empty for a direct node. Subscriptions list trunk nodes first
 	// in each group, and FormatAnixOps marks them for the App's default.

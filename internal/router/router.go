@@ -611,7 +611,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// (internal/netline, docs/design/network-lines).
 		v4.GET("/kernel/network/lines", networkModel.Lines)
 		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
-		// Cross-border standby channels (F-54): public-protocol channels
+		// Cross-border standby channels: public-protocol channels
 		// of each cross-border transport, switched in one call
 		// (internal/l2standby, docs/guide/cross-border-standby.md).
 		standby := handler.NewL2StandbyHandler()
@@ -664,7 +664,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		exitPolicy := handler.NewExitPolicyHandler()
 		v4.GET("/kernel/nodes/:id/exit-policy", exitPolicy.Get)
 		v4.PUT("/kernel/nodes/:id/exit-policy", exitPolicy.Set)
-		// Feature licensing (internal/entitlement, anx spec §2.4.1): the ANX
+		// Feature licensing (internal/entitlement): the ANX
 		// licensing settings, the devices that asked for a license, revoke
 		// and restore. Off by default.
 		entitlements := handler.NewEntitlementsHandler()

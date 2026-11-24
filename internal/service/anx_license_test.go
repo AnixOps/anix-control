@@ -16,7 +16,7 @@ import (
 )
 
 // The license's user_id is the one anx-node derives from the user key the
-// panel hands the node (anx spec §2.1).
+// panel hands the node.
 func TestANXLicenseUserIDMatchesTheUserKey(t *testing.T) {
 	uuid := "C9A1E7B0-5B0E-4A4B-9A54-2F3F1C1B0D11"
 	key, err := hex.DecodeString(ANXUserKey(uuid))

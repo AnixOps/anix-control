@@ -1,18 +1,18 @@
 # Cross-Border Standby Channels And Drill
 
-When a cross-border transport (ANX-A, the A2 jacket: kind `anx`, not trusted,
-in the network model) is blocked, its traffic can move in one call to a
+When a cross-border transport (ANX-A: kind `anx`, not trusted, in the
+network model) is unreachable, its traffic can move in one call to a
 public-protocol standby channel between the same two proxy nodes, and back
-once the transport recovers (anx `docs/FUTURE-IMPROVEMENTS.md` F-54).
+once the transport recovers.
 
 Two tiers, prepared ahead of time and switched per transport or all at once:
 
 | Tier | Protocol | Looks like | Use when |
 |------|----------|------------|----------|
-| `reality` (tier 1) | VLESS + REALITY + Vision (`xtls-rprx-vision`), Chrome fingerprint, borrowed site's certificate | TLS to a large foreign site | the A2 transport is blocked; fastest to switch, but the same TLS family as A2 |
-| `xhttp` (tier 2) | VLESS + XHTTP (`packet-up`) over our own domain's real TLS, behind nginx on the exit node | HTTPS to our own site | tier 1 is blocked too, or the whole TLS-jacket family is targeted |
+| `reality` (tier 1) | VLESS + REALITY + Vision (`xtls-rprx-vision`), Chrome fingerprint, borrowed site's certificate | TLS to a large foreign site | the ANX-A transport is unreachable; fastest to switch |
+| `xhttp` (tier 2) | VLESS + XHTTP (`packet-up`) over our own domain's real TLS, behind nginx on the exit node | HTTPS to our own site | tier 1 is unreachable too |
 
-Shadowsocks 2022 is not used across the border. A drill switches to **both**
+A drill switches to **both**
 tiers in turn.
 
 ## How It Works
@@ -128,7 +128,7 @@ The alert scan raises (see [kernel alerts](../reference/kernel-alerts.md)):
   while it has no standby, `warning` once switched (the message says to
   switch back when it is up).
 - `cross_border_wide_outage` (`critical`), when half or more of at least two
-  cross-border transports are down at once: the jacket itself is targeted.
+  cross-border transports are down at once.
 
 ## Drill (Do It Before You Need It)
 
@@ -151,23 +151,23 @@ Run on one pair first, then on all. Each step is reversible with tier `off`.
 Do the drill on every new cross-border pair and after every kernel or Agent
 upgrade that touches egress routes.
 
-## Manual Plan When A Link Is Blocked
+## Manual Plan When A Link Is Down
 
 1. The alert names the transport and since when; the detail has the reasons
    the device reported (RST after the handshake, blackhole, AEAD failures:
    F-38 counters).
 2. **One transport down**: switch it to `reality`. If tier 1 does not carry
-   traffic within 5 minutes, or is blocked within hours, switch it to
+   traffic within 5 minutes, or goes down within hours, switch it to
    `xhttp`.
 3. **Wide outage** (`cross_border_wide_outage`): switch **all** to
    `reality`; if tier 1 fails on more than one pair, switch all to `xhttp`.
    Do not rotate addresses in a wide outage: it burns addresses for nothing.
 4. Check the client side: `GET /api/v4/kernel/client-failures` (what
-   AnixOps Net clients report per node) tells user-side blocking from a
-   cross-border one.
+   AnixOps Net clients report per node) tells a user-side fault from a
+   link fault.
 5. Find out why: compare the canary nodes (AnixOps-ansible
-   `services/canary-egress` and `canary-probe`) that run the same jacket
-   profiles — which ones were blocked, after how long, and how.
+   `services/canary-egress` and `canary-probe`): which ones went down,
+   and when.
 6. When the transport is up again for an hour (the alert resolved), switch
    back to `off`, one transport first.
 7. Write down what happened, what you switched, and when, for the next

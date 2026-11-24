@@ -155,7 +155,7 @@ func TestPlanReverseTransport(t *testing.T) {
 	require.Equal(t, "[::]:30000", result.Plans["proxy-1"].GetTransports()[0].GetAnxLine().GetReverseListen())
 	require.Equal(t, "[2001:db8::7]:30000", result.Plans["proxy-2"].GetTransports()[0].GetAnxLine().GetReverseDial())
 
-	// c2 / c3 dial back too (anx ANX-LINE-REVERSE §6.3): the order reaches both ends.
+	// c2 / c3 dial back too: the order reaches both ends.
 	doc.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", CarrierOrder: []string{"c2", "c3", "c1"}}
 	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestPlanReverseTransport(t *testing.T) {
 	}
 }
 
-// A reversed jacketed link (anx ANX-LINE-REVERSE §6.4): the accepting
+// A reversed jacketed link: the accepting
 // device (proxy-2, overseas) opens no port and dials back to proxy-1's A2
 // listener as the jacket's client, authenticating to proxy-1's key.
 func TestPlanReverseJacketedTransport(t *testing.T) {

@@ -70,26 +70,23 @@ func buildANXConfig(config, settings map[string]any) {
 	if n := intSetting(settings, "max_streams", 0); n > 0 && n <= anxMaxStreamsLimit {
 		config["max_streams"] = n
 	}
-	// The wg jacket (WireGuard-shaped UDP, for users dialing a domestic
-	// entry): anx-node opens this UDP port beside the A2 TCP port.
+	// The wg jacket: anx-node opens this UDP port beside the A2 TCP port.
 	if n := ANXWGPort(settings); n > 0 {
 		config["wg_listen_port"] = n
 	}
-	// The bare jacket (random-looking TCP, anx spec §5.2) is for users
-	// dialing a domestic entry only; validateANXProtocol ties it to the
-	// no-SNI mode, the mode domestic entries run.
+	// The bare jacket: validateANXProtocol ties it to the no-SNI mode.
 	if n := ANXBarePort(settings); n > 0 {
 		config["bare_listen_port"] = n
 	}
-	// The cover site's TLS stack preset and per-key overrides (anx spec §4
-	// item 6): ValidateANXSettings checks the shape, anx-node the values.
+	// dest_stack and dest_behavior: ValidateANXSettings checks the shape,
+	// anx-node the values.
 	if stack := stringSetting(settings, "dest_stack", ""); stack != "" {
 		config["dest_stack"] = stack
 	}
 	if behavior, ok := settings["dest_behavior"].(map[string]any); ok && len(behavior) > 0 {
 		config["dest_behavior"] = behavior
 	}
-	// Per-dest overrides (anx #208), keyed by an entry of the dest list.
+	// Per-dest overrides, keyed by an entry of the dest list.
 	// anx-node refuses a key that is not in the list, so entries left over
 	// from an earlier list stay stored but do not go out.
 	if behaviors := anxDestBehaviors(config["dest"].(string), settings); len(behaviors) > 0 {
@@ -103,8 +100,7 @@ func buildANXConfig(config, settings map[string]any) {
 	}
 }
 
-// applyANXLicense adds the license options of the anx-node inbound (anx
-// spec §2.4.1) while ANX licensing is on (internal/entitlement): the
+// applyANXLicense adds the license options of the anx-node inbound while ANX licensing is on (internal/entitlement): the
 // license CA the node trusts, when required require_license, and the
 // revoked devices it refuses (license_revoked; a change reloads the
 // inbound, which ends the revoked device's open sessions). Like the other
@@ -177,7 +173,7 @@ var anxDestBehaviorKeys = map[string]bool{
 	"read_ahead": true, "bad_finished": true, "unexpected_handshake": true,
 	"handshake_timeout_secs": true, "timeout": true, "dest_close_grace_ms": true,
 	"session_tickets": true, "flight_records": true, "flight_gap_ms": true,
-	// TLS session resumption (anx #216): measured by dest-probe as one set.
+	// Session resumption keys, set together.
 	"ticket_lifetime": true, "ticket_ids": true, "ticket_prefix": true, "ticket_reuse": true,
 	"resume_exts": true, "resume_flight": true, "resume_tickets": true, "resume_ticket_ids": true,
 	"bad_binder": true,
@@ -190,8 +186,7 @@ const anxMaxTicketLifetime = 604800
 // non-zero (it refuses to start without them).
 var anxResumptionRequired = []string{"ticket_ids", "resume_exts"}
 
-// anxDestSiteKeys are the dest_behavior keys that hold the cover site's own
-// data (anx spec §4 items 8 and 9), measured by anx-lab dest-probe: record
+// anxDestSiteKeys are the dest_behavior keys that hold per-dest data:
 // lengths "len/len/…" (min, max length, max count), or "none".
 var anxDestSiteKeys = map[string][3]int{
 	"session_tickets": {35, 16401, 8},
@@ -242,7 +237,7 @@ func validateANXDestBehaviors(value any) error {
 func validateANXDestBehavior(value any) error {
 	behavior, isObject := value.(map[string]any)
 	if !isObject {
-		return errors.New("ANX dest_behavior must be an object (paste the dest_behavior line anx-lab dest-probe prints)")
+		return errors.New("ANX dest_behavior must be an object (paste the whole dest_behavior line)")
 	}
 	for key, item := range behavior {
 		if !anxDestBehaviorKeys[key] {
@@ -278,7 +273,7 @@ func validateANXDestBehavior(value any) error {
 	if lifetime, _ := anxTicketLifetime(behavior["ticket_lifetime"]); lifetime > 0 {
 		for _, key := range anxResumptionRequired {
 			if _, ok := behavior[key]; !ok {
-				return fmt.Errorf("ANX dest_behavior turns on session resumption (ticket_lifetime) without %s: paste the whole dest_behavior line anx-lab dest-probe prints", key)
+				return fmt.Errorf("ANX dest_behavior turns on session resumption (ticket_lifetime) without %s: paste the whole dest_behavior line", key)
 			}
 		}
 	}
@@ -446,9 +441,7 @@ func ValidateANXSettings(settings map[string]any) error {
 		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
 			return errors.New("ANX bare_listen_port must be a port number from 1 to 65535")
 		}
-		// The bare jacket looks like random bytes, which on-path traffic
-		// classifiers flag on cross-border paths: it is for domestic entries only, and those run
-		// the no-SNI mode.
+		// The bare jacket needs the no-SNI mode.
 		if !ANXNoSNI(settings) {
 			return errors.New("ANX bare_listen_port is for domestic entries only and needs allow_no_sni")
 		}

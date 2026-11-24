@@ -328,6 +328,12 @@ jobs:
       - name: Neutral terminology
         run: python3 .github/scripts/neutral_terms.py
 
+      # ANX is described only through its public boundary names.
+      - name: Public wording
+        run: |
+          bash config/scripts/check_public_wording.sh --self-test
+          bash config/scripts/check_public_wording.sh
+
       - name: Validate release workflow policy script syntax
         run: bash -n config/scripts/check_release_workflow.sh
 

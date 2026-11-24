@@ -2,8 +2,7 @@
 
 Node entries (节点 → 入口, `internal/nodeentry`) can be dealt out to
 subscribers in pools, so that a leaked subscription exposes only its pool's
-addresses and can be traced back to the subscribers who had it (anx
-`docs/FUTURE-IMPROVEMENTS.md` F-55, `internal/entrypool`).
+addresses and can be traced back to the subscribers who had it (`internal/entrypool`).
 
 ## Rules
 

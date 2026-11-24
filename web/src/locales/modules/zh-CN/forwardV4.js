@@ -288,7 +288,7 @@ export default {
       networkMode: '传输方式',
       networkModeHelp: 'Control 在上一跳设备和本跳设备之间建立的链路类型。',
       modeJacket: 'ANX + A2 外衣',
-      modeJacketHelp: '伪装成 TLS，走 TCP，端口 24443；跨境线路用这个',
+      modeJacketHelp: '走 TCP，端口 24443；非可信线路用这个',
       modeLine: '裸 ANX-Line',
       modeLineHelp: '不加外衣，可选 TCP/QUIC，端口 24445；只用于可信线路（IX、专线、国内段）',
       modeReverse: '反向回连',

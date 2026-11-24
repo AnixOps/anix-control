@@ -884,7 +884,7 @@ func knownFamily(f networkv1.Family) bool {
 // checkAnxLineReverse checks a reversed link: the accepting end dials the
 // dialing end's reverse listener, so neither end has carrier addresses;
 // the dialing end has reverse_listen, the accepting end reverse_dial. l2
-// runs reversed on c1 only (anx ANX-LINE-REVERSE §6.4): the accepting end
+// runs reversed on c1 only: the accepting end
 // dials back as the A2 jacket's client, so it also needs the dialing end's
 // server_public, and both ends the jacket's server_name.
 func checkAnxLineReverse(transport *networkv1.Transport, anx *networkv1.AnxLineSettings) error {
