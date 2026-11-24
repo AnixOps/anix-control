@@ -43,7 +43,8 @@ import (
 // forward.v1 session is asked for (forward-sdk.md section 8.4: one
 // long-lived stream and a low-frequency heartbeat, decided by default with
 // F3a). A certificate revoked while the stream is open ends it at the next
-// heartbeat, so within a minute on these sessions.
+// heartbeat or the server's own check (agentStreamRecheck), whichever comes
+// first.
 const forwardHeartbeatIntervalSeconds = uint32(60)
 
 // forwardHelloTimeout bounds recording a Hello, its plan included.
