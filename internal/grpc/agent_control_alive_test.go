@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"io"
 	"sync"
 	"testing"
@@ -10,8 +11,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	"github.com/AnixOps/anix-control/v5/internal/cache"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -195,10 +194,10 @@ func TestSendAliveListPages(t *testing.T) {
 // The alive list counts what UpdateOnlineStatus stores, per user across
 // nodes: the source of alive.v1.
 func TestUserAliveCountsFromTheOnlineSets(t *testing.T) {
-	cache.InitMemory()
+	online.Reset()
 	servers := service.NewServerService()
-	require.NoError(t, servers.UpdateOnlineStatus(model.ServerType("vmess"), 1, map[uint][]string{7: {"203.0.113.1", "203.0.113.2"}, 8: {"203.0.113.3"}}))
-	require.NoError(t, servers.UpdateOnlineStatus(model.ServerType(""), 2, map[uint][]string{7: {"198.51.100.1"}}))
+	require.True(t, servers.UpdateOnlineStatus(1, time.Time{}, map[uint][]string{7: {"203.0.113.1", "203.0.113.2"}, 8: {"203.0.113.3"}}))
+	require.True(t, servers.UpdateOnlineStatus(2, time.Time{}, map[uint][]string{7: {"198.51.100.1"}}))
 	counts, err := service.UserAliveCounts()
 	require.NoError(t, err)
 	assert.Equal(t, map[uint64]int{7: 3, 8: 1}, counts)

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"log/slog"
 	"time"
 
@@ -401,14 +402,9 @@ func (s *StatsService) fetchSubscriptionFromDB(userID uint) (*UserSubscription, 
 	return sub, nil
 }
 
-// 获取在线用户数
+// getOnlineUsersCount answers how many users are online on any node.
 func (s *StatsService) getOnlineUsersCount() int64 {
-	// 尝试从缓存的 alive list 获取
-	count, err := cache.SCard("alive:users")
-	if err != nil {
-		return 0
-	}
-	return count
+	return int64(len(online.Counts()))
 }
 
 const (

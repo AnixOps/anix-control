@@ -2,7 +2,6 @@ package cache
 
 import (
 	"container/list"
-	"strings"
 	"sync"
 	"time"
 )
@@ -18,10 +17,9 @@ type cacheEntry struct {
 type MemoryCache struct {
 	mu      sync.RWMutex
 	items   map[string]*cacheEntry
-	sets    map[string]map[string]struct{} // 集合数据
-	lruList *list.List                     // LRU 链表，尾部是最久未使用的
-	keyMap  map[string]*list.Element       // key -> *list.Element (指向 lruList 中的 *lruNode)
-	maxSize int                            // 最大缓存条目数，0 表示无限制
+	lruList *list.List               // LRU 链表，尾部是最久未使用的
+	keyMap  map[string]*list.Element // key -> *list.Element (指向 lruList 中的 *lruNode)
+	maxSize int                      // 最大缓存条目数，0 表示无限制
 	stopCh  chan struct{}
 	doneCh  chan struct{}
 }
@@ -49,7 +47,6 @@ func InitMemoryWithSize(maxSize int) {
 	CloseMemory()
 	cache := &MemoryCache{
 		items:   make(map[string]*cacheEntry),
-		sets:    make(map[string]map[string]struct{}),
 		lruList: list.New(),
 		keyMap:  make(map[string]*list.Element),
 		maxSize: maxSize,
@@ -94,7 +91,6 @@ func (c *MemoryCache) cleanup() {
 // deleteInternal 内部删除方法（调用者需持有写锁）
 func (c *MemoryCache) deleteInternal(key string) {
 	delete(c.items, key)
-	delete(c.sets, key)
 	if elem, ok := c.keyMap[key]; ok {
 		c.lruList.Remove(elem)
 		delete(c.keyMap, key)
@@ -225,98 +221,4 @@ func Del(keys ...string) error {
 		memCache.deleteInternal(key)
 	}
 	return nil
-}
-
-// SAdd 集合添加
-func SAdd(key string, members ...any) error {
-	if memCache == nil {
-		return nil
-	}
-	memCache.mu.Lock()
-	defer memCache.mu.Unlock()
-
-	if memCache.sets[key] == nil {
-		memCache.sets[key] = make(map[string]struct{})
-	}
-
-	for _, member := range members {
-		if str, ok := member.(string); ok {
-			memCache.sets[key][str] = struct{}{}
-		}
-	}
-	return nil
-}
-
-// SCard 获取集合大小
-func SCard(key string) (int64, error) {
-	if memCache == nil {
-		return 0, nil
-	}
-	memCache.mu.RLock()
-	defer memCache.mu.RUnlock()
-
-	set, ok := memCache.sets[key]
-	if !ok {
-		return 0, nil
-	}
-	return int64(len(set)), nil
-}
-
-// Expire 设置过期时间
-func Expire(key string, expiration time.Duration) error {
-	if memCache == nil {
-		return nil
-	}
-	memCache.mu.Lock()
-	defer memCache.mu.Unlock()
-
-	if item, ok := memCache.items[key]; ok {
-		item.expiresAt = time.Now().Add(expiration)
-		// 更新访问时间
-		item.lastAccess = time.Now()
-		memCache.moveToFront(key)
-	}
-	return nil
-}
-
-// Keys 获取匹配的键（支持简单的 * 通配符）
-func Keys(pattern string) ([]string, error) {
-	if memCache == nil {
-		return []string{}, nil
-	}
-	memCache.mu.RLock()
-	defer memCache.mu.RUnlock()
-
-	result := make([]string, 0)
-
-	// 简单的通配符匹配
-	prefix := strings.TrimSuffix(pattern, "*")
-	hasWildcard := strings.Contains(pattern, "*")
-
-	now := time.Now()
-	for key, item := range memCache.items {
-		// 跳过已过期项
-		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
-			continue
-		}
-		if hasWildcard {
-			if strings.HasPrefix(key, prefix) {
-				result = append(result, key)
-			}
-		} else if key == pattern {
-			result = append(result, key)
-		}
-	}
-
-	for key := range memCache.sets {
-		if hasWildcard {
-			if strings.HasPrefix(key, prefix) {
-				result = append(result, key)
-			}
-		} else if key == pattern {
-			result = append(result, key)
-		}
-	}
-
-	return result, nil
 }

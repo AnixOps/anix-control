@@ -15,7 +15,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -256,10 +255,14 @@ func (s *AgentControlGRPCServer) applyTrafficReport(node agentcontrol.AgentNode,
 	if err != nil || !applied {
 		return applied, err
 	}
-	// The online set is a cache; the batch is committed whatever happens to
-	// it, and the next report replaces it.
-	if err := s.reports.server.UpdateOnlineStatus(model.ServerType(""), uint(node.ID), userIPs); err != nil {
-		slog.Warn("failed to update online status from traffic report", "component", "agent-control", "node", node.String(), "error", err)
+	// The online set is current state, not a delta: a replayed batch older
+	// than the node's current set leaves it, and the node's count, alone.
+	var window time.Time
+	if report.WindowEndUnixMs > 0 {
+		window = time.UnixMilli(report.WindowEndUnixMs)
+	}
+	if !s.reports.server.UpdateOnlineStatus(uint(node.ID), window, userIPs) {
+		return true, nil
 	}
 	onlineUsers := 0
 	for _, ips := range userIPs {

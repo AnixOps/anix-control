@@ -2,6 +2,7 @@ package kerneltelemetry
 
 import (
 	"context"
+	"github.com/AnixOps/anix-control/v5/internal/online"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -79,7 +80,8 @@ func TestDashboardNeedsItsCapability(t *testing.T) {
 func TestDashboardAnswersTheKernelsCachedSnapshot(t *testing.T) {
 	db, server := fixture(t, dashboardOnly)
 	ctx := context.Background()
-	require.NoError(t, cache.SAdd("alive:users", "1", "2", "3"))
+	online.Reset()
+	online.Replace(1, time.Time{}, map[uint][]string{1: {"192.0.2.1"}, 2: {"192.0.2.2"}, 3: {"192.0.2.3"}})
 
 	first, err := server.GetDashboard(ctx, &kerneltelemetryv1.GetDashboardRequest{})
 	require.NoError(t, err)
