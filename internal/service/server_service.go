@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"slices"
 	"time"
 
@@ -222,11 +223,21 @@ func planNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics ma
 		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
 			return nil, err
 		}
-		upload := int64(float64(traffic[0]) * rate)
-		download := int64(float64(traffic[1]) * rate)
+		upload, err := scaleTraffic(traffic[0], rate)
+		if err != nil {
+			return nil, err
+		}
+		download, err := scaleTraffic(traffic[1], rate)
+		if err != nil {
+			return nil, err
+		}
 		plan.entries = append(plan.entries, subscriber.TrafficEntry{UserID: userID, Upload: upload, Download: download})
-		plan.totalUpload += upload
-		plan.totalDownload += download
+		if plan.totalUpload, err = addTraffic(plan.totalUpload, upload); err != nil {
+			return nil, err
+		}
+		if plan.totalDownload, err = addTraffic(plan.totalDownload, download); err != nil {
+			return nil, err
+		}
 		plan.logs = append(plan.logs, model.TrafficLog{
 			UserID:     userID,
 			ServerID:   nodeID,
@@ -332,7 +343,7 @@ func UserAliveCounts() (map[uint64]int, error) {
 }
 
 func normalizeTrafficRate(rate float64) float64 {
-	if rate <= 0 {
+	if rate <= 0 || math.IsNaN(rate) {
 		return 1.0
 	}
 	return rate
