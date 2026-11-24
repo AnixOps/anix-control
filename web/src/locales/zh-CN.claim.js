@@ -3,9 +3,9 @@
 export default {
   claim: {
     pageTitle: '创建首个管理员',
-    signInHint: '这个面板还没有管理员。在服务器上运行 {command}，再打开它打印的链接。',
+    signInHint: '尚未创建管理员。请在服务器上运行 {command}，并打开输出的链接。',
     title: '创建首个管理员',
-    subtitle: '这个面板还没有管理员。设置以后用来登录的邮箱和密码。',
+    subtitle: '设置管理员登录邮箱和密码。',
     loading: '正在检查链接…',
     email: '邮箱',
     password: '密码',
@@ -16,29 +16,29 @@ export default {
       title: '管理员已创建',
       subtitle: '正在登录…'
     },
-    created: '管理员已创建，请用新密码登录。',
+    created: '管理员已创建，请使用新密码登录。',
     missing: {
       title: '请打开领取链接',
-      body: '这个页面需要服务器打印的领取链接。在服务器上运行下面的命令获取新链接：'
+      body: '需使用服务器输出的领取链接。在服务器上运行以下命令获取：'
     },
     none: {
       title: '没有进行中的领取',
-      body: '这里没有需要设置的内容。如果你管理这个面板，请直接登录。'
+      body: '无需设置。管理员请直接登录。'
     },
     expired: {
       title: '链接已过期',
-      body: '领取链接 24 小时内有效。在服务器上运行下面的命令，再打开它打印的新链接：'
+      body: '领取链接 24 小时内有效。在服务器上运行以下命令获取新链接：'
     },
     invalid: {
       title: '链接无效',
-      body: '它可能已被更新的链接替换。在服务器上运行下面的命令，再打开它打印的新链接：'
+      body: '链接可能已被替换。在服务器上运行以下命令获取新链接：'
     },
     toSignIn: '去登录',
     errors: {
-      passwordShort: '密码至少需要 {min} 个字符。',
-      passwordLong: '密码太长，最多 72 个字节。',
-      emailTaken: '这个邮箱已有账户，请换一个邮箱。',
-      identity: '登录服务暂时无法访问。没有做任何更改，请稍后重试。',
+      passwordShort: '密码至少 {min} 个字符。',
+      passwordLong: '密码最长 72 字节。',
+      emailTaken: '该邮箱已被使用。',
+      identity: '登录服务不可用，未做任何更改。请稍后重试。',
       failed: '无法创建管理员：{message}'
     }
   }

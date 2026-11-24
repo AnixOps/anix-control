@@ -72,7 +72,7 @@ describe('User Orders flow', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await user.click(screen.getByRole('button', { name: 'Pay' }))
-    expect(toastMessages('info')).toEqual(['Online payment isn’t available yet. Contact your administrator to pay.'])
+    expect(toastMessages('info')).toEqual(['Online payment is not available. Contact the administrator to pay.'])
   })
 
   it('names an order whose plan no longer exists', async () => {
@@ -87,7 +87,7 @@ describe('User Orders flow', () => {
   it('shows an empty state that leads to the plans', async () => {
     mockGetOrders.mockResolvedValue({ data: { list: [] } })
     renderPage()
-    expect(await screen.findByRole('heading', { level: 2, name: 'No orders yet' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: 'No orders' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Choose a plan' }).getAttribute('href')).toBe('/user/plans')
   })
 

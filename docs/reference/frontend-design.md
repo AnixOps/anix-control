@@ -329,6 +329,21 @@ written separately for each language. Page text is passed in as props.
   toasts.
 - **Copy.** Short, active, about the result; Chinese and English written
   separately; a space between a number and its unit (`128.4 GB`, `3 分钟前`).
+  The wording is formal and written, not spoken:
+  - Say what the thing is, what to do and what happens; leave out why a
+    mechanism exists and how it works inside (that belongs in `docs/`).
+    A description or hint is one sentence, two at most.
+  - Chinese: 该/此 for 这个/这台, 暂无 for 还没有, 无法/未 for 不能/没有
+    (无法连接, 未发送), 请 only before an instruction; no 你 (omit the
+    subject, or 您 on the user portal), no 吧/呢/哦/啦/即可; quote names with
+    “” rather than 「」.
+  - English: no contractions (could not, cannot, do not), no "yet" on empty
+    states, no chatty questions (*No account?*, not *New here?*), "the" for
+    objects the administrator manages rather than "your".
+  - Empty states name what is missing (*暂无节点* / *No nodes*); the hint
+    names the first action. Errors name what failed, then the remedy.
+  - Neutral terms only (`.github/scripts/neutral_terms.py`), and the ANX
+    rules in AGENTS.md.
 - **Lists.** Search, filter chips, sort and page live in the URL query, so a
   filtered list can be shared and survives a reload or 返回
   (`composables/useListQuery.js`: `read`, `readPage`, `write` with

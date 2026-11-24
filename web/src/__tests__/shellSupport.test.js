@@ -109,7 +109,7 @@ describe('AboutDialog.vue (version moved out of the sidebar)', () => {
   it('says so when the version cannot be read', async () => {
     mockGetSystemInfo.mockRejectedValue(new Error('offline'))
     render(AboutDialog, { props: { open: true } })
-    expect(await screen.findByText('Version information is not available right now.')).toBeTruthy()
+    expect(await screen.findByText('Version information is unavailable.')).toBeTruthy()
   })
 
   it('does not ask the backend while closed', () => {

@@ -162,7 +162,7 @@ describe('User Tickets flow', () => {
     dialog = await screen.findByRole('alertdialog', { name: 'Close the ticket “Cannot connect”?' })
     await user.click(within(dialog).getByRole('button', { name: 'Close ticket' }))
     await waitFor(() => expect(api.closeTicket).toHaveBeenCalledWith(1))
-    expect(await screen.findByText('This ticket is closed. Open a new ticket if you need more help.')).toBeTruthy()
+    expect(await screen.findByText('This ticket is closed. Open a new ticket for further help.')).toBeTruthy()
     expect(screen.queryByLabelText('Reply')).toBeNull()
     expect(toastMessages('success')).toEqual(['Ticket closed'])
   })
@@ -173,7 +173,7 @@ describe('User Tickets flow', () => {
     api.getTicketDetail.mockResolvedValue({ data: { id: 9, subject: 'New one', status: 0, level: 2, messages: [] } })
     const { user } = await renderPage()
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'No tickets yet' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: 'No tickets' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'New ticket' }))
     const sheet = await screen.findByRole('dialog', { name: 'New ticket' })
     await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByLabelText(/^Subject/)))
@@ -189,7 +189,7 @@ describe('User Tickets flow', () => {
     await user.click(within(sheet).getByRole('button', { name: 'Send ticket' }))
     await waitFor(() => expect(api.createTicket).toHaveBeenCalledWith({ subject: 'New one', level: 2, message: 'It broke' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(toastMessages('success')).toEqual(['Ticket sent. Support will reply soon.'])
+    expect(toastMessages('success')).toEqual(['Ticket sent.'])
     expect(route.current.query).toEqual({ ticket: '9' })
   })
 

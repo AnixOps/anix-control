@@ -96,7 +96,7 @@ test('resets the subscription link with a code and shows the new one', async ({ 
   const link = `${new URL(baseURL).origin}/s/${NEW_TOKEN}`
   await expect(done.getByLabel('New subscription link')).toHaveValue(link)
   await expect(done.getByRole('img', { name: 'QR code of your subscription link' })).toBeVisible()
-  await expect(page.getByLabel('Notifications').getByText('Subscription link reset. Import it again on all your devices.')).toBeVisible()
+  await expect(page.getByLabel('Notifications').getByText('Subscription link reset. Import it again on all devices.')).toBeVisible()
   expect(calls.at(-1)).toEqual({ reset: { code: '123456', method: 'totp' } })
   await done.getByRole('button', { name: 'Done' }).click()
   await expect(page.locator('#subscribe-link')).toHaveValue(link)

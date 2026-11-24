@@ -125,7 +125,7 @@ describe('StatusPage.vue', () => {
 
   it('brings its own lockup and main landmark when standalone', async () => {
     const { container } = await renderStatus({ kind: 'forbidden', standalone: true })
-    expect(screen.getByRole('heading', { level: 1, name: 'You don’t have access to this page' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Access denied' })).toBeTruthy()
     expect(container.querySelector('main#app-main-content')).not.toBeNull()
     expect(container.querySelector('.brand-lockup')).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Go to home' }).getAttribute('href')).toBe('/user/dashboard')

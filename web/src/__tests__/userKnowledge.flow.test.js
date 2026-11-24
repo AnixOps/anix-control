@@ -85,7 +85,7 @@ describe('User Knowledge flow', () => {
     await waitFor(() => expect(route.current.query).toEqual({ q: 'FIREWALL' }))
 
     await user.type(search, 'zzz')
-    expect(await screen.findByText('No articles match “FIREWALLzzz”. Try another word.')).toBeTruthy()
+    expect(await screen.findByText('No articles match “FIREWALLzzz”.')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
     expect(search.value).toBe('')
     expect(document.activeElement).toBe(search)
@@ -138,7 +138,7 @@ describe('User Knowledge flow', () => {
   it('has an empty state, and a retryable error state', async () => {
     mockGetKnowledgeList.mockResolvedValueOnce({ data: null })
     renderPage()
-    expect(await screen.findByRole('heading', { level: 2, name: /No help articles yet/ })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: /No help articles/ })).toBeTruthy()
   })
 
   it('retries after a failed load', async () => {

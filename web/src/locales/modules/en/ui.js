@@ -42,8 +42,8 @@ export default {
     },
     chart: {
       loading: 'Loading {label}…',
-      loadFailed: 'Couldn’t load the chart',
-      empty: 'No data yet',
+      loadFailed: 'Could not load the chart',
+      empty: 'No data',
       showTable: 'View as table',
       showChart: 'View as chart'
     },
@@ -64,8 +64,8 @@ export default {
       clearSelection: 'Clear selection',
       bulkActions: 'Actions for the selected rows',
       loading: 'Loading {label}…',
-      loadFailed: 'This list didn’t load',
-      empty: 'Nothing here yet',
+      loadFailed: 'The list could not be loaded',
+      empty: 'No items',
       noMatches: 'No results',
       noMatchesHint: 'Try other words or clear the filters.',
       clearFilters: 'Clear filters'

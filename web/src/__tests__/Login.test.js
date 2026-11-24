@@ -53,7 +53,7 @@ describe('Login.vue', () => {
   it('says how to create the first administrator only while the panel has none', async () => {
     mockClaimStatus.mockResolvedValue(true)
     const view = render(Login)
-    const hint = await screen.findByText(/This panel has no administrator yet/)
+    const hint = await screen.findByText(/No administrator exists/)
     expect(hint.closest('[data-auth-claim-hint]').textContent).toContain('sudo anix-control admin claim-link')
     expect(screen.queryByRole('link')).toBeNull()
     view.unmount()
@@ -160,7 +160,7 @@ describe('Login.vue', () => {
     await user.paste('654 321')
     await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(2))
     expect(mockLogin.mock.calls[1][0]).toMatchObject({ mfa_code: '654321' })
-    expect(await screen.findByText(/That code is not correct/)).toBeTruthy()
+    expect(await screen.findByText(/The code is incorrect/)).toBeTruthy()
     await waitFor(() => expect(codeBoxes().map(box => box.value).join('')).toBe(''))
   })
 
@@ -226,7 +226,7 @@ describe('Login.vue', () => {
     render(Login)
     await signIn(user, 'enroll@example.com')
 
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Turn on two-factor authentication first' })
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Two-factor authentication required' })
     await waitFor(() => expect(document.activeElement).toBe(heading))
     expect(screen.getByText('enroll@example.com')).toBeTruthy()
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
