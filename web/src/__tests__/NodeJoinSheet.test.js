@@ -144,13 +144,13 @@ describe('NodeJoinSheet', () => {
     const checks = within(blocked).getAllByRole('listitem')
     expect(checks).toHaveLength(3)
     expect(checks[0].textContent).toContain('Control’s address')
-    expect(checks[0].textContent).toContain('agent_install.public_url to the https address')
+    expect(checks[0].textContent).toContain('agent_install.public_url to the Control https address')
     expect(checks[0].textContent).toContain('which is not https')
     expect(checks[1].textContent).toContain('gRPC address')
     // The certificate the Agents verify: its own name, the fix in the
     // reader's words, and the server's reason.
     expect(checks[2].textContent).toContain('gRPC certificate')
-    expect(checks[2].textContent).toContain('system CAs')
+    expect(checks[2].textContent).toContain('public CA')
     expect(checks[2].textContent).toContain('still requesting')
     // No command, and nothing was created or read for one.
     expect(within(dialog).queryByTestId('join-command-text')).toBeNull()
@@ -273,7 +273,7 @@ describe('NodeJoinSheet', () => {
 
     await user.click(within(dialog).getByTestId('join-reset-token'))
     let confirm = await screen.findByRole('alertdialog', { name: 'Reset the token of “默认”?' })
-    expect(confirm.textContent).toContain('Every command copied before stops working')
+    expect(confirm.textContent).toContain('Previously copied commands stop working')
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(kernel.resetKernelNodeGroupToken).not.toHaveBeenCalled()

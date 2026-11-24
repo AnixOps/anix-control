@@ -91,7 +91,7 @@ test.describe('node traffic', () => {
   test('shows the error of a failed load and loads again on Try again', async ({ page }) => {
     const requests = recordRequests(page)
     await openScreen(page, 'admin-node-traffic-error', { clock: true })
-    await expect(page.getByText('Couldn’t load the traffic')).toBeVisible()
+    await expect(page.getByText('Could not load the traffic')).toBeVisible()
     await expect(page.getByText('the traffic store is unavailable')).toBeVisible()
     await page.getByRole('button', { name: 'Try again' }).click()
     await expect.poll(() => requests.to('/api/v4/kernel/nodes/108/traffic').length).toBe(2)
@@ -219,7 +219,7 @@ test.describe('rotate Agent credentials', () => {
     // kr-sel-01 (107) is the disabled node of the fixture.
     await page.goto('/admin/nodes/107?section=credentials')
     await expect(page.getByTestId('rotate-credentials')).toBeDisabled()
-    await expect(page.getByText('This node is disabled. Enable it first, then rotate its credentials.')).toBeVisible()
+    await expect(page.getByText('This node is disabled. Enable it first.')).toBeVisible()
   })
 
   test('is offered on a forwarding node\'s page too, with no API key option', async ({ page }) => {

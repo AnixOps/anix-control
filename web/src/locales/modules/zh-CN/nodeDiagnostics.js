@@ -2,7 +2,7 @@
 export default {
   nodeDiagnostics: {
     title: '诊断',
-    description: '在节点的 Agent 上运行允许的检查，结果直接显示在这里。',
+    description: '在节点 Agent 上运行检查。',
     refresh: '刷新',
     loading: '正在加载诊断…',
     loadFailed: '无法加载诊断',
@@ -13,12 +13,12 @@ export default {
     separator: '、',
     offline: {
       title: 'Agent 不在线',
-      description: '节点的 Agent 连上 Control 后才能运行诊断。'
+      description: 'Agent 连接 Control 后方可诊断。'
     },
     unsupported: {
-      title: '这个 Agent 不支持诊断',
-      description: '升级节点的 Agent 后可以使用诊断。',
-      descriptionVersion: 'Agent {version} 不支持诊断。升级节点的 Agent 后可以使用。'
+      title: '该 Agent 不支持诊断',
+      description: '请升级 Agent。',
+      descriptionVersion: 'Agent {version} 不支持诊断，请升级。'
     },
     service: {
       title: '服务 {service}',
@@ -37,17 +37,17 @@ export default {
       label: '日志行数',
       option: '最近 {count} 行'
     },
-    restartSuperOnly: '只有超级管理员可以重启服务。',
+    restartSuperOnly: '仅超级管理员可重启服务。',
     restart: {
       title: '重启 {name} 上的 {service}？',
-      message: '{service} 会短暂中断，经过它的连接会断开。',
+      message: '{service} 将短暂中断，现有连接将断开。',
       confirm: '重启服务'
     },
     forward: {
       title: '转发检查',
       hop: '要检查的跳',
-      noHops: '这个节点还没有承载任何转发路由的跳。',
-      unsupported: '这个 Agent 不支持转发检查。升级后可用。'
+      noHops: '该节点未承载转发路由。',
+      unsupported: '该 Agent 不支持转发检查，请升级。'
     },
     running: '正在运行“{action}”，最多等待 {seconds} 秒…',
     result: {
@@ -56,7 +56,7 @@ export default {
       failed: '失败',
       duration: '耗时 {ms} ms',
       output: '输出',
-      noOutput: '（没有输出）',
+      noOutput: '（无输出）',
       rtt: '{ms} ms'
     },
     checkStates: {
@@ -69,20 +69,20 @@ export default {
       title: '最近的诊断',
       show: '查看',
       pending: '进行中',
-      none: '转发节点不保存诊断历史，每次运行都记在操作日志里。'
+      none: '转发节点不保存诊断历史，运行记录见操作日志。'
     },
     errors: {
-      node_offline: '节点的 Agent 不在线。',
-      diagnostics_unsupported: '这个 Agent 不支持这项诊断。升级后可用。',
-      node_pending_approval: '节点正在等待批准，批准后才能诊断。',
-      diagnostic_busy: '这个节点正在运行另一项诊断，请稍后再试。',
-      diagnostic_timeout: '节点在 {seconds} 秒内没有返回结果。',
-      agent_error: 'Agent 拒绝了这项诊断：{message}',
-      super_admin_required: '只有超级管理员可以重启服务。',
-      action_not_allowed: '不允许这项诊断。',
+      node_offline: '节点 Agent 不在线。',
+      diagnostics_unsupported: '该 Agent 不支持此诊断，请升级。',
+      node_pending_approval: '节点待批准，批准后方可诊断。',
+      diagnostic_busy: '该节点正在运行其他诊断，请稍后重试。',
+      diagnostic_timeout: '节点 {seconds} 秒内未返回结果。',
+      agent_error: 'Agent 拒绝诊断：{message}',
+      super_admin_required: '仅超级管理员可重启服务。',
+      action_not_allowed: '不允许此诊断。',
       invalid_params: '诊断参数不正确：{message}',
       node_not_found: '节点不存在。',
-      unknown: '诊断没有完成。'
+      unknown: '诊断未完成。'
     }
   }
 }

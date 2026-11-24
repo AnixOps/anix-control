@@ -115,7 +115,7 @@ describe('Nodes.vue', () => {
 
     expect(kernelApi.getKernelAdminNodes).toHaveBeenCalledTimes(1)
     expect(adminApi.getNodeStats).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('Couldn’t load nodes')
+    expect(wrapper.text()).toContain('Could not load nodes')
 
     kernelApi.getKernelAdminNodes.mockResolvedValueOnce({ list: [{ id: 1, name: 'hk-01', host: 'hk.example' }], total: 1 })
     await wrapper.findAll('button').find(button => button.text() === 'Try again').trigger('click')
@@ -267,7 +267,7 @@ describe('Nodes.vue', () => {
       const { wrapper } = await mountNodes()
       const badge = wrapper.find('[data-testid="node-agent-compatibility"]')
       expect(badge.text()).toBe('Incompatible')
-      expect(badge.attributes('title')).toContain('upgrade the kernel')
+      expect(badge.attributes('title')).toContain('Upgrade the kernel')
       expect(badge.attributes('title')).toContain('server text')
     })
 
@@ -373,7 +373,7 @@ describe('Nodes.vue', () => {
         const shown = cells(wrapper)
         expect(shown.map(cell => cell.attributes('data-service-status'))).toEqual(['unavailable', 'unavailable'])
         expect(shown[0].text()).toContain('—')
-        expect(shown[0].attributes('title')).toContain('Service status is unavailable')
+        expect(shown[0].attributes('title')).toContain('Service status unavailable')
         expect(wrapper.find('[data-testid="node-service-status"]').exists()).toBe(false)
         wrapper.unmount()
       }
@@ -431,7 +431,7 @@ describe('Nodes.vue', () => {
       kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [group(), { ...group({ live: 1, pending: 2 }), id: 4, name: 'edge' }] })
       const { wrapper } = await mountNodes()
 
-      expect(wrapper.find('[data-testid="approval-banner"]').text()).toContain('3 machine(s) wait for your approval')
+      expect(wrapper.find('[data-testid="approval-banner"]').text()).toContain('3 machine(s) awaiting approval')
       const badges = wrapper.findAll('[data-testid="node-approval-pending"]')
       expect(badges).toHaveLength(1)
       expect(badges[0].text()).toBe('Awaiting approval')
@@ -492,7 +492,7 @@ describe('Nodes.vue', () => {
       await user.click(screen.getByRole('button', { name: 'Actions for hk-02' }))
       await user.click(await screen.findByRole('menuitem', { name: 'Approve' }))
       await flushPromises()
-      expect(toastMessages('error')).toEqual(['Couldn’t do that: the node is not pending approval'])
+      expect(toastMessages('error')).toEqual(['Could not process: the node is not pending approval'])
     })
   })
 

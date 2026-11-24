@@ -2,7 +2,7 @@
 export default {
   realityTargets: {
     title: '目标站',
-    description: '由节点自己的 Agent 探测候选的 Reality 目标站（dest 与 SNI），按结果排序并推荐，可一键应用到节点的 Reality 协议。',
+    description: '由节点 Agent 探测 Reality 目标站（dest 与 SNI），按结果排序推荐，可应用至节点的 Reality 协议。',
     refresh: '刷新',
     loading: '正在加载目标站…',
     loadFailed: '无法加载目标站',
@@ -14,29 +14,29 @@ export default {
     score: '{score} 分',
     current: {
       title: '当前目标',
-      none: '这个节点没有 Reality 协议。',
+      none: '该节点无 Reality 协议。',
       dest: 'dest {dest}'
     },
     probe: {
       title: '探测',
-      offline: '节点的 Agent 连上 Control 后才能探测。',
-      unsupported: '这个 Agent 不支持目标站探测，升级节点的 Agent 后可以使用。',
-      unsupportedVersion: 'Agent {version} 不支持目标站探测，升级节点的 Agent 后可以使用。',
+      offline: 'Agent 连接 Control 后方可探测。',
+      unsupported: '该 Agent 不支持目标站探测，请升级。',
+      unsupportedVersion: 'Agent {version} 不支持目标站探测，请升级。',
       candidates: '自定义候选',
-      candidatesHint: '域名或 域名:端口，用空格、逗号或换行分隔，会先于内置列表探测。',
+      candidatesHint: '域名或域名:端口，以空格、逗号或换行分隔，优先于内置列表探测。',
       withDefaults: '同时探测内置列表（{count} 个）',
       run: '开始探测',
-      running: '节点正在逐个探测，最多需要一分多钟…'
+      running: '正在探测，最长约需一分钟…'
     },
     recommended: {
       title: '推荐'
     },
     results: {
       title: '探测结果',
-      none: '还没有探测结果。',
+      none: '暂无探测结果。',
       handshake: '握手 {ms} ms',
       cdn: 'CDN：{cdn}',
-      usedBy: '另有 {count} 个节点在用'
+      usedBy: '另有 {count} 个节点使用'
     },
     verdicts: {
       ok: '可用',
@@ -46,7 +46,7 @@ export default {
     failures: {
       resolve: '解析失败',
       private_address: '解析到内网地址',
-      connect: '连不上',
+      connect: '无法连接',
       tls_handshake: 'TLS 握手失败',
       tls13: '不支持 TLS 1.3',
       h2: '不支持 h2',
@@ -58,31 +58,31 @@ export default {
     },
     auto: {
       title: '自动选择',
-      description: '每 6 小时从节点复测一次当前目标站和内置候选；当前目标站连续两次探测失败（第二次在 15 分钟后）就自动换成推荐站。探测没有结果不算失败，还能用的目标站不会因为分数更高而被替换。每次切换都会写入操作日志。',
+      description: '每 6 小时复测当前目标站及内置候选；当前目标站连续两次（间隔 15 分钟）探测失败时，自动切换为推荐站。切换记入操作日志。',
       nextRun: '下次复测：{time}',
       nextRunSoon: '下次复测：几分钟内',
       lastRun: '上次复测：{time}',
       outcome: '结果：{outcome}',
       lastSwitch: '上次自动切换：{time}',
       confirmTitle: '开启自动选择？',
-      confirmMessage: '自动切换会改动这个节点 Reality 协议的 SNI 和 dest，客户端要更新订阅才能连上新的目标站。',
+      confirmMessage: '自动切换将修改该节点 Reality 协议的 SNI 和 dest，客户端须更新订阅。',
       confirm: '开启'
     },
     apply: {
       button: '应用',
       toProtocol: '应用到 {name}',
       inUse: '使用中',
-      title: '把 {name} 的目标站改为 {target}？',
-      message: 'SNI 和 dest 会从 {from} 改为 {target}，私钥等其他设置不变。节点会自动拿到新配置；客户端需要更新订阅，否则会连不上。',
+      title: '将 {name} 的目标站改为 {target}？',
+      message: 'SNI 和 dest 将由 {from} 改为 {target}，其他设置不变。客户端须更新订阅。',
       confirm: '应用',
-      done: '已把 {name} 的目标站改为 {target}。请让用户更新订阅。'
+      done: '{name} 的目标站已改为 {target}，请通知用户更新订阅。'
     },
     errors: {
-      node_offline: '节点的 Agent 不在线。',
-      reality_probe_unsupported: '这个 Agent 不支持目标站探测。',
-      probe_busy: '这个节点正在探测，请等它完成。',
-      target_not_probed: '这个节点还没有成功探测过这个目标站，请先探测。',
-      protocol_not_found: '找不到这个 Reality 协议。',
+      node_offline: '节点 Agent 不在线。',
+      reality_probe_unsupported: '该 Agent 不支持目标站探测。',
+      probe_busy: '该节点正在探测，请稍后。',
+      target_not_probed: '该目标站未成功探测，请先探测。',
+      protocol_not_found: 'Reality 协议不存在。',
       invalid_params: '参数无效：{message}',
       unknown: '操作失败，请稍后重试。'
     }

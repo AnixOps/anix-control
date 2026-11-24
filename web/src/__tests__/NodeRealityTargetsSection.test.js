@@ -77,7 +77,7 @@ describe('NodeRealityTargetsSection', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByTestId('reality-apply-41-near.example.com'))
     const dialog = await screen.findByRole('alertdialog')
-    expect((dialog).textContent).toContain('客户端需要更新订阅')
+    expect((dialog).textContent).toContain('客户端须更新订阅')
     await user.click(within(dialog).getByRole('button', { name: '应用' }))
     await waitFor(() => expect(kernelApi.applyKernelRealityTarget).toHaveBeenCalledWith('proxy-57', { protocolId: 41, serverName: 'near.example.com', port: 443 }))
     expect((await screen.findByTestId('reality-applied')).textContent).toContain('near.example.com')

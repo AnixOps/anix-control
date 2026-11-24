@@ -101,7 +101,7 @@ describe('node groups', () => {
   it('shows an empty state that points at Join a node', async () => {
     kernel.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     await renderGroups()
-    expect(await screen.findByText('No node groups yet')).toBeTruthy()
+    expect(await screen.findByText('No node groups')).toBeTruthy()
     expect(screen.getByTestId('groups-empty-join')).toBeTruthy()
   })
 
@@ -133,7 +133,7 @@ describe('node groups', () => {
       name: 'HK', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
       monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, token_expires_at: null
     })
-    await waitFor(() => expect(toastMessages('success')).toEqual(['New nodes of “HK” now need your approval.']))
+    await waitFor(() => expect(toastMessages('success')).toEqual(['New nodes of “HK” require approval.']))
     expect(kernel.listKernelNodeGroups.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
@@ -143,7 +143,7 @@ describe('node groups', () => {
     await renderGroups()
     expect(within(screen.getByTestId('node-groups-panel')).getByText('Expired')).toBeTruthy()
     await user.click(screen.getByTestId('group-approval-3'))
-    await waitFor(() => expect(toastMessages('error')).toEqual(['This group’s token has expired. Set a new validity under Edit first.']))
+    await waitFor(() => expect(toastMessages('error')).toEqual(['The token has expired. Set a new validity under Edit.']))
     expect(kernel.updateKernelNodeGroup).not.toHaveBeenCalled()
 
     // Saving the sheet needs a choice; a new validity goes with the body.

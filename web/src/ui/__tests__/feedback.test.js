@@ -249,10 +249,10 @@ describe('Badge and StatusDot', () => {
 describe('Layout components', () => {
   it('EmptyState renders a heading, text and actions', () => {
     render(UiEmptyState, {
-      props: { title: 'No nodes yet', description: 'Add the first node.', icon: Server, headingTag: 'h2' },
+      props: { title: 'No nodes', description: 'Add the first node.', icon: Server, headingTag: 'h2' },
       slots: { actions: '<button>Add node</button>' }
     })
-    expect(screen.getByRole('heading', { level: 2, name: 'No nodes yet' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'No nodes' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add node' })).toBeTruthy()
   })
 

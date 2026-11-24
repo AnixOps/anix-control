@@ -29,7 +29,7 @@ describe('NodeForwardPortsSection', () => {
     const first = await screen.findByLabelText('端口范围起')
     expect(first.value).toBe('30000')
     expect(screen.getByLabelText('端口范围止').value).toBe('39999')
-    expect(screen.getByTestId('node-forward-ports-source').textContent).toContain('内置的 30000–39999')
+    expect(screen.getByTestId('node-forward-ports-source').textContent).toContain('内置范围 30000–39999')
 
     const user = userEvent.setup()
     await user.clear(first)
@@ -44,8 +44,8 @@ describe('NodeForwardPortsSection', () => {
       addresses: ['203.0.113.7'],
       labels: { link: 'iepl' }
     }, expect.anything())
-    expect(await screen.findByText('已保存，经过这个节点的线路已重新规划。')).toBeTruthy()
-    expect(screen.getByTestId('node-forward-ports-source').textContent).toContain('这个节点自己设置的范围')
+    expect(await screen.findByText('已保存，经过该节点的线路已重新规划。')).toBeTruthy()
+    expect(screen.getByTestId('node-forward-ports-source').textContent).toContain('该节点自定义的范围')
   })
 
   it('refuses a range with one end', async () => {
@@ -55,7 +55,7 @@ describe('NodeForwardPortsSection', () => {
     await user.type(await screen.findByLabelText('端口范围起'), '40000')
     await user.click(screen.getByTestId('node-forward-ports-save'))
     expect(forwardApi.setNodeSettings).not.toHaveBeenCalled()
-    expect(screen.getByText('起止端口都要填写')).toBeTruthy()
+    expect(screen.getByText('请填写起止端口')).toBeTruthy()
   })
 
   it('hides itself when Control has no forwarding', async () => {

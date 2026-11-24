@@ -33,7 +33,7 @@ describe('NodeNetworkSection', () => {
     expect(kernelApi.setKernelNodeNetwork).toHaveBeenCalledWith('proxy-864', {
       ...EMPTY, interface: 'eth1', source_v4: '10.0.0.7', gateway_v4: '10.0.0.1'
     })
-    expect(await screen.findByText('已保存，经过这个节点的线路已重新规划。')).toBeTruthy()
+    expect(await screen.findByText('已保存，经过该节点的线路已重新规划。')).toBeTruthy()
   })
 
   it('saves the scanning-cloud switch', async () => {
@@ -51,7 +51,7 @@ describe('NodeNetworkSection', () => {
     kernelApi.setKernelNodeNetwork.mockImplementation(async (_, settings) => settings)
     render(NodeNetworkSection, { props: { nodeRef: 'proxy-57', name: 'tyo-01' } })
     const user = userEvent.setup()
-    expect(await screen.findByText(/按名称预填的/)).toBeTruthy()
+    expect(await screen.findByText(/按名称预填/)).toBeTruthy()
     await user.click(screen.getByTestId('node-network-save'))
     expect(kernelApi.setKernelNodeNetwork).toHaveBeenCalledWith('proxy-57', { ...EMPTY, region: 'jp' })
   })
@@ -66,7 +66,7 @@ describe('NodeNetworkSection', () => {
     await user.type(await screen.findByLabelText('IPv4 源地址'), '10.0.0.7')
     await user.click(screen.getByTestId('node-network-save'))
     expect(await screen.findByText('a source address leaves by an interface: name it')).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toContain('有字段需要修改')
+    expect(screen.getByRole('alert').textContent).toContain('部分字段有误')
   })
 
   it('offers the interfaces the Agent detected', async () => {
@@ -123,7 +123,7 @@ describe('NodeNetworkSection', () => {
     expect(screen.getByTestId('node-uplink-probe-proxy-50-eth1').textContent).toContain('31 ms')
     expect(screen.getByTestId('node-uplink-probe-proxy-50-eth1').textContent).toContain('使用中')
     expect(screen.getByTestId('node-uplink-hop-proxy-50').textContent).toContain('KFC JP')
-    await user.click(screen.getByRole('combobox', { name: '这个下一跳走' }))
+    await user.click(screen.getByRole('combobox', { name: '该下一跳使用' }))
     await user.click(await screen.findByRole('option', { name: /eth0/ }))
     await user.click(screen.getByTestId('node-network-save'))
     expect(kernelApi.setKernelNodeNetwork).toHaveBeenCalledWith('proxy-62', {

@@ -28,7 +28,7 @@ describe('NodeExitPolicySection', () => {
     const toggle = await screen.findByRole('switch')
     expect(toggle.getAttribute('aria-checked')).toBe('false')
     expect(screen.getByTestId('node-exit-policy-count').textContent).toContain('No refused connection')
-    expect(screen.getByText(/Needs an Agent and kernel of 5.0.2/)).toBeTruthy()
+    expect(screen.getByText(/Requires Agent and kernel 5.0.2/)).toBeTruthy()
     await userEvent.click(toggle)
     expect(kernelApi.setKernelNodeExitPolicy).toHaveBeenCalledWith('proxy-3', true)
     expect((await screen.findByRole('switch')).getAttribute('aria-checked')).toBe('true')

@@ -59,8 +59,8 @@ describe('Agent install sheet', () => {
 
     expect(kernelApi.createKernelAgentInstallToken).toHaveBeenCalledWith('forward-41', 3600)
     const result = inBody('[data-testid="agent-install-result"]')
-    expect(result.text()).toContain('shown only here')
-    expect(result.text()).toContain('verify it with /install.sh.sig')
+    expect(result.text()).toContain('shown once')
+    expect(result.text()).toContain('Verify it with /install.sh.sig')
     expect(result.text()).toContain('inet v2b_forward')
     expect(inBody('[data-testid="agent-install-command"]').text()).toContain(base)
     expect(inBody('[data-testid="agent-install-command"]').text()).not.toContain('--mirror')
@@ -91,7 +91,7 @@ describe('Agent install sheet', () => {
     const wrapper = await mountSheet()
     await inBody('[data-testid="agent-install-generate"]').trigger('click')
     await flushPromises()
-    expect(inBody('[data-testid="agent-install-result"]').text()).toContain('no release signature')
+    expect(inBody('[data-testid="agent-install-result"]').text()).toContain('No install script signature')
 
     const close = [...document.body.querySelectorAll('.ui-sheet__footer button')].find(button => button.textContent.includes('Close'))
     close.click()

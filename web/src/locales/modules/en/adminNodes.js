@@ -3,16 +3,16 @@ import { AGENT_NAME } from '../../../constants/brand'
 
 export default {
   title: 'Nodes',
-  subtitle: 'Proxy nodes that serve subscriptions. Open a node for its protocols, credentials, deployment and logs.',
+  subtitle: 'Proxy nodes that serve subscriptions.',
   confirm: {
     deleteNodeTitle: 'Delete node {name}?',
-    deleteNodeMessage: 'The node and its credentials are removed. This can’t be undone.',
+    deleteNodeMessage: 'The node and its credentials will be removed. This cannot be undone.',
     deleteNodeAction: 'Delete node',
     disableNodeTitle: 'Disable node {name}?',
-    disableNodeMessage: 'Subscriptions stop offering this node and the Agent certificates issued to it are revoked.',
+    disableNodeMessage: 'Subscriptions stop offering this node and its Agent certificates are revoked.',
     disableNodeAction: 'Disable node',
     deleteProtocolTitle: 'Delete protocol {type} :{port}?',
-    deleteProtocolMessage: 'Node {name} stops offering this protocol. This can’t be undone.',
+    deleteProtocolMessage: 'Node {name} stops offering this protocol. This cannot be undone.',
     deleteProtocolAction: 'Delete protocol'
   },
   stats: {
@@ -42,14 +42,14 @@ export default {
       warning: 'Check version',
       incompatible: 'Incompatible',
       problems: {
-        agent_protocol_too_old: 'The Agent speaks an older protocol revision than this Control serves: upgrade the Agent.',
-        agent_protocol_too_new: 'The Agent speaks a newer protocol revision than this Control; its new features stay off: upgrade Control.',
-        version_line_mismatch: 'The Agent is on another major.minor than Control: upgrade it to an Agent of the same version line.',
-        kernel_too_old: 'anx-node is older than this Agent needs: upgrade the kernel.'
+        agent_protocol_too_old: 'The Agent protocol revision is below the minimum Control supports. Upgrade the Agent.',
+        agent_protocol_too_new: 'The Agent protocol revision is newer than Control; new features are disabled. Upgrade Control.',
+        version_line_mismatch: 'The Agent and Control major.minor versions differ. Upgrade to the same version line.',
+        kernel_too_old: 'anx-node is below the version this Agent requires. Upgrade the kernel.'
       }
     },
     kernelUnknown: 'Not reported',
-    kernelUnknownHint: 'An online Agent reports its anx-node version; older Agents do not, until they are upgraded.',
+    kernelUnknownHint: 'Reported by an online Agent; older Agents do not report it.',
     load: 'Load',
     loadValue: 'CPU {cpu} · Mem {memory}',
     traffic: 'Total traffic',
@@ -62,9 +62,9 @@ export default {
     certificate: 'Certificate',
     serviceStatus: 'Services',
     never: 'Never',
-    empty: 'No nodes yet',
-    emptyDescription: 'Choose Join a node and run the command on a machine: it appears here.',
-    loadFailed: 'Couldn’t load nodes'
+    empty: 'No nodes',
+    emptyDescription: 'Choose Join a node to get the install command.',
+    loadFailed: 'Could not load nodes'
   },
   // The Services column: the machine-telemetry services summary of a node.
   serviceStatus: {
@@ -79,7 +79,7 @@ export default {
     },
     counts: '{total} services: {active} running, {failed} failed',
     loading: 'Loading service status',
-    unavailable: 'Service status is unavailable: it needs the enabled machine-telemetry package and its API permission',
+    unavailable: 'Service status unavailable: requires the machine-telemetry package and its API permission',
     notEnabled: 'Service collection is off on this node'
   },
   actions: {
@@ -95,8 +95,8 @@ export default {
     title: 'Node',
     back: 'Nodes',
     loading: 'Loading node…',
-    loadFailed: 'Couldn’t load this node',
-    notFound: 'Node #{id} doesn’t exist',
+    loadFailed: 'Could not load this node',
+    notFound: 'Node #{id} does not exist',
     notFoundHint: 'It may have been deleted. Go back to the node list.',
     sections: 'Node sections',
     sectionNames: {
@@ -116,7 +116,7 @@ export default {
     health: 'Health',
     traffic: 'Traffic',
     config: 'Settings',
-    never: 'No heartbeat yet',
+    never: 'No heartbeat',
     os: 'Operating system',
     serverIp: 'Server IP',
     uptime: 'Uptime',
@@ -128,8 +128,8 @@ export default {
     totalDownload: 'Total download',
     unlimited: 'No limit · {used} this month',
     resetDay: 'Day {day} of each month',
-    quotaFooter: 'A node over its monthly quota is only flagged; nothing is limited automatically.',
-    overQuota: 'This node is over its monthly quota. It is only flagged; nothing is limited automatically.',
+    quotaFooter: 'Nodes over the monthly quota are flagged only, not limited.',
+    overQuota: 'Over the monthly quota. Flagged only, not limited.',
     runtimeError: 'The node reports a runtime error: {message}',
     rootNode: 'None (exit node)',
     registered: 'Added',
@@ -142,9 +142,9 @@ export default {
     retry: 'Retry',
     loading: 'Loading the Agent connection…',
     unavailable: 'Unavailable',
-    loadFailed: 'Couldn’t load the Agent connection',
-    noRecord: 'No Agent record yet',
-    noRecordHint: 'This node has not enrolled an Agent. Install one from the Deployment tab.',
+    loadFailed: 'Could not load the Agent connection',
+    noRecord: 'No Agent record',
+    noRecordHint: 'No Agent is enrolled. Install one from the Deployment tab.',
     connectionLabel: 'Connection',
     transport: 'Last transport',
     lastSeen: 'Last seen',
@@ -154,15 +154,15 @@ export default {
     renewAfter: 'Renews after',
     revokedAt: 'Revoked at',
     revokeReason: 'Revoked because',
-    overdueNotice: 'The Agent should have renewed its certificate after {date}. The certificate is still valid, but the Agent has not renewed it in time.',
-    revokedNotice: 'This Agent’s certificate is revoked. The Agent has to enroll again.',
-    footer: 'Read from the Agent transport inventory. A live connection is only known to the Control process that holds it.',
+    overdueNotice: 'The Agent did not renew its certificate after {date}. The certificate is still valid.',
+    revokedNotice: 'The Agent certificate is revoked. The Agent must enroll again.',
+    footer: 'From the Agent transport inventory.',
     connection: {
       mtls_stream: 'mTLS stream',
       offline: 'Offline'
     },
     connectionHint: {
-      mtls_stream: 'Agent Control stream authenticated by the Agent certificate',
+      mtls_stream: 'Control stream authenticated by the Agent certificate',
       offline: 'Nothing seen in the last five minutes'
     },
     certificate: {
@@ -181,7 +181,7 @@ export default {
     save: 'Save changes',
     required: 'Required',
     parentNone: 'None (root / exit node)',
-    parentHint: 'Pick a parent node to build a multi-level relay chain. Traffic this node forwards counts for it and every ancestor.',
+    parentHint: 'Builds a multi-level relay chain. Forwarded traffic counts for this node and every ancestor.',
     fields: {
       name: 'Name',
       address: 'Address',
@@ -207,8 +207,8 @@ export default {
   },
   install: {
     title: 'Move to a new machine',
-    description: 'Install node {node} on another machine with one command.',
-    intro: 'Generates a single-use token bound to this node and the install command for each download source. Paste it on the new machine as root (sudo): the script installs the Agent, removes this machine’s legacy forward runtime and waits until the Agent has joined. Running the same command again is safe. The new machine takes the place of the old one.',
+    description: 'Move node {node} to another machine.',
+    intro: 'Generates a single-use token bound to this node and the install commands. Run one on the new machine as root. The new machine replaces the old one; the command can be run again safely.',
     ttl: 'Token lifetime',
     ttlOptions: {
       hour: '1 hour (default)',
@@ -219,43 +219,43 @@ export default {
     generate: 'Generate install command',
     regenerate: 'Generate again',
     commandTitle: 'Install command',
-    once: 'The token is shown only here, works once and expires {time}. It cannot be shown again after you close this sheet.',
+    once: 'The token is shown once, works once and expires {time}.',
     mirror: 'Download source',
     mirrors: {
       control: 'Control',
       cn: 'Mainland mirror',
       github: 'GitHub',
-      controlHelp: 'The script and the Agent are downloaded from this Control.',
-      cnHelp: 'The script comes from this Control and the Agent from the mainland mirror; checksums always come from Control or GitHub.',
-      githubHelp: 'The script and the Agent come from GitHub releases; the token still enrolls with this Control.'
+      controlHelp: 'The script and the Agent download from this Control.',
+      cnHelp: 'The script downloads from this Control and the Agent from the mainland mirror; checksums come from Control or GitHub.',
+      githubHelp: 'The script and the Agent download from GitHub releases; the token enrolls with this Control.'
     },
     commandLabel: 'Run on the node as root',
     copy: 'Copy command',
     fallback: 'This download source is not set up: {note}',
-    signed: 'The install script is signed: verify it with /install.sh.sig and the official release key before running it.',
-    unsigned: 'This Control has no release signature for the install script; to verify it, use agent-install.sh and its .sig from GitHub releases.',
-    legacy: 'The install removes this machine’s legacy forward runtime (the nftables tables inet v2b_forward, ip v2b_forward and ip anixops_forward, and the v2forward-agent service) and lists what it removed.',
+    signed: 'The install script is signed. Verify it with /install.sh.sig and the official release key.',
+    unsigned: 'No install script signature on this Control. To verify, use agent-install.sh and its .sig from GitHub releases.',
+    legacy: 'The install removes the legacy forward runtime (nftables tables inet v2b_forward, ip v2b_forward and ip anixops_forward, and the v2forward-agent service) and lists what was removed.',
     failed: 'Could not generate the install command'
   },
 
   deploySection: {
     title: 'Deployment',
-    description: `Manage this node’s ${AGENT_NAME}. New machines are not added here: use Nodes › Join a node.`,
+    description: `Manage the ${AGENT_NAME} of this node. Add new machines under Nodes › Join a node.`,
     move: 'Move to a new machine',
-    moveText: 'Move this node to another machine, or join it again after its certificate stopped working. Generates a single-use command to run on the new machine as root.',
+    moveText: 'Move this node to another machine, or join it again after its certificate stops working.',
     moveAction: 'Generate install command',
     certificate: 'Certificate',
-    certificateText: 'The node connects with a certificate; its Agent renews it before it ends.',
-    certificateGone: 'The certificate no longer works, so this node’s Agent cannot connect. Join it again with “Move to a new machine”.',
-    certificateNone: 'This node has no Agent certificate yet. Use “Move to a new machine” to join a machine.',
+    certificateText: 'The node connects with a certificate that is renewed before expiry.',
+    certificateGone: 'The certificate is invalid and the Agent cannot connect. Join again with “Move to a new machine”.',
+    certificateNone: 'No Agent certificate. Use “Move to a new machine” to join a machine.',
     uninstall: 'Uninstall',
-    uninstallText: 'Run it on this node’s machine. Add --purge to remove its identity and data too.',
+    uninstallText: 'Run on the node. Add --purge to also remove its identity and data.',
     uninstallLabel: 'Run on the node as root',
     copy: 'Copy command'
   },
   traffic: {
     title: 'Traffic',
-    description: 'The bytes this node’s users moved through it, with the node’s traffic rate applied.',
+    description: 'User traffic through this node, with the traffic rate applied.',
     range: 'Time range',
     ranges: { '24h': '24 h', '7d': '7 d', '30d': '30 d', '90d': '90 d', '1y': '1 y' },
     rangeNames: {
@@ -274,35 +274,35 @@ export default {
     chart: {
       title: 'Traffic over time',
       label: 'Traffic of {node}, {range}',
-      summary: '{up} uploaded and {down} downloaded. Busiest {bucket}: {peak}, starting {time}.',
+      summary: '{up} uploaded, {down} downloaded. Peak {bucket}: {peak}, starting {time}.',
       summaryEmpty: 'No traffic.',
       bucketHour: 'hour',
       bucketDay: 'day',
       time: 'Time'
     },
     empty: 'No traffic in this range',
-    emptyHour: 'Nothing was reported in these hours. Hourly history only goes back as far as the traffic log is kept.',
+    emptyHour: 'No reports in this period. Hourly data follows the traffic log retention.',
     emptyDay: 'Nothing was recorded on these days.',
-    loadFailed: 'Couldn’t load the traffic',
-    noteHour: 'Hourly buckets (UTC hours) from the traffic log, shown in your time zone. History ends where the log was purged.',
-    noteDay: 'Daily totals (calendar days of the Control host) from the daily statistics, kept however long the traffic log is.'
+    loadFailed: 'Could not load the traffic',
+    noteHour: 'Hourly totals (UTC hours), shown in the local time zone.',
+    noteDay: 'Daily totals (calendar days of the Control host), independent of traffic log retention.'
   },
   rotate: {
     title: 'Agent credentials',
     row: 'Rotate Agent credentials',
-    rowHint: 'Revoke what this node’s Agent holds and issue a one-time credential to enroll it again.',
-    footer: 'Super administrators only. The rotation is recorded in the audit log with your reason; the credential never is.',
+    rowHint: 'Revoke the Agent credentials of this node and issue a one-time credential to enroll again.',
+    footer: 'Super administrators only. The rotation and reason are recorded in the audit log; the credential is not.',
     action: 'Rotate credentials…',
     superOnly: 'Only super administrators can rotate credentials.',
-    disabledHint: 'This node is disabled. Enable it first, then rotate its credentials.',
+    disabledHint: 'This node is disabled. Enable it first.',
     confirm: {
       title: 'Rotate the credentials of {name}?',
-      message: 'The Agent has to enroll again. You can rotate again at any time; only the last credential works.',
+      message: 'The Agent must enroll again. Only the latest credential is valid.',
       action: 'Rotate credentials',
-      impact: 'What happens',
-      revoke: 'Every Agent certificate, enrollment and forward link certificate of this node is revoked. A running Agent loses its connection at its next heartbeat.',
-      issue: 'A new one-time credential is issued and shown once. An earlier unused credential stops working.',
-      offline: 'Nothing contacts the node, so this works while it is offline: its Agent finds out when it next connects.',
+      impact: 'Impact',
+      revoke: 'All Agent certificates, enrollments and forward link certificates of this node are revoked. A running Agent disconnects at its next heartbeat.',
+      issue: 'A new one-time credential is issued and shown once. Unused earlier credentials stop working.',
+      offline: 'The node is not contacted; rotation works while it is offline.',
       reason: 'Reason',
       reasonHelp: 'Optional, recorded in the audit log. {count} / {max} bytes.',
       reasonTooLong: 'The reason is too long: {count} of {max} bytes.',
@@ -311,19 +311,19 @@ export default {
     },
     result: {
       title: 'New credential for {name}',
-      description: 'Shown once. It can’t be shown again after you close this dialog.',
-      warning: 'Treat it like a password. Until it is used or expires, anyone who has it can enroll an Agent as this node: don’t share it, and don’t paste it into chats, tickets or files.',
+      description: 'Shown once. It cannot be shown again after this dialog closes.',
+      warning: 'Treat it as a password. Until used or expired, it can enroll an Agent as this node. Do not share it.',
       label: 'One-time credential',
       copy: 'Copy credential',
       expires: 'Valid until {time}',
       remaining: 'in {remaining}',
-      expired: 'This credential has expired. Rotate again to get a new one.',
+      expired: 'This credential has expired. Rotate again.',
       single: 'It works once.',
       revoked: 'Revoked',
       certificates: 'Agent certificates',
       enrollments: 'Enrollments',
       linkCertificates: 'Forward link certificates',
-      next: 'Give this credential to the machine and enroll the Agent again. The guide has the steps for a node that already has an identity.',
+      next: 'Use this credential to enroll the Agent again. See the guide for the steps.',
       guide: 'Rotating a node’s credentials (guide)',
       done: 'Done'
     },
@@ -331,39 +331,39 @@ export default {
       super_admin_required: 'Only super administrators can rotate credentials.',
       node_not_found: 'This node no longer exists.',
       node_disabled: 'This node is disabled. Enable it first.',
-      agent_pki_disabled: 'The built-in Agent CA is off (module_runtime.ca_kek), so Control can’t issue credentials.',
-      failed: 'Couldn’t rotate the credentials: {message}'
+      agent_pki_disabled: 'The built-in Agent CA is disabled (module_runtime.ca_kek). Credentials cannot be issued.',
+      failed: 'Could not rotate the credentials: {message}'
     }
   },
   credentials: {
     title: 'Credentials',
-    description: `The ${AGENT_NAME} signs in to the control plane with its mTLS certificate; the node has no API key.`,
+    description: `The ${AGENT_NAME} authenticates to the control plane with an mTLS certificate; the node has no API key.`,
     nodeId: 'Node ID',
     protocolSecrets: 'Protocol secrets',
     protocolSecretsRow: 'Open protocols',
-    protocolSecretsFooter: 'Private keys and passwords in protocol settings show as ********; keep ******** to keep a stored value.'
+    protocolSecretsFooter: 'Private keys and passwords show as ********; keep it to retain the stored value.'
   },
   danger: {
     title: 'Danger zone',
     description: 'These change what subscriptions offer.',
     disable: 'Disable node',
-    disableHint: 'Subscriptions stop offering it and its Agent certificates are revoked.',
+    disableHint: 'Subscriptions stop offering it; its Agent certificates are revoked.',
     disableAction: 'Disable…',
     enable: 'Enable node',
-    enableHint: 'The node goes back to pending and shows online after its next heartbeat.',
+    enableHint: 'The node returns to pending and shows online after the next heartbeat.',
     enableAction: 'Enable',
     delete: 'Delete node',
-    deleteHint: 'Removes the node, its protocols and credentials. You type its name to confirm.',
+    deleteHint: 'Removes the node, its protocols and credentials. Requires the node name to confirm.',
     deleteAction: 'Delete…'
   },
   protocols: {
     title: 'Protocols',
-    description: 'What this node serves. Changes reach the node with the next sync.',
+    description: 'Protocols served by this node. Changes apply at the next sync.',
     tableLabel: 'Protocols of {name}',
     add: 'Add protocol',
-    empty: 'No protocols yet',
-    emptyDescription: 'Add a protocol, or start from a template, so subscriptions can use this node.',
-    loadFailed: 'Couldn’t load the protocols',
+    empty: 'No protocols',
+    emptyDescription: 'Add a protocol so subscriptions can use this node.',
+    loadFailed: 'Could not load the protocols',
     enabled: 'Enabled',
     disabled: 'Disabled',
     listed: 'Listed',
@@ -379,24 +379,24 @@ export default {
   },
   services: {
     title: 'Services',
-    description: 'Read-only systemd services on this node: state, CPU over the last 10 minutes and memory.',
+    description: 'systemd services on this node (read-only): state, 10-minute CPU and memory.',
     tableLabel: 'Services of {name}',
     refresh: 'Refresh services',
     settings: 'Settings',
-    loadFailed: 'Couldn’t load the services',
+    loadFailed: 'Could not load the services',
     totals: "Total {total} {'|'} Failed {failed} {'|'} Updated every 10 minutes",
     observedAt: 'Reported {time}',
-    stale: 'The last report is from {time}. The table may be out of date: the node or its collector may be offline.',
-    unsupported: 'This node can’t report its services',
+    stale: 'Last report: {time}. The data may be out of date.',
+    unsupported: 'This node cannot report its services',
     unsupportedReason: 'Reason: {reason}',
     unsupportedNoReason: 'The node needs systemd and cgroup v2.',
     waiting: 'Waiting for the first report',
-    waitingDescription: 'The node sends its services table about once a minute after collection is enabled.',
+    waitingDescription: 'Once enabled, the node reports about once a minute.',
     empty: 'No services match the node’s filters',
     emptyDescription: 'Change the include or exclude patterns in Settings.',
     disabled: {
       title: 'Not enabled on this node',
-      description: 'The services table is off by default. Enable it to collect the unit names, states, CPU and memory of this node’s systemd services. Nothing else is collected.',
+      description: 'Off by default. When enabled, only unit names, states, CPU and memory of systemd services are collected.',
       enable: 'Enable for this node'
     },
     filters: {
@@ -425,18 +425,18 @@ export default {
       title: 'Services settings',
       description: 'Node {name}',
       enabled: 'Collect services on this node',
-      enabledHelp: 'Read-only: the table never starts, stops or restarts a service.',
+      enabledHelp: 'Read-only. Services are never started, stopped or restarted.',
       include: 'Include patterns',
-      includeHelp: 'One pattern per line, such as nginx*.service. Leave empty to include every service.',
+      includeHelp: 'One pattern per line, such as nginx*.service. Empty includes all services.',
       exclude: 'Exclude patterns',
       excludeHelp: 'One pattern per line. Matching services are left out.',
       invalidGlob: 'Not a valid pattern: {glob}',
       tooManyGlobs: 'At most {max} patterns',
       save: 'Save',
-      saved: 'Services settings saved. The node applies them with its next configuration.',
-      saveFailed: 'Couldn’t save the services settings',
-      conflict: 'The settings changed elsewhere. Reloaded the latest; review and save again.',
-      noInstallation: 'Machine Telemetry has no Agent installation. Install it under Plugins first.'
+      saved: 'Services settings saved. They apply with the next node configuration.',
+      saveFailed: 'Could not save the services settings',
+      conflict: 'The settings were changed elsewhere and have been reloaded. Review and save again.',
+      noInstallation: 'Machine Telemetry has no Agent installation. Install it under Plugins.'
     }
   },
   logs: {
@@ -446,7 +446,7 @@ export default {
     refresh: 'Refresh logs',
     empty: 'No logs from this node',
     emptyDescription: 'Logs appear here once the node reports them.',
-    loadFailed: 'Couldn’t load the logs',
+    loadFailed: 'Could not load the logs',
     filters: {
       allLevels: 'All levels',
       search: 'Search logs',
@@ -473,23 +473,23 @@ export default {
     description: 'Node {name}',
     create: 'Add protocol',
     save: 'Save protocol',
-    pickHint: 'Pick a starting point. Every setting can be changed in the next step.',
+    pickHint: 'Choose a template. All settings can be changed in the next step.',
     portSpec: 'Port {port}',
     recommended: 'Recommended',
     change: 'Change',
     fixed: '{value} (fixed for this protocol)',
     blank: {
       name: 'Custom',
-      description: 'Start from a blank protocol and choose everything yourself'
+      description: 'Start from a blank configuration'
     },
     sections: {
       basics: 'Basics',
       connection: 'Transport and security',
       publish: 'Publishing'
     },
-    enableHint: 'When off, the configuration is kept but does not run on the node.',
+    enableHint: 'When off, the configuration is kept but not run on the node.',
     showHint: 'Include this inbound in user subscriptions.',
-    maskedSecretsHint: 'Stored secrets (private keys, passwords, tokens) show as ********. Leave ******** to keep a stored secret, or replace it with a new value.',
+    maskedSecretsHint: 'Stored secrets show as ********. Keep it to retain the value, or enter a new value.',
     modeLabel: 'Editor',
     jsonLabel: 'Protocol JSON',
     tabs: {
@@ -517,7 +517,7 @@ export default {
     iwan: {
       title: 'Panabit iWAN',
       unencrypted: 'Not encrypted',
-      unencryptedHint: 'iWAN has no encryption or integrity protection: devices on the path can read and change the traffic. Use it only on links you trust (spec §9).',
+      unencryptedHint: 'iWAN has no encryption or integrity protection. Use it on trusted links only.',
       fields: {
         pool: 'Address pool',
         mtu: 'MTU',
@@ -527,11 +527,11 @@ export default {
         fixedAddresses: 'Fixed addresses'
       },
       hints: {
-        pool: 'IPv4 network (/8 to /30); its first address is the gateway.',
+        pool: 'IPv4 network (/8 to /30); the first address is the gateway.',
         dnsUpstream: 'Where the gateway relays DNS: an IP or IP:port.',
-        allowEncrypt: 'XOR only hides traffic from casual inspection; it is not encryption.',
+        allowEncrypt: 'XOR masking is not encryption.',
         fixedAddresses: 'One "user id=address" per line, inside the pool and not the gateway.',
-        login: 'Users log in with their panel user id and the first 16 hex digits of their UUID; the iWAN format on the subscription page gives them an iwand configuration.'
+        login: 'Login: user id and the first 16 hex digits of the UUID. The iwand configuration is available in the iWAN subscription format.'
       }
     },
     wireguard: {
@@ -566,8 +566,8 @@ export default {
       anxAdvanced: 'Advanced'
     },
     groupIntros: {
-      anxCover: 'Connections that are not ANX are forwarded to this site.',
-      anxEntry: 'Only for nodes that users dial directly; leave the defaults on transit nodes.',
+      anxCover: 'Non-ANX connections are forwarded to this site.',
+      anxEntry: 'Only for nodes users connect to directly; keep the defaults on transit nodes.',
       anxTuning: 'Optional: a general preset applies when empty.'
     },
     none: 'None',
@@ -609,24 +609,24 @@ export default {
       min_wire_gen: 'Lowest handshake generation accepted'
     },
     hints: {
-      anxServerNames: 'Comma separated, clients use the first; they must be names the fallback target serves.',
-      anxDest: 'Connections that are not ANX are forwarded here as host:port.',
-      anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
-      anxShapePlain: 'Shaping is on by default; turn it off only to debug interop.',
-      anxMaxStreams: 'Streams one ANX session may open at once; empty means 256.',
-      anxWireGen: 'Set to 2 to publish the server key with "{\'@\'}2": clients then log in with the second handshake generation and never fall back. Only once this node runs an anx-node that knows the second generation, and every client of it has been updated; older clients cannot read the new key. Empty = 1.',
-      anxMinWireGen: 'Set to 2 to make the node refuse first-generation logins. Only after the published generation is 2 and the node no longer counts first-generation logins (Stats auth_gen1). Empty = 1 (both accepted). Needs an anx-node that knows the second generation.',
-      anxDestBehavior: 'Paste the whole "dest_behavior": {…} line for this dest (or a JSON object), never single keys. It should carry session_tickets and flight_records. Empty = the stack preset only.',
-      anxDestBehaviorMissing: 'Warning: a dest lacks session_tickets or flight_records in dest_behavior (or its dest_behaviors entry). Paste the whole dest_behavior line for that dest ("none" counts as set).',
-      anxDestBehaviors: 'For a dest list: a JSON object of dest ("host:port", as written in dest) to that dest\'s overrides on top of dest_behavior. Needs an anx-node with per-dest behavior.',
-      anxDestBehaviorsStale: 'Some entries name a dest no longer in the dest list; they are kept but not sent.',
-      anxWgListenPort: 'Also serve the wg jacket on this UDP port. Subscriptions add wg_port. Open the UDP port in the firewall. Empty = off. Needs an anx-node with the wg jacket.',
-      anxBareListenPort: 'Also serve the bare jacket on this TCP port; it needs the no-SNI mode. Subscriptions add bare_port. Open the TCP port in the firewall. Empty = off. Needs an anx-node with the bare jacket.',
-      serverKey: 'Server key of the 2022 ciphers, required; switching to a 2022 cipher generates a random one.',
-      snellPsk: 'Shared by every user of this protocol; each user also logs in with their own user key (their UUID), so only clients that can send a user key connect. Subscriptions list this protocol in the Surge format only. Needs an Agent of protocol revision 3 or later.',
-      snellVersion: '1 to 6; a version 4 node also serves version 5 clients. Obfuscation applies to versions 1 to 4 and the mode to version 6, which needs a PSK of at least 12 bytes.',
-      privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
-      publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
+      anxServerNames: 'Comma separated; clients use the first. Must be names the fallback target serves.',
+      anxDest: 'Forward address for non-ANX connections, as host:port.',
+      anxAllowNoSni: 'Also accept connections without SNI; subscriptions then carry no SNI. Requires anx-node newer than alpha.7.',
+      anxShapePlain: 'For interoperability debugging only.',
+      anxMaxStreams: 'Concurrent streams per session. Default 256.',
+      anxWireGen: 'Set to 2 to publish the server key with "{\'@\'}2"; clients then use the second handshake generation. Enable only after anx-node supports it and all clients are updated; older clients cannot use the new key. Default 1.',
+      anxMinWireGen: 'Set to 2 to refuse first-generation handshakes. Enable only after the published generation is 2 and Stats auth_gen1 stops growing. Default 1. Requires anx-node with second-generation support.',
+      anxDestBehavior: 'Paste the complete "dest_behavior": {…} line or a JSON object, including session_tickets and flight_records. Empty uses the stack preset.',
+      anxDestBehaviorMissing: 'Warning: a dest lacks session_tickets or flight_records in dest_behavior. Paste the complete line ("none" counts as set).',
+      anxDestBehaviors: 'For multiple dests: a JSON object mapping each dest ("host:port") to its overrides of dest_behavior. Requires a newer anx-node.',
+      anxDestBehaviorsStale: 'Some entries name a dest no longer listed; they are kept but not sent.',
+      anxWgListenPort: 'Serve the wg jacket on this UDP port; subscriptions add wg_port. Open the port in the firewall. Empty disables it. Requires a newer anx-node.',
+      anxBareListenPort: 'Serve the bare jacket on this TCP port; requires no-SNI mode. Subscriptions add bare_port. Open the port in the firewall. Empty disables it. Requires a newer anx-node.',
+      serverKey: 'Required for 2022 ciphers; generated when switching to one.',
+      snellPsk: 'Shared by all users; each user also authenticates with a UUID. Listed in the Surge format only. Requires Agent protocol revision 3 or later.',
+      snellVersion: '1 to 6. Version 4 nodes also serve version 5 clients. Obfuscation applies to versions 1 to 4; mode applies to version 6, which requires a PSK of at least 12 bytes.',
+      privateKey: 'Empty generates a key pair when saved.',
+      publicKey: 'Public key sent to clients; empty derives it from the private key.'
     }
   },
   tabs: {
@@ -637,19 +637,19 @@ export default {
   // Join a node: one entry for a new machine (docs/design/node-onboarding).
   join: {
     title: 'Join a node',
-    description: 'Run one command on the machine to join. It becomes a node of the node group you pick.',
+    description: 'Run the install command on the target machine to join the selected node group.',
     checking: 'Checking that this Control can take nodes…',
     loading: 'Getting ready…',
-    loadFailed: 'Couldn’t get ready: {message}',
+    loadFailed: 'Could not get ready: {message}',
     retry: 'Try again',
     recheck: 'Check again',
     group: 'Node group',
     newGroup: 'New node group',
-    requiresApproval: 'New nodes wait for your approval',
-    defaultCreated: 'The default node group “{name}” was created for you: one VLESS Reality protocol on a random port, in the default subscription group. Edit it later under Node groups.',
+    requiresApproval: 'New nodes require approval',
+    defaultCreated: 'Default node group “{name}” created: VLESS Reality on a random port, in the default subscription group.',
     blocked: {
-      title: 'Nodes can’t join yet',
-      description: 'Fix these first. A command copied now would fail on the machine.'
+      title: 'Nodes cannot join',
+      description: 'Resolve the following first.'
     },
     checks: {
       public_url: 'Control’s address',
@@ -661,13 +661,13 @@ export default {
       script_signature: 'Install script signature'
     },
     fixes: {
-      public_url: 'Set agent_install.public_url to the https address nodes reach Control at (for example https://panel.example.com) and restart Control. Behind a reverse proxy, also list the proxy in server.trusted_proxies.',
-      panel_certificate: 'Nodes download the install script over https and refuse an untrusted certificate. The banner at the top says why the certificate is not ready; fix that, then use Request again there (or anix-control tls retry on the server).',
-      grpc: 'Set domain (it turns the gRPC listener on), or grpc.enabled. When nodes dial a different address than Control’s own, set agent_install.grpc_target. Then restart Control.',
-      grpc_certificate: 'Nodes verify the gRPC certificate against their system CAs and refuse anything else. Set domain (and, behind a CDN, grpc.public_name to a DNS-only name) so Control obtains one; the banner at the top says why it is not ready yet.',
-      ca: 'Set module_runtime.ca_kek (environment variable ANIX_CONTROL_MODULE_RUNTIME_CA_KEK) to a 32-byte key, for example from openssl rand -base64 32, and restart Control.',
-      agent_release: 'Set agent_install.agent_version to a published Agent release (for example v4.2.0), or put the Agent release in agent_install.artifact_dir, and restart Control.',
-      script_signature: 'Point agent_install.signature_file at this version’s agent-install.sh.sig, or leave it empty.'
+      public_url: 'Set agent_install.public_url to the Control https address (for example https://panel.example.com) and restart Control. Behind a reverse proxy, add the proxy to server.trusted_proxies.',
+      panel_certificate: 'The panel certificate is not ready; the banner at the top shows why. Resolve it, then choose Request again or run anix-control tls retry on the server.',
+      grpc: 'Set domain or grpc.enabled. If nodes connect to a different address, set agent_install.grpc_target. Then restart Control.',
+      grpc_certificate: 'The gRPC certificate must come from a public CA. Set domain (behind a CDN, also grpc.public_name to a DNS-only name) to obtain one; the banner at the top shows why it is not ready.',
+      ca: 'Set module_runtime.ca_kek (environment variable ANIX_CONTROL_MODULE_RUNTIME_CA_KEK) to a 32-byte key (openssl rand -base64 32) and restart Control.',
+      agent_release: 'Set agent_install.agent_version to a published Agent release (for example v4.2.0), or place the release in agent_install.artifact_dir, and restart Control.',
+      script_signature: 'Point agent_install.signature_file to agent-install.sh.sig of this version, or leave it empty.'
     },
     command: {
       title: 'Install command',
@@ -676,30 +676,30 @@ export default {
         control: 'Control',
         cn: 'Mainland mirror',
         github: 'GitHub',
-        controlHelp: 'The script and the Agent are downloaded from this Control.',
-        cnHelp: 'The script comes from this Control and the Agent from the mainland mirror; checksums always come from Control or GitHub.',
-        githubHelp: 'The script and the Agent come from GitHub releases; the node still joins this Control.'
+        controlHelp: 'The script and the Agent download from this Control.',
+        cnHelp: 'The script downloads from this Control and the Agent from the mainland mirror; checksums come from Control or GitHub.',
+        githubHelp: 'The script and the Agent download from GitHub releases; the node joins this Control.'
       },
       commandLabel: 'Run on the machine to join, as root',
       copy: 'Copy command',
       fallback: 'This download source is not set up: {note}',
-      expires: 'The token ends {time}. The same command joins any number of machines.',
-      neverExpires: 'The token does not expire. The same command joins any number of machines.',
-      expired: 'The token has expired: set a new validity under Node groups › Edit, or reset the token, to join more machines.',
-      history: 'The command contains the token; it stays in the shell history of every machine it ran on.',
+      expires: 'The token expires {time}. The command can join multiple machines.',
+      neverExpires: 'The token does not expire. The command can join multiple machines.',
+      expired: 'The token has expired. Set a new validity under Node groups › Edit, or reset the token.',
+      history: 'The command contains the token and remains in the shell history of the machine.',
       reset: 'Reset token',
       resetConfirmTitle: 'Reset the token of “{name}”?',
-      resetConfirmMessage: 'Every command copied before stops working. Nodes that already joined are not affected.',
+      resetConfirmMessage: 'Previously copied commands stop working. Joined nodes are not affected.',
       resetDone: 'Token reset. Use the new command.',
       uninstall: 'Uninstall command',
-      uninstallHelp: 'Run it on the node. Add --purge to remove its identity and data too.',
-      forbidden: 'Only a super administrator can see the join command. Sign in as one.',
-      failed: 'Couldn’t read the join command: {message}'
+      uninstallHelp: 'Run on the node. Add --purge to also remove its identity and data.',
+      forbidden: 'Only super administrators can view the join command.',
+      failed: 'Could not read the join command: {message}'
     },
     nodes: {
       title: 'Machines that joined',
       waiting: 'Waiting for a machine to join…',
-      waitingHint: 'Run the command above on the machine and it shows up here.',
+      waitingHint: 'Machines appear here after running the command above.',
       joined: '{name} joined',
       online: 'Online',
       connecting: 'Connecting',
@@ -709,27 +709,27 @@ export default {
       name: 'Node group name',
       namePlaceholder: 'Hong Kong',
       create: 'Create node group',
-      failed: 'Couldn’t create the node group: {message}'
+      failed: 'Could not create the node group: {message}'
     }
   },
   approval: {
     pending: 'Awaiting approval',
-    pendingHint: 'This node waits for you: it gets no configuration and no users until you approve it.',
+    pendingHint: 'Awaiting approval. No configuration or users are sent until approved.',
     approved: 'Approved',
     rejected: 'Rejected',
     approve: 'Approve',
     reject: 'Reject',
-    banner: '{count} machine(s) wait for your approval. They get no configuration and no users until you approve them.',
+    banner: '{count} machine(s) awaiting approval. No configuration or users are sent until approved.',
     view: 'View',
     rejectTitle: 'Reject node {name}?',
     rejectMessage: 'The node is disabled and its certificates are revoked.',
     approvedToast: '{name} approved',
     rejectedToast: '{name} rejected',
-    failed: 'Couldn’t do that: {message}'
+    failed: 'Could not process: {message}'
   },
   // Node groups (the tab and its sheet).
   groups: {
-    summary: 'A node group sets the defaults, the protocols and the join token of its nodes.',
+    summary: 'A node group defines the defaults, protocols and join token of its nodes.',
     add: 'New node group',
     table: {
       label: 'Node groups',
@@ -747,29 +747,29 @@ export default {
     tokenNever: 'Does not expire',
     tokenUntil: 'Ends {date}',
     tokenExpired: 'Expired',
-    tokenExpiredEdit: 'This group’s token has expired. Set a new validity under Edit first.',
-    approvalOn: 'New nodes of “{name}” now need your approval.',
+    tokenExpiredEdit: 'The token has expired. Set a new validity under Edit.',
+    approvalOn: 'New nodes of “{name}” require approval.',
     approvalOff: 'New nodes of “{name}” no longer need approval.',
-    empty: 'No node groups yet',
-    emptyDescription: 'Choose Join a node: Control makes the default node group and shows the command.',
-    loadFailed: 'Couldn’t load node groups',
+    empty: 'No node groups',
+    emptyDescription: 'Choose Join a node to create the default node group.',
+    loadFailed: 'Could not load node groups',
     created: 'Node group {name} created',
     saved: 'Node group {name} saved',
     deleted: 'Node group {name} deleted',
     deleteTitle: 'Delete node group {name}?',
-    deleteMessage: 'Its join token stops working at once. Nodes that already joined are not affected.',
+    deleteMessage: 'The join token stops working immediately. Joined nodes are not affected.',
     deleteAction: 'Delete node group',
     deleteInUse: 'The group still has nodes: delete or move them first.',
     nameTaken: 'A node group with this name exists.',
-    caKekMissing: 'module_runtime.ca_kek is not set, so no node group can be created.'
+    caKekMissing: 'module_runtime.ca_kek is not set. Node groups cannot be created.'
   },
   groupForm: {
     titleCreate: 'New node group',
     titleEdit: 'Edit node group',
-    createDescription: 'The group’s settings are copied to every node that joins it.',
+    createDescription: 'Settings apply to nodes that join later.',
     create: 'Create node group',
     save: 'Save changes',
-    saveFailed: 'Couldn’t save: {message}',
+    saveFailed: 'Could not save: {message}',
     joining: 'Joining',
     fields: {
       name: 'Name',
@@ -780,7 +780,7 @@ export default {
       resetDay: 'Monthly reset day',
       tokenExpiry: 'Token validity',
       maxNodes: 'Node limit',
-      requireApproval: 'New nodes need my approval'
+      requireApproval: 'Require approval for new nodes'
     },
     placeholders: {
       name: 'Hong Kong',
@@ -792,7 +792,7 @@ export default {
       monthlyLimit: 'Leave empty for no limit.',
       resetDay: '1 to 28.',
       maxNodes: '0 means no limit.',
-      requireApproval: 'Until you approve it, a node gets no configuration and no users.'
+      requireApproval: 'No configuration or users are sent until approved.'
     },
     expiry: {
       never: 'Does not expire',
@@ -831,7 +831,7 @@ export default {
     transportUnsupported: '{type} does not run over {value}',
     tlsUnsupported: '{type} does not take {value}',
     requiredFields: 'Fill in the required fields',
-    saveFailed: 'Couldn’t save: {message}',
+    saveFailed: 'Could not save: {message}',
     syncSuccess: 'Node “{name}” accepted the sync',
     syncFailed: 'Sync failed: {message}',
     nodeSaved: 'Node {name} saved',
@@ -841,10 +841,10 @@ export default {
     protocolCreated: 'Protocol {type} :{port} added',
     protocolSaved: 'Protocol {type} :{port} saved',
     protocolDeleted: 'Protocol {type} :{port} deleted',
-    generateFailed: 'Couldn’t generate: {message}',
+    generateFailed: 'Could not generate: {message}',
     copied: 'Copied',
-    copyFailedManual: 'Couldn’t copy automatically. Select the text and copy it.',
+    copyFailedManual: 'Could not copy automatically. Copy the text manually.',
     invalidJsonDetail: 'Invalid JSON: {message}',
-    quotaExceededBanner: 'Over their monthly quota on this page: {count}. Nodes are only flagged; nothing is limited automatically.'
+    quotaExceededBanner: 'Nodes over the monthly quota on this page: {count}. Flagged only, not limited.'
   }
 }

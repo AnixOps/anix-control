@@ -2,13 +2,13 @@
 export default {
   topology: {
     title: 'Network topology',
-    description: 'Every device and the lines between them. Select a device or a line to see where it goes.',
+    description: 'All devices and the lines between them.',
     loadFailed: 'The topology did not load',
-    emptyTitle: 'No devices yet',
-    emptyDescription: 'Once the first device joins, its place and lines are drawn here.',
+    emptyTitle: 'No devices',
+    emptyDescription: 'Device locations and lines appear once a device joins.',
     openNodes: 'Add a device',
     close: 'Close',
-    unplaced: '{n} devices have no region yet. Pick one under Network on the device page (Protocols) to map them:',
+    unplaced: '{n} devices have no region. Set one under Network on the device page:',
     view: { label: 'View', map: 'World map', graph: 'Diagram' },
     map: { zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit the devices', world: 'Whole world' },
     roles: { entry: 'Entry', relay: 'Relay', exit: 'Exit', direct: 'Direct' },
@@ -25,7 +25,7 @@ export default {
       users: 'Users online',
       usersDetail: 'Sum of what the devices report'
     },
-    lines: { title: 'Lines', empty: 'No relayed lines yet. Users reach every device directly.' },
+    lines: { title: 'Lines', empty: 'No relayed lines.' },
     line: { kind: 'Kind', route: 'Relayed line', egress: 'Domain egress', traffic: 'Traffic, last 24 hours', protocol: 'Protocol', fixed: 'Fixed targets, ports only', open: 'Open the line' },
     device: {
       place: 'Place',
@@ -38,7 +38,7 @@ export default {
       usersLabel: 'Users online',
       users: '{n} online',
       lines: 'Lines through it ({n})',
-      noLines: 'No line uses it; users reach it directly.',
+      noLines: 'No lines pass through; users connect directly.',
       open: 'Open the device'
     }
   }

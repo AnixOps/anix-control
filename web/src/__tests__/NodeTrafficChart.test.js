@@ -104,7 +104,7 @@ describe('NodeTrafficChart', () => {
     renderChart()
     const plot = await screen.findByRole('img', { name: /Traffic of hk-01, the last 24 hours/ })
     const lastHour = local(Date.UTC(2026, 9, 2, 8))
-    expect(plot.getAttribute('aria-label')).toBe(`Traffic of hk-01, the last 24 hours: 1.0 GB uploaded and 3.0 GB downloaded. Busiest hour: 4.0 GB, starting ${lastHour}.`)
+    expect(plot.getAttribute('aria-label')).toBe(`Traffic of hk-01, the last 24 hours: 1.0 GB uploaded, 3.0 GB downloaded. Peak hour: 4.0 GB, starting ${lastHour}.`)
 
     const table = await screen.findByRole('table', { hidden: true })
     expect(within(table).getAllByRole('columnheader', { hidden: true }).map(cell => cell.textContent)).toEqual(['Time', 'Upload', 'Download', 'Total'])
@@ -142,18 +142,18 @@ describe('NodeTrafficChart', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     kernelApi.getKernelNodeTraffic.mockResolvedValueOnce(hourly(24)).mockResolvedValueOnce(daily(90))
     renderChart()
-    expect((await screen.findByTestId('node-traffic-note')).textContent).toContain('Hourly buckets (UTC hours)')
+    expect((await screen.findByTestId('node-traffic-note')).textContent).toContain('Hourly totals (UTC hours)')
     await user.click(screen.getByRole('button', { name: '90 d' }))
     await waitFor(() => expect(screen.getByTestId('node-traffic-note').textContent).toContain('Daily totals'))
     const plot = screen.getByRole('img', { name: /the last 90 days/ })
-    expect(plot.getAttribute('aria-label')).toContain('Busiest day')
+    expect(plot.getAttribute('aria-label')).toContain('Peak day')
   })
 
   it('shows an empty state, not a flat chart, when nothing was moved', async () => {
     kernelApi.getKernelNodeTraffic.mockResolvedValue(hourly(24, { up: 0, down: 0 }))
     renderChart()
     expect(await screen.findByText('No traffic in this range')).toBeTruthy()
-    expect(screen.getByText(/Hourly history only goes back as far as the traffic log is kept/)).toBeTruthy()
+    expect(screen.getByText(/Hourly data follows the traffic log retention/)).toBeTruthy()
     expect(screen.queryByRole('table', { hidden: true })).toBeNull()
     expect(screen.getAllByText('0 B').length).toBeGreaterThanOrEqual(3)
   })
@@ -164,7 +164,7 @@ describe('NodeTrafficChart', () => {
       response: { status: 500, data: { error: { code: 'internal_error', message: 'the traffic store is unavailable' } } }
     })
     renderChart()
-    expect(await screen.findByText('Couldn’t load the traffic')).toBeTruthy()
+    expect(await screen.findByText('Could not load the traffic')).toBeTruthy()
     expect(screen.getByText('the traffic store is unavailable')).toBeTruthy()
     // The totals do not pretend to know.
     expect(within(screen.getByRole('region', { name: 'Traffic totals' })).getAllByText('—')).toHaveLength(3)
@@ -172,7 +172,7 @@ describe('NodeTrafficChart', () => {
     kernelApi.getKernelNodeTraffic.mockResolvedValueOnce(hourly(24))
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     await waitFor(() => expect(screen.getByText('4.0 GB')).toBeTruthy())
-    expect(screen.queryByText('Couldn’t load the traffic')).toBeNull()
+    expect(screen.queryByText('Could not load the traffic')).toBeNull()
   })
 
   it('keeps the answer of the range that was chosen last when the requests finish out of order', async () => {

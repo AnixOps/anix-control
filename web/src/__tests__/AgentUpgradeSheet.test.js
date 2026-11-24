@@ -215,7 +215,7 @@ describe('AgentUpgradeSheet', () => {
     renderSheet()
     openKernelUpgrade(['proxy-1'])
     await screen.findByTestId('agent-upgrade-form')
-    expect((await screen.findByTestId('agent-upgrade-kernel')).textContent).toContain('no anx-node release')
+    expect((await screen.findByTestId('agent-upgrade-kernel')).textContent).toContain('No anx-node release')
     expect(screen.getByTestId('agent-upgrade-start').disabled).toBe(true)
   })
 
@@ -252,8 +252,8 @@ describe('AgentUpgradeSheet', () => {
     const cases = [
       ['10, 100', 'The first batch is at most 5%.'],
       ['5, 25', 'The last batch must be 100%.'],
-      ['25, 5, 100', 'Each percentage must be larger than the one before and at most 100.'],
-      ['5, x, 100', 'Write the batches as integers separated by commas, for example 5, 25, 100.'],
+      ['25, 5, 100', 'Percentages must increase and not exceed 100.'],
+      ['5, x, 100', 'Batches must be comma-separated integers, for example 5, 25, 100.'],
       ['1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100', 'At most 10 batches.']
     ]
     for (const [text, message] of cases) {
@@ -274,7 +274,7 @@ describe('AgentUpgradeSheet', () => {
     const field = screen.getByLabelText('Target version')
     await userEvent.clear(field)
     await userEvent.type(field, 'latest')
-    expect(await screen.findByText('Write the target as a release tag, for example v4.2.0.')).toBeTruthy()
+    expect(await screen.findByText('The target must be a release tag, for example v4.2.0.')).toBeTruthy()
     expect(screen.getByTestId('agent-upgrade-start').hasAttribute('disabled')).toBe(true)
   })
 
@@ -318,7 +318,7 @@ describe('AgentUpgradeSheet', () => {
     await userEvent.click(screen.getByTestId('agent-upgrade-start'))
     await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Start upgrade' }))
     const error = await screen.findByTestId('agent-upgrade-start-error')
-    expect(error.textContent).toContain('did not pass verification')
+    expect(error.textContent).toContain('verification failed')
     expect(error.textContent).toContain('SHA256SUMS of the Agent release v4.2.0 is missing')
   })
 

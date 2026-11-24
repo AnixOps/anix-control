@@ -4,11 +4,11 @@
 export default {
   nodeExitPolicy: {
     title: 'Exit policy',
-    description: 'What this node refuses when clients leave to the internet through it.',
+    description: 'Destinations this node refuses.',
     loading: 'Loading the exit policy',
     loadFailed: 'Could not load the exit policy',
     blockMainland: 'Refuse mainland-China destinations',
-    blockMainlandHelp: 'Off by default. The node refuses every connection to a mainland-China address, so mainland traffic sent here by mistake fails instead of leaving from abroad. Needs an Agent and kernel of 5.0.2 or later; older ones ignore it.',
+    blockMainlandHelp: 'Off by default. When on, connections to mainland-China addresses are refused. Requires Agent and kernel 5.0.2 or later.',
     blocked: '{n} connections refused, the last at {date}.',
     none: 'No refused connection reported.',
     saveFailed: 'Could not save the exit policy'

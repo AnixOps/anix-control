@@ -70,7 +70,7 @@ describe('forwarding node page: rotate credentials', () => {
     })
     const wrapper = await mountPage()
     const section = wrapper.get('[data-testid="forward-node-rotate"]')
-    expect(section.text()).toContain('Revoke what this node’s Agent holds')
+    expect(section.text()).toContain('Revoke the Agent credentials of this node')
     await section.get('[data-testid="rotate-credentials"]').trigger('click')
     await flushPromises()
     expect(inBody('[role="alertdialog"]').text()).toContain('Rotate the credentials of hk-edge-01?')
