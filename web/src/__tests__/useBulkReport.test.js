@@ -22,7 +22,7 @@ describe('useBulkReport', () => {
       refused(1, 'failed', 'database is locked'), refused(2, 'not_attempted'), refused(3, 'conflict'),
       refused(4, 'not_found'), refused(5, 'forbidden_self'), refused(6, 'not_found'), refused(7, 'plugin_host_unavailable', 'no host')
     ]).failed
-    expect(failureText(failed)).toBe('2 not found; 1 already used and kept; your own account can’t be banned; 1 not attempted (out of time); 2 failed (database is locked).')
+    expect(failureText(failed)).toBe('2 not found; 1 already used and kept; your own account cannot be banned; 1 not attempted (out of time); 2 failed (database is locked).')
     expect(failureText([])).toBe('')
   })
 
@@ -58,7 +58,7 @@ describe('useBulkReport', () => {
     const { report } = useBulkReport()
     report(outcomeOf([refused(1, 'forbidden_self'), refused(2, 'conflict')]), { success: 'Done', partial: 'Some', none: 'Did none.', retry: () => {} })
     const [toast] = toasts('error')
-    expect(toast.message).toBe('Did none. 1 already used and kept; your own account can’t be banned.')
+    expect(toast.message).toBe('Did none. 1 already used and kept; your own account cannot be banned.')
     expect(toast.action).toBeNull()
   })
 })

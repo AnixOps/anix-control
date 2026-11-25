@@ -5,13 +5,13 @@ export default {
     bar: {
       label: '未保存的更改',
       unsaved: '有未保存的更改',
-      invalid: '有未填好的项，修改后才能保存',
+      invalid: '存在未填写完整的项，修改后方可保存',
       discard: '放弃',
       save: '保存'
     },
     leave: {
       title: '放弃未保存的更改？',
-      message: '离开后，这一页的修改不会保存。',
+      message: '离开后本页修改将不会保存。',
       discard: '放弃更改',
       stay: '继续编辑'
     }
@@ -33,7 +33,7 @@ export default {
     general: {
       links: {
         title: '其他常用设置',
-        description: '这些设置在各自的页面里，点击直接打开。',
+        description: '以下设置位于各自页面。',
         mail: '邮件通知',
         mailHint: 'SMTP 发信服务器与测试',
         security: '登录安全',
@@ -41,18 +41,18 @@ export default {
       },
       subscription: {
         title: '订阅域名',
-        description: '用户订阅链接和 managed-config 输出使用的域名。',
+        description: '订阅链接与 managed-config 输出使用的域名。',
         path: '订阅路径',
         currentHost: '当前访问域名',
         domains: '备用域名',
         domainsPlaceholder: 'sub1.example.com\nsub2.example.com',
-        domainsHelp: '每行一个域名，也可以用逗号或分号分隔；写完整链接时只取域名。',
+        domainsHelp: '每行一个域名，或以逗号、分号分隔；填写完整链接时仅取域名。',
         invalidDomains: '这些不是有效的域名：{domains}',
         domainsOnly: '只在订阅域名上提供订阅',
-        domainsOnlyHint: '面板自己的域名访问订阅路径时返回 404。',
-        domainsOnlyHelp: '建议：订阅用单独的域名（最好走 CDN），不要和面板、节点 SNI 共用；某个域名不可达时换一个订阅域名即可，面板不受影响。需要先填写备用域名。',
+        domainsOnlyHint: '通过面板域名访问订阅路径时返回 404。',
+        domainsOnlyHelp: '建议订阅使用独立域名（宜经 CDN），勿与面板或节点 SNI 共用。需先填写备用域名。',
         preview: '链接预览',
-        previewEmpty: '没有备用域名时，订阅链接使用当前访问域名。',
+        previewEmpty: '未设置备用域名时，订阅链接使用当前访问域名。',
         loadFailed: '无法加载订阅域名',
         saveFailed: '无法保存订阅域名',
         saved: '订阅域名已保存'
@@ -60,16 +60,16 @@ export default {
     },
     data: {
       title: '数据与保留',
-      description: '决定记录哪些统计，以及保留多久。',
-      footer: '关闭后立即停止记录，已保留的记录不会删除。完整的统计图表在“监控 → 目的地”。',
+      description: '统计记录范围与保留时长。',
+      footer: '关闭后立即停止记录，已保留的记录不会删除。统计图表见“监控 → 目的地”。',
       days: '{days} 天'
     },
     advanced: {
       warningTitle: '仅用于排查问题',
-      warning: '日常选项都在其他分区里。这里是以键值保存的全部系统配置，改错可能让功能异常；调度器的内部记录不会显示。',
+      warning: '此处为全部键值系统配置，错误修改可能导致功能异常。',
       configs: {
         title: '配置项',
-        description: '以键值保存的全部系统配置；敏感值只显示为 ********。',
+        description: '全部键值系统配置，敏感值显示为 ********。',
         add: '添加配置项',
         search: '搜索键名或描述',
         key: '键名',
@@ -80,18 +80,18 @@ export default {
         descriptionField: '描述',
         descriptionPlaceholder: '这项配置的用途',
         updatedAt: '更新时间',
-        empty: '还没有配置项',
-        emptyDescription: '保存过的系统配置会列在这里。',
+        empty: '暂无配置项',
+        emptyDescription: '显示已保存的系统配置。',
         loadFailed: '无法加载配置项',
         createTitle: '添加配置项',
         editTitle: '编辑配置项',
-        sensitiveWithValue: '敏感值已隐藏。留空保留当前值，填写新值则替换。',
-        sensitiveWithoutValue: '这是敏感配置，请填写后保存。',
+        sensitiveWithValue: '敏感值已隐藏。留空则保留当前值。',
+        sensitiveWithoutValue: '敏感配置，请填写后保存。',
         saved: '已保存配置项 {key}',
         saveFailed: '保存失败：{message}',
         saveFailedShort: '无法保存配置项',
         deleteTitle: '删除配置项 {key}？',
-        deleteMessage: '依赖这项配置的功能会改用默认值。此操作无法撤销。',
+        deleteMessage: '依赖该配置的功能将改用默认值。此操作无法撤销。',
         deleteAction: '删除配置项',
         deleteFailed: '无法删除配置项',
         deleted: '已删除配置项 {key}'
@@ -99,18 +99,18 @@ export default {
     },
     backup: {
       title: '备份',
-      description: 'Control 每天 03:00 到 05:00 之间、每次数据库迁移之前以及你要求时，备份数据库、根密钥和配置，并逐个验证备份能否还原。',
+      description: 'Control 于每日 03:00–05:00、每次数据库迁移前及手动触发时备份数据库、根密钥与配置，并逐一验证可还原性。',
       backupNow: '立即备份',
       created: '已备份到 {file}，正在验证。',
       createFailed: '无法备份',
-      busy: '已有备份或验证在进行，请稍后再试。',
+      busy: '备份或验证正在进行，请稍后重试。',
       loadFailed: '无法加载备份列表',
       unsupported: '备份需要 SQLite',
-      unsupportedHint: '这个面板使用 PostgreSQL，Control 的备份不覆盖它。请用 pg_dump 备份数据库，并和 root.key 一起保存。',
+      unsupportedHint: '当前数据库为 PostgreSQL，不在 Control 备份范围内。请使用 pg_dump 备份，并与 root.key 一同保存。',
       summary: {
         label: '备份状态',
         lastVerified: '上次验证通过的备份',
-        none: '还没有',
+        none: '暂无',
         stale: '已超过 {hours} 小时',
         current: '正常',
         nextDaily: '下次自动备份',
@@ -123,11 +123,11 @@ export default {
         size: '大小',
         createdAt: '备份时间',
         verified: '验证',
-        empty: '还没有备份',
-        emptyDescription: 'Control 启动几分钟后会自动备份第一次，也可以现在备份。',
+        empty: '暂无备份',
+        emptyDescription: 'Control 启动数分钟后自动执行首次备份。',
         download: '下载',
         downloadFailed: '无法下载备份',
-        superAdminRequired: '只有超级管理员可以下载备份：备份里有面板的根密钥。'
+        superAdminRequired: '仅超级管理员可下载备份（含根密钥）。'
       },
       types: {
         daily: '每日',
@@ -140,16 +140,16 @@ export default {
         passed: '验证通过',
         failed: '验证未通过'
       },
-      retention: 'Control 保留最近 {daily} 个每日备份、此前 {weekly} 周每周最新的一个每日备份、最近 {days} 天内所有迁移前备份，以及最近 {manual} 个手动备份。最近一个验证通过的备份永远不会删除。',
+      retention: '保留最近 {daily} 个每日备份、此前 {weekly} 周的每周备份、最近 {days} 天内的迁移前备份及最近 {manual} 个手动备份。最近一个验证通过的备份始终保留。',
       restore: {
         title: '还原',
-        description: '还原会替换数据库，所以只能在停止 Control 后在服务器上进行，不能在本页操作。Control 再次启动时会自动迁移较旧的备份。',
+        description: '还原将替换数据库，须停止 Control 后在服务器上执行。Control 启动时自动迁移旧版本备份。',
         commands: '在服务器上执行'
       }
     },
     audit: {
       title: '审计日志',
-      description: '管理员的每一次操作：谁、在什么时候、对什么做了什么。',
+      description: '管理员操作记录：操作人、时间、对象与内容。',
       refresh: '刷新',
       filterAction: '按动作筛选',
       filterTargetType: '按目标类型筛选',
@@ -168,25 +168,25 @@ export default {
         ip: 'IP',
         createdAt: '时间'
       },
-      empty: '还没有审计日志',
-      emptyDescription: '管理员的操作会记录在这里。',
+      empty: '暂无审计日志',
+      emptyDescription: '显示管理员操作记录。',
       loadFailed: '无法加载审计日志'
     },
     about: {
       title: '关于',
-      description: '版本与构建信息。反馈问题时请附上。',
+      description: '版本与构建信息。',
       product: '产品',
       copy: '复制版本信息',
       copied: '已复制版本信息'
     },
     packages: {
       title: '内置包',
-      description: '编译进 Control 的官方包。Control 每次启动时安装、升级并启用它们。',
+      description: '编译进 Control 的官方包，每次启动时自动安装、升级并启用。',
       refresh: '刷新',
-      loadFailed: '内置包没有加载出来',
+      loadFailed: '内置包加载失败',
       empty: {
-        title: '没有内置包',
-        description: '这个 Control 构建不带任何包：未经 `make build` 的开发构建。'
+        title: '暂无内置包',
+        description: '当前为未经 `make build` 的开发构建，不含任何包。'
       },
       version: '版本 {version}',
       versionChanging: '版本 {from}，正在启动 {to}',
@@ -198,17 +198,17 @@ export default {
       configureNamed: '配置 {name}',
       confirm: {
         title: '重启 {name}？',
-        message: '它的宿主会停止后再启动；期间几秒内，它的页面和接口会答复不可用。'
+        message: '宿主将停止并重新启动，期间数秒内相关页面和接口不可用。'
       },
       restarted: '{name} 正在重启',
       restartFailed: '无法重启该包',
       config: { title: '{name} 设置' },
-      note: '启动时失败的包，其路由在下次启动前保持不可用；首页告警和 Control 日志会给出原因。包不能导入、升级、回滚或停用：新的 Control 版本会带来它们的新版本。'
+      note: '启动失败的包在下次启动前不可用，原因见首页告警与 Control 日志。包随 Control 版本更新，不支持单独导入、升级、回滚或停用。'
     }
   },
   adminNotify: {
     title: '通知',
-    subtitle: '邮件与 Telegram 渠道、消息模板和发送记录。',
+    subtitle: '邮件与 Telegram 渠道、消息模板及发送记录。',
     channelsLabel: '通知渠道',
     channels: {
       email: '邮件',
@@ -238,7 +238,7 @@ export default {
       portInvalid: '端口是 1–65535 之间的整数',
       username: '用户名',
       password: '密码',
-      passwordStored: '已保存，内容隐藏。留空保留当前密码。',
+      passwordStored: '已保存。留空则保留当前密码。',
       encryption: '加密连接',
       encryptionHelp: '使用 SSL/TLS 连接邮件服务器。',
       sender: '发件人',
@@ -253,11 +253,11 @@ export default {
       testSend: '测试发送',
       testSendAction: '发送测试邮件',
       testTitle: '发送测试邮件',
-      testDescription: '用已保存的设置发一封邮件，确认能送达。',
+      testDescription: '使用已保存的设置发送测试邮件。',
       testRecipient: '收件地址',
       testRecipientRequired: '请填写收件地址',
       testSubject: '测试邮件',
-      testContent: '这是一封测试邮件。收到它，说明邮件设置可以正常使用。',
+      testContent: '测试邮件。邮件设置可正常使用。',
       testSent: '测试邮件已发往 {recipient}',
       testFailed: '发送失败：{message}',
       testFailedShort: '无法发送测试邮件'
@@ -265,7 +265,7 @@ export default {
     telegram: {
       bot: {
         title: '机器人',
-        description: '用户绑定账户、接收提醒都通过这个机器人。',
+        description: '用户通过该机器人绑定账户并接收提醒。',
         token: 'Bot Token',
         tokenHelp: '从 BotFather 获取。',
         adminIds: '管理员 Telegram ID',
@@ -281,7 +281,7 @@ export default {
       webhook: {
         title: 'Webhook',
         url: 'Webhook 地址',
-        help: 'Telegram 把消息推送到这个地址。更换域名后请重新设置。',
+        help: 'Telegram 消息推送地址。更换域名后请重新设置。',
         needsToken: '先填写并保存 Bot Token。',
         set: '设置 Webhook',
         delete: '删除 Webhook',
@@ -294,7 +294,7 @@ export default {
       },
       send: {
         title: '发送消息',
-        description: '先发给一个用户试试，确认无误再广播。',
+        description: '建议先发送给单个用户，确认无误后再广播。',
         audience: '接收人',
         single: '一个用户',
         everyone: '全部用户',
@@ -305,11 +305,11 @@ export default {
         messagePlaceholder: '要发送的内容',
         markdown: '支持 Markdown。',
         messageRequired: '请填写消息内容',
-        broadcastNote: '广播会发给每一个已绑定的用户，发出后无法撤回。',
+        broadcastNote: '广播将发送给所有已绑定用户，发送后无法撤回。',
         send: '发送',
         broadcast: '广播',
-        broadcastTitle: '向所有已绑定用户广播这条消息？',
-        broadcastMessage: '每个已绑定的用户都会收到，发出后无法撤回。',
+        broadcastTitle: '向所有已绑定用户广播此消息？',
+        broadcastMessage: '所有已绑定用户均将收到，发送后无法撤回。',
         broadcastDone: '广播完成：成功 {success}，失败 {failed}',
         sent: '消息已发送',
         failed: '发送失败：{message}',
@@ -317,8 +317,8 @@ export default {
       },
       test: {
         title: '测试消息',
-        description: '向你自己已绑定的 Telegram 账号发送一条测试消息，检查机器人令牌和网络连接。',
-        dirty: '测试使用已保存的机器人设置。先保存修改再测试。',
+        description: '向当前管理员绑定的 Telegram 账号发送测试消息，检查机器人令牌与网络连接。',
+        dirty: '测试使用已保存的设置，请先保存修改。',
         send: '发送测试消息',
         wait: '{seconds} 秒后可再试',
         classes: {
@@ -332,35 +332,35 @@ export default {
           unknown: '意外的响应'
         },
         hints: {
-          chat_not_found: '确认你的 Telegram 账号仍处于绑定状态，并且已启动机器人。',
-          bot_blocked: '在 Telegram 中打开机器人并点击“开始”，或取消屏蔽。',
+          chat_not_found: '请确认 Telegram 账号仍已绑定且已启动机器人。',
+          bot_blocked: '请在 Telegram 中启动机器人或取消屏蔽。',
           rate_limited: '稍等片刻后再次发送测试。',
-          not_configured: '在上方填写机器人令牌并保存机器人设置。',
-          invalid_token: '重新从 BotFather 复制令牌并保存机器人设置。',
-          unknown: '稍后再试。如果一直失败，请查看 Control 日志。'
+          not_configured: '请填写机器人令牌并保存。',
+          invalid_token: '请从 BotFather 重新复制令牌并保存。',
+          unknown: '请稍后重试；持续失败时请查看 Control 日志。'
         },
         reasons: {
-          timeout: 'Telegram 没有及时响应。请检查 Control 服务器的网络。',
+          timeout: 'Telegram 响应超时。请检查 Control 服务器网络。',
           dns: '无法解析 api.telegram.org。请检查 Control 服务器的 DNS。',
-          tls: 'TLS 连接失败。拦截 TLS 的代理或错误的 CA 证书库可能导致此问题。',
-          connect: '连接被拒绝或中断。请检查 Control 服务器的防火墙和代理。',
-          canceled: '请求在完成前被取消。请再次发送测试。',
-          other: '网络因其他原因失败。请检查 Control 服务器的网络连接。'
+          tls: 'TLS 连接失败。请检查代理与 CA 证书库。',
+          connect: '连接被拒绝或中断。请检查 Control 服务器防火墙与代理。',
+          canceled: '请求已取消，请重新发送测试。',
+          other: '网络错误。请检查 Control 服务器网络连接。'
         },
         tooMany: '测试过于频繁',
         tooManyMessage: '测试每分钟只能发送几次。',
         notBound: '尚未绑定 Telegram',
-        notBoundMessage: '你的管理员账号没有绑定 Telegram，无处发送测试消息。',
-        notBoundHint: '请先绑定：在面板「账户」页绑定 Telegram，或在机器人里发送 /bind 和你的订阅链接，然后再测试。',
+        notBoundMessage: '当前管理员账号未绑定 Telegram，无法发送测试消息。',
+        notBoundHint: '请先在“账户”页绑定 Telegram，或向机器人发送 /bind 与订阅链接。',
         notAllowed: '不允许该聊天',
-        notAllowedMessage: '该聊天不是你的聊天，也不在机器人的管理员 ID 中。',
+        notAllowedMessage: '该聊天不属于当前管理员，且不在机器人管理员 ID 中。',
         failed: '测试失败',
         failedShort: '无法发送测试消息'
       },
       users: {
         bind: '手动绑定',
         bindTitle: '手动绑定 Telegram',
-        bindDescription: "把用户绑定到一个 Telegram 账号。用户可以向 {'@'}userinfobot 发消息查到自己的 Telegram ID。",
+        bindDescription: "将用户绑定至 Telegram 账号。Telegram ID 可通过 {'@'}userinfobot 查询。",
         bindUser: '用户邮箱或用户 ID',
         bindUserHelp: "例如 user{'@'}example.com 或 42",
         bindTelegramIdHelp: "纯数字的 Telegram 用户 ID，不是 {'@'}用户名",
@@ -373,7 +373,7 @@ export default {
         unbindMessage: '{name} 将不再收到 Telegram 提醒。',
         unbound: '已解除绑定',
         title: '已绑定用户',
-        description: '绑定了机器人的用户，以及是否接收提醒。',
+        description: '已绑定机器人的用户及其提醒设置。',
         search: '搜索邮箱或 Telegram ID',
         email: '邮箱',
         telegramId: 'Telegram ID',
@@ -381,15 +381,15 @@ export default {
         boundAt: '绑定时间',
         notify: '接收提醒',
         notifyNamed: '{name} 接收提醒',
-        empty: '还没有绑定用户',
-        emptyDescription: '用户自助绑定或管理员手动绑定后会出现在这里。',
+        empty: '暂无绑定用户',
+        emptyDescription: '显示自助绑定或手动绑定的用户。',
         loadFailed: '无法加载已绑定用户',
         toggleFailed: '更新失败：{message}',
         toggleFailedShort: '无法更新提醒设置'
       },
       commands: {
         title: '机器人命令',
-        description: '用户可以在 Telegram 里使用这些命令。',
+        description: '用户可在 Telegram 中使用的命令。',
         items: {
           start: '启动机器人',
           bind: '绑定账户',
@@ -404,7 +404,7 @@ export default {
     },
     templates: {
       title: '模板',
-      description: '各渠道在各事件下发送的内容。',
+      description: '各渠道在各事件下的发送内容。',
       create: '新建模板',
       createTitle: '新建通知模板',
       editTitle: '编辑通知模板',
@@ -420,14 +420,14 @@ export default {
       content: '内容',
       contentPlaceholder: "通知正文，可以使用变量 {'{'}username{'}'}、{'{'}email{'}'}、{'{'}expire_time{'}'}",
       enabled: '启用模板',
-      empty: '还没有通知模板',
-      emptyDescription: '新建一个模板，指定渠道和触发的事件。',
+      empty: '暂无通知模板',
+      emptyDescription: '新建模板并指定渠道与触发事件。',
       loadFailed: '无法加载通知模板',
       saved: '通知模板已保存',
       saveFailed: '保存失败：{message}',
       saveFailedShort: '无法保存通知模板',
       deleteTitle: '删除通知模板 {name}？',
-      deleteMessage: '这个事件将不再发送这条通知。此操作无法撤销。',
+      deleteMessage: '该事件将不再发送此通知。此操作无法撤销。',
       deleteAction: '删除模板',
       deleteFailed: '无法删除通知模板',
       deleted: '已删除通知模板 {name}'
@@ -443,7 +443,7 @@ export default {
       type: '渠道',
       status: '结果',
       sentAt: '发送时间',
-      empty: '还没有发送记录',
+      empty: '暂无发送记录',
       emptyDescription: '通知发出后会记录在这里。',
       loadFailed: '无法加载发送记录'
     }
@@ -460,14 +460,14 @@ export default {
     },
     mfa: {
       title: '两步验证',
-      description: '所有用户的两步验证策略。用户在自己的账户页开启和管理。',
+      description: '全体用户的两步验证策略。用户在账户页自行开启与管理。',
       recovery: '恢复码',
       lockout: '锁定',
       lockoutDuration: '锁定时长',
       minutes: '分钟',
       range: '请输入 {min}–{max} 之间的整数',
       atLeastOne: '请输入不小于 1 的整数',
-      methodRequired: '开启两步验证时，至少保留一种验证方式。'
+      methodRequired: '开启两步验证时须至少保留一种验证方式。'
     }
   }
 }

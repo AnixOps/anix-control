@@ -283,7 +283,7 @@ describe('ApiTokenCreate', () => {
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), name)
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    return screen.findByRole('dialog', { name: 'Your new API token' })
+    return screen.findByRole('dialog', { name: 'New API token' })
   }
 
   it('explains each scope: read is GET and HEAD only and not the two clear-secret reads', async () => {
@@ -293,9 +293,9 @@ describe('ApiTokenCreate', () => {
     const read = within(form).getByRole('radio', { name: 'Read' })
     expect(read.getAttribute('aria-checked')).toBe('true')
     expect(form.textContent).toMatch(/GET and HEAD requests/)
-    expect(form.textContent).toMatch(/can’t read the Telegram bot token/)
-    expect(form.textContent).toMatch(/Everything you may do on the administrator APIs/)
-    expect(form.textContent).toMatch(/can’t manage API tokens/)
+    expect(form.textContent).toMatch(/Cannot change anything or read the Telegram bot token/)
+    expect(form.textContent).toMatch(/full permissions on the administrator APIs/)
+    expect(form.textContent).toMatch(/Cannot manage API tokens/)
     // 90 days is the choice, and the recommendation.
     expect(within(form).getByRole('combobox', { name: 'Expires' }).textContent).toContain('90 days (recommended)')
     expect(kernelApi.createKernelApiToken).not.toHaveBeenCalled()
@@ -322,12 +322,12 @@ describe('ApiTokenCreate', () => {
     await user.click(await screen.findByRole('option', { name: '30 days' }))
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
 
-    const result = await screen.findByRole('dialog', { name: 'Your new API token' })
+    const result = await screen.findByRole('dialog', { name: 'New API token' })
     expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: 'nightly export', scope: 'admin', expiresInDays: 30 })
     const field = within(result).getByLabelText('API token')
     expect(field.value).toBe(TOKEN)
     expect(field.type).toBe('password')
-    expect(within(result).getByTestId('api-token-warning').textContent).toMatch(/Copy it now.*can’t show it again/)
+    expect(within(result).getByTestId('api-token-warning').textContent).toMatch(/Copy it now.*revoke it and create another/)
     expect(within(result).getByTestId('api-token-facts').textContent).toContain('nightly export')
     // The hint shows how to call the API: a header, a placeholder, never a URL.
     const usage = within(result).getByTestId('api-token-usage').textContent
@@ -396,7 +396,7 @@ describe('ApiTokenCreate', () => {
       const result = await createToken(user)
       const overlay = result.parentElement
       await user.click(overlay)
-      expect(screen.getByRole('dialog', { name: 'Your new API token' })).toBeTruthy()
+      expect(screen.getByRole('dialog', { name: 'New API token' })).toBeTruthy()
       expect(onPage()).toBe(true)
       await user.click(within(result).getByRole('button', { name: 'Close' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
@@ -437,7 +437,7 @@ describe('ApiTokenCreate', () => {
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     const alert = await within(form).findByRole('alert')
-    expect(alert.textContent).toContain('Your sign-in is too old for this.')
+    expect(alert.textContent).toContain('The session is too old.')
     expect(within(alert).getByRole('button', { name: 'Sign in again' })).toBeTruthy()
   })
 
@@ -448,7 +448,7 @@ describe('ApiTokenCreate', () => {
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    expect((await within(form).findByRole('alert')).textContent).toContain('You already hold 25 active API tokens. Revoke one first.')
+    expect((await within(form).findByRole('alert')).textContent).toContain('The limit of 25 active API tokens is reached. Revoke one first.')
   })
 
   it('is off, with the button disabled, while the limit is reached', async () => {

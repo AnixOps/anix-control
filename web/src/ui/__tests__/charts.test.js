@@ -114,9 +114,9 @@ describe('UiChart', () => {
   })
 
   it('shows the error state with 重试', async () => {
-    const wrapper = mount(UiChart, { props: { option, label: 'Traffic', error: 'gateway timeout', errorTitle: 'Couldn’t load traffic' } })
+    const wrapper = mount(UiChart, { props: { option, label: 'Traffic', error: 'gateway timeout', errorTitle: 'Could not load traffic' } })
     await flushPromises()
-    expect(wrapper.get('[data-error-state]').text()).toContain('Couldn’t load traffic')
+    expect(wrapper.get('[data-error-state]').text()).toContain('Could not load traffic')
     expect(wrapper.text()).toContain('gateway timeout')
     await wrapper.get('[data-error-retry]').trigger('click')
     expect(wrapper.emitted('retry')).toHaveLength(1)

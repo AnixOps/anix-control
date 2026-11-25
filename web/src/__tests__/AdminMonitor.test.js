@@ -259,7 +259,7 @@ describe('用户流量', () => {
     expect(adminApi.getTrafficHourly).toHaveBeenCalledWith(24, 0)
     expect(wrapper.text()).toContain('ranking failed')
     expect(wrapper.text()).toContain('No traffic data in the selected range')
-    expect(wrapper.text()).toContain('No node has reported traffic yet.')
+    expect(wrapper.text()).toContain('No node has reported traffic.')
     wrapper.unmount()
   })
 

@@ -41,10 +41,10 @@ describe('Telegram test message button', () => {
   })
 
   it.each([
-    ['chat_not_found', 'warning', 'Chat not found', 'Check that your Telegram account is still linked'],
-    ['bot_blocked', 'warning', 'Bot blocked', 'press Start'],
+    ['chat_not_found', 'warning', 'Chat not found', 'Check that the Telegram account is still linked'],
+    ['bot_blocked', 'warning', 'Bot blocked', 'Start or unblock'],
     ['rate_limited', 'warning', 'Telegram is limiting the bot', 'Wait a moment'],
-    ['not_configured', 'warning', 'Bot not set up', 'Enter the bot token'],
+    ['not_configured', 'warning', 'Bot not set up', 'Enter and save the bot token'],
     ['invalid_token', 'danger', 'Invalid bot token', 'BotFather'],
     ['unknown', 'danger', 'Unexpected answer', 'Control logs'],
     ['brand_new_class', 'danger', 'Unexpected answer', 'Control logs']
@@ -129,7 +129,7 @@ describe('Telegram test message button', () => {
 
   it('warns that the test uses the saved settings when the form has unsaved changes', async () => {
     const wrapper = mount(TelegramTestPanel, { props: { dirty: true } })
-    expect(wrapper.get('[data-testid="telegram-test-dirty"]').text()).toContain('saved bot settings')
+    expect(wrapper.get('[data-testid="telegram-test-dirty"]').text()).toContain('saved settings')
     wrapper.unmount()
   })
 

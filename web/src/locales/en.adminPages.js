@@ -53,7 +53,7 @@ export default {
   },
   adminPayment: {
     title: 'Payments',
-    subtitle: 'Gateways users pay through, every payment, and how much came in.',
+    subtitle: 'Payment gateways, payment records and revenue statistics.',
     tabs: {
       label: 'Payment sections',
       gateways: 'Gateways',
@@ -78,8 +78,8 @@ export default {
         maxAmount: 'Max Amount',
         status: 'Status'
       },
-      empty: 'No payment gateways yet',
-      emptyDescription: 'Add a gateway so users can pay for plans.'
+      empty: 'No payment gateways',
+      emptyDescription: 'Users can pay for plans once a gateway is added.'
     },
     records: {
       label: 'Payment records',
@@ -102,8 +102,8 @@ export default {
         amount: 'Amount',
         status: 'Status'
       },
-      empty: 'No payments yet',
-      emptyDescription: 'Payments appear here when users pay for an order.'
+      empty: 'No payments',
+      emptyDescription: 'Order payments appear here.'
     },
     stats: {
       totalAmount: 'Total Revenue',
@@ -111,7 +111,7 @@ export default {
       successOrders: 'Successful Orders',
       successRate: 'Success Rate',
       gatewayDistribution: 'Gateway Distribution',
-      empty: 'No gateway statistics yet'
+      empty: 'No gateway statistics'
     },
     modal: {
       createTitle: 'New gateway',
@@ -149,13 +149,13 @@ export default {
     },
     confirm: {
       deleteTitle: 'Delete payment gateway {name}?',
-      deleteMessage: 'Users can no longer pay through this gateway. This can’t be undone.',
+      deleteMessage: 'The gateway can no longer accept payments. This cannot be undone.',
       deleteAction: 'Delete gateway'
     },
     messages: {
-      fetchGatewaysFailed: 'Payment gateways didn’t load',
-      fetchRecordsFailed: 'Payment records didn’t load',
-      fetchStatsFailed: 'Payment statistics didn’t load',
+      fetchGatewaysFailed: 'Could not load the payment gateways',
+      fetchRecordsFailed: 'Could not load the payment records',
+      fetchStatsFailed: 'Could not load the payment statistics',
       invalidConfigJson: 'Configuration JSON is invalid',
       gatewaySaveSuccess: 'Gateway saved successfully',
       gatewaySaveFailed: 'Failed to save gateway: {message}',
@@ -188,10 +188,10 @@ export default {
       email: 'Email verification code'
     },
     info: {
-      totpBody: 'Time-based one-time passwords. Users can scan a QR code with apps such as Google Authenticator or Authy to bind MFA.',
-      backupBody: 'When users cannot access their authenticator, they can use recovery codes to log in. Each recovery code can only be used once.',
-      lockoutBody: 'Multiple consecutive MFA failures will trigger an account lockout to prevent brute-force attacks.',
-      userOpsBody: 'Users turn two-factor authentication on or off and make new recovery codes on their own Account page.'
+      totpBody: 'Time-based one-time passwords, set up by scanning a QR code in an app such as Google Authenticator or Authy.',
+      backupBody: 'Recovery codes sign a user in without the authenticator. Each code works once.',
+      lockoutBody: 'Repeated MFA failures lock the account.',
+      userOpsBody: 'Users turn two-factor authentication on or off and create new recovery codes on the Account page.'
     },
     messages: {
       fetchFailed: 'Failed to load MFA configuration',
@@ -202,7 +202,7 @@ export default {
   },
   adminTemplates: {
     title: 'Subscription templates',
-    subtitle: 'Free subscription templates: traffic quota, speed and device limits, and the subscription groups they grant. Assign one to a user to apply it.',
+    subtitle: 'Free subscription templates: traffic quota, speed and device limits, and the subscription groups they grant. A template applies once assigned to a user.',
     filters: {
       search: 'Search templates'
     },
@@ -213,14 +213,14 @@ export default {
       create: 'New template'
     },
     empty: {
-      title: 'No subscription templates yet',
-      description: 'Create a template, then assign it to users to give them traffic and subscription groups.'
+      title: 'No subscription templates',
+      description: 'Users assigned a template receive its traffic and subscription groups.'
     },
     detail: {
       description: 'Template ID {id}'
     },
     labels: {
-      noGroupsHint: 'This template grants no subscription groups yet.'
+      noGroupsHint: 'This template grants no subscription groups.'
     },
     planModal: {
       createTitle: 'New subscription template',
@@ -255,7 +255,7 @@ export default {
   },
   adminPlans: {
     title: 'Plans',
-    subtitle: 'What users can buy: traffic quota, speed and device limits, price, and the subscription groups each plan grants.',
+    subtitle: 'Purchasable plans: traffic quota, speed and device limits, price, and the subscription groups each plan grants.',
     filters: {
       search: 'Search plans'
     },
@@ -277,8 +277,8 @@ export default {
       removeGroupNamed: 'Remove group {name}'
     },
     empty: {
-      title: 'No plans yet',
-      description: 'Create a plan so users can buy traffic and get subscription groups.'
+      title: 'No plans',
+      description: 'Users who buy a plan receive its traffic and subscription groups.'
     },
     detail: {
       description: 'Plan ID {id}',
@@ -301,7 +301,7 @@ export default {
       },
       help: {
         zeroUnlimited: '0 means no limit.',
-        show: 'When off, users do not see this plan on the purchase page. Users who already have it are not affected.'
+        show: 'When off, the plan is hidden on the purchase page. Existing holders are not affected.'
       }
     },
     assignModal: {
@@ -329,13 +329,13 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} devices',
       noGroups: 'None',
-      noGroupsHint: 'This plan grants no subscription groups yet.',
+      noGroupsHint: 'This plan grants no subscription groups.',
       onSale: 'On sale',
       offSale: 'Off sale'
     },
     confirm: {
       deleteTitle: 'Delete plan {name}?',
-      deleteMessage: 'This can’t be undone.',
+      deleteMessage: 'This cannot be undone.',
       deleteAction: 'Delete plan'
     },
     messages: {
@@ -360,11 +360,11 @@ export default {
   },
   adminUsers: {
     title: 'Users',
-    subtitle: 'Accounts, subscriptions and traffic. Select a user to see the details.',
+    subtitle: 'Accounts, subscriptions and traffic. Select a user to view details.',
     filters: {
       searchEmail: 'Search by email',
       label: 'Filter by status',
-      exhaustedHint: '“Out of traffic” narrows the users on this page only; the server has no such filter.'
+      exhaustedHint: '“Out of traffic” filters the users on this page only.'
     },
     table: {
       label: 'Users',
@@ -381,7 +381,7 @@ export default {
     },
     lastOnline: {
       never: 'Never',
-      neverHint: 'No node has reported this user yet.',
+      neverHint: 'No node has reported this user.',
       loading: 'Loading',
       unavailable: 'Unavailable'
     },
@@ -402,8 +402,8 @@ export default {
       viewTraffic: 'Traffic in the last 30 days'
     },
     empty: {
-      title: 'No users yet',
-      description: 'Add the first user to give them a subscription.'
+      title: 'No users',
+      description: 'Subscriptions can be assigned once users are added.'
     },
     detail: {
       description: 'ID {id} · joined {date}',
@@ -412,7 +412,7 @@ export default {
       activity: 'Activity',
       actions: 'Actions',
       danger: 'Danger zone',
-      dangerFooter: 'A new subscription link means every client has to import it again. Reset traffic can’t be undone.'
+      dangerFooter: 'After a subscription link reset, every client must import it again. A traffic reset cannot be undone.'
     },
     editModal: {
       title: 'Edit User',
@@ -458,17 +458,17 @@ export default {
     },
     confirm: {
       resetSubscribeTitle: 'Reset the subscription link of {email}?',
-      resetSubscribeMessage: 'The old link stops working at once and the user has to import the subscription again. This can’t be undone.',
+      resetSubscribeMessage: 'The old link stops working immediately and the user must import the subscription again. This cannot be undone.',
       resetSubscribeAction: 'Reset link'
     },
     copyDialog: {
       title: 'Copy subscription link',
-      description: 'The link could not be copied automatically. Copy it below.',
+      description: 'Automatic copy failed. Copy the link below.',
       label: 'Subscription link'
     },
     resetFlow: {
       userTitle: 'Reset the traffic of {email}?',
-      userMessage: 'Used traffic goes back to zero. This can’t be undone.',
+      userMessage: 'Used traffic is reset to zero. This cannot be undone.',
       usedFlow: 'Used flow',
       quota: 'Quota',
       confirmAction: 'Reset traffic'
@@ -511,7 +511,7 @@ export default {
       unbanNone: 'No user was unbanned.',
       undoPartial: '{count} users could not be restored.',
       resetTitle: 'Reset the traffic of {count} users?',
-      resetMessage: 'The used traffic of every selected user goes back to zero. This can’t be undone.',
+      resetMessage: 'Used traffic of all selected users is reset to zero. This cannot be undone.',
       resetDone: 'Traffic reset for {count} users',
       resetPartial: 'Reset the traffic of {done} of {total} users.',
       resetNone: 'No user’s traffic was reset.'
@@ -522,7 +522,7 @@ export default {
       passwordTooShort: 'Password must be at least 6 characters',
       userCreated: 'User created successfully',
       createFailed: 'Create failed',
-      fetchUsersFailed: 'Users didn’t load',
+      fetchUsersFailed: 'Could not load the users',
       bulkBanned: '{count} users banned',
       bulkUnbanned: '{count} users unbanned',
       fetchStatsFailed: 'Failed to fetch statistics',
@@ -554,23 +554,23 @@ export default {
     filters: { label: 'Filter by service scope', allScopes: 'All service scopes' },
     table: { group: 'Access group', scope: 'Scope', state: 'State' },
     states: { enabled: 'Enabled', disabled: 'Disabled' },
-    groups: { title: 'Access groups', empty: 'No access groups in this scope', emptyAll: 'No access groups yet', emptyDescription: 'An access group gives its users and plans resource grants and quota policies within one service scope.', noDescription: 'No description', directUnion: 'Direct and plan membership are combined as an allow-union.' },
+    groups: { title: 'Access groups', empty: 'No access groups in this scope', emptyAll: 'No access groups', emptyDescription: 'An access group gives its users and plans resource grants and quota policies within one service scope.', noDescription: 'No description', directUnion: 'Direct and plan membership are combined as an allow-union.' },
     detail: { title: 'Access group', loading: 'Loading access group details…', group: 'Group', danger: 'Danger zone' },
     members: { title: 'User members', userID: 'User ID', empty: 'No direct user members' },
     plans: { title: 'Plan memberships', planID: 'Plan ID', empty: 'No plan memberships' },
     grants: { title: 'Resource grants', resourceType: 'Resource type', resourceID: 'Resource ID', permissions: 'Permissions JSON', empty: 'No resource grants' },
     quotas: { title: 'Quota policies', key: 'Policy key', policy: 'Policy JSON', empty: 'No quota policies' },
-    resolver: { title: 'Effective access preview', description: 'Preview the server-side allow-union for one user, optional plan, and service scope.', userID: 'User ID', planID: 'Plan ID (optional)', scope: 'Service scope', result: '{count} enabled groups apply', none: 'No enabled groups apply', policySummary: '{grants} grants and {quotas} quota policies are effective.' },
-    editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled', scopeFixed: 'The scope of an existing group can’t change.' },
+    resolver: { title: 'Effective access preview', description: 'Preview the effective access of a user, plan and service scope.', userID: 'User ID', planID: 'Plan ID (optional)', scope: 'Service scope', result: '{count} enabled groups apply', none: 'No enabled groups apply', policySummary: '{grants} grants and {quotas} quota policies are effective.' },
+    editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled', scopeFixed: 'The scope of an existing group cannot change.' },
     messages: { groupCreated: 'Created access group {name}', groupSaved: 'Saved access group {name}', groupEnabled: 'Enabled access group {name}', groupDisabled: 'Disabled access group {name}', groupDeleted: 'Deleted access group {name}', memberAdded: 'Added user #{id}', memberRemoved: 'Removed user #{id}', planAdded: 'Added plan #{id}', planRemoved: 'Removed plan #{id}', grantAdded: 'Added resource grant', grantRemoved: 'Removed resource grant', quotaSaved: 'Saved quota policy', quotaRemoved: 'Removed quota policy' },
-    confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This can’t be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This can’t be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This can’t be undone.', removeQuotaAction: 'Remove policy' },
+    confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This cannot be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This cannot be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This cannot be undone.', removeQuotaAction: 'Remove policy' },
     errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }
   },
   agentUpgrades: {
     title: 'Agent upgrades',
-    description: 'Control pushes Agent releases in canary batches (5%, 25%, 100%, at least 30 minutes each) and rolls a batch back when more than 5% of it fails.',
-    empty: 'No Agent upgrade yet. A super administrator starts one with:',
-    emptyShort: 'No Agent upgrade yet.',
+    description: 'Agent releases roll out in batches of 5%, 25% and 100%, at least 30 minutes each. A batch rolls back when more than 5% of it fails.',
+    empty: 'No Agent upgrades. A super administrator starts one with:',
+    emptyShort: 'No Agent upgrades.',
     target: 'Agent {version}',
     batchOf: 'batch {batch} of {total}',
     batchEnds: 'next batch at {time} at the earliest',
@@ -582,9 +582,9 @@ export default {
     actions: { pause: 'Pause', resume: 'Resume', abort: 'Abort', rollback: 'Abort and roll back' },
     confirm: {
       abortTitle: 'Abort the upgrade to {version}?',
-      abort: 'No further node is offered the upgrade. Nodes already upgraded keep the new release.',
+      abort: 'No more nodes receive the upgrade. Upgraded nodes keep the new release.',
       rollbackTitle: 'Roll back the upgrade to {version}?',
-      rollback: 'The upgraded nodes of the current batch are told to reinstate their previous release, then the campaign ends.'
+      rollback: 'Upgraded nodes in the current batch return to their previous release, and the upgrade ends.'
     },
     loadFailed: 'Unable to load Agent upgrades'
   },

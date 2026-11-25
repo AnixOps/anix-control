@@ -160,7 +160,7 @@ test.describe('the table of tokens', () => {
   test('shows the error of a failed load and loads again on Try again', async ({ page }) => {
     const requests = recordRequests(page)
     await openScreen(page, 'admin-api-tokens-error', { clock: true })
-    await expect(page.getByText('Couldn’t load the API tokens')).toBeVisible()
+    await expect(page.getByText('Could not load the API tokens')).toBeVisible()
     // The route's message, not its JSON.
     await expect(page.getByRole('alert').getByText('the database is unavailable', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Try again' }).click()
@@ -169,7 +169,7 @@ test.describe('the table of tokens', () => {
 
   test('turns Create off and says why at the limit of 25 active tokens', async ({ page }) => {
     await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'full' })
-    await expect(page.getByTestId('api-tokens-quota')).toHaveText('You hold the maximum of 25 active tokens. Revoke one to create another.')
+    await expect(page.getByTestId('api-tokens-quota')).toHaveText('The limit of 25 active tokens is reached. Revoke one to create another.')
     await expect(page.getByTestId('api-token-create-open')).toBeDisabled()
   })
 
@@ -208,8 +208,8 @@ test.describe('creating a token', () => {
     expect(requests.to(TOKENS, 'POST')).toHaveLength(0)
     await expect(form.getByRole('radio', { name: 'Read' })).toBeChecked()
     await expect(form).toContainText('GET and HEAD requests on the administrator APIs')
-    await expect(form).toContainText('can’t read the Telegram bot token')
-    await expect(form).toContainText('It still can’t manage API tokens')
+    await expect(form).toContainText('Cannot change anything or read the Telegram bot token')
+    await expect(form).toContainText('Cannot manage API tokens')
     await expect(form.getByRole('combobox', { name: 'Expires' })).toContainText('90 days (recommended)')
     await expect(form.getByRole('textbox', { name: /^Name/ })).toBeFocused()
 
@@ -220,7 +220,7 @@ test.describe('creating a token', () => {
     await expect(form.getByRole('combobox', { name: 'Expires' })).toContainText('30 days')
     await form.getByRole('button', { name: 'Create token' }).click()
 
-    const result = page.getByRole('dialog', { name: 'Your new API token' })
+    const result = page.getByRole('dialog', { name: 'New API token' })
     await expect(result).toBeVisible()
     const posts = requests.to(TOKENS, 'POST')
     expect(posts).toHaveLength(1)
@@ -232,7 +232,7 @@ test.describe('creating a token', () => {
     const field = result.getByLabel('API token')
     await expect(field).toHaveValue(FIXTURE_TOKEN)
     await expect(field).toHaveAttribute('type', 'password')
-    await expect(result.getByTestId('api-token-warning')).toContainText('can’t show it again')
+    await expect(result.getByTestId('api-token-warning')).toContainText('revoke it and create another')
     await expect(result.getByTestId('api-token-facts')).toContainText('weekly report')
     await expect(result.getByTestId('api-token-facts')).toContainText('Admin')
     // The usage hint has a header and a placeholder, never the token or a URL with it.
@@ -327,7 +327,7 @@ test.describe('creating a token', () => {
     await form.getByLabel('Days until it expires').fill('45')
     await form.getByRole('combobox', { name: 'Expires' }).click()
     await page.getByRole('option', { name: 'No expiry (not recommended)' }).click()
-    await expect(form.getByTestId('api-token-never-notice')).toContainText('works until someone revokes it')
+    await expect(form.getByTestId('api-token-never-notice')).toContainText('stays valid until revoked')
     await form.getByRole('button', { name: 'Create token' }).click()
     await expect(page.getByTestId('api-token-result')).toBeVisible()
     // No expiry: the field is left out of the request.
@@ -341,7 +341,7 @@ test.describe('creating a token', () => {
     await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
     await form.getByRole('button', { name: 'Create token' }).click()
     const alert = form.getByRole('alert')
-    await expect(alert).toContainText('Your sign-in is too old for this. Sign in again, then create the token within 10 minutes.')
+    await expect(alert).toContainText('The session is too old. Sign in again and create the token within 10 minutes.')
     await alert.getByRole('button', { name: 'Sign in again' }).click()
     await expect(page).toHaveURL(/\/login$/)
   })
@@ -351,7 +351,7 @@ test.describe('creating a token', () => {
     const form = await openForm(page)
     await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
     await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(form.getByRole('alert')).toContainText('You already hold 25 active API tokens. Revoke one first.')
+    await expect(form.getByRole('alert')).toContainText('The limit of 25 active API tokens is reached. Revoke one first.')
     await expect(form).toBeVisible()
   })
 
@@ -381,7 +381,7 @@ test.describe('revoking a token', () => {
     const requests = recordRequests(page)
     await openScreen(page, 'admin-api-tokens', { clock: true })
     const dialog = await openRevoke(page, 'deploy bot')
-    await expect(dialog).toContainText('stops working at once')
+    await expect(dialog).toContainText('stops working immediately')
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
     // Nothing is sent before the danger button.
     expect(requests.to(`${TOKENS}/6b0e1c52-0002`, 'DELETE')).toHaveLength(0)
@@ -410,13 +410,13 @@ test.describe('revoking a token', () => {
     await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'revokeFails' })
     let dialog = await openRevoke(page, 'nightly export')
     await dialog.getByRole('button', { name: 'Revoke token' }).click()
-    await expect(dialog.getByRole('alert')).toContainText('Couldn’t revoke the token: database operation failed')
+    await expect(dialog.getByRole('alert')).toContainText('Could not revoke the token: database operation failed')
     await expect(dialog).toBeVisible()
 
     await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'revokeGone' })
     dialog = await openRevoke(page, 'nightly export')
     await dialog.getByRole('button', { name: 'Revoke token' }).click()
-    await expect(dialog.getByRole('alert')).toContainText('This token no longer exists, or it isn’t yours.')
+    await expect(dialog.getByRole('alert')).toContainText('The token no longer exists or belongs to another administrator.')
   })
 
   test('copies the token\'s ID for the audit log', async ({ page, context }) => {

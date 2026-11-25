@@ -31,7 +31,7 @@ test('lists the bundles with their verification, the last verified backup and th
   await expect(panel.getByRole('table').getByText('anix-control-20261002T034107Z-daily.tar')).toBeVisible()
   await expect(panel.locator('[data-verify="passed"]').first()).toHaveText('Verified')
   await expect(panel.locator('[data-verify="failed"]')).toHaveText('Verification failed')
-  await expect(panel.locator('[data-verify="pending"]')).toHaveText('Not verified yet')
+  await expect(panel.locator('[data-verify="pending"]')).toHaveText('Not verified')
   await expect(panel.getByRole('table').getByText('Before a migration')).toBeVisible()
   await expect(page.locator('[data-test="backup-last-verified"]')).toContainText('4 hours ago')
   await expect(page.locator('[data-test="backup-freshness"]')).toHaveText('Up to date')
@@ -50,7 +50,7 @@ test('backs up now and reloads the list', async ({ page }) => {
   const requests = recordRequests(page)
   await openScreen(page, 'admin-system-backup', { clock: true })
   await page.locator('[data-test="backup-now"]').click()
-  await expectToast(page, 'Backed up to anix-control-20261002T080000Z-manual.tar. It’s being verified.')
+  await expectToast(page, 'Backed up to anix-control-20261002T080000Z-manual.tar. It is being verified.')
   expect(requests.to('/api/v5/backups', 'POST')).toHaveLength(1)
   await expect.poll(() => requests.to('/api/v5/backups').length).toBe(2)
 })
@@ -67,15 +67,15 @@ test('tells an administrator who is not a super administrator why the download i
   await openScreen(page, 'admin-system-backup', { clock: true, scenario: 'backupStaff' })
   await page.getByRole('button', { name: 'Actions for anix-control-20261002T034107Z-daily.tar' }).click()
   await page.getByRole('menuitem', { name: 'Download' }).click()
-  await expectToast(page, 'Only a super administrator can download a backup: it holds the panel’s root key.')
+  await expectToast(page, 'Only a super administrator can download backups (they contain the root key).')
 })
 
 test('warns when the last verified backup is too old, and when there is none', async ({ page }) => {
   await openScreen(page, 'admin-system-backup-stale', { clock: true })
   await expect(page.locator('[data-test="backup-freshness"]')).toHaveText('Older than 36 hours')
   await openScreen(page, 'admin-system-backup-empty', { clock: true })
-  await expect(page.locator('[data-test="backup-last-verified"]')).toContainText('None yet')
-  await expect(page.getByText('No backups yet')).toBeVisible()
+  await expect(page.locator('[data-test="backup-last-verified"]')).toContainText('None')
+  await expect(page.getByText('No backups')).toBeVisible()
 })
 
 test('says why there are no backups on PostgreSQL', async ({ page }) => {

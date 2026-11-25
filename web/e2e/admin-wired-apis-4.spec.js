@@ -60,7 +60,7 @@ test.describe('the Telegram test message', () => {
     await expect(blocked).toHaveAttribute('data-tone', 'warning')
     await expect(blocked).toContainText('Bot blocked')
     await expect(blocked).toContainText('the chat blocked the bot or never started it')
-    await expect(blocked).toContainText('press Start')
+    await expect(blocked).toContainText('Start or unblock')
 
     await openScreen(page, 'admin-telegram-test-network')
     const network = page.getByTestId('telegram-test-result')
@@ -126,7 +126,7 @@ test.describe('kernel alerts in the dashboard', () => {
     expect(order.indexOf('tickets')).toBeGreaterThan(order.findIndex(key => key.startsWith('node-')))
 
     await expect(card.locator('[data-alert="kernel-31"]')).toContainText('The current forward link CA is about to end')
-    await expect(card.locator('[data-alert="kernel-31"]')).toContainText('No next CA is staged: rotate the CA now.')
+    await expect(card.locator('[data-alert="kernel-31"]')).toContainText('no next CA is staged. Rotate the CA now.')
     await expect(card.locator('[data-alert="kernel-32"]')).toContainText('The Agent certificate of hk-01 is about to expire')
     await expect(card.locator('[data-alert="kernel-32"]')).toContainText('Ends 2026-10-03 04:00')
     await expect(card.locator('[data-alert="kernel-33"]')).toContainText('The forward link certificate of edge-sg-1 is about to expire')
@@ -160,7 +160,7 @@ test.describe('kernel alerts in the dashboard', () => {
   test('keeps the dashboard working when the alerts fail, and loads them again on Try again', async ({ page }) => {
     await openScreen(page, 'admin-dashboard-alerts-failed', { clock: true })
     const card = page.locator('[data-dashboard-alerts]')
-    await expect(card.locator('[data-alert="alerts-failed"]')).toContainText('Couldn’t load certificate and rollout alerts')
+    await expect(card.locator('[data-alert="alerts-failed"]')).toContainText('Could not load certificate and rollout alerts')
     await expect(card.locator('[data-alert="node-9"]')).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.locator('[data-metric="users"]')).toContainText('1,204')

@@ -3,14 +3,14 @@
 export default {
   adminApiTokens: {
     title: 'API tokens',
-    description: 'Personal access tokens for scripts, CI jobs and monitoring probes. A token acts as you on the administrator APIs, within its scope, until it expires or you revoke it.',
+    description: 'Personal access tokens for scripts, CI jobs and monitoring probes. A token acts as its owner on the administrator APIs, within its scope, until it expires or is revoked.',
     guide: 'About API tokens (guide)',
     refresh: 'Refresh',
     quota: '{used} of {max} active tokens in use.',
-    quotaReached: 'You hold the maximum of {max} active tokens. Revoke one to create another.',
-    loadFailed: 'Couldn’t load the API tokens',
+    quotaReached: 'The limit of {max} active tokens is reached. Revoke one to create another.',
+    loadFailed: 'Could not load the API tokens',
     copied: 'Token ID copied.',
-    copyFailed: 'Couldn’t copy the token ID.',
+    copyFailed: 'Could not copy the token ID.',
     filters: {
       label: 'Also show',
       ended: 'Revoked and expired',
@@ -26,7 +26,7 @@ export default {
       expires: 'Expires',
       lastUsed: 'Last used',
       createdOn: 'Created {date}',
-      hintTitle: 'The last four characters of the token. The token itself is never shown again.'
+      hintTitle: 'Last four characters of the token. The full token is not shown again.'
     },
     owner: {
       you: 'You',
@@ -62,33 +62,33 @@ export default {
     },
     empty: {
       title: 'No API tokens',
-      description: 'Create a token to let a script, CI job or monitoring probe call the administrator APIs without your password. It is shown once, when you create it.'
+      description: 'Scripts, CI jobs and monitoring probes use tokens to call the administrator APIs. A token is shown only once, at creation.'
     },
     revoke: {
       title: 'Revoke “{name}”?',
-      message: 'Anything using this token stops working at once: its next request is refused. This can’t be undone. Create a new token for the automation instead.',
-      messageOther: 'It belongs to administrator #{id}. Anything using this token stops working at once: its next request is refused. This can’t be undone.',
+      message: 'Anything using this token stops working immediately. This cannot be undone.',
+      messageOther: 'It belongs to administrator #{id}. Anything using this token stops working immediately. This cannot be undone.',
       action: 'Revoke token',
       done: 'Revoked “{name}”.',
       already: '“{name}” was already revoked.',
-      gone: 'This token no longer exists, or it isn’t yours. The list has been refreshed.',
-      failed: 'Couldn’t revoke the token: {message}'
+      gone: 'The token no longer exists or belongs to another administrator. The list has been refreshed.',
+      failed: 'Could not revoke the token: {message}'
     },
     create: {
       action: 'Create token',
       title: 'Create an API token',
-      description: 'A script, CI job or monitoring probe sends it instead of your password. It is shown once, right after you create it.',
+      description: 'Used by scripts, CI jobs or monitoring probes instead of a password. Shown only once, after creation.',
       name: 'Name',
       namePlaceholder: 'nightly export',
-      nameHelp: 'What it is for, for example “nightly export”. Up to {max} characters.',
+      nameHelp: 'Purpose, for example “nightly export”. Up to {max} characters.',
       scope: 'Scope',
       scopeHelp: 'Prefer Read, a short expiry and one token per automation.',
       scopeText: {
-        read: 'Read only: GET and HEAD requests on the administrator APIs. It can list and inspect but never change anything, and it can’t read the Telegram bot token, the one read that still answers a secret in clear.',
-        admin: 'Everything you may do on the administrator APIs, changes included (and super administrator actions if you are one). It still can’t manage API tokens: that needs your signed-in session.'
+        read: 'Read only: GET and HEAD requests on the administrator APIs. Cannot change anything or read the Telegram bot token.',
+        admin: 'The owner’s full permissions on the administrator APIs, including changes and super administrator actions. Cannot manage API tokens.'
       },
       expiry: 'Expires',
-      expiryHelp: 'Set one and put the renewal in your calendar. 90 days is a good start.',
+      expiryHelp: 'Set an expiry; 90 days is recommended.',
       expiryOptions: {
         d30: '30 days',
         d90: '90 days (recommended)',
@@ -101,7 +101,7 @@ export default {
       customDays: 'Days until it expires',
       customDaysHelp: 'A whole number from 1 to {max}.',
       daysUnit: 'days',
-      neverNotice: 'A token without an expiry works until someone revokes it, even if it leaks. Choose an expiry unless you have a reason not to.',
+      neverNotice: 'A token without an expiry stays valid until revoked. Set an expiry unless there is a specific reason not to.',
       cancel: 'Cancel',
       submit: 'Create token',
       signInAgain: 'Sign in again',
@@ -112,17 +112,17 @@ export default {
           unprintable: 'Use printable characters only.'
         },
         expiry: 'Enter a whole number of days from 1 to 730.',
-        signInAgain: 'Your sign-in is too old for this. Sign in again, then create the token within 10 minutes.',
-        too_many_tokens: 'You already hold 25 active API tokens. Revoke one first.',
+        signInAgain: 'The session is too old. Sign in again and create the token within 10 minutes.',
+        too_many_tokens: 'The limit of 25 active API tokens is reached. Revoke one first.',
         not_an_administrator: 'Only an active administrator can create API tokens.',
-        invalid_request: 'The token wasn’t created: {message}',
-        failed: 'Couldn’t create the token: {message}'
+        invalid_request: 'Could not create the token: {message}',
+        failed: 'Could not create the token: {message}'
       }
     },
     result: {
-      title: 'Your new API token',
-      description: 'Shown once. When you close this dialog it can’t be shown again.',
-      warning: 'Copy it now and put it in the secret store of whatever will use it. Control keeps only a hash and can’t show it again. If you lose it, revoke it and create another.',
+      title: 'New API token',
+      description: 'Shown only once. It cannot be viewed again after this dialog closes.',
+      warning: 'Copy it now into a secret store. If it is lost, revoke it and create another.',
       label: 'API token',
       copy: 'Copy token',
       name: 'Name',
@@ -132,7 +132,7 @@ export default {
       usageTitle: 'Using the token',
       usageIntro: 'Send it in the Authorization header, on the administrator APIs only (/api/v2/admin, /api/v3 and /api/v4).',
       usageLabel: 'Example request',
-      usageNever: 'Never put it in a URL. A request with a token in its query string is refused and audited, and the URL has already reached the access logs: revoke that token.',
+      usageNever: 'Never put it in a URL. A request with a token in its query string is refused and audited; revoke that token.',
       done: 'Done'
     }
   }

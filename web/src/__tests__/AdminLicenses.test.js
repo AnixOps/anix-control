@@ -49,7 +49,7 @@ describe('Admin device licenses', () => {
     expect(wrapper.get('[data-testid="licenses-enabled"]').attributes('aria-checked')).toBe('false')
     expect(wrapper.find('[data-testid="licenses-no-root-key"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="licenses-ca"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('No devices yet')
+    expect(wrapper.text()).toContain('No devices')
     expect(wrapper.text()).toContain('Pro')
   })
 

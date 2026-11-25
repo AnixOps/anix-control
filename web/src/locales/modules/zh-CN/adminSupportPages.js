@@ -54,16 +54,16 @@ export default {
       name: '夏季活动'
     },
     empty: {
-      title: '还没有优惠券',
-      description: '创建一个优惠码，让用户下次下单时享受折扣。'
+      title: '暂无优惠券',
+      description: '创建优惠码，供用户下单时使用。'
     },
     confirm: {
       deleteTitle: '删除优惠券 {code}？',
-      deleteMessage: '用户将不能再使用这个优惠码。此操作无法撤销。',
+      deleteMessage: '删除后该优惠码将无法使用。此操作无法撤销。',
       deleteAction: '删除优惠券'
     },
     messages: {
-      fetchFailed: '优惠券没有加载出来',
+      fetchFailed: '优惠券加载失败',
       codeRequired: '请填写优惠券码',
       nameRequired: '请填写优惠券名称',
       createSuccess: '优惠券创建成功',
@@ -74,7 +74,7 @@ export default {
   },
   adminOrders: {
     title: '订单',
-    subtitle: '所有购买、续费和升级。选中一个订单查看支付情况。',
+    subtitle: '全部购买、续费与升级订单。选择订单查看支付情况。',
     stats: {
       totalOrders: '订单总数',
       pendingOrders: '待支付订单',
@@ -128,19 +128,19 @@ export default {
       unknown: '未知'
     },
     empty: {
-      title: '还没有订单',
-      description: '用户购买或续费套餐后，订单会出现在这里。'
+      title: '暂无订单',
+      description: '显示用户购买或续费的订单。'
     },
     confirm: {
       markPaidTitle: '将订单 {tradeNo} 标记为已支付？',
-      markPaidMessage: '订单金额 {amount}，标记后按已支付处理。此操作无法撤销。',
+      markPaidMessage: '订单金额 {amount}，将按已支付处理。此操作无法撤销。',
       cancelTitle: '取消订单 {tradeNo}？',
-      cancelMessage: '用户将不能再支付这笔订单。此操作无法撤销。',
+      cancelMessage: '取消后该订单将无法支付。此操作无法撤销。',
       cancelAction: '取消订单',
       keepOrder: '保留订单'
     },
     messages: {
-      fetchOrdersFailed: '订单列表没有加载出来',
+      fetchOrdersFailed: '订单列表加载失败',
       fetchStatsFailed: '加载订单统计失败',
       markPaidSuccess: '订单已标记为支付成功',
       markPaidFailedShort: '标记失败',
@@ -163,18 +163,18 @@ export default {
   },
   adminInviteCodes: {
     title: '邀请码',
-    subtitle: '生成、复制和撤销用于注册的邀请码。',
+    subtitle: '生成、复制与撤销注册邀请码。',
     rewardsLink: '邀请返佣',
     never: '永不过期',
     empty: {
-      title: '还没有邀请码',
-      description: '生成一批邀请码，发给你想邀请注册的人。'
+      title: '暂无邀请码',
+      description: '批量生成邀请码用于注册。'
     },
     registration: {
       requiredBadge: '必填',
       optionalBadge: '选填',
       required: '当前注册必须填写邀请码（auth.registration.require_invite）。',
-      optional: '当前注册无需邀请码；注册时填写的邀请码仍会被核销。'
+      optional: '当前注册无需邀请码，已填写的邀请码仍将核销。'
     },
     generate: {
       title: '生成邀请码',
@@ -184,7 +184,7 @@ export default {
       expireDays: '有效期',
       daysUnit: '天',
       expireDaysPlaceholder: '使用配置的默认值',
-      expireDaysHelp: '留空：使用配置的有效期；0：永不过期。',
+      expireDaysHelp: '留空使用默认有效期，0 表示永不过期。',
       submit: '生成',
       created: '已生成 {count} 个邀请码：'
     },
@@ -219,18 +219,18 @@ export default {
     confirm: {
       revokeTitle: '撤销邀请码 {code}？',
       revokeManyTitle: '撤销 {count} 个邀请码？',
-      revokeMessage: '撤销后不能再用于注册。此操作无法撤销。'
+      revokeMessage: '撤销后无法用于注册。此操作无法撤销。'
     },
     messages: {
       failed: '请求失败',
-      fetchFailed: '邀请码没有加载出来',
+      fetchFailed: '邀请码加载失败',
       countRange: '每次可生成 1 到 {max} 个邀请码。',
       generated: '已生成 {count} 个邀请码',
       generateFailed: '生成邀请码失败：{message}',
       revoked: '已撤销邀请码 {code}',
       revokedMany: '已撤销 {count} 个邀请码',
       revokePartial: '{total} 个邀请码中 {done} 个已撤销。',
-      revokeNone: '没有邀请码被撤销。',
+      revokeNone: '未撤销任何邀请码。',
       revokeFailed: '撤销邀请码失败：{message}',
       copied: '已复制',
       copyFailed: '复制失败'
@@ -238,7 +238,7 @@ export default {
   },
   adminInvite: {
     title: '邀请返佣',
-    subtitle: '审核佣金提现，查看邀请排行，设置返佣规则。',
+    subtitle: '佣金提现审核、邀请排行与返佣规则。',
     currencySymbol: '¥',
     tabs: {
       label: '邀请返佣分区',
@@ -254,7 +254,7 @@ export default {
       codeLengthHelp: '4 到 16 个字符。',
       commissionTitle: '佣金',
       commissionRate: '佣金比例',
-      commissionRateHelp: '每笔符合条件的订单按此比例返给邀请人。',
+      commissionRateHelp: '符合条件的订单按此比例返佣给邀请人。',
       commissionType: '佣金类型',
       commissionFixed: '固定佣金金额',
       withdrawTitle: '提现',
@@ -298,8 +298,8 @@ export default {
         status: '状态',
         createdAt: '申请时间'
       },
-      empty: '还没有提现申请',
-      emptyDescription: '邀请人申请提取佣金后，申请会出现在这里等待审核。'
+      empty: '暂无提现申请',
+      emptyDescription: '显示待审核的佣金提现申请。'
     },
     stats: {
       totalInvites: '总邀请数',
@@ -319,7 +319,7 @@ export default {
       approveTitle: '通过提现申请 #{id}？',
       approveMessage: '将向 {account} 发放 {amount}。此操作无法撤销。',
       rejectTitle: '拒绝提现申请 #{id}？',
-      rejectMessage: '这笔 {amount} 的申请会被拒绝。此操作无法撤销。'
+      rejectMessage: '将拒绝金额为 {amount} 的申请。此操作无法撤销。'
     },
     messages: {
       fetchConfigFailed: '加载邀请配置失败',
@@ -336,7 +336,7 @@ export default {
   },
   adminTickets: {
     title: '工单',
-    subtitle: '所有用户工单在一个队列里。选中一个来回复或关闭。',
+    subtitle: '全部用户工单。选择工单进行回复或关闭。',
     list: '工单队列',
     loading: '正在加载工单…',
     select: '选择一个工单进行回复。',
@@ -344,7 +344,7 @@ export default {
     noSubject: '无主题',
     meta: '#{id} · 用户 {user} · {level}',
     priority: '优先级：{level}',
-    threadNote: '管理端暂时看不到之前的对话。你的回复会出现在用户的工单页面，工单会标为已回复。',
+    threadNote: '管理端暂不显示历史对话。回复将显示在用户工单页，工单标记为已回复。',
     closedNote: '工单已关闭，不能再回复。',
     filters: {
       search: '搜索主题、编号或用户 ID',
@@ -362,9 +362,9 @@ export default {
       sendReply: '发送回复'
     },
     empty: {
-      title: '没有工单',
-      description: '用户提交工单后，会出现在这里。',
-      noMatches: '没有符合条件的工单'
+      title: '暂无工单',
+      description: '显示用户提交的工单。',
+      noMatches: '无符合条件的工单'
     },
     levels: {
       low: '低',
@@ -386,29 +386,29 @@ export default {
     quick: {
       label: '快捷回复',
       receivedLabel: '正在处理',
-      received: '感谢反馈，我们正在排查，有进展会在这里告诉你。',
+      received: '感谢反馈，我们正在排查，进展将在此更新。',
       detailsLabel: '询问细节',
-      details: '请告诉我们你使用的客户端和节点，以及问题从什么时候开始出现。',
+      details: '请提供所用客户端、节点及问题出现的时间。',
       fixedLabel: '已修复',
-      fixed: '问题应该已经解决了。请更新订阅后再试，如果还有问题请继续回复。'
+      fixed: '问题已处理。请更新订阅后重试，如仍有问题请继续回复。'
     },
     confirm: {
-      closeTitle: '关闭工单 #{id}「{subject}」？',
-      closeMessage: '关闭后不能再回复，也无法重新打开。',
+      closeTitle: '关闭工单 #{id}“{subject}”？',
+      closeMessage: '关闭后无法回复或重新打开。',
       closeAction: '关闭工单'
     },
     messages: {
-      fetchFailed: '工单没有加载出来',
+      fetchFailed: '工单加载失败',
       replyRequired: '请先写回复内容',
       replySuccess: '已回复工单 #{id}',
-      replyFailed: '回复没有发送成功',
+      replyFailed: '回复发送失败',
       closed: '已关闭工单 #{id}',
-      closeFailed: '工单没有关闭'
+      closeFailed: '工单关闭失败'
     }
   },
   adminKnowledge: {
     title: '帮助中心内容',
-    subtitle: '用户在帮助中心看到的公告、教程和常见问题。',
+    subtitle: '帮助中心的公告、教程与常见问题。',
     actions: {
       createArticle: '新建文章',
       publish: '发布',
@@ -441,11 +441,11 @@ export default {
       sort: '排序',
       sortHelp: '数字越小越靠前。',
       visibility: '在帮助中心显示',
-      visibilityHelp: '隐藏的文章仍保留在这里，但用户看不到。'
+      visibilityHelp: '隐藏后文章保留，但对用户不可见。'
     },
     placeholders: {
       title: '文章标题',
-      body: '在这里写文章。## 开始一节，- 开始一个列表项。'
+      body: '正文。## 表示小节，- 表示列表项。'
     },
     editor: {
       view: '编辑视图',
@@ -457,29 +457,29 @@ export default {
     modal: {
       createTitle: '新建文章',
       editTitle: '编辑文章',
-      description: '预览和用户在帮助中心看到的一样。'
+      description: '与帮助中心显示效果一致。'
     },
     empty: {
-      title: '还没有文章',
-      description: '写下第一篇文章，用户就能在帮助中心看到。'
+      title: '暂无文章',
+      description: '文章发布后显示于帮助中心。'
     },
     confirm: {
       deleteTitle: '删除文章“{title}”？',
-      deleteMessage: '文章会从帮助中心移除，用户将无法再看到它。此操作无法撤销。',
+      deleteMessage: '文章将从帮助中心移除。此操作无法撤销。',
       deleteAction: '删除文章'
     },
     messages: {
-      fetchFailed: '文章没有加载出来',
+      fetchFailed: '文章加载失败',
       requiredFields: '请填写标题和正文',
       titleRequired: '请填写标题',
       bodyRequired: '请填写正文',
       saveSuccess: '文章已保存',
       publishSuccess: '文章已发布',
-      actionFailed: '文章没有保存成功',
-      shown: '「{title}」已在帮助中心显示',
-      hidden: '「{title}」已隐藏',
+      actionFailed: '文章保存失败',
+      shown: '“{title}”已在帮助中心显示',
+      hidden: '“{title}”已隐藏',
       deleted: '已删除文章“{title}”',
-      deleteFailed: '文章没有删除成功'
+      deleteFailed: '文章删除失败'
     }
   }
 }

@@ -126,7 +126,7 @@ describe('Admin Dashboard', () => {
     kernelApi.getPanelBackups.mockResolvedValueOnce({ supported: true, backups: [], summary: { last_verified: null, stale: true, stale_after_hours: 36 } })
     wrapper = mountDashboard()
     await flushPromises()
-    expect(card().get('[data-metric-value]').text()).toBe('None yet')
+    expect(card().get('[data-metric-value]').text()).toBe('None')
     expect(card().get('[data-backup-stale]').text()).toBe('Older than 36 hours')
     wrapper.unmount()
 
@@ -139,7 +139,7 @@ describe('Admin Dashboard', () => {
     kernelApi.getPanelBackups.mockRejectedValueOnce(new Error('offline'))
     wrapper = mountDashboard()
     await flushPromises()
-    expect(card().text()).toContain('Backups didn’t load')
+    expect(card().text()).toContain('Could not load the backups')
     expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
     wrapper.unmount()
   })
@@ -243,12 +243,12 @@ describe('Admin Dashboard', () => {
     const wrapper = mountDashboard()
     await flushPromises()
 
-    expect(wrapper.get('[data-error-state]').text()).toContain('Couldn’t load the dashboard')
+    expect(wrapper.get('[data-error-state]').text()).toContain('Could not load the dashboard')
     expect(wrapper.text()).toContain('dashboard down')
     await wrapper.get('[data-error-retry]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
-    expect(wrapper.get('[data-dashboard-activity]').text()).toContain('Couldn’t load the audit log')
+    expect(wrapper.get('[data-dashboard-activity]').text()).toContain('Could not load the audit log')
     wrapper.unmount()
   })
 
@@ -288,7 +288,7 @@ describe('Admin Dashboard', () => {
       // Danger (the offline node, the critical CA) before warnings (tickets, certificate).
       expect(keys).toEqual(['node-8', 'kernel-8', 'tickets', 'kernel-7'])
       expect(alerts.get('[data-alert="kernel-8"]').text()).toContain('The current module CA is about to end')
-      expect(alerts.get('[data-alert="kernel-8"]').text()).toContain('No next CA is staged')
+      expect(alerts.get('[data-alert="kernel-8"]').text()).toContain('no next CA is staged')
       expect(alerts.get('[data-alert="kernel-7"]').text()).toContain('The Agent certificate of hk-1 is about to expire')
       expect(alerts.get('[data-alert="kernel-7"]').text()).not.toContain('English message')
       expect(alerts.get('[data-alert="kernel-7"] .dashboard-alerts__icon').classes()).toContain('is-warning')
@@ -340,7 +340,7 @@ describe('Admin Dashboard', () => {
       await flushPromises()
 
       const alerts = wrapper.get('[data-dashboard-alerts]')
-      expect(alerts.get('[data-alert="alerts-failed"]').text()).toContain('Couldn’t load certificate and rollout alerts')
+      expect(alerts.get('[data-alert="alerts-failed"]').text()).toContain('Could not load certificate and rollout alerts')
       expect(alerts.find('[data-alert="node-8"]').exists()).toBe(true)
       expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
       expect(wrapper.find('[data-dashboard-refresh]').attributes('disabled')).toBeUndefined()

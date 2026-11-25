@@ -342,7 +342,7 @@ describe('Admin Payment', () => {
       adminApi.getPaymentGateways.mockRejectedValueOnce(new Error('Network Error'))
       render(Harness)
       const alert = await screen.findByRole('alert')
-      expect(alert.textContent).toContain('Payment gateways didn’t load')
+      expect(alert.textContent).toContain('Could not load the payment gateways')
       await user.click(within(alert).getByRole('button', { name: 'Try again' }))
       expect(await screen.findByText('Stripe EU')).toBeTruthy()
     })

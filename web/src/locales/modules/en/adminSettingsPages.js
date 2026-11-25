@@ -5,21 +5,21 @@ export default {
   settingsForm: {
     bar: {
       label: 'Unsaved changes',
-      unsaved: 'You have unsaved changes',
+      unsaved: 'Unsaved changes',
       invalid: 'Fix the highlighted fields to save',
       discard: 'Discard',
       save: 'Save'
     },
     leave: {
       title: 'Discard unsaved changes?',
-      message: 'If you leave, your changes on this page won’t be saved.',
+      message: 'Changes on this page will not be saved.',
       discard: 'Discard changes',
       stay: 'Keep editing'
     }
   },
   adminSettings: {
     title: 'Settings',
-    subtitle: 'Subscription domains, data retention, backups, the audit log and advanced configuration keys.',
+    subtitle: 'Subscription domains, data retention, backups, audit log and advanced configuration keys.',
     navLabel: 'Settings sections',
     loading: 'Loading…',
     sections: {
@@ -34,7 +34,7 @@ export default {
     general: {
       links: {
         title: 'Other common settings',
-        description: 'These live on their own pages. Click one to open it.',
+        description: 'These settings have their own pages.',
         mail: 'E-mail notifications',
         mailHint: 'SMTP server and test',
         security: 'Sign-in security',
@@ -42,35 +42,35 @@ export default {
       },
       subscription: {
         title: 'Subscription domains',
-        description: 'The domains used in users’ subscription links and managed-config output.',
+        description: 'Domains used in subscription links and managed-config output.',
         path: 'Subscription path',
         currentHost: 'Current host',
         domains: 'Alternate domains',
         domainsPlaceholder: 'sub1.example.com\nsub2.example.com',
-        domainsHelp: 'One domain per line, or separated by commas or semicolons. A full link keeps only its domain.',
+        domainsHelp: 'One domain per line, or separated by commas or semicolons. For a full link, only the domain is kept.',
         invalidDomains: 'Not valid domains: {domains}',
         domainsOnly: 'Serve subscriptions only on these domains',
         domainsOnlyHint: 'The panel’s own domain answers 404 on subscription paths.',
-        domainsOnlyHelp: 'Tip: give subscriptions their own domain (ideally behind a CDN), never shared with the panel or a node’s SNI. When one is unreachable, switch to another; the panel is not affected. Needs at least one domain above.',
+        domainsOnlyHelp: 'Use a dedicated subscription domain (preferably behind a CDN), not shared with the panel or any node SNI. Requires at least one domain above.',
         preview: 'Link preview',
         previewEmpty: 'Without alternate domains, links use the current host.',
-        loadFailed: 'Couldn’t load the subscription domains',
-        saveFailed: 'Couldn’t save the subscription domains',
+        loadFailed: 'Could not load the subscription domains',
+        saveFailed: 'Could not save the subscription domains',
         saved: 'Subscription domains saved'
       }
     },
     data: {
       title: 'Data & retention',
-      description: 'Choose which statistics are recorded and how long they are kept.',
-      footer: 'Turning it off stops recording at once; records already kept are not deleted. The full charts are under Monitor → Destinations.',
+      description: 'Which statistics are recorded and how long they are kept.',
+      footer: 'Turning it off stops recording immediately; kept records are not deleted. Charts are under Monitor → Destinations.',
       days: '{days} days'
     },
     advanced: {
       warningTitle: 'For troubleshooting only',
-      warning: 'The everyday options are in the other sections. This is every system configuration key as a raw value; a wrong value can break a feature. The scheduler’s internal records are not listed.',
+      warning: 'All system configuration keys as raw values. A wrong value can break a feature.',
       configs: {
         title: 'Configuration keys',
-        description: 'Every system setting stored as a key and value. Sensitive values show as ********.',
+        description: 'All system settings as keys and values. Sensitive values show as ********.',
         add: 'Add key',
         search: 'Search keys or descriptions',
         key: 'Key',
@@ -81,37 +81,37 @@ export default {
         descriptionField: 'Description',
         descriptionPlaceholder: 'What this setting is for',
         updatedAt: 'Updated',
-        empty: 'No configuration keys yet',
+        empty: 'No configuration keys',
         emptyDescription: 'Saved system settings appear here.',
-        loadFailed: 'Couldn’t load the configuration keys',
+        loadFailed: 'Could not load the configuration keys',
         createTitle: 'Add configuration key',
         editTitle: 'Edit configuration key',
-        sensitiveWithValue: 'The value is hidden. Leave it empty to keep it, or enter a new one to replace it.',
+        sensitiveWithValue: 'Value hidden. Leave empty to keep it.',
         sensitiveWithoutValue: 'This key is sensitive. Enter a value and save.',
         saved: 'Saved {key}',
-        saveFailed: 'Couldn’t save: {message}',
-        saveFailedShort: 'Couldn’t save the configuration key',
+        saveFailed: 'Could not save: {message}',
+        saveFailedShort: 'Could not save the configuration key',
         deleteTitle: 'Delete {key}?',
-        deleteMessage: 'Features that read this key fall back to their defaults. You can’t undo this.',
+        deleteMessage: 'Features that read this key fall back to their defaults. This cannot be undone.',
         deleteAction: 'Delete key',
-        deleteFailed: 'Couldn’t delete the configuration key',
+        deleteFailed: 'Could not delete the configuration key',
         deleted: 'Deleted {key}'
       }
     },
     backup: {
       title: 'Backups',
-      description: 'Control backs up its database, root key and configuration every day between 03:00 and 05:00, before every database migration and when you ask, and checks that each backup restores.',
+      description: 'Control backs up its database, root key and configuration daily between 03:00 and 05:00, before each database migration and on demand, and verifies that each backup restores.',
       backupNow: 'Back up now',
-      created: 'Backed up to {file}. It’s being verified.',
-      createFailed: 'Couldn’t back up',
-      busy: 'A backup or verification is already running. Try again in a moment.',
-      loadFailed: 'Couldn’t load the backups',
+      created: 'Backed up to {file}. It is being verified.',
+      createFailed: 'Could not back up',
+      busy: 'A backup or verification is running. Try again later.',
+      loadFailed: 'Could not load the backups',
       unsupported: 'Backups need SQLite',
-      unsupportedHint: 'This panel runs on PostgreSQL, which Control’s backups don’t cover. Back the database up with pg_dump and keep root.key with it.',
+      unsupportedHint: 'PostgreSQL is not covered by Control backups. Back up the database with pg_dump and keep root.key with it.',
       summary: {
         label: 'Backup status',
         lastVerified: 'Last verified backup',
-        none: 'None yet',
+        none: 'None',
         stale: 'Older than {hours} hours',
         current: 'Up to date',
         nextDaily: 'Next automatic backup',
@@ -124,11 +124,11 @@ export default {
         size: 'Size',
         createdAt: 'Taken',
         verified: 'Verification',
-        empty: 'No backups yet',
-        emptyDescription: 'The first automatic backup runs a few minutes after Control starts. You can also back up now.',
+        empty: 'No backups',
+        emptyDescription: 'The first automatic backup runs a few minutes after Control starts.',
         download: 'Download',
-        downloadFailed: 'Couldn’t download the backup',
-        superAdminRequired: 'Only a super administrator can download a backup: it holds the panel’s root key.'
+        downloadFailed: 'Could not download the backup',
+        superAdminRequired: 'Only a super administrator can download backups (they contain the root key).'
       },
       types: {
         daily: 'Daily',
@@ -137,20 +137,20 @@ export default {
         verify: 'Verification test'
       },
       verify: {
-        pending: 'Not verified yet',
+        pending: 'Not verified',
         passed: 'Verified',
         failed: 'Verification failed'
       },
-      retention: 'Control keeps the newest {daily} daily backups, the newest daily backup of each of the {weekly} weeks before, every backup taken before a migration in the last {days} days and the newest {manual} manual ones. The newest verified backup is never deleted.',
+      retention: 'Kept: the newest {daily} daily backups, one per week for the {weekly} weeks before, all pre-migration backups from the last {days} days, and the newest {manual} manual backups. The newest verified backup is always kept.',
       restore: {
         title: 'Restore',
-        description: 'A restore replaces the database, so it runs on the server while Control is stopped, never from this page. Control migrates an older backup when it starts again.',
+        description: 'A restore replaces the database and runs on the server while Control is stopped. Control migrates older backups at start.',
         commands: 'Commands on the server'
       }
     },
     audit: {
       title: 'Audit log',
-      description: 'Every administrator action: who did what to which object, and when.',
+      description: 'Administrator actions: who, when, what and on which object.',
       refresh: 'Refresh',
       filterAction: 'Filter by action',
       filterTargetType: 'Filter by target type',
@@ -169,25 +169,25 @@ export default {
         ip: 'IP',
         createdAt: 'Time'
       },
-      empty: 'No audit entries yet',
-      emptyDescription: 'Administrator actions are recorded here.',
-      loadFailed: 'Couldn’t load the audit log'
+      empty: 'No audit entries',
+      emptyDescription: 'Administrator actions appear here.',
+      loadFailed: 'Could not load the audit log'
     },
     about: {
       title: 'About',
-      description: 'Version and build details. Include them when you report a problem.',
+      description: 'Version and build details.',
       product: 'Product',
       copy: 'Copy details',
       copied: 'Version details copied'
     },
     packages: {
       title: 'Built-in packages',
-      description: 'The official packages built into Control. Control installs, upgrades and enables them at every start.',
+      description: 'Official packages built into Control, installed, upgraded and enabled at every start.',
       refresh: 'Refresh',
-      loadFailed: 'The built-in packages didn’t load',
+      loadFailed: 'Could not load the built-in packages',
       empty: {
         title: 'No built-in packages',
-        description: 'This Control build carries no package: a development build without `make build`.'
+        description: 'This is a development build without `make build` and includes no packages.'
       },
       version: 'Version {version}',
       versionChanging: 'Version {from}, starting {to}',
@@ -199,12 +199,12 @@ export default {
       configureNamed: 'Configure {name}',
       confirm: {
         title: 'Restart {name}?',
-        message: 'Its host stops and starts again; its pages and API answer as unavailable for a few seconds.'
+        message: 'The host restarts; its pages and API are unavailable for a few seconds.'
       },
       restarted: '{name} is restarting',
       restartFailed: 'The package could not be restarted',
       config: { title: '{name} settings' },
-      note: 'A package that failed at start keeps its routes unavailable until the next start; the dashboard alert and the Control log give the reason. Packages cannot be imported, upgraded, rolled back or disabled: a new Control version brings their new versions.'
+      note: 'A package that failed at start stays unavailable until the next start; see the dashboard alert and the Control log. Packages update with Control and cannot be imported, upgraded, rolled back or disabled separately.'
     }
   },
   adminNotify: {
@@ -247,26 +247,26 @@ export default {
       fromNamePlaceholder: 'For example AnixOps',
       fromAddress: 'Sender address',
       addressInvalid: 'Enter a valid e-mail address',
-      loadFailed: 'Couldn’t load the e-mail settings',
+      loadFailed: 'Could not load the e-mail settings',
       saved: 'E-mail settings saved',
-      saveFailed: 'Couldn’t save: {message}',
-      saveFailedShort: 'Couldn’t save the e-mail settings',
+      saveFailed: 'Could not save: {message}',
+      saveFailedShort: 'Could not save the e-mail settings',
       testSend: 'Send test',
       testSendAction: 'Send test e-mail',
       testTitle: 'Send a test e-mail',
-      testDescription: 'Send one e-mail with the saved settings to check it arrives.',
+      testDescription: 'Sends a test e-mail with the saved settings.',
       testRecipient: 'To',
       testRecipientRequired: 'Enter an address to send to',
       testSubject: 'Test e-mail',
-      testContent: 'This is a test e-mail. If you received it, the e-mail settings work.',
+      testContent: 'Test e-mail. The e-mail settings work.',
       testSent: 'Test e-mail sent to {recipient}',
-      testFailed: 'Couldn’t send: {message}',
-      testFailedShort: 'Couldn’t send the test e-mail'
+      testFailed: 'Could not send: {message}',
+      testFailedShort: 'Could not send the test e-mail'
     },
     telegram: {
       bot: {
         title: 'Bot',
-        description: 'Users link their account and get reminders through this bot.',
+        description: 'Users link their account and receive reminders through this bot.',
         token: 'Bot token',
         tokenHelp: 'Get it from BotFather.',
         adminIds: 'Administrator Telegram IDs',
@@ -274,28 +274,28 @@ export default {
         adminIdsInvalid: 'Not valid IDs: {ids}',
         welcome: 'Welcome message',
         welcomePlaceholder: 'Sent when a user starts the bot for the first time',
-        loadFailed: 'Couldn’t load the bot settings',
+        loadFailed: 'Could not load the bot settings',
         saved: 'Bot settings saved',
-        saveFailed: 'Couldn’t save: {message}',
-        saveFailedShort: 'Couldn’t save the bot settings'
+        saveFailed: 'Could not save: {message}',
+        saveFailedShort: 'Could not save the bot settings'
       },
       webhook: {
         title: 'Webhook',
         url: 'Webhook address',
-        help: 'Telegram pushes messages to this address. Set it again after changing the domain.',
+        help: 'The address Telegram pushes messages to. Set it again after a domain change.',
         needsToken: 'Enter and save the bot token first.',
         set: 'Set webhook',
         delete: 'Delete webhook',
         setDone: 'Webhook set',
-        setFailed: 'Couldn’t set the webhook: {message}',
-        setFailedShort: 'Couldn’t set the webhook',
+        setFailed: 'Could not set the webhook: {message}',
+        setFailedShort: 'Could not set the webhook',
         deleted: 'Webhook deleted',
-        deleteFailed: 'Couldn’t delete the webhook: {message}',
-        deleteFailedShort: 'Couldn’t delete the webhook'
+        deleteFailed: 'Could not delete the webhook: {message}',
+        deleteFailedShort: 'Could not delete the webhook'
       },
       send: {
         title: 'Send a message',
-        description: 'Try it on one user first, then broadcast.',
+        description: 'Send to one user first, then broadcast.',
         audience: 'Recipients',
         single: 'One user',
         everyone: 'Everyone',
@@ -306,20 +306,20 @@ export default {
         messagePlaceholder: 'What to send',
         markdown: 'Markdown is supported.',
         messageRequired: 'Enter a message',
-        broadcastNote: 'A broadcast goes to every linked user and can’t be recalled.',
+        broadcastNote: 'A broadcast goes to every linked user and cannot be recalled.',
         send: 'Send',
         broadcast: 'Broadcast',
         broadcastTitle: 'Broadcast this message to every linked user?',
-        broadcastMessage: 'Every linked user receives it. It can’t be recalled.',
+        broadcastMessage: 'Every linked user receives it. It cannot be recalled.',
         broadcastDone: 'Broadcast finished: {success} sent, {failed} failed',
         sent: 'Message sent',
-        failed: 'Couldn’t send: {message}',
-        failedShort: 'Couldn’t send the message'
+        failed: 'Could not send: {message}',
+        failedShort: 'Could not send the message'
       },
       test: {
         title: 'Test message',
-        description: 'Send a test message to your own linked Telegram account to check the bot token and the connection.',
-        dirty: 'The test uses the saved bot settings. Save your changes first to test them.',
+        description: 'Sends a test message to the current administrator’s linked Telegram account to check the bot token and connection.',
+        dirty: 'The test uses the saved settings. Save the changes first.',
         send: 'Send test message',
         wait: 'Try again in {seconds} s',
         classes: {
@@ -333,35 +333,35 @@ export default {
           unknown: 'Unexpected answer'
         },
         hints: {
-          chat_not_found: 'Check that your Telegram account is still linked and that you started the bot.',
-          bot_blocked: 'Open the bot in Telegram and press Start, or unblock it.',
+          chat_not_found: 'Check that the Telegram account is still linked and the bot is started.',
+          bot_blocked: 'Start or unblock the bot in Telegram.',
           rate_limited: 'Wait a moment and send the test again.',
-          not_configured: 'Enter the bot token above and save the bot settings.',
-          invalid_token: 'Copy the token from BotFather again and save the bot settings.',
-          unknown: 'Send the test again later. If it keeps failing, check the Control logs.'
+          not_configured: 'Enter and save the bot token.',
+          invalid_token: 'Copy the token from BotFather again and save.',
+          unknown: 'Try again later. If it keeps failing, check the Control logs.'
         },
         reasons: {
-          timeout: 'Telegram did not answer in time. Check the network of the Control server.',
+          timeout: 'Telegram timed out. Check the Control server network.',
           dns: 'The name api.telegram.org did not resolve. Check DNS on the Control server.',
-          tls: 'The TLS connection failed. A proxy that intercepts TLS or a wrong CA store can cause it.',
-          connect: 'The connection was refused or dropped. Check the firewall and proxy of the Control server.',
-          canceled: 'The request was cancelled before it finished. Send the test again.',
-          other: 'The network failed for another reason. Check the Control server’s connection.'
+          tls: 'The TLS connection failed. Check the proxy and the CA store.',
+          connect: 'The connection was refused or dropped. Check the Control server firewall and proxy.',
+          canceled: 'The request was cancelled. Send the test again.',
+          other: 'Network error. Check the Control server connection.'
         },
         tooMany: 'Too many tests',
         tooManyMessage: 'Tests are limited to a few a minute.',
         notBound: 'Telegram not linked',
-        notBoundMessage: 'Your administrator account has no linked Telegram account, so there is nowhere to send the test.',
-        notBoundHint: 'Link it first: link Telegram on the Account page, or send /bind with your subscription link to the bot, then test again.',
+        notBoundMessage: 'The current administrator account has no linked Telegram account.',
+        notBoundHint: 'Link Telegram on the Account page, or send /bind with the subscription link to the bot.',
         notAllowed: 'Chat not allowed',
-        notAllowedMessage: 'This chat is neither yours nor one of the bot’s administrator IDs.',
+        notAllowedMessage: 'This chat does not belong to the current administrator and is not among the bot’s administrator IDs.',
         failed: 'Test failed',
-        failedShort: 'Couldn’t send the test message'
+        failedShort: 'Could not send the test message'
       },
       users: {
         bind: 'Link manually',
         bindTitle: 'Link Telegram manually',
-        bindDescription: "Links a user to a Telegram account. Users can find their Telegram ID by messaging {'@'}userinfobot.",
+        bindDescription: "Links a user to a Telegram account. The Telegram ID is available from {'@'}userinfobot.",
         bindUser: 'User e-mail or user ID',
         bindUserHelp: "For example user{'@'}example.com or 42",
         bindTelegramIdHelp: "The numeric Telegram user ID, not the {'@'}username",
@@ -374,7 +374,7 @@ export default {
         unbindMessage: '{name} will stop getting Telegram reminders.',
         unbound: 'Unlinked',
         title: 'Linked users',
-        description: 'Users who linked the bot, and whether they get reminders.',
+        description: 'Users who linked the bot and their reminder settings.',
         search: 'Search e-mail or Telegram ID',
         email: 'E-mail',
         telegramId: 'Telegram ID',
@@ -382,11 +382,11 @@ export default {
         boundAt: 'Linked',
         notify: 'Reminders',
         notifyNamed: 'Reminders for {name}',
-        empty: 'No linked users yet',
-        emptyDescription: 'Users appear here once they link Telegram themselves or an administrator links them.',
-        loadFailed: 'Couldn’t load the linked users',
-        toggleFailed: 'Couldn’t update: {message}',
-        toggleFailedShort: 'Couldn’t update the reminder setting'
+        empty: 'No linked users',
+        emptyDescription: 'Users linked by themselves or by an administrator appear here.',
+        loadFailed: 'Could not load the linked users',
+        toggleFailed: 'Could not update: {message}',
+        toggleFailedShort: 'Could not update the reminder setting'
       },
       commands: {
         title: 'Bot commands',
@@ -421,16 +421,16 @@ export default {
       content: 'Content',
       contentPlaceholder: "The notification text. Variables: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}",
       enabled: 'Template is enabled',
-      empty: 'No notification templates yet',
-      emptyDescription: 'Create one for a channel and the event that sends it.',
-      loadFailed: 'Couldn’t load the notification templates',
+      empty: 'No notification templates',
+      emptyDescription: 'Create a template for a channel and event.',
+      loadFailed: 'Could not load the notification templates',
       saved: 'Notification template saved',
-      saveFailed: 'Couldn’t save: {message}',
-      saveFailedShort: 'Couldn’t save the notification template',
+      saveFailed: 'Could not save: {message}',
+      saveFailedShort: 'Could not save the notification template',
       deleteTitle: 'Delete notification template {name}?',
-      deleteMessage: 'This event no longer sends this notification. You can’t undo this.',
+      deleteMessage: 'This event no longer sends this notification. This cannot be undone.',
       deleteAction: 'Delete template',
-      deleteFailed: 'Couldn’t delete the notification template',
+      deleteFailed: 'Could not delete the notification template',
       deleted: 'Deleted notification template {name}'
     },
     logs: {
@@ -444,9 +444,9 @@ export default {
       type: 'Channel',
       status: 'Result',
       sentAt: 'Sent',
-      empty: 'Nothing sent yet',
-      emptyDescription: 'Notifications are recorded here once they are sent.',
-      loadFailed: 'Couldn’t load the send log'
+      empty: 'Nothing sent',
+      emptyDescription: 'Sent notifications appear here.',
+      loadFailed: 'Could not load the send log'
     }
   },
   adminSecurity: {
@@ -461,14 +461,14 @@ export default {
     },
     mfa: {
       title: 'Two-factor authentication',
-      description: 'The two-factor policy for every user. Users turn it on and manage it on their own account page.',
+      description: 'The two-factor policy for all users. Users turn it on and manage it on the Account page.',
       recovery: 'Recovery codes',
       lockout: 'Lockout',
       lockoutDuration: 'Lockout time',
       minutes: 'minutes',
       range: 'Enter a whole number from {min} to {max}',
       atLeastOne: 'Enter a whole number of 1 or more',
-      methodRequired: 'With two-factor authentication on, keep at least one method.'
+      methodRequired: 'Keep at least one method while two-factor authentication is on.'
     }
   }
 }

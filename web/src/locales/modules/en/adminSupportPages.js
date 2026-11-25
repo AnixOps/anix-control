@@ -54,16 +54,16 @@ export default {
       name: 'Summer sale'
     },
     empty: {
-      title: 'No coupons yet',
-      description: 'Create a code to give users a discount on their next order.'
+      title: 'No coupons',
+      description: 'Create a discount code for users to apply at checkout.'
     },
     confirm: {
       deleteTitle: 'Delete coupon {code}?',
-      deleteMessage: 'Users can no longer redeem this code. This can’t be undone.',
+      deleteMessage: 'The code can no longer be redeemed. This cannot be undone.',
       deleteAction: 'Delete coupon'
     },
     messages: {
-      fetchFailed: 'Coupons didn’t load',
+      fetchFailed: 'Could not load the coupons',
       codeRequired: 'Enter a coupon code',
       nameRequired: 'Enter a coupon name',
       createSuccess: 'Coupon created successfully',
@@ -74,7 +74,7 @@ export default {
   },
   adminOrders: {
     title: 'Orders',
-    subtitle: 'Every purchase, renewal and upgrade. Select an order to see its payment.',
+    subtitle: 'All purchases, renewals and upgrades. Select an order to view its payment.',
     stats: {
       totalOrders: 'Total orders',
       pendingOrders: 'Pending orders',
@@ -128,19 +128,19 @@ export default {
       unknown: 'Unknown'
     },
     empty: {
-      title: 'No orders yet',
-      description: 'Orders appear here when users buy or renew a plan.'
+      title: 'No orders',
+      description: 'Plan purchases and renewals appear here.'
     },
     confirm: {
       markPaidTitle: 'Mark order {tradeNo} as paid?',
-      markPaidMessage: 'Order amount {amount}. The order is then treated as paid. This can’t be undone.',
+      markPaidMessage: 'Order amount {amount}. The order is then treated as paid. This cannot be undone.',
       cancelTitle: 'Cancel order {tradeNo}?',
-      cancelMessage: 'The user can no longer pay this order. This can’t be undone.',
+      cancelMessage: 'The order can no longer be paid. This cannot be undone.',
       cancelAction: 'Cancel order',
       keepOrder: 'Keep order'
     },
     messages: {
-      fetchOrdersFailed: 'Orders didn’t load',
+      fetchOrdersFailed: 'Could not load the orders',
       fetchStatsFailed: 'Failed to load order stats',
       markPaidSuccess: 'Order marked as paid',
       markPaidFailedShort: 'Mark paid failed',
@@ -157,19 +157,19 @@ export default {
     errors: {
       not_found: '{count} not found',
       conflict: '{count} already used and kept',
-      forbidden_self: 'your own account can’t be banned',
+      forbidden_self: 'your own account cannot be banned',
       not_attempted: '{count} not attempted (out of time)',
       failed: '{count} failed'
     }
   },
   adminInviteCodes: {
     title: 'Invite codes',
-    subtitle: 'Generate, copy and revoke the codes that admit a registration.',
+    subtitle: 'Generate, copy and revoke registration invite codes.',
     rewardsLink: 'Referrals',
     never: 'Never',
     empty: {
       title: 'No invite codes',
-      description: 'Generate a batch and hand the codes to the people you want to sign up.'
+      description: 'Generate a batch of codes for registration.'
     },
     registration: {
       requiredBadge: 'Required',
@@ -185,7 +185,7 @@ export default {
       expireDays: 'Expires after',
       daysUnit: 'days',
       expireDaysPlaceholder: 'Configured default',
-      expireDaysHelp: 'Empty: the configured expiry. 0: never expires.',
+      expireDaysHelp: 'Empty uses the configured expiry; 0 never expires.',
       submit: 'Generate',
       created: '{count} codes generated:'
     },
@@ -220,11 +220,11 @@ export default {
     confirm: {
       revokeTitle: 'Revoke invite code {code}?',
       revokeManyTitle: 'Revoke {count} invite codes?',
-      revokeMessage: 'A revoked code can no longer be used to register. This can’t be undone.'
+      revokeMessage: 'A revoked code can no longer be used to register. This cannot be undone.'
     },
     messages: {
       failed: 'Request failed',
-      fetchFailed: 'Invite codes didn’t load',
+      fetchFailed: 'Could not load the invite codes',
       countRange: 'Generate between 1 and {max} codes at a time.',
       generated: '{count} codes generated',
       generateFailed: 'Failed to generate codes: {message}',
@@ -239,7 +239,7 @@ export default {
   },
   adminInvite: {
     title: 'Referrals',
-    subtitle: 'Review commission withdrawals, see who invites the most, and set the referral rules.',
+    subtitle: 'Commission withdrawals, inviter ranking and referral rules.',
     currencySymbol: '¥',
     tabs: {
       label: 'Referral sections',
@@ -300,7 +300,7 @@ export default {
         createdAt: 'Requested at'
       },
       empty: 'No withdrawal requests',
-      emptyDescription: 'When an inviter asks to withdraw their commission, the request appears here for review.'
+      emptyDescription: 'Commission withdrawal requests awaiting review appear here.'
     },
     stats: {
       totalInvites: 'Total invites',
@@ -318,9 +318,9 @@ export default {
     },
     confirm: {
       approveTitle: 'Approve withdrawal #{id}?',
-      approveMessage: '{amount} will be paid to {account}. This can’t be undone.',
+      approveMessage: '{amount} will be paid to {account}. This cannot be undone.',
       rejectTitle: 'Reject withdrawal #{id}?',
-      rejectMessage: 'The request for {amount} will be rejected. This can’t be undone.'
+      rejectMessage: 'The request for {amount} will be rejected. This cannot be undone.'
     },
     messages: {
       fetchConfigFailed: 'Failed to load invite config',
@@ -337,7 +337,7 @@ export default {
   },
   adminTickets: {
     title: 'Tickets',
-    subtitle: 'Every user ticket in one queue. Pick one to reply or close it.',
+    subtitle: 'All user tickets. Select a ticket to reply or close it.',
     list: 'Ticket queue',
     loading: 'Loading tickets…',
     select: 'Select a ticket to reply to it.',
@@ -345,7 +345,7 @@ export default {
     noSubject: 'No subject',
     meta: '#{id} · user {user} · {level}',
     priority: '{level} priority',
-    threadNote: 'Earlier messages aren’t available to administrators here. Your reply reaches the user on their Tickets page and marks the ticket as answered.',
+    threadNote: 'Earlier messages are not shown here. The reply appears on the user’s Tickets page and marks the ticket as answered.',
     closedNote: 'This ticket is closed and takes no more replies.',
     filters: {
       search: 'Search subject, #number or user ID',
@@ -364,7 +364,7 @@ export default {
     },
     empty: {
       title: 'No tickets',
-      description: 'When users ask for help, their tickets show up here.',
+      description: 'User tickets appear here.',
       noMatches: 'No tickets match'
     },
     levels: {
@@ -387,29 +387,29 @@ export default {
     quick: {
       label: 'Quick replies',
       receivedLabel: 'Looking into it',
-      received: 'Thanks for reaching out. We’re looking into this and will update you here.',
+      received: 'Thank you for the report. We are investigating and will post updates here.',
       detailsLabel: 'Ask for details',
-      details: 'Could you tell us which client and node you use, and when the problem started?',
+      details: 'Please provide the client and node in use and when the problem started.',
       fixedLabel: 'Fixed',
-      fixed: 'This should be fixed now. Please refresh your subscription and let us know if it still happens.'
+      fixed: 'The issue has been resolved. Please update the subscription and reply if it persists.'
     },
     confirm: {
       closeTitle: 'Close ticket #{id} “{subject}”?',
-      closeMessage: 'A closed ticket takes no more replies and can’t be reopened.',
+      closeMessage: 'A closed ticket cannot be replied to or reopened.',
       closeAction: 'Close ticket'
     },
     messages: {
-      fetchFailed: 'Tickets didn’t load',
+      fetchFailed: 'Could not load the tickets',
       replyRequired: 'Write a reply first',
       replySuccess: 'Reply sent to ticket #{id}',
-      replyFailed: 'The reply wasn’t sent',
+      replyFailed: 'Could not send the reply',
       closed: 'Ticket #{id} closed',
-      closeFailed: 'The ticket wasn’t closed'
+      closeFailed: 'Could not close the ticket'
     }
   },
   adminKnowledge: {
     title: 'Help Center content',
-    subtitle: 'Announcements, tutorials and answers your users read in the Help Center.',
+    subtitle: 'Help Center announcements, tutorials and answers.',
     actions: {
       createArticle: 'New article',
       publish: 'Publish',
@@ -442,11 +442,11 @@ export default {
       sort: 'Order',
       sortHelp: 'Lower numbers come first.',
       visibility: 'Show in Help Center',
-      visibilityHelp: 'Hidden articles stay here but users don’t see them.'
+      visibilityHelp: 'Hidden articles are kept but not shown to users.'
     },
     placeholders: {
       title: 'Article title',
-      body: 'Write the article. ## starts a section, - a list item.'
+      body: 'Article body. ## starts a section, - a list item.'
     },
     editor: {
       view: 'Editor view',
@@ -458,29 +458,29 @@ export default {
     modal: {
       createTitle: 'New article',
       editTitle: 'Edit article',
-      description: 'The preview shows the article as users see it in the Help Center.'
+      description: 'Shown as in the Help Center.'
     },
     empty: {
-      title: 'No articles yet',
-      description: 'Write the first article and users will find it in the Help Center.'
+      title: 'No articles',
+      description: 'Published articles appear in the Help Center.'
     },
     confirm: {
       deleteTitle: 'Delete article "{title}"?',
-      deleteMessage: 'The article is removed from the help center and users can no longer see it. This can’t be undone.',
+      deleteMessage: 'The article is removed from the Help Center. This cannot be undone.',
       deleteAction: 'Delete article'
     },
     messages: {
-      fetchFailed: 'Articles didn’t load',
+      fetchFailed: 'Could not load the articles',
       requiredFields: 'Add a title and the article text',
       titleRequired: 'Add a title',
       bodyRequired: 'Write the article text',
       saveSuccess: 'Article saved',
       publishSuccess: 'Article published',
-      actionFailed: 'The article wasn’t saved',
+      actionFailed: 'Could not save the article',
       shown: '“{title}” is visible in the Help Center',
       hidden: '“{title}” is hidden',
       deleted: 'Article "{title}" deleted',
-      deleteFailed: 'The article wasn’t deleted'
+      deleteFailed: 'Could not delete the article'
     }
   }
 }

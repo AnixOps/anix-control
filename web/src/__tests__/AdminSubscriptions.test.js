@@ -175,7 +175,7 @@ describe('Admin subscription groups', () => {
     it('says when the group does not exist', async () => {
       adminApiMock.getSubscriptionGroups.mockResolvedValue({ data: [{ id: 3, name: 'Asia', enable: 1 }] })
       const { wrapper } = await mountRoute('/admin/subscriptions/9')
-      expect(wrapper.text()).toContain('This group doesn’t exist')
+      expect(wrapper.text()).toContain('This group does not exist')
     })
 
     it('sends an unknown section to the overview', async () => {
@@ -251,7 +251,7 @@ describe('Admin subscription groups', () => {
       getMembersMock.mockRejectedValueOnce({ message: 'Request failed', response: { status: 404, data: { error: { code: 'not_found', message: 'subscription group not found' } } } })
       await renderMembers()
       const alert = await screen.findByRole('alert')
-      expect(alert.textContent).toContain('Couldn’t load the members')
+      expect(alert.textContent).toContain('Could not load the members')
       expect(screen.getByRole('heading', { level: 1, name: 'Asia' })).toBeTruthy()
       getMembersMock.mockResolvedValueOnce({ total: 1, page: 1, page_size: 20, members: [member()] })
       await user.click(within(alert).getByRole('button', { name: 'Try again' }))
@@ -315,7 +315,7 @@ describe('Admin subscription groups', () => {
         transport_settings: JSON.stringify({ path: '/ws', host: 'edge.example.com' }),
         protocol_settings: JSON.stringify({ flow: 'xtls-rprx-vision' })
       }))
-      expect(wrapper.vm.templateFormError).toBe('Couldn’t save')
+      expect(wrapper.vm.templateFormError).toBe('Could not save')
       expect(wrapper.vm.templateDialogOpen).toBe(true)
       expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
     })
@@ -341,7 +341,7 @@ describe('Admin subscription groups', () => {
       await wrapper.vm.toggleTemplate({ id: 10, name: 'Rejected Template', enable: 1 })
       await flushPromises()
       expect(adminApiMock.updateSubscriptionTemplate).toHaveBeenCalledWith(10, { enable: 0 })
-      expect(toastMessages('error')).toEqual(['Couldn’t update'])
+      expect(toastMessages('error')).toEqual(['Could not update'])
       expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
     })
   })
@@ -368,7 +368,7 @@ describe('Admin subscription groups', () => {
       await wrapper.vm.openManageProtocolsModal()
       await flushPromises()
       expect(wrapper.vm.availableProtocols).toEqual([])
-      expect(toastMessages('error')).toEqual(['Couldn’t load the node protocols that can be linked'])
+      expect(toastMessages('error')).toEqual(['Could not load the node protocols that can be linked'])
     })
 
     it('lists the protocols in the group order with their display names', async () => {
@@ -432,7 +432,7 @@ describe('Admin subscription groups', () => {
       await wrapper.vm.saveGroupProtocols()
       await flushPromises()
       expect(adminApiMock.updateGroupProtocols).toHaveBeenCalledWith(1, [10])
-      expect(wrapper.vm.protocolsError).toBe('Couldn’t update the linked node protocols')
+      expect(wrapper.vm.protocolsError).toBe('Could not update the linked node protocols')
       expect(wrapper.vm.showManageProtocolsModal).toBe(true)
       expect(adminApiMock.getSubscriptionProtocols).not.toHaveBeenCalled()
     })
@@ -493,7 +493,7 @@ describe('Admin subscription groups', () => {
 
       await user.type(within(dialog).getByLabelText(/Group name/), 'Europe')
       await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-      expect((await within(dialog).findByRole('alert')).textContent).toBe('Couldn’t save')
+      expect((await within(dialog).findByRole('alert')).textContent).toBe('Could not save')
       await user.click(within(dialog).getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(adminApiMock.createSubscriptionGroup).toHaveBeenLastCalledWith({ name: 'Europe', description: '', priority: 0, enable: 1 })
