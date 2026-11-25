@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"sort"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -129,9 +130,21 @@ func recordMemberKeys(ctx context.Context, db *gorm.DB, nodeRef string, payload 
 	}
 	updates := map[uint]string{}
 	for _, row := range rows {
-		if key, ok := reported[row.Code]; ok && (row.StaticKey == nil || *row.StaticKey != key) {
-			updates[row.ID] = key
+		key, ok := reported[row.Code]
+		if !ok || row.StaticKey != nil && *row.StaticKey == key {
+			continue
 		}
+		// A key a device or another node has is not taken: it would
+		// keep that device admitted through this node's entry.
+		owned, err := keyOwnedElsewhere(db, key, nodeRef)
+		if err != nil {
+			return err
+		}
+		if owned {
+			slog.Warn("mesh: a node reported a static key a device or another node has; not taken", "node", nodeRef, "region", row.Code)
+			continue
+		}
+		updates[row.ID] = key
 	}
 	if len(updates) == 0 {
 		return nil
@@ -178,6 +191,19 @@ func bindDeviceKey(ctx context.Context, db *gorm.DB, device model.MeshDevice, to
 			Where("EXISTS (?)", tx.Model(&model.MeshDeviceToken{}).Select("1").Where("device_id = ? AND token_hash = ?", device.ID, hashToken(token))).
 			Update("static_key", key).Error
 	})
+}
+
+// keyOwnedElsewhere answers whether key is the static key of a device or
+// of a member of another node than nodeRef.
+func keyOwnedElsewhere(db *gorm.DB, key, nodeRef string) (bool, error) {
+	var members, devices int64
+	if err := db.Model(&model.MeshMember{}).Where("static_key = ? AND node_ref <> ?", key, nodeRef).Count(&members).Error; err != nil {
+		return false, err
+	}
+	if err := db.Model(&model.MeshDevice{}).Where("static_key = ?", key).Count(&devices).Error; err != nil {
+		return false, err
+	}
+	return members+devices > 0, nil
 }
 
 // keyTaken answers whether key is the static key of a member or of a
