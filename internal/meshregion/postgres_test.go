@@ -248,7 +248,7 @@ func TestPostgresPlanChangesTogether(t *testing.T) {
 	require.NoError(t, err)
 	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: home.ID, Hostname: "router", Role: RoleFull}, nil, now)
 	require.NoError(t, err)
-	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: strings.Repeat("r", 32)}, now)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: strings.Repeat("r", 32)}, now)
 	require.NoError(t, err)
 	for round := 0; round < 5; round++ {
 		subnet := fmt.Sprintf("192.168.%d.0/24", round)
@@ -329,7 +329,7 @@ func TestPostgresChangesTogether(t *testing.T) {
 				return err
 			},
 			func() error {
-				_, err := DeviceConfig(ctx, db, lost, now)
+				_, err := DeviceConfig(ctx, db, lost, nil, now)
 				return err
 			},
 			func() error {

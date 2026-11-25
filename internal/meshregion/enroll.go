@@ -246,6 +246,10 @@ type EnrollRequest struct {
 	// network, when it has one already (nativekeys.go); without it the
 	// device's first report names it.
 	StaticKey string `json:"static_key"`
+	// Features are the capabilities of the device's kernel (its
+	// GET /v1/status features); the answered configuration follows them
+	// (DeviceConfig).
+	Features []string `json:"features"`
 }
 
 // Enrolled answers an enrollment: the device's id, its token (answered
@@ -393,7 +397,7 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 	if err != nil {
 		return Enrolled{}, err
 	}
-	config, err := DeviceConfig(ctx, db, device, now)
+	config, err := DeviceConfig(ctx, db, device, request.Features, now)
 	return Enrolled{DeviceID: device.ID, DeviceToken: token, Config: config}, err
 }
 
@@ -477,7 +481,11 @@ func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
 // region is enabled, none otherwise; an access member, or for a full node
 // a full member that listens and advertises its confirmed subnets. A
 // device whose address went to another device gets a new one.
-func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now time.Time) (map[string]any, error) {
+//
+// The configuration follows the capabilities of the device's kernel:
+// features, when the request names them (non-nil), or else those of its
+// latest report.
+func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, features []string, now time.Time) (map[string]any, error) {
 	db = db.WithContext(ctx)
 	var region model.MeshRegion
 	if err := readRegion(db, device.RegionID, &region); err != nil {
@@ -564,12 +572,22 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	if err != nil {
 		return nil, err
 	}
-	features, err := deviceFeatures(db, device.ID)
+	capabilities, err := deviceFeatures(db, device.ID)
 	if err != nil {
 		return nil, err
 	}
+	if features != nil {
+		capabilities = featureSet(features)
+	}
+	// A region network admits only the keys it lists, which a kernel
+	// without mesh_native_keys ignores: such a device, or one that has
+	// not named its kernel's capabilities yet, gets no network until its
+	// report does (spec section 8.3.1; the Agent does the same for nodes).
+	if !capabilities[FeatureNativeKeys] {
+		return map[string]any{"networks": []any{}}, nil
+	}
 	network := map[string]any{
-		"id": region.Code, "name": "mesh-" + region.Code,
+		"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
 		"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": role, "listen": listen,
 		"peers":   peers,
@@ -579,10 +597,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	}
 	// A field the device's kernel does not take is left out: it refuses
 	// a configuration with unknown fields (agent-contract.md section 4).
-	if features[FeatureNativeKeys] {
-		network["kind"], network["native_keys"] = KindManaged, regionKeys(keys, region.ID)
-	}
-	if features[FeatureResolverAddress] {
+	if capabilities[FeatureResolverAddress] {
 		network["dns"] = regionDNS(dns, resolvers[region.ID])
 	}
 	return map[string]any{"networks": []map[string]any{network}}, nil
@@ -603,20 +618,36 @@ func deviceFeatures(db *gorm.DB, deviceID uint) (map[string]bool, error) {
 	if err := db.Where("node_ref = ?", DeviceRef(deviceID)).Limit(1).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	features := map[string]bool{}
 	if len(rows) == 0 {
-		return features, nil
+		return map[string]bool{}, nil
 	}
+	return reportedFeatures(rows[0].Payload), nil
+}
+
+// reportedFeatures answers the capabilities a report names in "features".
+func reportedFeatures(payload string) map[string]bool {
 	var shape struct {
 		Features []string `json:"features"`
 	}
-	if json.Unmarshal([]byte(rows[0].Payload), &shape) != nil {
-		return features, nil
+	if json.Unmarshal([]byte(payload), &shape) != nil {
+		return map[string]bool{}
 	}
-	for _, feature := range shape.Features {
-		features[feature] = true
+	return featureSet(shape.Features)
+}
+
+// maxFeatures bounds the capability names taken from one device.
+const maxFeatures = 64
+
+// featureSet answers names as a set, at most maxFeatures of them.
+func featureSet(names []string) map[string]bool {
+	features := map[string]bool{}
+	for i, name := range names {
+		if i == maxFeatures {
+			break
+		}
+		features[name] = true
 	}
-	return features, nil
+	return features
 }
 
 // RecordDeviceStatus keeps payload, the device's "mesh.status" report sent

@@ -63,7 +63,7 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.NotContains(t, response.Body.String(), issued.Token)
 
-	body := `{"token":"` + issued.Token + `","device_key":"` + strings.Repeat("k", 32) + `","latencies":{"eu":20,"cn":90}}`
+	body := `{"token":"` + issued.Token + `","device_key":"` + strings.Repeat("k", 32) + `","latencies":{"eu":20,"cn":90},"features":["mesh","mesh_native_keys"]}`
 	response = serveJSON(router, http.MethodPost, "/device/enroll", body)
 	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
 	var enrolled meshregion.Enrolled
@@ -77,6 +77,9 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/config", "msd_unknown", "").Code)
 	response = device(http.MethodGet, "/device/config", enrolled.DeviceToken, "")
 	require.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), `"networks":[]`, "no network before the kernel names mesh_native_keys")
+	response = device(http.MethodGet, "/device/config?features=mesh,+mesh_native_keys", enrolled.DeviceToken, "")
+	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), `"role":"access"`)
 	assert.Equal(t, "invalid_request", errorCode(t, device(http.MethodPost, "/device/report", enrolled.DeviceToken, `[]`)))
 	assert.Equal(t, http.StatusRequestEntityTooLarge, device(http.MethodPost, "/device/report", enrolled.DeviceToken, `{"networks":["`+strings.Repeat("x", 1<<20)+`"]}`).Code)
@@ -88,7 +91,7 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &change))
 	response = serveJSON(router, http.MethodPost, "/mesh/changes/"+strconv.FormatUint(uint64(change.ID), 10)+"/approve", `{}`)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
-	assert.Contains(t, device(http.MethodGet, "/device/config", enrolled.DeviceToken, "").Body.String(), `"address":"10.150.128.0/16"`)
+	assert.Contains(t, device(http.MethodGet, "/device/config?features=mesh,mesh_native_keys", enrolled.DeviceToken, "").Body.String(), `"address":"10.150.128.0/16"`)
 
 	devicePath := "/mesh/devices/" + strconv.FormatUint(uint64(enrolled.DeviceID), 10)
 	assert.Equal(t, http.StatusNoContent, serveJSON(router, http.MethodPost, devicePath+"/revoke", "").Code)
@@ -140,7 +143,7 @@ func TestMeshFullNodeAPI(t *testing.T) {
 	assert.Equal(t, "mesh_conflict", errorCode(t, serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"hostname":"nas","region_id":`+regionID+`,"role":"full","address":"10.150.0.7"}`)))
 	assert.Contains(t, serveJSON(router, http.MethodGet, "/mesh/enrollments", "").Body.String(), `"role":"full","address":"10.150.0.7"`)
 
-	response = serveJSON(router, http.MethodPost, "/device/enroll", `{"token":"`+issued.Token+`","device_key":"`+strings.Repeat("r", 32)+`"}`)
+	response = serveJSON(router, http.MethodPost, "/device/enroll", `{"token":"`+issued.Token+`","device_key":"`+strings.Repeat("r", 32)+`","features":["mesh_native_keys"]}`)
 	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
 	var enrolled meshregion.Enrolled
 	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &enrolled))
@@ -158,7 +161,7 @@ func TestMeshFullNodeAPI(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	assert.JSONEq(t, `["192.168.1.0/24"]`, string(dataOf(t, response.Body.Bytes())))
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/device/config", nil)
+	request := httptest.NewRequest(http.MethodGet, "/device/config?features=mesh_native_keys", nil)
 	request.Header.Set("Authorization", "Bearer "+enrolled.DeviceToken)
 	router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)

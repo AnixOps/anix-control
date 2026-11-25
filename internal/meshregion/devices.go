@@ -49,6 +49,10 @@ const (
 	// 100.64.0.0/10, which other overlay software on the same machine
 	// often takes over whole (SharedAddressSpace).
 	WarningSharedAddressSpace = "shared_address_space"
+	// WarningNativeKeysUnsupported: an enrolled device whose latest
+	// report, if any, does not list mesh_native_keys; it gets no network
+	// until it does.
+	WarningNativeKeysUnsupported = "native_keys_unsupported"
 )
 
 var deviceKeyPattern = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,128}$`)
@@ -352,6 +356,9 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
 		}
 		view.FQDN = fqdn(row.Hostname, view.RegionCode, settings.NameSuffix)
+		if view.Enrolled && !reportedFeatures(string(view.Status))[FeatureNativeKeys] {
+			view.Warnings = append(view.Warnings, WarningNativeKeysUnsupported)
+		}
 		switch {
 		case view.Enrolled && row.StaticKey == nil && view.Status != nil && reportsTakenKey(owners, row, view.RegionCode, string(view.Status)):
 			view.Warnings = append(view.Warnings, WarningStaticKeyTaken)

@@ -118,7 +118,7 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), statusWithKey("cn", testStaticKey(1)), now, now))
 	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: cn.ID, Hostname: "phone"}, nil, now)
 	require.NoError(t, err)
-	first, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey}, now)
+	first, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey}, now)
 	require.NoError(t, err)
 	device, err := Authenticate(ctx, db, first.DeviceToken, now)
 	require.NoError(t, err)
@@ -132,11 +132,11 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 
 	// A retry of the enrollment binds a key while there is none, and
 	// cannot change it afterwards.
-	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(2)}, now.Add(time.Minute))
+	_, err = Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(2)}, now.Add(time.Minute))
 	require.NoError(t, err)
-	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(2)}, now.Add(time.Minute))
+	_, err = Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(2)}, now.Add(time.Minute))
 	require.NoError(t, err, "the same key again")
-	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(3)}, now.Add(time.Minute))
+	_, err = Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(3)}, now.Add(time.Minute))
 	require.ErrorIs(t, err, ErrConflict)
 	require.Equal(t, []string{testStaticKey(1), testStaticKey(2)}, nodeNetwork(t, db, proxy(1), "cn")["native_keys"])
 
@@ -144,7 +144,7 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 	// earlier token binds nothing; one with the new token does.
 	again, err := CreateEnrollment(ctx, db, EnrollmentInput{DeviceID: device.ID}, nil, now)
 	require.NoError(t, err)
-	second, err := Enroll(ctx, db, EnrollRequest{Token: again.Token, DeviceKey: laptopKey}, now)
+	second, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: again.Token, DeviceKey: laptopKey}, now)
 	require.NoError(t, err)
 	var row model.MeshDevice
 	require.NoError(t, db.First(&row, device.ID).Error)
@@ -197,19 +197,19 @@ func TestNativeKeysOfDevices(t *testing.T) {
 
 	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: cn.ID, Hostname: "phone"}, nil, now)
 	require.NoError(t, err)
-	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, StaticKey: "short"}, now)
+	_, err = Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey, StaticKey: "short"}, now)
 	require.ErrorIs(t, err, ErrInvalid)
 
 	// Enrolled without a key: the device gets the node's key and is
 	// marked until its first report names its own.
-	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey}, now)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: laptopKey}, now)
 	require.NoError(t, err)
 	network := enrolled.Config["networks"].([]map[string]any)[0]
 	require.Equal(t, KindManaged, network["kind"])
 	require.Equal(t, []string{testStaticKey(1)}, network["native_keys"])
 	views, err := Devices(ctx, db, cn.ID, now)
 	require.NoError(t, err)
-	require.Equal(t, []string{WarningNoStaticKey}, views[0].Warnings)
+	require.Equal(t, []string{WarningNativeKeysUnsupported, WarningNoStaticKey}, views[0].Warnings, "until its first report names its capabilities")
 
 	var changed int
 	cancel := OnChange(func([]agentcontrol.AgentNode) { changed++ })
@@ -236,7 +236,7 @@ func TestNativeKeysOfDevices(t *testing.T) {
 	// Enrolling again with a credential for it is how the key changes.
 	again, err := CreateEnrollment(ctx, db, EnrollmentInput{DeviceID: device.ID}, nil, now)
 	require.NoError(t, err)
-	second, err := Enroll(ctx, db, EnrollRequest{Token: again.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(6)}, now)
+	second, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: again.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(6)}, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{testStaticKey(1), testStaticKey(6)}, nodeNetwork(t, db, proxy(1), "cn")["native_keys"])
 
@@ -251,13 +251,13 @@ func TestNativeKeysOfDevices(t *testing.T) {
 	require.NoError(t, db.First(&row, device.ID).Error)
 	require.Nil(t, row.StaticKey)
 	require.NoError(t, RecordDeviceStatus(ctx, db, row, second.DeviceToken, statusWithKey("eu", testStaticKey(7)), now))
-	config, err := DeviceConfig(ctx, db, row, now)
+	config, err := DeviceConfig(ctx, db, row, nil, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{testStaticKey(7)}, config["networks"].([]map[string]any)[0]["native_keys"])
 
 	// A revoked device leaves the list: our nodes refuse it at once.
 	require.NoError(t, RevokeDevice(ctx, db, device.ID))
-	config, err = DeviceConfig(ctx, db, row, now)
+	config, err = DeviceConfig(ctx, db, row, nil, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{}, config["networks"].([]map[string]any)[0]["native_keys"])
 }
@@ -272,35 +272,46 @@ func TestDeviceConfigFollowsTheDeviceFeatures(t *testing.T) {
 	require.NoError(t, err)
 	device, err := Authenticate(ctx, db, enrolled.DeviceToken, now)
 	require.NoError(t, err)
-	network := func() map[string]any {
-		config, err := DeviceConfig(ctx, db, device, now)
+	networks := func(features []string) []map[string]any {
+		config, err := DeviceConfig(ctx, db, device, features, now)
 		require.NoError(t, err)
-		return config["networks"].([]map[string]any)[0]
+		list, _ := config["networks"].([]map[string]any)
+		return list
+	}
+	warnings := func() []string {
+		views, err := Devices(ctx, db, cn.ID, now)
+		require.NoError(t, err)
+		require.Len(t, views, 1)
+		return views[0].Warnings
 	}
 
-	// Before a report names its kernel's capabilities, the fields its
-	// kernel may not take are left out; the dns section stays.
-	first := enrolled.Config["networks"].([]map[string]any)[0]
-	for _, current := range []map[string]any{first, network()} {
-		require.NotContains(t, current, "kind")
-		require.NotContains(t, current, "native_keys")
-		require.NotContains(t, current["dns"], "resolver_address")
-		require.Equal(t, true, current["dns"].(map[string]any)["enabled"])
-	}
+	// A region network admits only the keys it lists: a kernel that has
+	// not named mesh_native_keys gets none, before its first report too.
+	require.Empty(t, enrolled.Config["networks"])
+	require.Empty(t, networks(nil))
+	require.Empty(t, networks([]string{"mesh"}))
+	require.Contains(t, warnings(), WarningNativeKeysUnsupported)
+
+	// Named in the request, or else in the latest report.
+	current := networks(meshFeatures)[0]
+	require.Equal(t, KindManaged, current["kind"])
+	require.Equal(t, []string{testStaticKey(3)}, current["native_keys"])
+	require.NotContains(t, current["dns"], "resolver_address")
+	require.Equal(t, true, current["dns"].(map[string]any)["enabled"])
 
 	report := func(features string) {
 		payload := fmt.Appendf(nil, `{"features":%s,"networks":[{"id":"cn","running":true,"static_key":%q,"peers":[]}]}`, features, testStaticKey(3))
 		require.NoError(t, RecordDeviceStatus(ctx, db, device, enrolled.DeviceToken, payload, now))
 	}
 	report(`["mesh","mesh_native_keys"]`)
-	current := network()
-	require.Equal(t, KindManaged, current["kind"])
-	require.Equal(t, []string{testStaticKey(3)}, current["native_keys"])
-	require.NotContains(t, current["dns"], "resolver_address")
+	require.Equal(t, KindManaged, networks(nil)[0]["kind"])
+	require.NotContains(t, warnings(), WarningNativeKeysUnsupported)
+	require.Empty(t, networks([]string{}), "the request's features come first")
 
 	report(`["mesh","mesh_native_keys","mesh_resolver_address"]`)
-	require.Equal(t, "10.150.0.254", network()["dns"].(map[string]any)["resolver_address"])
+	require.Equal(t, "10.150.0.254", networks(nil)[0]["dns"].(map[string]any)["resolver_address"])
 
 	report(`"not a list"`)
-	require.NotContains(t, network(), "kind", "a malformed list names nothing")
+	require.Empty(t, networks(nil), "a malformed list names nothing")
+	require.Contains(t, warnings(), WarningNativeKeysUnsupported)
 }

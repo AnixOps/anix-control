@@ -104,7 +104,8 @@ export default {
         static_key_mismatch: 'Static key mismatch',
         static_key_taken: 'Static key used by another member',
         reserved_address: 'Holds the reserved resolver address',
-        shared_address_space: 'Advertised subnet in shared address space'
+        shared_address_space: 'Advertised subnet in shared address space',
+        native_keys_unsupported: 'Admission capability not reported'
       },
       fullNode: 'Full node',
       subnets: 'Advertised subnets…',

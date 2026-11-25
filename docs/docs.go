@@ -9048,7 +9048,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
+                "description": "The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
                 "produces": [
                     "application/json"
                 ],
@@ -9056,6 +9056,14 @@ const docTemplate = `{
                     "Mesh"
                 ],
                 "summary": "A mesh device's networks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "the kernel's capabilities, comma separated",
+                        "name": "features",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -10482,6 +10490,13 @@ const docTemplate = `{
             "properties": {
                 "device_key": {
                     "type": "string"
+                },
+                "features": {
+                    "description": "Features are the capabilities of the device's kernel (its\nGET /v1/status features); the answered configuration follows them\n(DeviceConfig).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "latencies": {
                     "description": "Latencies are the device's round trips in milliseconds by region\ncode, for a credential without a region.",
