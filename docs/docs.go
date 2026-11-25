@@ -6292,7 +6292,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The device's token is refused from now on; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).",
+                "description": "The device's token is refused from now on and its static key leaves its region's native_keys; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).",
                 "produces": [
                     "application/json"
                 ],
@@ -9048,7 +9048,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The device's networks in the shape of the Agent's member mesh: its region's network as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
+                "description": "The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
                 "produces": [
                     "application/json"
                 ],
@@ -9068,7 +9068,7 @@ const docTemplate = `{
         },
         "/api/v5/mesh/device/enroll": {
             "post": {
-                "description": "A device without an Agent exchanges a one-time credential (token) for its device token, sent as ` + "`" + `Authorization: Bearer \u003cdevice_token\u003e` + "`" + ` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
+                "description": "A device without an Agent exchanges a one-time credential (token) for its device token, sent as ` + "`" + `Authorization: Bearer \u003cdevice_token\u003e` + "`" + ` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. static_key, when the device has one already, is its static public key in the region's network (32 bytes in standard base64 with padding), which the region's native_keys list; without it the device's first report names it, and it changes only with another enrollment. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9081,7 +9081,7 @@ const docTemplate = `{
                 "summary": "Enroll a mesh device",
                 "parameters": [
                     {
-                        "description": "token, device_key, latencies",
+                        "description": "token, device_key, latencies, static_key",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9146,7 +9146,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. 401 for an unknown or revoked device token.",
+                "description": "The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. A device without a static key gets the one it reports for its region's network (networks[].static_key of the network whose id is the region code); later reports cannot change it. 401 for an unknown or revoked device token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10450,6 +10450,10 @@ const docTemplate = `{
                     "description": "Role is access (a pool address) or full (a fixed address of the\nserver segment, R32); Subnets are a full node's confirmed subnets.",
                     "type": "string"
                 },
+                "static_key": {
+                    "description": "StaticKey is the device's static public key in its region's network\n(0050_mesh_native_keys), from its enrollment or its first report\nafter it; nil before either and after a move to another region.",
+                    "type": "string"
+                },
                 "status": {
                     "type": "object"
                 },
@@ -10486,6 +10490,10 @@ const docTemplate = `{
                         "type": "number",
                         "format": "float64"
                     }
+                },
+                "static_key": {
+                    "description": "StaticKey is the device's static public key in its region's\nnetwork, when it has one already (nativekeys.go); without it the\ndevice's first report names it.",
+                    "type": "string"
                 },
                 "token": {
                     "type": "string"
@@ -10693,6 +10701,10 @@ const docTemplate = `{
                 },
                 "region_id": {
                     "type": "integer"
+                },
+                "static_key": {
+                    "description": "StaticKey is the node's static public key in this region's network\nas its Agent last reported it (0050_mesh_native_keys): 32 bytes of\nX25519 in standard base64; nil before the first report.",
+                    "type": "string"
                 },
                 "status": {
                     "description": "Status is the node's last report as the Agent sent it, nil before\nthe first.",
@@ -10951,6 +10963,10 @@ const docTemplate = `{
                 "region_id": {
                     "type": "integer"
                 },
+                "static_key": {
+                    "description": "StaticKey is the device's static public key in its region's network\n(0050_mesh_native_keys), from its enrollment or its first report\nafter it; nil before either and after a move to another region.",
+                    "type": "string"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -11033,6 +11049,10 @@ const docTemplate = `{
                 },
                 "region_id": {
                     "type": "integer"
+                },
+                "static_key": {
+                    "description": "StaticKey is the node's static public key in this region's network\nas its Agent last reported it (0050_mesh_native_keys): 32 bytes of\nX25519 in standard base64; nil before the first report.",
+                    "type": "string"
                 }
             }
         },

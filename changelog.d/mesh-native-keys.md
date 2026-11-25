@@ -1,0 +1,3 @@
+### Added
+
+- 组网: every region network is sent as a managed network with its admission list, `native_keys`: the static public keys of its member nodes, as their Agents report them, and of its enrolled devices without an Agent, which give their key at enrollment or in their first report after it and cannot change it afterwards. A new or changed key reaches the region's nodes at once. Revoking or deleting a device takes its key off the list, so the nodes refuse it at once instead of needing a new network key. The device list marks devices that have not given a key yet or report another one, and node status shows a refused peer that is not on the list (migration 0050).

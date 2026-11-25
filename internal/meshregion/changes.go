@@ -250,7 +250,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 	if err != nil {
 		return "", err
 	}
-	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "updated_at": now}, "device")
+	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "static_key": gorm.Expr("NULL"), "updated_at": now}, "device")
 }
 
 // RejectChange records a rejection; nothing moves.

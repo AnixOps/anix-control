@@ -708,6 +708,10 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
+	keys, err := nativeKeys(db)
+	if err != nil {
+		return nil, err
+	}
 	networks := []map[string]any{}
 	for _, region := range regions {
 		member, ok := mine[region.ID]
@@ -735,7 +739,8 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			groups = []map[string]any{}
 		}
 		networks = append(networks, map[string]any{
-			"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
+			"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
+			"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
 			"listen":      []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
 			"peers":       regionPeers,
@@ -781,6 +786,11 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 		return err
 	}
 	if err := touchDevices(db, payload, observedAt); err != nil {
+		return err
+	}
+	// A new or changed static key of the node changes its regions'
+	// native_keys.
+	if err := recordMemberKeys(ctx, db, node.String(), payload); err != nil {
 		return err
 	}
 	// A host group names its gateways by instance id: a new or changed id

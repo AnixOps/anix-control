@@ -37,6 +37,13 @@ describe('mesh model', () => {
       status: { networks: [{ running: true }, { running: false, alerts: [{ code: 'address_conflict' }, { code: 'address_conflict' }] }] },
       status_received_at: fresh
     }, now)).toEqual({ state: 'stopped', alerts: ['address_conflict'] })
+    // A network's failure shows with its alerts, such as a refused peer.
+    expect(statusSummary({
+      status: { networks: [{ running: true, failure: { code: 'peer_not_native', detail: 'n-1' }, alerts: [{ code: 'peer_not_native' }] }] },
+      status_received_at: fresh
+    }, now)).toEqual({ state: 'running', alerts: ['peer_not_native'] })
+    expect(enMesh.mesh.page.alerts.peer_not_native).toBeTruthy()
+    expect(zhMesh.mesh.page.alerts.peer_not_native).toBeTruthy()
     expect(statusSummary({ status: { networks: [] }, status_received_at: new Date(now - STATUS_STALE_MS - 1).toISOString() }, now).state).toBe('lost')
   })
 

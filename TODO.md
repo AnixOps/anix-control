@@ -21,14 +21,14 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   gated feature `mesh`) and the second (device pool, host groups and
   names, the name list, region change approval, settings, enrollment
   credentials and devices without an Agent, full nodes without an Agent
-  with a fixed address and confirmed subnets): per-member
-  admission in the kernel instead of the region key, the `takeover` setting,
+  with a fixed address and confirmed subnets, the admission list
+  `native_keys`): the `takeover` setting,
   forward nodes in the node picker, and turning the
   feature on once the node kernel runs the mesh. Also: the bridge to the
   old network during a migration (nodes of other implementations never
   join a managed network directly: they stay in the old network, bridged
-  by this platform's nodes; per-member admission in the kernel is what
-  keeps a node holding the region key out), the 「未启用前向保密」 display and the
+  by this platform's nodes; the admission list `native_keys` keeps a
+  node holding the region key out), the 「未启用前向保密」 display and the
   migration progress (R30); the result of a node's own region request back
   to the node (a refused `mesh.region_request` is only in the panel); a
   warning when two gateways report the same instance id; IPv6 (fc00::/7)
@@ -52,7 +52,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   request whose node was just moved answers 400 instead of 409. The node kernel has
   no copy of the name table yet: it is to embed
   `internal/meshregion/nametable-unicode-15.1.0.txt` and check the same
-  SHA-256 as the panel's test.
+  SHA-256 as the panel's test. A device's static key is bound by its
+  first report when it enrolled without one (it has no network
+  configuration, hence no key, before it enrolls): the specification's
+  §8.3.1 item 7 is to say so too.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

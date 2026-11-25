@@ -91,12 +91,14 @@ export default {
       deleteMessage: '设备地址随即释放。',
       revoke: '吊销令牌…',
       revokeTitle: '吊销 {name} 的设备令牌',
-      revokeMessage: '设备令牌立即失效，设备无法再读取配置或上报状态；设备及其地址保留。设备仍持有地区网络密钥，如需阻止其入网，请在地区列表中更换网络密钥。重新接入需为该设备签发新凭证。',
+      revokeMessage: '设备令牌立即失效，设备无法再读取配置或上报状态，其静态公钥移出地区准入清单，各节点随即拒绝其连接；设备及其地址保留。重新接入需为该设备签发新凭证。',
       revokeConfirm: '吊销',
       revoked: '已吊销',
       warnings: {
         no_address: '地址已回收',
-        address_idle: '30 天未使用'
+        address_idle: '30 天未使用',
+        no_static_key: '未登记公钥',
+        static_key_mismatch: '公钥不一致'
       },
       fullNode: '完整节点',
       subnets: '通告网段…',

@@ -54,7 +54,8 @@ export default {
         address_unmanaged: 'Unmanaged address',
         unsupported: 'Kernel without mesh',
         start_refused: 'Start refused',
-        takeover_pending: 'Waiting to take over the existing mesh program'
+        takeover_pending: 'Waiting to take over the existing mesh program',
+        peer_not_native: 'Refused a peer not admitted'
       }
     },
     region: {

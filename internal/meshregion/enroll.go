@@ -242,6 +242,10 @@ type EnrollRequest struct {
 	// Latencies are the device's round trips in milliseconds by region
 	// code, for a credential without a region.
 	Latencies map[string]float64 `json:"latencies"`
+	// StaticKey is the device's static public key in its region's
+	// network, when it has one already (nativekeys.go); without it the
+	// device's first report names it.
+	StaticKey string `json:"static_key"`
 }
 
 // Enrolled answers an enrollment: the device's id, its token (answered
@@ -270,6 +274,14 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 	if len(request.Latencies) > maxLatencies {
 		return Enrolled{}, invalid("latencies: at most %d regions", maxLatencies)
 	}
+	var static *string
+	if request.StaticKey != "" {
+		value, ok := staticKey(request.StaticKey)
+		if !ok {
+			return Enrolled{}, invalid("static_key: 32 bytes in standard base64 with padding")
+		}
+		static = &value
+	}
 	token := deviceTokenPrefix + rand.Text()
 	var device model.MeshDevice
 	err = change(ctx, db, func(tx *gorm.DB) error {
@@ -292,6 +304,12 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 				return ErrUnauthorized
 			}
 			device = known[0]
+			if static != nil {
+				device.StaticKey = static
+				if err := tx.Model(&model.MeshDevice{}).Where("id = ?", device.ID).Update("static_key", *static).Error; err != nil {
+					return err
+				}
+			}
 		case enrollment.DeviceID != nil:
 			if err := findDevice(tx, *enrollment.DeviceID, &device); err != nil {
 				return ErrUnauthorized
@@ -302,11 +320,15 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 			if len(known) > 0 && known[0].ID != device.ID {
 				return conflict("another device has this device_key")
 			}
-			if device.DeviceKey == nil {
-				device.DeviceKey = key
-				if err := tx.Model(&device).Updates(map[string]any{"device_key": *key, "updated_at": now}).Error; err != nil {
-					return err
-				}
+			// Enrolling again is how a device changes its static key: it
+			// holds the one it gives now, or none until its first report.
+			device.DeviceKey, device.StaticKey = key, static
+			var staticColumn any = gorm.Expr("NULL")
+			if static != nil {
+				staticColumn = *static
+			}
+			if err := updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"device_key": *key, "static_key": staticColumn, "updated_at": now}, "device"); err != nil {
+				return err
 			}
 		case len(known) > 0:
 			return conflict("another device has this device_key; enroll it again with a credential issued for it")
@@ -328,7 +350,7 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 			if err != nil {
 				return err
 			}
-			device = model.MeshDevice{RegionID: region.ID, DeviceKey: key, Hostname: enrollment.Hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
+			device = model.MeshDevice{RegionID: region.ID, DeviceKey: key, StaticKey: static, Hostname: enrollment.Hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&device).Error; err != nil {
 				return err
 			}
@@ -422,13 +444,16 @@ func Authenticate(ctx context.Context, db *gorm.DB, token string, now time.Time)
 }
 
 // RevokeDevice deletes the device's token: it is refused from now on and
-// enrolls again only with a new credential.
+// enrolls again only with a new credential. Its static key leaves its
+// region's native_keys, so our nodes refuse it at once.
 func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
-	result := db.WithContext(ctx).Where("device_id = ?", id).Delete(&model.MeshDeviceToken{})
-	if result.Error == nil && result.RowsAffected == 0 {
-		return fmt.Errorf("%w: enrolled device %d", ErrNotFound, id)
-	}
-	return result.Error
+	return change(ctx, db, func(tx *gorm.DB) error {
+		result := tx.Where("device_id = ?", id).Delete(&model.MeshDeviceToken{})
+		if result.Error == nil && result.RowsAffected == 0 {
+			return fmt.Errorf("%w: enrolled device %d", ErrNotFound, id)
+		}
+		return result.Error
+	})
 }
 
 // DeviceConfig answers the device's networks in the shape of the member
@@ -515,8 +540,13 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 		role, advertise = RoleFull, splitSubnets(node.Subnets)
 		listen = []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}}
 	}
+	keys, err := nativeKeys(db)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{"networks": []map[string]any{{
-		"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
+		"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
+		"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": role, "listen": listen,
 		"peers":   peers,
 		"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
@@ -526,7 +556,8 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 }
 
 // RecordDeviceStatus keeps payload, the device's "mesh.status" report, as
-// its latest status.
+// its latest status; a device without a static key gets the one it
+// reports for its region's network (nativekeys.go).
 func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevice, payload []byte, now time.Time) error {
 	var shape struct {
 		Networks []json.RawMessage `json:"networks"`
@@ -538,10 +569,13 @@ func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevic
 		return err
 	}
 	row := model.MeshStatus{NodeRef: DeviceRef(device.ID), Payload: string(payload), ObservedAt: now, ReceivedAt: now}
-	return db.WithContext(ctx).Clauses(clause.OnConflict{
+	if err := db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "node_ref"}},
 		DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),
-	}).Create(&row).Error
+	}).Create(&row).Error; err != nil {
+		return err
+	}
+	return bindDeviceKey(ctx, db.WithContext(ctx), device, payload)
 }
 
 // RequestDeviceChange records the device's request to move to the region

@@ -92,12 +92,14 @@ export default {
       deleteMessage: 'The device\'s address is released.',
       revoke: 'Revoke token…',
       revokeTitle: 'Revoke the device token of {name}',
-      revokeMessage: 'The device token stops working at once: the device can no longer read its configuration or report. The device and its address stay. The device still holds the region\'s network key; to keep it out, change the key in the region list. Enrolling again needs a new credential issued for the device.',
+      revokeMessage: 'The device token stops working at once: the device can no longer read its configuration or report, and its static key leaves the region\'s admission list, so the nodes refuse it. The device and its address stay. Enrolling again needs a new credential issued for the device.',
       revokeConfirm: 'Revoke',
       revoked: 'Revoked',
       warnings: {
         no_address: 'Address reclaimed',
-        address_idle: 'Unused for 30 days'
+        address_idle: 'Unused for 30 days',
+        no_static_key: 'No static key',
+        static_key_mismatch: 'Static key mismatch'
       },
       fullNode: 'Full node',
       subnets: 'Advertised subnets…',
