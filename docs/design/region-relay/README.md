@@ -51,7 +51,8 @@ cache:
   tls_key_file: /etc/anix-relay/cache.key
   dir: /var/cache/anix-relay
   origins:                                   # 只从这些 https 前缀下载，防止成为开放代理
-    - https://github.com/AnixOps/
+    - https://github.com/AnixOps/anix-agent/releases/download/   # 只到具体仓库的发布文件：大小写变体与 latest 别名不在前缀内
+    - https://github.com/AnixOps/anix-control/releases/download/
     - https://panel.example.com/
   # redirect_hosts: [objects.githubusercontent.com, release-assets.githubusercontent.com]  # 重定向只能去 origins 的主机和这些主机
   # upstream_proxy: http://10.8.0.1:3128     # 经骨干的 HTTP 代理下载；此时由代理解析和连接，内网限制要在代理上做
@@ -59,6 +60,7 @@ cache:
   # allowed_sources: [10.0.0.0/8]            # 只服务这些节点地址；防火墙也只对本地区节点开放缓存端口
   # max_requests_per_source: 16              # 每个地址（IPv6 按 /64）同时打开的请求数
   # max_connections: 1024                    # 缓存端口同时打开的连接总数，超出的排队等待
+  # max_misses_per_source: 30                # 每个地址每小时最多触发的下载数；单个地址同时等待的来源少于 max_fetches
   # max_bytes: 21474836480                   # 20 GiB，按最近使用淘汰；下载中的文件不计入，磁盘另需 max_fetches × max_object_bytes
   # max_object_bytes: 2147483648             # 单个文件 2 GiB
   # max_fetches: 4

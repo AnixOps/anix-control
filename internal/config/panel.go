@@ -371,7 +371,10 @@ func narrowRelaySource(source string) error {
 	}
 	prefix, err := netip.ParsePrefix(source)
 	if err != nil {
-		return nil // NewPolicy already judged the syntax.
+		// NewPolicy (net.ParseCIDR) accepts forms such as 10.0.0.0/08,
+		// which then take effect as /8: refuse what this check cannot
+		// read (re-audit M2).
+		return fmt.Errorf("%s is not a plain CIDR (no leading zeros in the prefix length)", source)
 	}
 	// An IPv4-mapped IPv6 prefix would be judged by its IPv6 width (a /96
 	// is all of IPv4): write IPv4 ranges as IPv4.

@@ -58,6 +58,9 @@ const (
 	// DefaultCacheMaxConnections bounds the cache's open connections, the
 	// idle ones and those of every source together.
 	DefaultCacheMaxConnections = 1024
+	// DefaultCacheMissesPerSource bounds the downloads one address starts
+	// in an hour: an Agent upgrade is a few files.
+	DefaultCacheMissesPerSource = 30
 )
 
 // DefaultRedirectHosts are the hosts, besides the origins' own, that an
@@ -145,6 +148,10 @@ type CacheConfig struct {
 	// together; zero is DefaultCacheMaxConnections. Over it, new
 	// connections wait for one to close.
 	MaxConnections int `yaml:"max_connections"`
+	// MaxMissesPerSource bounds the downloads one address (an IPv6 /64)
+	// starts in an hour; zero is DefaultCacheMissesPerSource. One address
+	// also never holds every download slot while others wait.
+	MaxMissesPerSource int `yaml:"max_misses_per_source"`
 	// MaxBytes bounds the stored files; the least recently used go first.
 	// Zero is DefaultCacheMaxBytes. Downloads in progress are not counted:
 	// the disk needs room for max_bytes plus max_fetches times
@@ -293,11 +300,14 @@ func (c *Config) validate() error {
 		}
 		cache.AllowedSources[i] = source
 	}
-	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 || cache.MaxRequestsPerSource < 0 || cache.MaxConnections < 0 {
-		return errors.New("cache: max_bytes, max_object_bytes, max_fetches, fetch_timeout, max_requests_per_source and max_connections cannot be negative")
+	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 || cache.MaxRequestsPerSource < 0 || cache.MaxConnections < 0 || cache.MaxMissesPerSource < 0 {
+		return errors.New("cache: max_bytes, max_object_bytes, max_fetches, fetch_timeout, max_requests_per_source, max_connections and max_misses_per_source cannot be negative")
 	}
 	if cache.MaxConnections == 0 {
 		cache.MaxConnections = DefaultCacheMaxConnections
+	}
+	if cache.MaxMissesPerSource == 0 {
+		cache.MaxMissesPerSource = DefaultCacheMissesPerSource
 	}
 	if cache.MaxRequestsPerSource == 0 {
 		cache.MaxRequestsPerSource = DefaultCacheRequestsPerSource

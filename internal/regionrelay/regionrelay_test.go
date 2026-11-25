@@ -45,7 +45,8 @@ cache:
 		t.Fatalf("forward = %+v", forward)
 	}
 	if config.Cache.MaxBytes != DefaultCacheMaxBytes || config.Cache.MaxFetches != DefaultCacheFetches ||
-		config.Cache.MaxRequestsPerSource != DefaultCacheRequestsPerSource || config.Cache.MaxConnections != DefaultCacheMaxConnections || len(config.Cache.RedirectHosts) != len(DefaultRedirectHosts) {
+		config.Cache.MaxRequestsPerSource != DefaultCacheRequestsPerSource || config.Cache.MaxConnections != DefaultCacheMaxConnections ||
+		config.Cache.MaxMissesPerSource != DefaultCacheMissesPerSource || len(config.Cache.RedirectHosts) != len(DefaultRedirectHosts) {
 		t.Fatalf("cache = %+v", config.Cache)
 	}
 }
@@ -583,11 +584,96 @@ func TestCacheRefusesAKnownSourceWithAnotherHash(t *testing.T) {
 			t.Fatalf("hash of %q: %d, want 404 without a download", other, recorder.Code)
 		}
 	}
+	// The one download kept the file under its real hash.
 	if recorder := cacheGet(cache, sumOf("release-bytes"), source); recorder.Code != http.StatusOK {
 		t.Fatalf("the right hash: %d", recorder.Code)
 	}
-	if got := hits.Load(); got != 2 {
-		t.Fatalf("origin downloaded %d times, want 2", got)
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("origin downloaded %d times, want 1", got)
+	}
+}
+
+// Concurrent requests for one new source with different hashes share one
+// download (re-audit M1).
+func TestCacheSharesADownloadAcrossHashes(t *testing.T) {
+	var hits atomic.Int32
+	release := make(chan struct{})
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		<-release
+		_, _ = io.WriteString(w, "release-bytes")
+	}))
+	defer origin.Close()
+	cache := testCache(t, origin, 1<<20)
+	source := origin.URL + "/releases/a.zip"
+	codes := make(chan int, 4)
+	for _, data := range []string{"one", "two", "three", "release-bytes"} {
+		go func() { codes <- cacheGet(cache, sumOf(data), source).Code }()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for hits.Load() < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	ok := 0
+	for i := 0; i < 4; i++ {
+		if code := <-codes; code == http.StatusOK {
+			ok++
+		} else if code != http.StatusBadGateway && code != http.StatusNotFound {
+			t.Fatalf("request answered %d", code)
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d requests served, want 1", ok)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("origin downloaded %d times, want 1", got)
+	}
+}
+
+// One address starts at most max_misses_per_source downloads an hour,
+// and never holds every download slot (re-audit M1).
+func TestCacheBoundsMissesPerSource(t *testing.T) {
+	config := CacheConfig{Dir: t.TempDir(), Origins: []string{"https://github.com/AnixOps/"}, MaxMissesPerSource: 2,
+		MaxBytes: 1 << 20, MaxObjectBytes: 1 << 20, MaxFetches: 3, FetchTimeout: time.Second}
+	cache, err := NewCache(config, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := time.Unix(1_700_000_000, 0)
+	cache.now = func() time.Time { return clock }
+	ip, other := remoteIP("192.0.2.1:1234"), remoteIP("192.0.2.2:1")
+	if !cache.claimMiss(ip, "a") || !cache.claimMiss(ip, "a") {
+		t.Fatal("requests for one source were refused")
+	}
+	if !cache.claimMiss(ip, "b") {
+		t.Fatal("a second source was refused")
+	}
+	if cache.claimMiss(ip, "c") {
+		t.Fatal("max_misses_per_source 2 admitted a third source")
+	}
+	if !cache.claimMiss(other, "c") {
+		t.Fatal("another address was refused")
+	}
+	cache.releaseMiss(ip, "a")
+	cache.releaseMiss(ip, "a")
+	cache.releaseMiss(ip, "b")
+	if cache.claimMiss(ip, "c") {
+		t.Fatal("a third download in the hour was admitted with max_misses_per_source 2")
+	}
+	clock = clock.Add(missWindow)
+	if !cache.claimMiss(ip, "c") {
+		t.Fatal("the window did not end")
+	}
+	slots := CacheConfig{Dir: t.TempDir(), Origins: []string{"https://github.com/AnixOps/"},
+		MaxBytes: 1 << 20, MaxObjectBytes: 1 << 20, MaxFetches: 3, FetchTimeout: time.Second}
+	cache, err = NewCache(slots, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cache.claimMiss(ip, "a") || !cache.claimMiss(ip, "b") || cache.claimMiss(ip, "c") {
+		t.Fatal("one address must hold at most max_fetches-1 downloads")
 	}
 }
 
