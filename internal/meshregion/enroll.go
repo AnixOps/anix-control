@@ -252,6 +252,14 @@ type EnrollRequest struct {
 	Features []string `json:"features"`
 }
 
+// checkFeatures refuses more capability names than MaxFeatures.
+func checkFeatures(features []string) error {
+	if len(features) > MaxFeatures {
+		return invalid("features: at most %d names", MaxFeatures)
+	}
+	return nil
+}
+
 // Enrolled answers an enrollment: the device's id, its token (answered
 // only here) and its networks.
 type Enrolled struct {
@@ -274,6 +282,9 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 	}
 	if key == nil {
 		return Enrolled{}, invalid("device_key: required")
+	}
+	if err := checkFeatures(request.Features); err != nil {
+		return Enrolled{}, err
 	}
 	if len(request.Latencies) > maxLatencies {
 		return Enrolled{}, invalid("latencies: at most %d regions", maxLatencies)
@@ -597,7 +608,10 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 	}
 	// A field the device's kernel does not take is left out: it refuses
 	// a configuration with unknown fields (agent-contract.md section 4).
-	if capabilities[FeatureResolverAddress] {
+	switch {
+	case !capabilities[FeatureDNS]:
+		delete(network, "dns")
+	case capabilities[FeatureResolverAddress]:
 		network["dns"] = regionDNS(dns, resolvers[region.ID])
 	}
 	return map[string]any{"networks": []map[string]any{network}}, nil
@@ -607,6 +621,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 // add fields to its configuration (spec mesh-status.md).
 const (
 	FeatureNativeKeys      = "mesh_native_keys"
+	FeatureDNS             = "mesh_dns"
 	FeatureResolverAddress = "mesh_resolver_address"
 )
 
@@ -635,14 +650,14 @@ func reportedFeatures(payload string) map[string]bool {
 	return featureSet(shape.Features)
 }
 
-// maxFeatures bounds the capability names taken from one device.
-const maxFeatures = 64
+// MaxFeatures bounds the capability names taken from one device.
+const MaxFeatures = 64
 
-// featureSet answers names as a set, at most maxFeatures of them.
+// featureSet answers names as a set, at most MaxFeatures of them.
 func featureSet(names []string) map[string]bool {
 	features := map[string]bool{}
 	for i, name := range names {
-		if i == maxFeatures {
+		if i == MaxFeatures {
 			break
 		}
 		features[name] = true

@@ -185,6 +185,10 @@ func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
 	kernelData(c, http.StatusCreated, enrolled)
 }
 
+// maxFeaturesQuery bounds the features a device names on a configuration
+// read.
+const maxFeaturesQuery = 4 << 10
+
 // MeshDeviceConfig godoc
 // @Summary A mesh device's networks
 // @Description The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
@@ -201,6 +205,10 @@ func (h *MeshHandler) MeshDeviceConfig(c *gin.Context) {
 	}
 	var features []string
 	if raw, given := c.GetQuery("features"); given {
+		if len(raw) > maxFeaturesQuery || strings.Count(raw, ",") >= meshregion.MaxFeatures {
+			kernelError(c, http.StatusBadRequest, "invalid_request", "features: at most 64 names in 4 KiB")
+			return
+		}
 		features = []string{}
 		for _, name := range strings.Split(raw, ",") {
 			if name = strings.TrimSpace(name); name != "" {

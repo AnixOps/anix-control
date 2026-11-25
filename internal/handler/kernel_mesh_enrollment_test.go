@@ -78,6 +78,8 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	response = device(http.MethodGet, "/device/config", enrolled.DeviceToken, "")
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), `"networks":[]`, "no network before the kernel names mesh_native_keys")
+	assert.Equal(t, "invalid_request", errorCode(t, device(http.MethodGet, "/device/config?features="+strings.Repeat("x,", 64), enrolled.DeviceToken, "")))
+	assert.Equal(t, "invalid_request", errorCode(t, device(http.MethodGet, "/device/config?features="+strings.Repeat("x", 5<<10), enrolled.DeviceToken, "")))
 	response = device(http.MethodGet, "/device/config?features=mesh,+mesh_native_keys", enrolled.DeviceToken, "")
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), `"role":"access"`)
