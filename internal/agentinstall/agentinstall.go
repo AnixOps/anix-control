@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -185,9 +186,11 @@ type CommandInput struct {
 
 // RenderCommand returns the one-line install command:
 //
-//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
+//	curl -fsSL [--connect-to ...] <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
 //	  [--relay host:port]... [--release-cache https://...]...
 //
+// With relays, a script served by Control is fetched through the first
+// relay (scriptConnectTo), as the script then reaches Control.
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
 func RenderCommand(input CommandInput) string {
@@ -195,10 +198,14 @@ func RenderCommand(input CommandInput) string {
 	if strings.ContainsAny(input.ScriptURL, "[]") {
 		curl += "g"
 	}
-	words := []string{
-		curl, ShellQuote(input.ScriptURL), "|", "sudo", "bash", "-s", "--",
-		"-u", ShellQuote(input.ControlURL), "-t", ShellQuote(input.Token),
+	words := []string{curl}
+	if connect := scriptConnectTo(input); connect != "" {
+		words = append(words, "--connect-to", ShellQuote(connect))
 	}
+	words = append(words,
+		ShellQuote(input.ScriptURL), "|", "sudo", "bash", "-s", "--",
+		"-u", ShellQuote(input.ControlURL), "-t", ShellQuote(input.Token),
+	)
 	if input.Mirror != "" && input.Mirror != MirrorControl {
 		words = append(words, "--mirror", ShellQuote(input.Mirror))
 	}
@@ -209,6 +216,36 @@ func RenderCommand(input CommandInput) string {
 		words = append(words, "--release-cache", ShellQuote(cache))
 	}
 	return strings.Join(words, " ")
+}
+
+// scriptConnectTo is the curl --connect-to of a routed command whose
+// script Control serves: Control's host:port, then the first relay's host
+// with the same port, where a region relay forwards Control's https port
+// (docs/design/region-relay). TLS and the certificate check stay with
+// Control's name. "" without relays or for a script from elsewhere
+// (GitHub releases).
+func scriptConnectTo(input CommandInput) string {
+	if len(input.Relays) == 0 {
+		return ""
+	}
+	control, controlErr := url.Parse(input.ControlURL)
+	script, scriptErr := url.Parse(input.ScriptURL)
+	if controlErr != nil || scriptErr != nil || control.Hostname() == "" ||
+		!strings.EqualFold(control.Hostname(), script.Hostname()) || httpsPort(control) != httpsPort(script) {
+		return ""
+	}
+	relayHost, _, err := net.SplitHostPort(input.Relays[0])
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(control.Hostname(), httpsPort(control)) + ":" + net.JoinHostPort(relayHost, httpsPort(control))
+}
+
+func httpsPort(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	return "443"
 }
 
 // Settings is a Control's onboarding configuration, resolved.

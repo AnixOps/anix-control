@@ -157,6 +157,11 @@ FORWARD_CHECKED=0
 RELAYS=()
 CACHES=()
 readonly MAX_RELAYS=8
+# CONTROL_RELAY is the relay (host:port) that carries this install's https
+# requests to Control: a relay forwards Control's https port on the same
+# port number. CONTROL_AUTHORITY is Control's host:port it stands in for.
+CONTROL_RELAY=""
+CONTROL_AUTHORITY=""
 
 META_VERSION=""
 META_GRPC=""
@@ -243,10 +248,14 @@ Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
   --port-range FROM-TO  the node's forward port range: preflight lists ports in use there
   --skip-preflight      install although a preflight check fails (not recommended)
   --timeout SECONDS     how long the join may take (default 180)
-  --relay HOST:PORT     a region relay of the node group (repeat for each): the join and
-                        every later connection to Control go through the relays only
+  --relay HOST:PORT     a region relay of the node group (repeat for each): this install's
+                        requests to Control (through the relay's forward of Control's https
+                        port, on the same port number), the join and every later
+                        connection to Control go through the relays only; a configuration
+                        without them is rewritten (backup kept)
   --release-cache URL   a region relay's release file cache (https, repeat for each): the
-                        Agent's upgrades are fetched there, signatures still checked
+                        Agent is downloaded there first, by its SHA-256, and its upgrades
+                        are fetched there; checksums and signatures are still checked
   -h, --help            show this help
 
 Running the same command again upgrades the Agent in place and keeps its
@@ -694,6 +703,8 @@ check_control() {
   if [[ -n "${OFFLINE}" ]]; then
     # Offline makes no https request: the host talks to Control over gRPC only.
     pf_ok "offline bundle: Control's https address is not contacted; the Agent enrolls over gRPC, checked next"
+  elif [[ -n "${CONTROL_RELAY}" ]]; then
+    pf_ok "Control ${CONTROL_URL} reachable over https through the relay ${CONTROL_RELAY} (certificate verified)"
   else
     pf_ok "Control ${CONTROL_URL} reachable over https (certificate verified)"
   fi
@@ -821,6 +832,11 @@ preflight() {
 fetch() {
   local args=(-fsSL -g --proto '=https' --retry 3 --connect-timeout 15 -o "$2") rc=0
   [[ -z "${3:-}" ]] || args+=(-D "$3")
+  # Behind region relays every request to Control goes through the relay;
+  # TLS and the certificate check stay with Control's name.
+  if [[ -n "${CONTROL_RELAY}" && "$1" == "${CONTROL_URL}/"* ]]; then
+    args+=(--connect-to "${CONTROL_AUTHORITY}:${CONTROL_RELAY}")
+  fi
   curl "${args[@]}" "$1" || rc=$?
   for _ in 1 2; do
     ((rc != 0 && rc != 22)) || return "${rc}"
@@ -851,6 +867,34 @@ read_metadata() {
   ASSET="${META_ASSET[${ARCH}]:-}"
   [[ -n "${ASSET}" ]] || die "the Agent release ${META_VERSION} has no ${ARCH} build"
   [[ -n "${META_SOURCE[github]:-}" ]] || die "Control's install metadata has no GitHub source"
+}
+
+# select_control_relay picks the region relay this install reaches
+# Control's https address through: the first whose forward of Control's
+# https port answers /install/agent.env with Control's certificate. With
+# relays, the host never contacts Control directly (R34).
+select_control_relay() {
+  local authority="${CONTROL_URL#https://}" relay host port candidate
+  ((${#RELAYS[@]} > 0)) || return 0
+  if [[ "${authority}" =~ :[0-9]+$ ]]; then
+    port="${authority##*:}"
+  else
+    port=443
+    authority+=":443"
+  fi
+  CONTROL_AUTHORITY="${authority}"
+  for relay in "${RELAYS[@]}"; do
+    host="${relay%:*}"
+    candidate="${host}:${port}"
+    if curl -fsS -g --proto '=https' -o /dev/null --connect-timeout 10 -m 20 \
+      --connect-to "${CONTROL_AUTHORITY}:${candidate}" "${CONTROL_URL}/install/agent.env" 2>/dev/null; then
+      CONTROL_RELAY="${candidate}"
+      info "Reaching ${CONTROL_URL} through the region relay ${candidate}"
+      return 0
+    fi
+    note "the region relay ${candidate} does not carry ${CONTROL_URL}"
+  done
+  die "no region relay carries ${CONTROL_URL}: this node group's nodes reach Control only through its relays. Check that the relays forward Control's https port (${port}) as well as gRPC, and let this host in (region_relay_allow_from)"
 }
 
 fetch_metadata() {
@@ -959,11 +1003,44 @@ unpack_agent() {
   [[ -f "${TMP_DIR}/agent/anix-agent" && ! -L "${TMP_DIR}/agent/anix-agent" ]] || die "${ASSET} holds no anix-agent binary"
 }
 
+# url_query_escape escapes a URL for a query value (what Go's
+# url.QueryEscape does for the characters a release URL holds).
+url_query_escape() {
+  local value="$1" out="" char i
+  for ((i = 0; i < ${#value}; i++)); do
+    char="${value:i:1}"
+    case "${char}" in
+      [A-Za-z0-9._~-]) out+="${char}" ;;
+      *) out+="$(printf '%%%02X' "'${char}")" ;;
+    esac
+  done
+  printf '%s' "${out}"
+}
+
+# download_from_cache fetches the Agent zip from the node group's release
+# caches by its SHA-256 (GET <cache>/v1/sha256/<hex>?src=<GitHub release
+# URL>); the digest is checked by the caller as for any source.
+download_from_cache() {
+  local zip="$1" cache src
+  src="$(url_query_escape "${META_SOURCE[github]}/${META_VERSION}/${ASSET}")"
+  for cache in ${CACHES[@]+"${CACHES[@]}"}; do
+    info "Downloading the AnixOps Agent ${META_VERSION} (${ARCH}) from the release cache ${cache}"
+    if fetch "${cache}/v1/sha256/${EXPECTED_DIGEST}?src=${src}" "${zip}" &&
+      [[ "$(sha256sum "${zip}" | awk '{print $1}')" == "${EXPECTED_DIGEST}" ]]; then
+      return 0
+    fi
+    note "the release cache ${cache} did not serve ${ASSET}"
+  done
+  return 1
+}
+
 download_agent() {
   local zip="${TMP_DIR}/${ASSET}" actual
   expected_digest
-  info "Downloading the AnixOps Agent ${META_VERSION} (${ARCH}) from ${SOURCE}"
-  fetch "${SOURCE}/${META_VERSION}/${ASSET}" "${zip}" || die "cannot download ${SOURCE}/${META_VERSION}/${ASSET}; try another --mirror"
+  if ! download_from_cache "${zip}"; then
+    info "Downloading the AnixOps Agent ${META_VERSION} (${ARCH}) from ${SOURCE}"
+    fetch "${SOURCE}/${META_VERSION}/${ASSET}" "${zip}" || die "cannot download ${SOURCE}/${META_VERSION}/${ASSET}; try another --mirror"
+  fi
   actual="$(sha256sum "${zip}" | awk '{print $1}')"
   [[ "${actual}" == "${EXPECTED_DIGEST}" ]] || die "checksum mismatch for ${ASSET}: expected ${EXPECTED_DIGEST}, got ${actual}; nothing was installed"
   info "Checksum verified (sha256 ${actual})"
@@ -1260,24 +1337,46 @@ json_strings() {
   printf '%s]' "${out}"
 }
 
+# route_kept tells whether an existing configuration already carries the
+# region relays and release caches this command names. A command with none
+# keeps any configuration; one with relays rewrites a configuration that
+# reaches Control otherwise, so a node installed directly moves behind the
+# relays by re-running its group's command.
+route_kept() {
+  local config="$1"
+  if ((${#RELAYS[@]} > 0)); then
+    grep -qF "\"GRPCRelays\": $(json_strings "${RELAYS[@]}")," "${config}" || return 1
+  fi
+  if ((${#CACHES[@]} > 0)); then
+    grep -qF "\"ReleaseCaches\": $(json_strings "${CACHES[@]}")," "${config}" || return 1
+  fi
+  return 0
+}
+
 # write_config writes the configuration for NODE, keeping an existing one
-# for the same node unless --reset was given; a replaced one is kept as
+# for the same node unless --reset was given or it lacks this command's
+# region route (route_kept); a replaced one is kept as
 # config.json.bak.<time>. It carries no token: the identity is enrolled.
 write_config() {
   local config
   config="$(path "${CONFIG_FILE}")"
-  if [[ -f "${config}" ]] && ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
+  if [[ -f "${config}" ]] && ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}" && route_kept "${config}"; then
     CONFIG_STATE="kept ${CONFIG_FILE}"
     return 0
   fi
+  local backup="" state="wrote ${CONFIG_FILE}"
   if [[ -f "${config}" ]]; then
-    cp -p "${config}" "${config}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+    backup="${config}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+    cp -p "${config}" "${backup}"
+    if ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
+      state="rewrote ${CONFIG_FILE} for the node group's region relays (the previous one is ${backup#"${ROOT}"})"
+    fi
   fi
   render_config >"${config}.new"
   chmod 0640 "${config}.new"
   chown "root:${AGENT_USER}" "${config}.new"
   mv -f "${config}.new" "${config}"
-  CONFIG_STATE="wrote ${CONFIG_FILE}"
+  CONFIG_STATE="${state}"
 }
 
 # existing_node prints the node of this host's configuration, or nothing.
@@ -1308,8 +1407,10 @@ detect_addresses() {
   local family address
   PUBLIC_ADDRESSES=()
   # Offline makes no https request: Control names the node after the address
-  # its gRPC listener sees, or --host.
-  [[ -z "${OFFLINE}" ]] || return 0
+  # its gRPC listener sees, or --host. Through a region relay, Control's
+  # https listener would see the relay; its gRPC listener reads this host's
+  # address from the relay's PROXY header instead.
+  [[ -z "${OFFLINE}" && -z "${CONTROL_RELAY}" ]] || return 0
   for family in 4 6; do
     address="$(curl -fsS -g "-${family}" --proto '=https' --connect-timeout 5 -m 10 "${CONTROL_URL}/install/ip" 2>/dev/null | tr -d '[:space:]')" || address=""
     if [[ "${address}" =~ ^[0-9A-Fa-f:.]{2,45}$ ]]; then
@@ -1937,6 +2038,7 @@ main() {
   if [[ -n "${OFFLINE}" ]]; then
     load_offline
   else
+    select_control_relay
     fetch_metadata
     select_source
   fi

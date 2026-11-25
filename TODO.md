@@ -32,6 +32,16 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   subnets for full nodes and listing the subnets a full node discovers
   for confirmation.
 
+- [ ] Region relays, deferred from the third R34 re-audit (requirements
+  thread decision 2026-11-25): G6 check a group's relay addresses against
+  `grpc.relay_sources` (resolving names) and warn; G7 cache download slots
+  and the hourly miss bound per certificate identity rather than per
+  address (two allowed hosts can still take every slot, nodes behind one
+  NAT share 30 misses an hour). Next minor version.
+- [ ] Region relays, with the 0.4 region model (G3): Control checks that a
+  node of the mainland region is in a group with relays and warns
+  otherwise; the per-region fallback setting of the R33 assessment.
+
 ## Plugin Platform
 
 - [ ] Move the legacy business domains out of the kernel. Every `/api/v2`

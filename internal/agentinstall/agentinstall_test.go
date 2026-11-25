@@ -139,8 +139,25 @@ func TestRenderCommand(t *testing.T) {
 		Relays:        []string{"relay-a.example.cn:50051", "[2001:db8::1]:50051"},
 		ReleaseCaches: []string{"https://relay-a.example.cn:8443"},
 	})
-	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN"+
+	assert.Equal(t, "curl -fsSL --connect-to ctl.example.com:443:relay-a.example.cn:443 https://ctl.example.com/install.sh"+
+		" | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN"+
 		" --relay relay-a.example.cn:50051 --relay '[2001:db8::1]:50051' --release-cache https://relay-a.example.cn:8443", routed)
+
+	// The script comes through the first relay, on Control's https port;
+	// an IPv6 relay gets brackets.
+	routedV6 := RenderCommand(CommandInput{
+		ControlURL: "https://ctl.example.com:8443", ScriptURL: "https://ctl.example.com:8443/install.sh",
+		Token: "anixjoin_TOKEN", Mirror: MirrorControl, Relays: []string{"[2001:db8::1]:50051"},
+	})
+	assert.Equal(t, "curl -fsSL --connect-to 'ctl.example.com:8443:[2001:db8::1]:8443' https://ctl.example.com:8443/install.sh"+
+		" | sudo bash -s -- -u https://ctl.example.com:8443 -t anixjoin_TOKEN --relay '[2001:db8::1]:50051'", routedV6)
+
+	// A script from GitHub releases is not Control's: no --connect-to.
+	routedGitHub := RenderCommand(CommandInput{
+		ControlURL: "https://ctl.example.com", ScriptURL: ControlReleaseBase + "/v4.2.0/" + ScriptAssetName,
+		Token: "anixjoin_TOKEN", Mirror: MirrorGitHub, Relays: []string{"relay-a.example.cn:50051"},
+	})
+	assert.NotContains(t, routedGitHub, "--connect-to")
 }
 
 func TestSettingsCommands(t *testing.T) {

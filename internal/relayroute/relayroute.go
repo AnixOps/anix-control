@@ -36,8 +36,8 @@ const (
 // ErrInvalid wraps every validation error of Check.
 var ErrInvalid = errors.New("invalid relay route")
 
-// Route is a node's relays and release caches. A route without relays
-// reaches Control directly; caches alone are allowed (downloads only).
+// Route is a node's relays and release caches. A group without relays
+// installs its nodes directly; caches alone are allowed (downloads only).
 type Route struct {
 	Relays        []string `json:"relays"`
 	ReleaseCaches []string `json:"release_caches"`
@@ -61,8 +61,7 @@ func CleanRelays(relays []string) ([]string, error) {
 			continue
 		}
 		host, port, err := net.SplitHostPort(relay)
-		number, portErr := strconv.Atoi(port)
-		if err != nil || len(relay) > maxEntry || !validHost(host) || portErr != nil || number < 1 || number > 65535 {
+		if err != nil || len(relay) > maxEntry || !validHost(host) || !validPort(port) {
 			return nil, invalid("relay %q is not host:port", relay)
 		}
 		if !seen[relay] {
@@ -97,10 +96,8 @@ func CleanCaches(caches []string) ([]string, error) {
 		if strings.Trim(parsed.EscapedPath(), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~/-") != "" {
 			return nil, invalid("release cache %q has a path with other characters than letters, digits and ._~/-", raw)
 		}
-		if port := parsed.Port(); port != "" {
-			if number, err := strconv.Atoi(port); err != nil || number < 1 || number > 65535 {
-				return nil, invalid("release cache %q has no valid port", raw)
-			}
+		if port := parsed.Port(); port != "" && !validPort(port) {
+			return nil, invalid("release cache %q has no valid port", raw)
 		}
 		if !seen[raw] {
 			seen[raw] = true
@@ -111,6 +108,16 @@ func CleanCaches(caches []string) ([]string, error) {
 		return nil, invalid("at most %d release caches", MaxCaches)
 	}
 	return clean, nil
+}
+
+// validPort accepts 1-65535 written plainly: digits only, no sign and no
+// leading zero, as the installer (--relay) requires.
+func validPort(port string) bool {
+	if port == "" || len(port) > 5 || port[0] == '0' || strings.Trim(port, "0123456789") != "" {
+		return false
+	}
+	number, err := strconv.Atoi(port)
+	return err == nil && number <= 65535
 }
 
 // validHost accepts an IP literal or a DNS name of letters, digits, dashes
@@ -188,8 +195,18 @@ func ForNode(db *gorm.DB, node agentcontrol.AgentNode) (Route, error) {
 }
 
 // DesiredMember is the "control_route" member of node's desired
-// configuration, nil when its route is empty: the member is additive, and an
-// Agent without it keeps the route its own configuration has.
+// configuration, nil when its route is empty.
+//
+// Contract with the Agent (R34, requirements decision 2026-11-25):
+//   - No member: the Agent keeps the route its own configuration has.
+//   - "relays" lists the relays the Agent reaches Control through, never
+//     directly; "release_caches" the caches it downloads releases from.
+//   - An empty or missing "relays" never means "go direct": an Agent that
+//     reaches Control through relays keeps its current relays and warns.
+//     Only an explicit "direct": true (which this Control does not send
+//     yet) would let it reach Control directly.
+//   - Removing a relay from the group does not withdraw it from installed
+//     nodes (no member is sent for an empty route), so no node is cut off.
 func DesiredMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error) {
 	route, err := ForNode(db, node)
 	if err != nil || route.Empty() {
