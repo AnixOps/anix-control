@@ -35,7 +35,11 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   address table with a (region_id, address) unique index across the
   three would make it a constraint. The PostgreSQL tests of
   `internal/meshregion` create their tables with AutoMigrate, not the
-  migrations.
+  migrations, and do not yet run enrollments, credentials or region
+  change requests against a range change or a move. The node kernel has
+  no copy of the name table yet: it is to embed
+  `internal/meshregion/nametable-unicode-15.1.0.txt` and check the same
+  SHA-256 as the panel's test.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

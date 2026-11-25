@@ -221,6 +221,11 @@ func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) erro
 		if err := findDevice(tx, id, &row); err != nil {
 			return err
 		}
+		// The device's row before its changes, in the order an approval
+		// of a change takes them.
+		if err := lockRows(tx, &model.MeshDevice{}, "id = ?", id); err != nil {
+			return err
+		}
 		if err := tx.Model(&model.MeshRegionChange{}).Where("device_id = ? AND status = ?", id, model.MeshChangePending).
 			Updates(map[string]any{"status": model.MeshChangeRejected, "note": "the device was removed", "decided_at": now}).Error; err != nil {
 			return err

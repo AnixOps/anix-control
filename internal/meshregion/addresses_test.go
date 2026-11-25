@@ -372,8 +372,8 @@ func TestNormalizeName(t *testing.T) {
 }
 
 // nameTableSHA256 is the SHA-256 of the generated name table. The node
-// kernel checks its copy against the same value, so the two cannot drift
-// apart; a new table changes it here and in the kernel together.
+// kernel is to check its copy against the same value (TODO.md), so that
+// the two cannot drift apart; a new table changes it in both together.
 const nameTableSHA256 = "f1f486fd79d9fd8b15183a5d4d1a6efa801af64c6744973d0c65ba958010cd7c"
 
 func TestNameTable(t *testing.T) {

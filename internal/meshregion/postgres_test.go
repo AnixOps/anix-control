@@ -270,3 +270,54 @@ func TestPostgresPlanChangesTogether(t *testing.T) {
 		require.Equal(t, 1, accepted, "round %d: %v", round, errs)
 	}
 }
+
+// Requests, approvals, direct moves and deletes of the same devices at the
+// same time: each either happens or is refused as a conflict, and every
+// device keeps one address of its region.
+func TestPostgresChangesTogether(t *testing.T) {
+	db := openPostgres(t)
+	ctx := context.Background()
+	from, err := CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "eu", CIDR: "10.152.0.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	to, err := CreateRegion(ctx, db, RegionInput{Code: "as", Name: "as", CIDR: "10.152.1.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	tolerated := func(err error) error {
+		if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
+			return nil
+		}
+		return err
+	}
+	for round := 0; round < 4; round++ {
+		var ids []uint
+		for i := 0; i < 3; i++ {
+			device, err := CreateDevice(ctx, db, from.ID, DeviceInput{Hostname: fmt.Sprintf("c-%d-%d", round, i)}, now)
+			require.NoError(t, err)
+			ids = append(ids, device.ID)
+		}
+		pending, err := RequestChange(ctx, db, ChangeInput{DeviceID: ids[0], ToRegionID: to.ID}, model.MeshChangeAdmin, nil, now)
+		require.NoError(t, err)
+		errs := together(
+			func() error {
+				_, err := RequestChange(ctx, db, ChangeInput{DeviceID: ids[1], ToRegionID: to.ID}, model.MeshChangeAdmin, nil, now)
+				return tolerated(err)
+			},
+			func() error {
+				_, err := MoveDevice(ctx, db, ids[1], to.ID, nil, now)
+				return tolerated(err)
+			},
+			func() error {
+				_, err := ApproveChange(ctx, db, pending.ID, "", nil, now)
+				return tolerated(err)
+			},
+			func() error { return tolerated(DeleteDevice(ctx, db, ids[0], now)) },
+			func() error {
+				_, err := AssignDeviceAddress(ctx, db, ids[2], now)
+				return tolerated(err)
+			},
+		)
+		for i, err := range errs {
+			require.NoError(t, err, "round %d change %d", round, i)
+		}
+		requireDistinctAddresses(t, db)
+	}
+}
