@@ -92,14 +92,12 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   bridge); members' IPv6 /128 entries with IPv6 addresses; the Linux limit
   rests on the kernel capability (check the node's system if the panel
   learns it); tests for host group segment holds and concurrent changes
-  on PostgreSQL. From the Agent #203 review: when the kernel does not
-  support bridges (`external_bridge_unsupported`), holds left by a removed
-  bridge may never be released (let an administrator release them while
-  the alert persists and the node no longer bridges). A report with `external_bridge_unsupported` counts as no bridge
-  and releases holds: a kernel downgraded from a version that bridged may
-  leave its old firewall rules behind, which the deployment layer must
-  clean up. Subnet requests take IPv4 networks only (IPv6 with the next
-  minor).
+  on PostgreSQL.
+  A report with `external_bridge_unsupported` counts as no bridge and
+  releases holds (#650): a kernel downgraded from a version that bridged
+  may leave its old firewall rules behind, which the deployment layer
+  must clean up.
+  Subnet requests take IPv4 networks only (IPv6 with the next minor).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
