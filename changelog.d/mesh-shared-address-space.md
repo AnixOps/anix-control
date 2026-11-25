@@ -8,6 +8,8 @@
   reclaimed, and can take a pool address with "Assign new address".
 - Mesh: a region range, the host group supernet, a host group segment or a
   full node's advertised subnet overlapping 100.64.0.0/10 is marked
-  `shared_address_space` (spec section 8.3.1, coexistence with other
-  overlay software). The region and settings forms show the warning as
-  the range is typed. Such ranges are still accepted.
+  `shared_address_space` (spec section 15.4, coexistence with other
+  overlay software). The region, settings and advertised subnet forms
+  show the warning as the range is typed. Such ranges are still accepted.
+- Mesh: the device pool usage counts only pool addresses, not a full
+  node's fixed address nor a reserved resolver address.

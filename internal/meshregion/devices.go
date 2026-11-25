@@ -464,16 +464,33 @@ func LoadSummary(ctx context.Context, db *gorm.DB) (Summary, error) {
 	if err := db.Order("sort ASC, id ASC").Find(&regions).Error; err != nil {
 		return Summary{}, err
 	}
-	var counts []struct {
+	// Only pool addresses count: not a full node's fixed address, nor the
+	// resolver address a device held before it was reserved.
+	var holders []struct {
 		RegionID uint
-		Count    int
+		Address  string
 	}
-	if err := db.Model(&model.MeshDevice{}).Select("region_id, COUNT(*) AS count").Where("address IS NOT NULL").Group("region_id").Scan(&counts).Error; err != nil {
+	if err := db.Model(&model.MeshDevice{}).Select("region_id", "address").Where("address IS NOT NULL").Scan(&holders).Error; err != nil {
 		return Summary{}, err
 	}
+	pools := make(map[uint][2]uint32, len(regions))
+	for _, region := range regions {
+		if prefix, err := netip.ParsePrefix(region.CIDR); err == nil {
+			first, last := pool(prefix)
+			pools[region.ID] = [2]uint32{first, last}
+		}
+	}
 	usedBy := map[uint]int{}
-	for _, count := range counts {
-		usedBy[count.RegionID] = count.Count
+	for _, holder := range holders {
+		bounds, ok := pools[holder.RegionID]
+		address, err := netip.ParseAddr(holder.Address)
+		if !ok || err != nil || !address.Is4() {
+			continue
+		}
+		raw := address.As4()
+		if value := binary.BigEndian.Uint32(raw[:]); value >= bounds[0] && value <= bounds[1] {
+			usedBy[holder.RegionID]++
+		}
 	}
 	summary := Summary{Settings: settings, Pools: make([]RegionPool, 0, len(regions))}
 	for _, region := range regions {
