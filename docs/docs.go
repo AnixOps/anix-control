@@ -10851,7 +10851,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reserved_ranges": {
-                    "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces.",
+                    "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces. They have the regions'\nprefix length: during a migration the old network and the regions\ncarry traffic for each other (spec section 15.7, item 2).",
                     "type": "array",
                     "items": {
                         "type": "string"
