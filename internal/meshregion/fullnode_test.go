@@ -105,7 +105,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	_, err = ApproveChange(ctx, db, change.ID, "", nil, now)
 	require.NoError(t, err)
 	require.NoError(t, db.First(&router, router.ID).Error)
-	require.Equal(t, "10.152.0.1", *router.Address)
+	require.Equal(t, "10.152.0.2", *router.Address, "after the boundary node's address")
 
 	// Deleting the device keeps the credential as its record.
 	require.NoError(t, DeleteDevice(ctx, db, router.ID, now))
