@@ -41,6 +41,25 @@ func TestAllowDigest(t *testing.T) {
 		set[netip.MustParsePrefix(entry)] = true
 	}
 	require.Equal(t, "c2125301582f23d00252ec7ea3ae881359c66f9333fcae94ba95c64931257366", AllowDigest(set))
+	// The table of mesh-status.md ("externalBridge 摘要测试向量"), read as
+	// delivered entries are.
+	for _, vector := range []struct {
+		entries []string
+		digest  string
+	}{
+		{nil, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+		{[]string{"10.0.0.5"}, "65078d8a7bd32b6934150b573cfa67ab5eace9b47601e86deb978ac3be4ba6fc"},
+		{[]string{"10.0.0.5/32", "192.168.1.0/24", "10.0.0.5"}, "f8eb52bad06ba0dc556b78371a449a2fea20c61b8810fff1fff7fc5877065d06"},
+		{[]string{"FD7A:115C:A1E0:0:0:0:0:1", "10.150.0.7/32", "fd7a:115c:a1e0::1/128", "192.168.10.0/24", "FD00:AA:0:0::/64"}, "f4843004a47d48528d070b5e98e8526e14e22a0b73c7b907f2622f0c009e947b"},
+	} {
+		set := map[netip.Prefix]bool{}
+		for _, entry := range vector.entries {
+			prefix, err := parseRoute(entry)
+			require.NoError(t, err, entry)
+			set[prefix] = true
+		}
+		require.Equal(t, vector.digest, AllowDigest(set), "%v", vector.entries)
+	}
 }
 
 func bridgeView(t *testing.T, db *gorm.DB, nodeRef string) BridgeView {
