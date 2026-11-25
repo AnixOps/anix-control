@@ -84,16 +84,16 @@ func (c *Conn) Relayed() bool {
 }
 
 func (c *Conn) readHeader() {
-	_ = c.Conn.SetReadDeadline(time.Now().Add(c.timeout))
+	_ = c.SetReadDeadline(time.Now().Add(c.timeout))
 	header, err := Read(c.reader)
-	_ = c.Conn.SetReadDeadline(time.Time{})
+	_ = c.SetReadDeadline(time.Time{})
 	if err != nil {
 		c.err = err
 		c.remote = c.Conn.RemoteAddr()
 		if c.onRefused != nil {
 			c.onRefused(c.Conn.RemoteAddr(), err)
 		}
-		_ = c.Conn.Close()
+		_ = c.Close()
 		return
 	}
 	if header.Local || header.Source == nil {
