@@ -834,7 +834,9 @@ fetch() {
   [[ -z "${3:-}" ]] || args+=(-D "$3")
   # Behind region relays every request to Control goes through the relay;
   # TLS and the certificate check stay with Control's name.
-  [[ -z "${CONTROL_RELAY}" ]] || args+=(--connect-to "${CONTROL_AUTHORITY}:${CONTROL_RELAY}")
+  if [[ -n "${CONTROL_RELAY}" && "$1" == "${CONTROL_URL}/"* ]]; then
+    args+=(--connect-to "${CONTROL_AUTHORITY}:${CONTROL_RELAY}")
+  fi
   curl "${args[@]}" "$1" || rc=$?
   for _ in 1 2; do
     ((rc != 0 && rc != 22)) || return "${rc}"
