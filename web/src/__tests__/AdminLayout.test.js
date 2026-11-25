@@ -119,11 +119,11 @@ describe('AdminLayout.vue', () => {
     expect(current[0].classes()).toContain('is-active')
   })
 
-  it('has no 部署编排 item: 网络 holds 节点, 线路 and 拓扑', async () => {
+  it('has no 部署编排 item: 网络 holds 节点, 线路, 拓扑 and 组网', async () => {
     const { wrapper } = await mountLayout('/admin/nodes')
     mounted = wrapper
     const network = wrapper.get('[data-nav-group="network"]')
-    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'lines', 'topology'])
+    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'lines', 'topology', 'mesh'])
     expect(sidebarPaths(wrapper)).not.toContain('/admin/deployments')
   })
 
