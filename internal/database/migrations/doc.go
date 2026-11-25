@@ -207,4 +207,6 @@
 //     Agent asks to advertise, pending an administrator's approval
 //     (v5_mesh_full_node.requested_subnets, requested_at,
 //     internal/meshregion).
+//   - 0053_drop_legacy_node_tag: data only; v5_node.tags "legacy-node"
+//     (the only tag of the nodes from before the 5.0 Agent) becomes NULL.
 package migrations

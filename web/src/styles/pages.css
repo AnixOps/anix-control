@@ -70,6 +70,12 @@
   font-weight: var(--weight-semibold);
 }
 
+.dialog-section__intro {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
 .dialog-section__actions {
   display: flex;
   flex-wrap: wrap;

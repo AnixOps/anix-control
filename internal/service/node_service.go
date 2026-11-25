@@ -64,7 +64,9 @@ func (s *NodeService) GetNodes(params NodeListParams) (*NodeListResult, error) {
 	if params.Approval != "" {
 		query = query.Where("approval = ?", params.Approval)
 	}
-	if params.NodeGroupID != nil {
+	if params.NodeGroupID != nil && *params.NodeGroupID == 0 {
+		query = query.Where("node_group_id IS NULL")
+	} else if params.NodeGroupID != nil {
 		query = query.Where("node_group_id = ?", *params.NodeGroupID)
 	}
 
@@ -811,8 +813,9 @@ type NodeListParams struct {
 	// order ("sort ASC, id DESC").
 	OrderBy string
 	// Approval keeps the nodes in one approval state (model.NodeApproval*),
-	// and NodeGroupID those that joined one node group. The /api/v2 list
-	// leaves both unset; the console's /api/v4/admin/nodes list sets them.
+	// and NodeGroupID those of one node group (0: those without a group).
+	// The /api/v2 list leaves both unset; the console's /api/v4/admin/nodes
+	// list sets them.
 	Approval    string
 	NodeGroupID *uint
 }

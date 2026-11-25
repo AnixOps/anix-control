@@ -373,3 +373,42 @@ func (h *NodeGroupsHandler) RejectNode(c *gin.Context) {
 	}
 	kernelData(c, http.StatusOK, decision)
 }
+
+// nodeGroupMoveRequest is the body of a move: the nodes and the group they
+// go to, null to take them out of every group.
+type nodeGroupMoveRequest struct {
+	Nodes   []string `json:"nodes"`
+	GroupID *uint    `json:"group_id"`
+}
+
+// MoveNodes godoc
+// @Summary Move nodes into a node group
+// @Description Puts nodes (proxy-<id> or forward-<id>, 1 to 500) into a live node group, or takes them out of every group with group_id null. The group's join defaults are not applied; its relays reach the nodes at their next configuration refresh. 404 not_found for a group that is not live, node_not_found for a missing node: nothing moves then. Audited per node (node_group_move).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/node-groups/move [post]
+func (h *NodeGroupsHandler) MoveNodes(c *gin.Context) {
+	var input nodeGroupMoveRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "the body must be {nodes, group_id}")
+		return
+	}
+	nodes := make([]agentcontrol.AgentNode, 0, len(input.Nodes))
+	for _, ref := range input.Nodes {
+		node, err := agentcontrol.ParseAgentNode(ref)
+		if err != nil || !agentinstall.ValidNode(node.String()) {
+			kernelError(c, http.StatusBadRequest, "invalid_request", "nodes must be proxy-<id> or forward-<id>")
+			return
+		}
+		nodes = append(nodes, node)
+	}
+	result, err := h.groups().Move(c.Request.Context(), nodes, input.GroupID, h.actor(c))
+	if err != nil {
+		h.groupError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, result)
+}

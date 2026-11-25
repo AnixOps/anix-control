@@ -583,7 +583,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "节点组 ID",
+                        "description": "节点组 ID；0 为未分组的节点",
                         "name": "node_group_id",
                         "in": "query"
                     },
@@ -7611,6 +7611,35 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/node-groups/move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Puts nodes (proxy-\u003cid\u003e or forward-\u003cid\u003e, 1 to 500) into a live node group, or takes them out of every group with group_id null. The group's join defaults are not applied; its relays reach the nodes at their next configuration refresh. 404 not_found for a group that is not live, node_not_found for a missing node: nothing moves then. Audited per node (node_group_move).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Move nodes into a node group",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups/{id}": {
             "get": {
                 "security": [
@@ -12928,7 +12957,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "max_nodes": {
-                    "description": "MaxNodes caps the group's live nodes; 0 is no cap.",
+                    "description": "MaxNodes caps joins: a join is refused once the group has this many\nlive nodes (moving nodes in is not capped); 0 is no cap.",
                     "type": "integer"
                 },
                 "monthly_limit_bytes": {

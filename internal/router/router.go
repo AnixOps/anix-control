@@ -594,6 +594,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// The first group of a panel needs no input: the join dialog asks
 		// for this one (the default group, created once).
 		v4.POST("/kernel/node-groups/default", nodeGroups.EnsureDefault)
+		// Administrators group nodes by hand: a move puts nodes into a
+		// group or takes them out of every group.
+		v4.POST("/kernel/node-groups/move", nodeGroups.MoveNodes)
 		v4.GET("/kernel/node-groups/:id", nodeGroups.Get)
 		v4.PUT("/kernel/node-groups/:id", nodeGroups.Update)
 		v4.DELETE("/kernel/node-groups/:id", nodeGroups.Delete)

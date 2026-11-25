@@ -665,6 +665,7 @@ GET    /api/v4/kernel/node-groups/:id
 PUT    /api/v4/kernel/node-groups/:id             # 替换除 kind 和令牌外的全部字段
 DELETE /api/v4/kernel/node-groups/:id             # 软删除；组内还有存活节点时 409 node_group_in_use
 GET    /api/v4/kernel/node-groups/:id/nodes       # 组内存活节点（接入弹窗每 3 秒轮询）；不含凭据
+POST   /api/v4/kernel/node-groups/move        # {"nodes": ["proxy-1"], "group_id": 2 或 null}：手动移入节点组或移出，不套用组的接入默认值；逐节点审计 node_group_move
 
 # 接入前的就绪检查（管理员）
 GET    /api/v4/kernel/agents/install-readiness    # {"data": {"ready", "checks": [{"id", "ok", "level", "message", "fix"}]}}

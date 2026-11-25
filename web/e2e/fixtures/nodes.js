@@ -37,6 +37,11 @@ const GROUPS = [
   }
 ]
 
+const MESH_REGIONS = [
+  { id: 1, code: 'cn', name: '中国大陆', cidr: '10.150.0.0/16', enabled: true, members: [{ node_ref: 'proxy-1', home: true }, { node_ref: 'proxy-2', home: true }] },
+  { id: 2, code: 'apac', name: '亚太', cidr: '10.151.0.0/16', enabled: false, members: [] }
+]
+
 const SUBSCRIPTION_GROUPS = [
   { id: 1, name: 'default', description: '默认订阅分组', enable: 1, priority: 0 },
   { id: 2, name: 'vip', description: 'VIP', enable: 1, priority: 10 }
@@ -174,6 +179,8 @@ export default {
     m = path.match(/^\/api\/v4\/kernel\/node-groups\/(\d+)\/nodes$/)
     if (m) return { data: { nodes: scenario === 'joined' ? JOINED : [] } }
     if (path === '/api/v2/admin/subscription/groups') return envelope(SUBSCRIPTION_GROUPS)
+    // 网络分组 on the groups tab: the mesh regions.
+    if (path === '/api/v4/kernel/mesh/regions') return { data: MESH_REGIONS }
     return undefined
   },
   viewportOnly: ['menu', 'form', 'formErrors', 'join', 'joined', 'joinBlocked', 'groupEdit'],

@@ -30,7 +30,9 @@ const NodeGroupLiveNameIndex = "ux_v5_node_group_live_name"
 // NodeGroup owns a join token and the defaults of the nodes the token
 // creates (docs/design/node-onboarding, "Node Groups"). Running the install
 // command with the group's anixjoin_ token on a machine makes the machine a
-// clean node of the group (a v5_node row without protocols).
+// clean node of the group (a v5_node row without protocols). A node is in
+// at most one group (NodeGroupID): the one it joined, or the one an
+// administrator moved it to (nodegroup.Move).
 //
 // Rows are never removed. Deleting a group sets Deleted to 1 and DeletedAt;
 // gorm.io/plugin/soft_delete then adds "deleted = 0" to every query, update
@@ -48,12 +50,13 @@ type NodeGroup struct {
 	JoinTokenSealed string     `gorm:"type:text;not null" json:"-"`
 	TokenResetAt    time.Time  `gorm:"not null" json:"token_reset_at"`
 	TokenExpiresAt  *time.Time `json:"token_expires_at"`
-	// MaxNodes caps the group's live nodes; 0 is no cap.
+	// MaxNodes caps joins: a join is refused once the group has this many
+	// live nodes (moving nodes in is not capped); 0 is no cap.
 	MaxNodes        int  `gorm:"not null;default:0" json:"max_nodes"`
 	RequireApproval bool `gorm:"not null;default:false" json:"require_approval"`
 	// Rate, Tags, MonthlyLimitBytes, ResetDay and Sort are copied to every
-	// node the group creates Moving a node
-	// to another group does not apply them again.
+	// node the group creates. Moving a node into the group does not apply
+	// them.
 	Rate float64 `gorm:"not null;default:1" json:"rate"`
 	// Tags is a JSON array of strings.
 	Tags string `gorm:"type:text" json:"-"`

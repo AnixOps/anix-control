@@ -109,6 +109,9 @@ func (s *AdminNodesTestSuite) TestFilters() {
 	s.EqualValues(2, answer.Data.Total)
 	s.Equal([]string{"hk-01", "hk-02"}, s.names(answer))
 
+	answer, _ = s.list("?node_group_id=0")
+	s.Equal([]string{"hand-made"}, s.names(answer), "0 lists the nodes without a group")
+
 	answer, _ = s.list("?search=203.0.113.5&approval=approved")
 	s.Equal([]string{"hk-01"}, s.names(answer))
 
@@ -116,7 +119,7 @@ func (s *AdminNodesTestSuite) TestFilters() {
 	s.EqualValues(3, answer.Data.Total)
 	s.Equal([]string{"hand-made"}, s.names(answer))
 
-	for _, query := range []string{"?approval=maybe", "?node_group_id=x", "?node_group_id=0", "?sort=password"} {
+	for _, query := range []string{"?approval=maybe", "?node_group_id=x", "?node_group_id=-1", "?sort=password"} {
 		_, recorder := s.list(query)
 		s.Equal(http.StatusBadRequest, recorder.Code, query)
 		s.Contains(recorder.Body.String(), "invalid_request", query)

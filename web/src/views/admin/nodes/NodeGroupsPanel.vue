@@ -1,5 +1,6 @@
 <template>
   <div class="groups-panel" data-testid="node-groups-panel">
+    <h2 class="groups-panel__title">{{ t('admin.nodes.groups.title') }}</h2>
     <UiDataTable
       :columns="columns"
       :rows="groups"
@@ -94,6 +95,18 @@ const rowActions = group => [
 </script>
 
 <style scoped>
+.groups-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groups-panel__title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+}
+
 .groups-panel__summary {
   margin: 0;
   color: var(--label-2);
