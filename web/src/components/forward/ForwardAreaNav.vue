@@ -19,7 +19,8 @@
 // (docs/design/node-unification), plus 反向代理, with the polling line of the forwarding
 // pages (D5: "更新于 N 秒前" and refresh). DNS holds the providers of entry
 // high availability (L2); 分流 the egress routes between proxy nodes; 过境应急
-// the cross-border standby channels. 概览,
+// the cross-border standby channels; 组网 the mesh regions, only with the
+// capability "mesh" (a build that runs the gated feature). 概览,
 // 路由 and DNS need the forward package's v4 API, as their routes do.
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -37,7 +38,7 @@ defineProps({
 const emit = defineEmits(['refresh'])
 const router = useRouter()
 const { t } = useAppI18n()
-const PATHS = { nodes: '/admin/nodes', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress', standby: '/admin/forward/standby', 'reverse-proxies': '/admin/forward/reverse-proxies' }
+const PATHS = { nodes: '/admin/nodes', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress', standby: '/admin/forward/standby', 'reverse-proxies': '/admin/forward/reverse-proxies', mesh: '/admin/forward/mesh' }
 const FORWARD = new Set(['overview', 'routes', 'dns'])
 const options = computed(() => [
   { value: 'nodes', label: t('forwardV4.nav.nodes') },
@@ -46,8 +47,10 @@ const options = computed(() => [
   { value: 'dns', label: t('forwardDns.nav') },
   { value: 'egress', label: t('egressRoutes.nav') },
   { value: 'standby', label: t('standby.nav') },
-  { value: 'reverse-proxies', label: t('reverseProxies.nav') }
-].filter(option => !FORWARD.has(option.value) || adminCapabilities.value.includes('forward.v4')))
+  { value: 'reverse-proxies', label: t('reverseProxies.nav') },
+  { value: 'mesh', label: t('mesh.nav') }
+].filter(option => (!FORWARD.has(option.value) || adminCapabilities.value.includes('forward.v4')) &&
+  (option.value !== 'mesh' || adminCapabilities.value.includes('mesh'))))
 
 function go(value) {
   if (PATHS[value]) router.push(PATHS[value])

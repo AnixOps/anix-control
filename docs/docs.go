@@ -5791,6 +5791,267 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/members/{member_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "On the node's home membership: boundary makes it a boundary node (an address in every other region) or an ordinary member; region_id, when not 0, moves the node to that region, where it gets a new fixed address. Answers the node's home membership. 404 when member_id is not a home membership. Audited (module mesh, action mesh_member_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a node's mesh membership",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "home membership id",
+                        "name": "member_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "boundary and region_id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshMember"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes all memberships of the node of the home membership member_id; its configuration loses the member mesh at once. Audited (module mesh, action mesh_member_remove).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Take a node out of the mesh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "home membership id",
+                        "name": "member_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every region in order (code, name, cidr, enabled, sort) with its members: node, fixed address, whether it is the node's home region and whether the node is a boundary node, the node's name and host, and the node's last mesh status as its Agent reported it. Network keys are never answered. 404 feature_disabled while the mesh is not available in this build.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The intranet mesh regions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.Region"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A region is a network of its own: code (2 to 16 lowercase letters, digits or dashes, the network id the nodes see), name, cidr (an IPv4 network of /8 to /24 inside 10/8, 172.16/12, 192.168/16 or 100.64/10 that overlaps no other region; its lower half holds the fixed addresses, its upper half is the device pool), enabled and sort. Control generates its network key. Every boundary node gets an address in it. 409 mesh_conflict for a code or range another region has. Audited (module mesh, action mesh_region_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create a mesh region",
+                "parameters": [
+                    {
+                        "description": "code, name, cidr, enabled, sort",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.RegionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegion"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes code, name, cidr, enabled and sort. The range of a region with members cannot change (409 mesh_conflict). The nodes of an enabled region get its network in their configuration at once; disabling it takes the network away. Audited (module mesh, action mesh_region_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "code, name, cidr, enabled, sort",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.RegionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegion"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a region that is no node's home region (409 mesh_conflict otherwise); the boundary nodes leave it. Audited (module mesh, action mesh_region_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions/{id}/members": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Makes the region the node's home region with the lowest free fixed address of its server segment (the lower half of its range). A boundary node (boundary true) also gets an address in every other region. 409 mesh_conflict when the node is already in a region, segment_full when the segment has no free address. Audited (module mesh, action mesh_member_add).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a node to a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "node and boundary",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshMember"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/network": {
             "get": {
                 "security": [
@@ -8595,6 +8856,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshMemberRequest": {
+            "type": "object",
+            "properties": {
+                "boundary": {
+                    "type": "boolean"
+                },
+                "node": {
+                    "description": "Node is proxy-\u003cid\u003e or forward-\u003cid\u003e; only when adding a node.",
+                    "type": "string"
+                },
+                "region_id": {
+                    "description": "RegionID moves the node to another region; 0 keeps it.",
+                    "type": "integer"
+                }
+            }
+        },
         "handler.networkModelRequest": {
             "type": "object",
             "properties": {
@@ -8879,6 +9156,106 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.MemberView": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "boundary": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "home": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "node_host": {
+                    "type": "string"
+                },
+                "node_name": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "Status is the node's last report as the Agent sent it, nil before\nthe first.",
+                    "type": "object"
+                },
+                "status_observed_at": {
+                    "type": "string"
+                },
+                "status_received_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.Region": {
+            "type": "object",
+            "properties": {
+                "cidr": {
+                    "description": "CIDR is the region's virtual range, such as 10.150.0.0/16.",
+                    "type": "string"
+                },
+                "code": {
+                    "description": "Code is the network id the nodes see, such as \"cn\" or \"eu\".",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.MemberView"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.RegionInput": {
+            "type": "object",
+            "properties": {
+                "cidr": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.EgressExit": {
             "type": "object",
             "properties": {
@@ -8890,6 +9267,64 @@ const docTemplate = `{
                 },
                 "relay_port": {
                     "type": "integer"
+                }
+            }
+        },
+        "model.MeshMember": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "boundary": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "home": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "node_ref": {
+                    "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.MeshRegion": {
+            "type": "object",
+            "properties": {
+                "cidr": {
+                    "description": "CIDR is the region's virtual range, such as 10.150.0.0/16.",
+                    "type": "string"
+                },
+                "code": {
+                    "description": "Code is the network id the nodes see, such as \"cn\" or \"eu\".",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },

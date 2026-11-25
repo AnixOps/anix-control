@@ -90,6 +90,8 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.package_report` of kind `forward.report` (`NodeForwardReport`) | `forward.v1` with `package-reports.v1` |
 | Control → Agent | `ControlToAgent.config` with the member `network` (`NetworkPlan`) | `network.v1` with `config.v1` |
 | Agent → Control | `AgentToControl.package_report` of kind `network.status` (`NetworkStatus`) | `network.v1` with `package-reports.v1` |
+| Control → Agent | `ControlToAgent.config` with the member `mesh` (JSON, `docs/design/mesh-regions/agent-contract.md`) | `config.v1` (not negotiated) |
+| Agent → Control | `AgentToControl.package_report` of kind `mesh.status` (JSON) | `mesh.v1` with `package-reports.v1` |
 | Agent → Control | `AgentToControl.maintenance_events` (`MaintenanceEvents`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.maintenance_ack` (`MaintenanceAck` of `MaintenanceEventResult`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.alive_list` (`AliveList` of `UserAlive`) | `alive.v1` |
@@ -157,15 +159,17 @@ stream equivalent.
   - `users.v1`: proxy nodes (`v5_node`; a forward node has no user list);
   - `reports.v1`: proxy nodes (a forward node's stream is not offered it
     yet; its reports join with the forward plugins);
-  - `package-reports.v1`: proxy nodes, and forward nodes served `forward.v1`
-    or `network.v1` (their other package reports are refused: they have no
-    plugin assignments);
+  - `package-reports.v1`: proxy nodes, and forward nodes served `forward.v1`,
+    `network.v1` or `mesh.v1` (their other package reports are refused:
+    they have no plugin assignments);
   - `forward.v1` (see "Forwarding"): proxy and forward nodes, when the
     `Hello` lists it with a valid `node_capabilities` attribute and Control
     serves the session `config.v1`;
   - `network.v1` (see "Network model"): proxy and forward nodes, when the
     `Hello` lists it with a valid `device_capabilities` attribute and
     Control serves the session `config.v1`;
+  - `mesh.v1` (see "Intranet mesh"): proxy and forward nodes, while
+    Control runs the gated feature `mesh`;
   - `maintenance.v1` (see "Maintenance events"): proxy nodes, whose node log
     stores the events;
   - `alive.v1` (see "Alive list"): proxy nodes, whose users have device
@@ -356,6 +360,19 @@ stream equivalent.
     `TrafficReport`.
   - A report whose envelope `node_id` is not the stream's node ends the
     stream with `PermissionDenied`, as any other message does.
+- **Intranet mesh** (`mesh.v1`; `docs/design/mesh-regions/agent-contract.md`,
+  `internal/meshregion`, gated by the feature `mesh`):
+  - **Configuration.** The configuration document (either format) of a
+    node in an enabled region carries the member `mesh`, negotiated or
+    not (an Agent without the mesh ignores it): `networks`, one per region
+    the node is in. Without the member the node runs no mesh. A region or
+    membership change pushes the touched nodes' configurations at once.
+  - **Status.** The Agent sends its mesh status as a `PackageReport` with
+    `plugin_id` `mesh`, `kind` `mesh.status`, `version` `v1` and a JSON
+    object with a `networks` array. Control accepts it only on a session
+    that negotiated `mesh.v1` and keeps the latest per node; it refuses
+    (drops, logs and counts) one without it, another version, a future one
+    and a malformed payload.
 - **Network model** (`network.v1`; `docs/design/network-model`,
   `sdk/network`, contract `anixops.network.v1`, a draft until the Agent
   executor ships):

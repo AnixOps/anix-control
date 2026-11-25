@@ -3,6 +3,7 @@ package service
 import (
 	"sort"
 
+	"github.com/AnixOps/anix-control/v5/internal/features"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -15,7 +16,9 @@ var adminCapabilityRoutes = map[string]struct{ pluginID, route string }{
 }
 
 // AdminCapabilities answers the capabilities whose package is enabled and
-// declares the route, and whose api permission the actor holds.
+// declares the route, and whose api permission the actor holds, and "mesh"
+// while the build runs the gated feature mesh (internal/meshregion), which
+// opens the 组网 page.
 func AdminCapabilities(db *gorm.DB, actorID uint, legacyAdmin bool) ([]string, error) {
 	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
 	if err != nil {
@@ -49,6 +52,9 @@ func AdminCapabilities(db *gorm.DB, actorID uint, legacyAdmin bool) ([]string, e
 		if containsPluginString(manifest.ControlRoutes, wanted.route) {
 			out = append(out, name)
 		}
+	}
+	if features.Enabled("mesh") {
+		out = append(out, "mesh")
 	}
 	sort.Strings(out)
 	return out, nil
