@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/relayroute"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -45,6 +46,15 @@ type GroupInput struct {
 	// TokenExpiresAt, when set, ends the token's use; it must be in the
 	// future.
 	TokenExpiresAt *time.Time `json:"token_expires_at"`
+	// Relays are the region relays (host:port, at most 8) the group's nodes
+	// reach Control through, never directly (docs/design/region-relay). The
+	// install command carries them and the nodes get them in their desired
+	// configuration (control_route). Absent: unchanged on an update, none on
+	// a create; [] removes them.
+	Relays *[]string `json:"relays"`
+	// ReleaseCaches are the relays' release file caches (https URLs, at most
+	// 8) the nodes download releases through. Absent: unchanged on an update.
+	ReleaseCaches *[]string `json:"release_caches"`
 }
 
 // GroupView is a node group as the administrator API shows it: never the
@@ -61,6 +71,8 @@ type GroupView struct {
 	Sort              int        `json:"sort"`
 	TokenResetAt      time.Time  `json:"token_reset_at"`
 	TokenExpiresAt    *time.Time `json:"token_expires_at"`
+	Relays            []string   `json:"relays"`
+	ReleaseCaches     []string   `json:"release_caches"`
 	// TokenExpired is true once TokenExpiresAt has passed.
 	TokenExpired bool       `json:"token_expired"`
 	Nodes        NodeCounts `json:"nodes"`
@@ -83,6 +95,8 @@ type checked struct {
 	rate                     float64
 	monthlyLimit             int64
 	expiresAt                *time.Time
+	// relays and caches are the stored JSON arrays; nil keeps the group's.
+	relays, caches *string
 }
 
 // check validates input.
@@ -125,6 +139,22 @@ func (s *Service) check(input GroupInput) (checked, error) {
 			return out, invalid("token_expires_at must be in the future")
 		}
 		out.expiresAt = &expires
+	}
+	if input.Relays != nil {
+		relays, err := relayroute.CleanRelays(*input.Relays)
+		if err != nil {
+			return out, invalid("relays: %v", err)
+		}
+		encoded := relayroute.Encode(relays)
+		out.relays = &encoded
+	}
+	if input.ReleaseCaches != nil {
+		caches, err := relayroute.CleanCaches(*input.ReleaseCaches)
+		if err != nil {
+			return out, invalid("release_caches: %v", err)
+		}
+		encoded := relayroute.Encode(caches)
+		out.caches = &encoded
 	}
 	return out, nil
 }
@@ -202,8 +232,10 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 		if err := tx.Create(&group).Error; err != nil {
 			return err
 		}
+		route := relayroute.OfGroup(group)
 		return writeAudit(tx, actor, AuditActionCreate, auditTargetGroup, group.ID, map[string]any{
 			"group": group.Name, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
+			"relays": route.Relays, "release_caches": route.ReleaseCaches,
 		})
 	})
 	if err != nil {
@@ -216,6 +248,12 @@ func (c checked) apply(group *model.NodeGroup) {
 	group.Name, group.MaxNodes, group.RequireApproval, group.Rate = c.name, c.maxNodes, c.requireApproval, c.rate
 	group.Tags, group.MonthlyLimitBytes, group.ResetDay, group.Sort = c.tags, c.monthlyLimit, c.resetDay, c.sort
 	group.TokenExpiresAt = c.expiresAt
+	if c.relays != nil {
+		group.Relays = *c.relays
+	}
+	if c.caches != nil {
+		group.ReleaseCaches = *c.caches
+	}
 }
 
 // Update replaces a group's fields but its token. Nodes that
@@ -239,12 +277,14 @@ func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor A
 		group.UpdatedAt = s.now()
 		if err := tx.Model(&model.NodeGroup{}).Where("id = ?", id).Select(
 			"name", "max_nodes", "require_approval", "rate", "tags", "monthly_limit_bytes", "reset_day", "sort",
-			"token_expires_at", "updated_at",
+			"token_expires_at", "relays", "release_caches", "updated_at",
 		).Updates(&group).Error; err != nil {
 			return err
 		}
+		route := relayroute.OfGroup(group)
 		return writeAudit(tx, actor, AuditActionUpdate, auditTargetGroup, id, map[string]any{
 			"group": group.Name, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
+			"relays": route.Relays, "release_caches": route.ReleaseCaches,
 		})
 	})
 	if err != nil {
@@ -389,6 +429,8 @@ func (s *Service) view(group model.NodeGroup, counts NodeCounts) GroupView {
 		TokenResetAt: group.TokenResetAt, TokenExpiresAt: group.TokenExpiresAt, Nodes: counts,
 		CreatedAt: group.CreatedAt, UpdatedAt: group.UpdatedAt,
 	}
+	route := relayroute.OfGroup(group)
+	view.Relays, view.ReleaseCaches = route.Relays, route.ReleaseCaches
 	if group.Tags != "" {
 		_ = json.Unmarshal([]byte(group.Tags), &view.Tags)
 	}

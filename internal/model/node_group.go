@@ -58,13 +58,23 @@ type NodeGroup struct {
 	// Tags is a JSON array of strings.
 	Tags string `gorm:"type:text" json:"-"`
 	// MonthlyLimitBytes is the monthly traffic limit; 0 is none.
-	MonthlyLimitBytes int64                 `gorm:"not null;default:0" json:"monthly_limit_bytes"`
-	ResetDay          int                   `gorm:"not null;default:1" json:"reset_day"`
-	Sort              int                   `gorm:"not null;default:0" json:"sort"`
-	Deleted           soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
-	DeletedAt         *time.Time            `json:"deleted_at,omitempty"`
-	CreatedAt         time.Time             `json:"created_at"`
-	UpdatedAt         time.Time             `json:"updated_at"`
+	MonthlyLimitBytes int64 `gorm:"not null;default:0" json:"monthly_limit_bytes"`
+	ResetDay          int   `gorm:"not null;default:1" json:"reset_day"`
+	Sort              int   `gorm:"not null;default:0" json:"sort"`
+	// Relays is a JSON array of the region relays (host:port) the group's
+	// nodes reach Control through, never directly; empty: none
+	// (docs/design/region-relay). Unlike the defaults above it is not copied:
+	// the install command carries it and every node of the group gets it in
+	// its desired configuration (control_route), so a change reaches the
+	// nodes that already joined.
+	Relays string `gorm:"type:text" json:"-"`
+	// ReleaseCaches is a JSON array of the relays' release file caches
+	// (https base URLs) the group's nodes download releases through.
+	ReleaseCaches string                `gorm:"type:text" json:"-"`
+	Deleted       soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
+	DeletedAt     *time.Time            `json:"deleted_at,omitempty"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
 }
 
 func (NodeGroup) TableName() string { return "v5_node_group" }

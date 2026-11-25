@@ -176,11 +176,17 @@ type CommandInput struct {
 	// apart by the prefix.
 	Token  string
 	Mirror string
+	// Relays and ReleaseCaches are the node group's region relays and their
+	// release caches (internal/relayroute, already checked): the script
+	// joins through the relays and writes both into the configuration.
+	Relays        []string
+	ReleaseCaches []string
 }
 
 // RenderCommand returns the one-line install command:
 //
 //	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
+//	  [--relay host:port]... [--release-cache https://...]...
 //
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
@@ -195,6 +201,12 @@ func RenderCommand(input CommandInput) string {
 	}
 	if input.Mirror != "" && input.Mirror != MirrorControl {
 		words = append(words, "--mirror", ShellQuote(input.Mirror))
+	}
+	for _, relay := range input.Relays {
+		words = append(words, "--relay", ShellQuote(relay))
+	}
+	for _, cache := range input.ReleaseCaches {
+		words = append(words, "--release-cache", ShellQuote(cache))
 	}
 	return strings.Join(words, " ")
 }
@@ -232,6 +244,12 @@ const UninstallCommand = "sudo anix-agent uninstall"
 // the caller. Relaying runs on the network model, so no command carries
 // --forward.
 func (s Settings) Commands(token string) []Command {
+	return s.RoutedCommands(token, nil, nil)
+}
+
+// RoutedCommands is Commands for a node group with region relays and
+// release caches: every command carries them.
+func (s Settings) RoutedCommands(token string, relays, caches []string) []Command {
 	metadata := s.Metadata()
 	commands := make([]Command, 0, len(Mirrors))
 	for _, mirror := range Mirrors {
@@ -252,6 +270,7 @@ func (s Settings) Commands(token string) []Command {
 		}
 		command.Command = RenderCommand(CommandInput{
 			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror,
+			Relays: relays, ReleaseCaches: caches,
 		})
 		commands = append(commands, command)
 	}
