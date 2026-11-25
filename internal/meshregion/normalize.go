@@ -11,9 +11,9 @@ import (
 )
 
 // nameTableText is the character data the name rule uses, generated from
-// Unicode 15.1.0 by config/scripts/gen_mesh_name_table.py. The node
-// kernel reads the same generated file, so a name gets the same label in
-// both whichever Unicode version Go ships.
+// Unicode 15.1.0 by config/scripts/gen_mesh_name_table.py, so that a
+// name's label does not change with the Unicode version Go ships. The
+// node kernel is to embed the same file (TODO.md).
 //
 //go:embed nametable-unicode-15.1.0.txt
 var nameTableText string

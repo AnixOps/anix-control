@@ -319,7 +319,7 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 			row.Secret = rand.Text()
 		}
 		row.Code, row.Name, row.CIDR, row.Enabled, row.Sort, row.UpdatedAt = input.Code, input.Name, input.CIDR, input.Enabled, input.Sort, now
-		return tx.Save(&row).Error
+		return saveExisting(tx, &row, "region")
 	})
 	return row, err
 }
@@ -460,8 +460,12 @@ func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, 
 	if err := findRegion(tx, regionID, &region); err != nil {
 		return model.MeshMember{}, err
 	}
-	if err := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{}).Error; err != nil {
-		return model.MeshMember{}, err
+	result := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{})
+	if result.Error != nil {
+		return model.MeshMember{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return model.MeshMember{}, conflict("the node left the mesh meanwhile")
 	}
 	return join(tx, region, home.NodeRef, true, boundary, now)
 }
@@ -496,6 +500,29 @@ func findRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
 	return findLockedRegion(tx, id, row)
 }
 
+// forUpdate makes tx's next read lock the rows it reads until the
+// transaction ends (PostgreSQL).
+func forUpdate(tx *gorm.DB) *gorm.DB {
+	if tx.Name() != "postgres" {
+		return tx
+	}
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"})
+}
+
+// saveExisting writes every field of row, which must still exist. Unlike
+// Save, which inserts a row when its update matches none, it refuses a row
+// a change at the same time deleted, instead of bringing it back.
+func saveExisting(tx *gorm.DB, row any, what string) error {
+	result := tx.Model(row).Select("*").Updates(row)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return conflict("the %s was removed meanwhile", what)
+	}
+	return nil
+}
+
 // lockRows locks the rows of table that match the condition until the
 // transaction ends (PostgreSQL).
 func lockRows(tx *gorm.DB, table any, query string, args ...any) error {
@@ -503,7 +530,7 @@ func lockRows(tx *gorm.DB, table any, query string, args ...any) error {
 		return nil
 	}
 	var ids []uint
-	return tx.Model(table).Clauses(clause.Locking{Strength: "UPDATE"}).Where(query, args...).Pluck("id", &ids).Error
+	return tx.Model(table).Clauses(clause.Locking{Strength: "UPDATE"}).Where(query, args...).Order("id ASC").Pluck("id", &ids).Error
 }
 
 // readRegion reads a region without locking it, for an answer that
@@ -522,7 +549,9 @@ func readRegion(db *gorm.DB, id uint, row *model.MeshRegion) error {
 
 func findHome(tx *gorm.DB, memberID uint) (model.MeshMember, error) {
 	var rows []model.MeshMember
-	if err := tx.Where("id = ? AND home = ?", memberID, true).Limit(1).Find(&rows).Error; err != nil {
+	// Locked: a node removed or moved at the same time is not changed
+	// again from a row read before.
+	if err := forUpdate(tx).Where("id = ? AND home = ?", memberID, true).Limit(1).Find(&rows).Error; err != nil {
 		return model.MeshMember{}, err
 	}
 	if len(rows) == 0 {

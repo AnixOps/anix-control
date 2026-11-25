@@ -81,19 +81,18 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		return model.MeshRegionChange{}, invalid("node or device_id: one of them")
 	}
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// The target region before the member or device, in the order
+		// of every change that moves them, so that the region is not
+		// deleted while a request for it is written.
+		var region model.MeshRegion
+		if err := findRegion(tx, input.ToRegionID, &region); err != nil {
+			return err
+		}
 		if err := lockSubject(tx, row.NodeRef, row.DeviceID); err != nil {
 			return err
 		}
 		from, address, err := subject(tx, row.NodeRef, row.DeviceID)
 		if err != nil {
-			return err
-		}
-		// A plain read: the request chooses no address, and its approval
-		// checks the region again under the region locks. Locking the
-		// region after the member or device row would take the two kinds
-		// of lock in the opposite order to the changes that move them.
-		var region model.MeshRegion
-		if err := readRegion(tx, input.ToRegionID, &region); err != nil {
 			return err
 		}
 		if from == region.ID {
@@ -224,7 +223,7 @@ func decide(tx *gorm.DB, row model.MeshRegionChange) error {
 // move carries out row and answers the new address.
 func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error) {
 	if row.NodeRef != nil {
-		home, err := homeOf(tx, *row.NodeRef)
+		home, err := homeOf(forUpdate(tx), *row.NodeRef)
 		if err != nil {
 			return "", err
 		}
@@ -252,7 +251,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 		return "", err
 	}
 	device.RegionID, device.Address, device.AddressUsedAt, device.UpdatedAt = region.ID, &address, &now, now
-	return address, tx.Save(&device).Error
+	return address, saveExisting(tx, &device, "device")
 }
 
 // RejectChange records a rejection; nothing moves.

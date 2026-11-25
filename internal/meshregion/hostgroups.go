@@ -172,7 +172,7 @@ func UpdateHostGroup(ctx context.Context, db *gorm.DB, id uint, input HostGroupI
 			}
 		}
 		row.Name, row.GatewayRef, row.StandbyRef, row.UpdatedAt = name, home.NodeRef, standby, now
-		return tx.Save(&row).Error
+		return saveExisting(tx, &row, "host group")
 	})
 	return row, err
 }

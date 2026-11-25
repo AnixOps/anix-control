@@ -209,7 +209,7 @@ func UpdateDevice(ctx context.Context, db *gorm.DB, id uint, input DeviceInput, 
 			return err
 		}
 		row.Hostname, row.DeviceKey, row.UpdatedAt = hostname, key, now
-		return tx.Save(&row).Error
+		return saveExisting(tx, &row, "device")
 	})
 	return row, err
 }
@@ -487,7 +487,7 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 			return err
 		}
 		row.Address, row.AddressUsedAt, row.UpdatedAt = &address, &now, now
-		return tx.Save(&row).Error
+		return saveExisting(tx, &row, "device")
 	})
 	return row, err
 }

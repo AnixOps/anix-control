@@ -140,7 +140,7 @@ func UpdateDeviceName(ctx context.Context, db *gorm.DB, id uint, input DeviceNam
 		}
 		row = current
 		row.GatewayRef, row.HostGroupID, row.Name, row.Address, row.UpdatedAt = checked.GatewayRef, checked.HostGroupID, checked.Name, checked.Address, now
-		return tx.Save(&row).Error
+		return saveExisting(tx, &row, "name")
 	})
 	return row, err
 }
