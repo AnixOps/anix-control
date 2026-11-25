@@ -92,7 +92,12 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   bridge); members' IPv6 /128 entries with IPv6 addresses; the Linux limit
   rests on the kernel capability (check the node's system if the panel
   learns it); tests for host group segment holds and concurrent changes
-  on PostgreSQL.
+  on PostgreSQL. From the Agent #203 review: when the kernel does not
+  support bridges (`external_bridge_unsupported`), holds left by a removed
+  bridge may never be released (let an administrator release them while
+  the alert persists and the node no longer bridges); release by receive
+  time leaves a window of seconds (require two matching reports after the
+  removal).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
