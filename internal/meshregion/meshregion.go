@@ -104,8 +104,12 @@ type RegionInput struct {
 type Region struct {
 	model.MeshRegion
 	Members []MemberView `json:"members"`
+	// ResolverAddress is the region's fixed resolver address, which no
+	// node is given (ResolverAddress).
+	ResolverAddress string `json:"resolver_address"`
 	// Warnings: WarningFewBoundaryNodes when the region is enabled with
-	// fewer than two boundary nodes (R19).
+	// fewer than two boundary nodes (R19); WarningSharedAddressSpace when
+	// its range lies in 100.64.0.0/10.
 	Warnings []string `json:"warnings"`
 }
 
@@ -174,6 +178,12 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 	index := map[uint]int{}
 	for i, region := range regions {
 		answer[i] = Region{MeshRegion: region, Members: []MemberView{}, Warnings: []string{}}
+		if prefix, err := netip.ParsePrefix(region.CIDR); err == nil {
+			answer[i].ResolverAddress = ResolverAddress(prefix).String()
+		}
+		if inSharedSpace(region.CIDR) {
+			answer[i].Warnings = append(answer[i].Warnings, WarningSharedAddressSpace)
+		}
 		index[region.ID] = i
 	}
 	for _, member := range members {

@@ -2,6 +2,7 @@ package meshregion
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -226,6 +227,15 @@ func TestFullNodeSubnets(t *testing.T) {
 	subnets, err = SetDeviceSubnets(ctx, db, routers[0], nil, now)
 	require.NoError(t, err)
 	require.Empty(t, subnets)
+
+	// A subnet in 100.64.0.0/10 is advertised, and marked.
+	_, err = SetDeviceSubnets(ctx, db, routers[1], []string{"192.168.2.0/24", "100.100.0.0/24"}, now)
+	require.NoError(t, err)
+	views, err = Devices(ctx, db, cn.ID, now)
+	require.NoError(t, err)
+	for _, view := range views {
+		require.Equal(t, view.ID == routers[1], slices.Contains(view.Warnings, WarningSharedAddressSpace), view.Hostname)
+	}
 }
 
 // distinctHosts answers n distinct private /32 networks.

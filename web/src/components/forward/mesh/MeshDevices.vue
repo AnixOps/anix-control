@@ -176,7 +176,7 @@ async function assignAddress(row) {
 
 function rowActions(row) {
   return [
-    ...(row.address ? [] : [{ key: 'assign', label: t('meshAddr.devices.assign'), icon: MapPinPlus, onSelect: () => assignAddress(row) }]),
+    ...(row.address && !(row.warnings || []).includes('reserved_address') ? [] : [{ key: 'assign', label: t('meshAddr.devices.assign'), icon: MapPinPlus, onSelect: () => assignAddress(row) }]),
     { key: 'edit', label: t('meshAddr.devices.edit'), icon: Pencil, onSelect: () => openSheet('edit', row) },
     ...(row.role === 'full' ? [{ key: 'subnets', label: t('meshAddr.devices.subnets'), icon: Network, onSelect: () => openSheet('subnets', row) }] : []),
     { key: 'move', label: t('meshAddr.devices.move'), icon: MoveRight, onSelect: () => openSheet('move', row) },

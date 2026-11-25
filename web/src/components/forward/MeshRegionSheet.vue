@@ -10,7 +10,7 @@
     <form class="mesh-sheet" novalidate data-testid="mesh-region-form" @submit.prevent="save">
       <UiTextField v-model="form.name" size="md" :label="t('mesh.region.name')" required :error="errors.name" />
       <UiTextField v-model="form.code" size="md" :label="t('mesh.region.code')" required :help="t('mesh.region.codeHelp')" :error="errors.code" />
-      <UiTextField v-model="form.cidr" size="md" :label="t('mesh.region.cidr')" required placeholder="10.150.0.0/16" :help="t('mesh.region.cidrHelp')" :error="errors.cidr" />
+      <UiTextField v-model="form.cidr" size="md" :label="t('mesh.region.cidr')" required placeholder="10.150.0.0/16" :help="cidrHelp" :error="errors.cidr" />
       <UiNumberField v-model="form.sort" size="md" :label="t('mesh.region.sort')" :min="0" />
       <UiSwitch v-model="form.enabled" :label="t('mesh.region.enabled')" />
       <p v-if="saveError" class="fwd-note is-danger" role="alert">{{ saveError }}</p>
@@ -28,7 +28,7 @@ import { computed, ref, watch } from 'vue'
 import { UiButton, UiNumberField, UiSheet, UiSwitch, UiTextField, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { saveKernelMeshRegion } from '@/api/kernel'
-import { meshErrorMessage } from './meshModel'
+import { inSharedAddressSpace, meshErrorMessage } from './meshModel'
 import './forward.css'
 
 const props = defineProps({
@@ -41,6 +41,7 @@ const { t } = useAppI18n()
 const toast = useToast()
 
 const editing = computed(() => Boolean(props.region?.id))
+const cidrHelp = computed(() => inSharedAddressSpace(form.value.cidr) ? `${t('mesh.region.cidrHelp')} ${t('mesh.region.cidrShared')}` : t('mesh.region.cidrHelp'))
 const form = ref({})
 const errors = ref({})
 const saving = ref(false)

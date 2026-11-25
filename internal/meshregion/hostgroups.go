@@ -29,6 +29,9 @@ type HostGroupView struct {
 	model.MeshHostGroup
 	RegionID   uint   `json:"region_id"`
 	RegionCode string `json:"region_code"`
+	// Warnings: WarningSharedAddressSpace when the segment lies in
+	// 100.64.0.0/10.
+	Warnings []string `json:"warnings"`
 }
 
 // homeOf answers the home membership of nodeRef.
@@ -211,7 +214,11 @@ func HostGroups(ctx context.Context, db *gorm.DB) ([]HostGroupView, error) {
 	views := make([]HostGroupView, 0, len(rows))
 	for _, row := range rows {
 		region := homes[row.GatewayRef]
-		views = append(views, HostGroupView{MeshHostGroup: row, RegionID: region, RegionCode: codes[region]})
+		view := HostGroupView{MeshHostGroup: row, RegionID: region, RegionCode: codes[region], Warnings: []string{}}
+		if inSharedSpace(row.Segment) {
+			view.Warnings = append(view.Warnings, WarningSharedAddressSpace)
+		}
+		views = append(views, view)
 	}
 	return views, nil
 }

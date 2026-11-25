@@ -22,7 +22,9 @@ export default {
       none: '无',
       region: '地区',
       address: '地址',
-      name: '名称'
+      name: '名称',
+      sharedAddressSpace: '位于共享地址段',
+      sharedAddressSpaceHelp: '该网段位于 100.64.0.0/10，可能被同一主机上的其他组网软件整段接管，建议改用其他私有网段。'
     },
     enrollments: {
       title: '接入凭证',
@@ -99,7 +101,9 @@ export default {
         address_idle: '30 天未使用',
         no_static_key: '未登记公钥',
         static_key_mismatch: '公钥不一致',
-        static_key_taken: '公钥与其他成员重复'
+        static_key_taken: '公钥与其他成员重复',
+        reserved_address: '占用保留的解析地址',
+        shared_address_space: '通告网段位于共享地址段'
       },
       fullNode: '完整节点',
       subnets: '通告网段…',
