@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -140,9 +141,29 @@ func (f *Forward) untrack(conn net.Conn) {
 	_ = conn.Close()
 }
 
+// firstBytesSize is how much of the node's first bytes are read before
+// Control is dialed.
+const firstBytesSize = 16 << 10
+
+// firstBytesTimeout is how long a node may stay silent after connecting.
+var firstBytesTimeout = 10 * time.Second
+
 // relay copies one node connection to an upstream and back.
 func (f *Forward) relay(node net.Conn) {
 	setKeepAlive(node, f.config.KeepAlive)
+	// The node speaks first (the TLS ClientHello). Control is dialed only
+	// once its first bytes arrive, so a connection that only times the
+	// relay (the Agent's periodic measurement) never opens one to Control.
+	first := make([]byte, firstBytesSize)
+	_ = node.SetReadDeadline(time.Now().Add(firstBytesTimeout))
+	n, err := node.Read(first)
+	_ = node.SetReadDeadline(time.Time{})
+	if n == 0 {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrDeadlineExceeded) && !errors.Is(err, net.ErrClosed) {
+			f.logger.Debug("the node connection ended before it sent anything", "remote", node.RemoteAddr().String(), "error", err)
+		}
+		return
+	}
 	upstream, address, err := f.dialUpstream()
 	if err != nil {
 		f.logger.Warn("no upstream answered; closing the node connection", "remote", node.RemoteAddr().String(), "error", err)
@@ -163,6 +184,10 @@ func (f *Forward) relay(node net.Conn) {
 			f.logger.Warn("upstream refused the PROXY header", "upstream", address, "error", err)
 			return
 		}
+	}
+	if err := writeFull(upstream, first[:n], f.config.DialTimeout); err != nil {
+		f.logger.Warn("upstream refused the node's first bytes", "upstream", address, "error", err)
+		return
 	}
 	pipe(node, upstream)
 }

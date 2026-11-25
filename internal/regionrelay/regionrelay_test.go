@@ -218,6 +218,9 @@ func TestForwardRefusesOverMaxConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = first.Close() }()
+	if _, err := first.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
 	deadline := time.Now().Add(2 * time.Second)
 	for up.accepted.Load() < 1 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
@@ -230,6 +233,36 @@ func TestForwardRefusesOverMaxConnections(t *testing.T) {
 	_ = second.SetReadDeadline(time.Now().Add(2 * time.Second))
 	if _, err := second.Read(make([]byte, 1)); err == nil {
 		t.Fatal("the connection over max_connections was served")
+	}
+}
+
+// A connection that sends nothing (the Agent timing the relay) never
+// opens one to the upstream, whether it closes or stays silent.
+func TestForwardDialsTheUpstreamOnlyAfterTheNodeSpeaks(t *testing.T) {
+	saved := firstBytesTimeout
+	firstBytesTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { firstBytesTimeout = saved })
+	up := newUpstream(t, func(conn net.Conn) {
+		defer func() { _ = conn.Close() }()
+		_, _ = io.Copy(conn, conn)
+	})
+	forward := startForward(t, ForwardConfig{Upstreams: []string{up.listener.Addr().String()}})
+	closed, err := net.Dial("tcp", forward.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = closed.Close()
+	silent, err := net.Dial("tcp", forward.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = silent.Close() }()
+	_ = silent.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := silent.Read(make([]byte, 1)); err == nil {
+		t.Fatal("a silent node connection was served")
+	}
+	if got := up.accepted.Load(); got != 0 {
+		t.Fatalf("the upstream accepted %d connections from nodes that sent nothing", got)
 	}
 }
 
@@ -249,6 +282,9 @@ func TestForwardCloseEndsOpenConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = node.Close() }()
+	if _, err := node.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
 	deadline := time.Now().Add(2 * time.Second)
 	for up.accepted.Load() < 1 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
