@@ -98,6 +98,9 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   may leave its old firewall rules behind, which the deployment layer
   must clean up.
   Subnet requests take IPv4 networks only (IPv6 with the next minor).
+  Two first reports of one node at the same time on PostgreSQL (no row to
+  lock yet) can overwrite each other once; no hold is released wrongly
+  (#652 recheck R-2).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
