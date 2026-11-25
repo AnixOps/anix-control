@@ -202,6 +202,7 @@ export default {
       forwardV4Dns: 'DNS 服务商',
       topology: '网络拓扑',
       lines: '线路',
+      mesh: '组网',
       forwardEgress: '域名分流',
       forwardStandby: '过境应急',
       reverseProxies: '反向代理',

@@ -53,6 +53,7 @@ export default {
         nodes: '节点',
         lines: '线路',
         topology: '拓扑',
+        mesh: '组网',
         forward: '转发',
         settings: '系统设置',
         security: '安全',

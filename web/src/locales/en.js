@@ -202,6 +202,7 @@ export default {
       forwardV4Dns: 'DNS providers',
       topology: 'Network topology',
       lines: 'Lines',
+      mesh: 'Mesh',
       forwardEgress: 'Domain egress',
       forwardStandby: 'Cross-border standby',
       reverseProxies: 'Reverse proxies',

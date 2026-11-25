@@ -16,6 +16,7 @@ import egressRoutes from './modules/zh-CN/egressRoutes'
 import standby from './modules/zh-CN/standby'
 import topology from './modules/zh-CN/topology'
 import lines from './modules/zh-CN/lines'
+import mesh from './modules/zh-CN/mesh'
 import reverseProxies from './modules/zh-CN/reverseProxies'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
 import realityTargets from './modules/zh-CN/realityTargets'
@@ -36,6 +37,7 @@ export default {
   ...egressRoutes,
   ...topology,
   ...lines,
+  ...mesh,
   ...standby,
   ...reverseProxies,
   ...nodeDiagnostics,

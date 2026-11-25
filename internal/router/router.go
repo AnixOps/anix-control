@@ -751,6 +751,33 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v5.POST("/net/lines", lines.Create)
 		v5.PUT("/net/lines/:id", lines.Update)
 		v5.DELETE("/net/lines/:id", lines.Delete)
+		// The intranet mesh's panel side (internal/meshregion,
+		// docs/design/mesh-regions): regions and border nodes, members and
+		// their addresses, host groups, device names, the intranet names
+		// and region changes awaiting approval.
+		mesh := handler.NewMeshHandler()
+		v5.GET("/mesh", mesh.Overview)
+		v5.PUT("/mesh/settings", mesh.UpdateSettings)
+		v5.POST("/mesh/regions", mesh.CreateRegion)
+		v5.PUT("/mesh/regions/:id", mesh.UpdateRegion)
+		v5.DELETE("/mesh/regions/:id", mesh.DeleteRegion)
+		v5.GET("/mesh/members", mesh.Members)
+		v5.POST("/mesh/members", mesh.CreateMember)
+		v5.PUT("/mesh/members/:id", mesh.UpdateMember)
+		v5.DELETE("/mesh/members/:id", mesh.DeleteMember)
+		v5.POST("/mesh/members/:id/move", mesh.MoveMember)
+		v5.GET("/mesh/host-groups", mesh.HostGroups)
+		v5.POST("/mesh/host-groups", mesh.CreateHostGroup)
+		v5.PUT("/mesh/host-groups/:id", mesh.UpdateHostGroup)
+		v5.DELETE("/mesh/host-groups/:id", mesh.DeleteHostGroup)
+		v5.GET("/mesh/device-names", mesh.DeviceNames)
+		v5.POST("/mesh/device-names", mesh.CreateDeviceName)
+		v5.PUT("/mesh/device-names/:id", mesh.UpdateDeviceName)
+		v5.DELETE("/mesh/device-names/:id", mesh.DeleteDeviceName)
+		v5.GET("/mesh/names", mesh.Names)
+		v5.GET("/mesh/region-changes", mesh.Changes)
+		v5.POST("/mesh/region-changes/:id/approve", mesh.ApproveChange)
+		v5.POST("/mesh/region-changes/:id/reject", mesh.RejectChange)
 	}
 
 	// Routes of the packages outside the community set (router_commercial.go).

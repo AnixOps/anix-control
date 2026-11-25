@@ -44,6 +44,7 @@ const AdminSystem = () => import('@/views/admin/System.vue')
 // forward package's v4 API (meta.capability, checked in the guard).
 const AdminTopology = () => import('@/views/admin/Topology.vue')
 const AdminLines = () => import('@/views/admin/Lines.vue')
+const AdminMesh = () => import('@/views/admin/Mesh.vue')
 const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
 const ForwardRoutes = () => import('@/views/admin/forward/Routes.vue')
 const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
@@ -200,6 +201,12 @@ const routes = [
         path: 'topology',
         component: AdminTopology,
         meta: { ...WIDE, titleKey: 'pageTitles.admin.topology' }
+      },
+      {
+        // 组网: the intranet mesh's regions, addresses and names.
+        path: 'mesh',
+        component: AdminMesh,
+        meta: { ...WIDE, titleKey: 'pageTitles.admin.mesh' }
       },
       {
         // A node's page (UI U7); ?section= picks the section.
