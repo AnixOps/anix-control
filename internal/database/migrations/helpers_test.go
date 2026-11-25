@@ -68,26 +68,36 @@ func postgresDSN(t *testing.T) string {
 }
 
 // openPostgresSchema opens a connection whose search_path is a new schema,
-// dropped when the test ends.
+// dropped when the test ends. The administrative connection is open only
+// while it creates or drops the schema: a test that opens a database per
+// migration would otherwise hold two connections per migration and run
+// out of the server's connection slots.
 func openPostgresSchema(t *testing.T, base string) *gorm.DB {
 	t.Helper()
 	suffix := make([]byte, 4)
 	_, err := rand.Read(suffix)
 	require.NoError(t, err)
 	schema := "migrations_" + hex.EncodeToString(suffix)
-	admin, err := gorm.Open(postgres.Open(base), quiet())
-	require.NoError(t, err)
-	adminDB, err := admin.DB()
-	require.NoError(t, err)
-	require.NoError(t, admin.Exec(`CREATE SCHEMA "`+schema+`"`).Error)
-	t.Cleanup(func() {
-		_ = admin.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error
-		_ = adminDB.Close()
-	})
+	require.NoError(t, adminExec(base, `CREATE SCHEMA "`+schema+`"`))
+	t.Cleanup(func() { _ = adminExec(base, `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`) })
 	db, err := gorm.Open(postgres.Open(base+" search_path="+schema), quiet())
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db
+}
+
+// adminExec runs statement on its own connection to base and closes it.
+func adminExec(base, statement string) error {
+	admin, err := gorm.Open(postgres.Open(base), quiet())
+	if err != nil {
+		return err
+	}
+	adminDB, err := admin.DB()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = adminDB.Close() }()
+	return admin.Exec(statement).Error
 }
