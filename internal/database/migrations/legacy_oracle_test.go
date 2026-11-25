@@ -233,6 +233,7 @@ func laterModels() []any {
 		&model.EntitlementDevice{},         // 0037_entitlement_devices
 		&model.ReachVantage{},              // 0039_reach_probes
 		&model.ReachProbe{},                // 0039_reach_probes
+		&model.NodeTemporaryProxy{},        // 0044_node_temporary_proxies
 	}
 }
 

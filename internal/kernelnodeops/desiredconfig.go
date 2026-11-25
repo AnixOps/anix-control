@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/tempproxy"
 	"github.com/AnixOps/anix-control/v5/internal/trafficqos"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -177,6 +178,15 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	}
 	if exit != nil {
 		document["exit_policy"] = exit
+	}
+	// The SOCKS5 proxies the node serves for a limited time on an internal
+	// address (internal/tempproxy), only while one is open.
+	proxies, err := tempproxy.NodeMember(db, id, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if proxies != nil {
+		document[tempproxy.Member] = proxies
 	}
 	return document, nil
 }
