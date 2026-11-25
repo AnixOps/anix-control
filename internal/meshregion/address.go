@@ -1,6 +1,7 @@
 package meshregion
 
 import (
+	"encoding/binary"
 	"net/netip"
 	"regexp"
 	"strings"
@@ -85,11 +86,21 @@ func parseAddr(field, raw string) (netip.Addr, error) {
 
 // lastAddr answers the last address of an IPv4 range.
 func lastAddr(prefix netip.Prefix) netip.Addr {
-	bytes := prefix.Masked().Addr().As4()
 	host := uint32(1)<<(32-prefix.Bits()) - 1
-	value := uint32(bytes[0])<<24 | uint32(bytes[1])<<16 | uint32(bytes[2])<<8 | uint32(bytes[3])
-	value |= host
-	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)})
+	return addrFromUint(addrToUint(prefix.Masked().Addr()) | host)
+}
+
+// addrToUint answers an IPv4 address as a big-endian number.
+func addrToUint(addr netip.Addr) uint32 {
+	bytes := addr.As4()
+	return binary.BigEndian.Uint32(bytes[:])
+}
+
+// addrFromUint answers the IPv4 address of a big-endian number.
+func addrFromUint(value uint32) netip.Addr {
+	var bytes [4]byte
+	binary.BigEndian.PutUint32(bytes[:], value)
+	return netip.AddrFrom4(bytes)
 }
 
 // usableIn tells whether addr may be a member's address in a region with

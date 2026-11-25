@@ -115,13 +115,11 @@ func pickSegment(tx *gorm.DB, settings model.MeshSettings, requested string) (ne
 		return segment, nil
 	}
 	step := uint32(1) << (32 - settings.HostGroupPrefix)
-	start := supernet.Masked().Addr().As4()
-	base := uint32(start[0])<<24 | uint32(start[1])<<16 | uint32(start[2])<<8 | uint32(start[3])
+	base := addrToUint(supernet.Masked().Addr())
 	count := uint32(1) << (settings.HostGroupPrefix - supernet.Bits())
 	for i := uint32(0); i < count; i++ {
 		value := base + i*step
-		addr := netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)})
-		segment := netip.PrefixFrom(addr, settings.HostGroupPrefix)
+		segment := netip.PrefixFrom(addrFromUint(value), settings.HostGroupPrefix)
 		if free(segment) {
 			return segment, nil
 		}
