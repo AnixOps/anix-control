@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -483,9 +484,18 @@ func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 	})
 }
 
+// findRegion reads a region a change is about to use, after locking its
+// row (findLockedRegion): a range or a state read before the lock could
+// change before the transaction ends.
 func findRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
+	return findLockedRegion(tx, id, row)
+}
+
+// readRegion reads a region without locking it, for an answer that
+// changes nothing.
+func readRegion(db *gorm.DB, id uint, row *model.MeshRegion) error {
 	var rows []model.MeshRegion
-	if err := tx.Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
+	if err := db.Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) == 0 {
@@ -742,9 +752,15 @@ func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) err
 		if err == nil || !isUniqueViolation(err) && !isRetryable(err) {
 			break
 		}
+		changeRetries.Add(1)
 		if attempt == 3 {
 			return conflict("a concurrent change conflicted with this one; try again")
 		}
+		// A short, growing and random pause, so that the transactions
+		// that collided do not collide again at once.
+		var jitter [1]byte
+		_, _ = rand.Read(jitter[:])
+		time.Sleep(time.Duration(attempt)*10*time.Millisecond + time.Duration(jitter[0]%10)*time.Millisecond)
 	}
 	if err != nil {
 		return err
@@ -816,6 +832,11 @@ func notify(nodes []agentcontrol.AgentNode) {
 		listener(nodes)
 	}
 }
+
+// changeRetries counts the transactions change ran again, which the
+// PostgreSQL tests read: with the regions locked in one order, changes at
+// the same time wait for each other instead of colliding.
+var changeRetries atomic.Int64
 
 // isRetryable tells whether PostgreSQL ended the transaction for a
 // deadlock (40P01) or a serialization failure (40001), after which the

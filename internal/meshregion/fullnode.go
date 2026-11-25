@@ -64,10 +64,16 @@ func findLockedRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
 // that may choose addresses in more than one region (a boundary node, a
 // move between regions) takes it first, so that two such changes, or one
 // and a change of a single region, always lock regions in the same order
-// and never wait on each other in a cycle.
+// and never wait on each other in a cycle. It takes the address plan lock
+// before (lockAddressPlan), which a new region takes too: a boundary node
+// that joins every region and a region created at the same time take
+// turns, so the node joins the new region.
 func lockAllRegions(tx *gorm.DB) error {
 	if tx.Name() != "postgres" {
 		return nil
+	}
+	if err := lockAddressPlan(tx); err != nil {
+		return err
 	}
 	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Order("id ASC").Find(&[]model.MeshRegion{}).Error
 }

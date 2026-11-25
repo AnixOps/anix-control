@@ -30,7 +30,12 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   to the node (a refused `mesh.region_request` is only in the panel); a
   warning when two gateways report the same instance id; IPv6 (fc00::/7)
   subnets for full nodes and listing the subnets a full node discovers
-  for confirmation.
+  for confirmation. The members', devices' and full node credentials'
+  addresses are kept unique by the region lock, not by the database: one
+  address table with a (region_id, address) unique index across the
+  three would make it a constraint. The PostgreSQL tests of
+  `internal/meshregion` create their tables with AutoMigrate, not the
+  migrations.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against
