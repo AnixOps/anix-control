@@ -93,7 +93,10 @@
       <p class="list-page__note">{{ t('mesh.page.note') }}</p>
     </template>
     <template v-if="!unavailable && loaded">
-      <MeshDevices v-if="section === 'devices'" :regions="regions" :pools="meshSummary?.pools || []" @changed="refreshAll" />
+      <template v-if="section === 'devices'">
+        <MeshDevices :regions="regions" :pools="meshSummary?.pools || []" @changed="refreshAll" />
+        <MeshEnrollments :regions="regions" @changed="refreshAll" />
+      </template>
       <MeshHostGroups v-else-if="section === 'hostGroups'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshNames v-else-if="section === 'names'" />
       <MeshChanges v-else-if="section === 'changes'" :regions="regions" :members="members" @changed="refreshAll" />
@@ -118,6 +121,7 @@ import MeshMemberSheet from '@/components/forward/MeshMemberSheet.vue'
 import MeshRegionSheet from '@/components/forward/MeshRegionSheet.vue'
 import MeshChanges from '@/components/forward/mesh/MeshChanges.vue'
 import MeshDevices from '@/components/forward/mesh/MeshDevices.vue'
+import MeshEnrollments from '@/components/forward/mesh/MeshEnrollments.vue'
 import MeshHostGroups from '@/components/forward/mesh/MeshHostGroups.vue'
 import MeshNames from '@/components/forward/mesh/MeshNames.vue'
 import MeshSettings from '@/components/forward/mesh/MeshSettings.vue'

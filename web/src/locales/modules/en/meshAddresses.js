@@ -25,6 +25,30 @@ export default {
       address: 'Address',
       name: 'Name'
     },
+    enrollments: {
+      title: 'Enrollment credentials',
+      description: 'Devices without an Agent join the mesh with a one-time enrollment credential, exchange it for a device token, then read their configuration and report their status periodically.',
+      issue: 'Issue enrollment credential',
+      issueTitle: 'Issue enrollment credential',
+      issueDescription: 'A credential can be used once. The device joins as a personal device with an address from the device pool.',
+      issueConfirm: 'Issue',
+      empty: 'No enrollment credentials',
+      loadFailed: 'Could not load the enrollment credentials',
+      anyRegion: 'Chosen by latency',
+      hours: 'Validity (hours)',
+      hoursHelp: '1 to 168 hours.',
+      token: 'Enrollment credential',
+      tokenHelp: 'The credential is shown only once. Copy it now and give it to the device user.',
+      done: 'Done',
+      state: 'State',
+      expires: 'Valid until',
+      withdraw: 'Withdraw',
+      states: {
+        valid: 'Unused',
+        used: 'Used',
+        expired: 'Expired'
+      }
+    },
     devices: {
       title: 'Devices',
       description: 'Phones and personal computers receive an address from their region\'s device pool. The address stays with the device and is reclaimed only after 30 days without use.',
@@ -49,6 +73,11 @@ export default {
       edit: 'Edit…',
       deleteTitle: 'Delete device {name}',
       deleteMessage: 'The device\'s address is released.',
+      revoke: 'Revoke token…',
+      revokeTitle: 'Revoke the device token of {name}',
+      revokeMessage: 'The device token stops working at once: the device can no longer read its configuration or report. The device and its address stay. Enrolling again needs a new credential.',
+      revokeConfirm: 'Revoke',
+      revoked: 'Revoked',
       warnings: {
         no_address: 'Address reclaimed',
         address_idle: 'Unused for 30 days'

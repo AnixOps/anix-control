@@ -85,7 +85,30 @@
 - Control 只接受组网成员节点的上报；不在任何地区的节点的上报按 `not_assigned` 拒绝。
 - `peers[].address`：落在某地区设备地址池中的地址视为在用，Control 据此刷新该设备的「最近使用」时间（R29：连续 30 天未使用才可回收）。
 
-## 4. 上报：`mesh.region_request`
+## 4. 无 Agent 设备（R31）
+
+未安装 Agent 的设备（无 Agent 节点的安装命令、手机与个人电脑的客户端）经 HTTP 接入，不走 Agent Control 流。功能 `mesh` 关闭时以下接口一律回 404 `feature_disabled`；接口按来源地址限流。
+
+1. 管理员在 节点 → 组网 → 设备 签发一次性接入凭证（`mse_` 开头），指定主机名（一个 DNS 标签）、地区（可不指定）与有效期（1 至 168 小时，默认 24）。凭证只显示一次，Control 只保存其 SHA-256。
+2. 设备以凭证接入：
+
+   ```
+   POST /api/v5/mesh/device/enroll
+   {"token":"mse_…","device_key":"<设备身份密钥，16 至 128 位 base64 字符>","latencies":{"cn":35.2,"eu":180}}
+   → 201 {"data":{"device_id":5,"device_token":"msd_…","config":{"networks":[…]}}}
+   ```
+
+   - `device_key`：设备应持久保存。同一 `device_key` 再次接入沿用原设备、地区与地址，旧设备令牌失效。
+   - `latencies`：设备到各地区的往返时延（毫秒，按地区代码），凭证未指定地区时取已启用地区中时延最低者。
+   - 凭证未知、已使用或已过期回 401 `unauthorized`。
+3. 此后以 `Authorization: Bearer <device_token>` 调用：
+   - `GET /api/v5/mesh/device/config`：回 `{"data":{"networks":[…]}}`，形状与第 2 节配置成员 `mesh` 的 `networks` 相同（无 `takeover`）：`role` 为 `access`、`listen` 为空，地址取自设备地址池，`peers` 为该地区的边界节点。地区停用时 `networks` 为空，设备应停止该网络。设备每分钟读取一次。
+   - `POST /api/v5/mesh/device/report`：请求体即第 3 节 `mesh.status` 载荷（不超过 256 KiB），成功回 204，不带任何指令。超过 3 分钟无上报显示为「控制面失联」。
+   - `POST /api/v5/mesh/device/region-change`：`{"region":"eu","reason":"可选，至多 500 字"}`，申请迁移到其他地区，回 201；管理员在「地区变更」中批准后设备获得新地区的地址，下次读取配置即生效。每台设备同时至多一个待审批申请。
+   - 令牌被吊销或设备被删除后回 401；重新接入需新凭证。
+4. 每次读取配置或上报都记为设备地址的使用；连续 30 天未使用的地址可回收给其他设备，设备再次读取配置时重新分配。
+
+## 5. 上报：`mesh.region_request`
 
 节点所有者在节点上申请迁往另一地区（R24，内核命令 `mesh_request_region`）时，Agent 发送 `PackageReport`：`plugin_id` `mesh`，`kind` `mesh.region_request`，`version` `v1`，协商规则同 `mesh.status`。
 
@@ -97,6 +120,6 @@
 - Control 以上报会话的节点身份记录一条来源为 `member` 的待处理申请，节点只能为自己申请。目标地区不存在、已是当前地区、节点不在组网中或已有待处理申请时按 `bad_payload` 拒绝。
 - 不回执；网络管理者在面板批准后，节点经配置推送获得新地区的网络与地址，拒绝时配置不变。
 
-## 5. 不在本约定内
+## 6. 不在本约定内
 
-入网凭据与无 Agent 节点的只读上报（R31）在后续阶段另行约定。设备地址池（R29）的分配与地区变更审批只在面板中，不经 Agent。Agent 节点不使用一次性入网凭据，直接以 mTLS 身份取得配置。
+Agent 节点不使用一次性接入凭证，直接以 mTLS 身份取得配置。接管设置（`takeover`）的面板入口、转发节点加入组网在后续阶段另行约定。

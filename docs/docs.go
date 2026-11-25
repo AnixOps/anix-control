@@ -6285,6 +6285,133 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/devices/{device_id}/revoke": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device's token is refused from now on; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Revoke an enrolled device's token",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/enrollments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh enrollment credentials",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.MeshEnrollment"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Issue a mesh enrollment credential",
+                "parameters": [
+                    {
+                        "description": "region_id, hostname, hours",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.EnrollmentInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.IssuedEnrollment"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/enrollments/{enrollment_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the credential; a device that already used it stays enrolled. Audited (module mesh, action mesh_enrollment_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Withdraw a mesh enrollment credential",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "credential id",
+                        "name": "enrollment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/host-groups": {
             "get": {
                 "security": [
@@ -8834,6 +8961,137 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/mesh/device/config": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device's networks in the shape of the Agent's member mesh: its region's network as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "A mesh device's networks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/mesh/device/enroll": {
+            "post": {
+                "description": "A device without an Agent exchanges a one-time credential (token) for its device token, sent as ` + "`" + `Authorization: Bearer \u003cdevice_token\u003e` + "`" + ` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps: enrolling the same key again keeps the device, its region and its address. latencies (milliseconds by region code) choose the region when the credential names none. 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "Enroll a mesh device",
+                "parameters": [
+                    {
+                        "description": "token, device_key, latencies",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.EnrollRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.Enrolled"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/mesh/device/region-change": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records the device's request to move to the region of code region, with an optional reason (at most 500 characters), for an administrator to approve or reject on the region changes. 409 mesh_conflict when a request is already pending. 401 for an unknown or revoked device token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "Ask to move a mesh device to another region",
+                "parameters": [
+                    {
+                        "description": "region, reason",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshDeviceChangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegionChange"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/mesh/device/report": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. 401 for an unknown or revoked device token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "Report a mesh device's status",
+                "parameters": [
+                    {
+                        "description": "mesh.status payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v5/net/lines": {
             "post": {
                 "security": [
@@ -9633,6 +9891,18 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshDeviceChangeRequest": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                },
+                "region": {
+                    "description": "Region is the code of the region to move to.",
+                    "type": "string"
+                }
+            }
+        },
         "handler.meshDeviceMoveRequest": {
             "type": "object",
             "properties": {
@@ -10062,6 +10332,10 @@ const docTemplate = `{
                     "description": "DeviceKey is the device's identity key once it enrolled; nil for a\ndevice an administrator added.",
                     "type": "string"
                 },
+                "enrolled": {
+                    "description": "Enrolled: the device holds a device token (enroll.go); LastSeenAt is\nits last read or report, Status its last report.",
+                    "type": "boolean"
+                },
                 "fqdn": {
                     "type": "string"
                 },
@@ -10072,11 +10346,20 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "last_seen_at": {
+                    "type": "string"
+                },
                 "region_code": {
                     "type": "string"
                 },
                 "region_id": {
                     "type": "integer"
+                },
+                "status": {
+                    "type": "object"
+                },
+                "status_received_at": {
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -10086,6 +10369,56 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "meshregion.EnrollRequest": {
+            "type": "object",
+            "properties": {
+                "device_key": {
+                    "type": "string"
+                },
+                "latencies": {
+                    "description": "Latencies are the device's round trips in milliseconds by region\ncode, for a credential without a region.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.Enrolled": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "device_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.EnrollmentInput": {
+            "type": "object",
+            "properties": {
+                "hostname": {
+                    "type": "string"
+                },
+                "hours": {
+                    "description": "Hours the credential stays valid: 1 to 168, 24 when 0.",
+                    "type": "integer"
+                },
+                "region_id": {
+                    "description": "RegionID 0 lets the device's latencies choose.",
+                    "type": "integer"
                 }
             }
         },
@@ -10136,6 +10469,39 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.IssuedEnrollment": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "hostname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_id": {
+                    "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
+                    "type": "integer"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "used_at": {
                     "type": "string"
                 }
             }
@@ -10455,6 +10821,36 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.MeshEnrollment": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "hostname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_id": {
+                    "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
+                    "type": "integer"
+                },
+                "used_at": {
                     "type": "string"
                 }
             }

@@ -49,6 +49,12 @@ type DeviceView struct {
 	RegionCode string   `json:"region_code"`
 	FQDN       string   `json:"fqdn"`
 	Warnings   []string `json:"warnings"`
+	// Enrolled: the device holds a device token (enroll.go); LastSeenAt is
+	// its last read or report, Status its last report.
+	Enrolled         bool            `json:"enrolled"`
+	LastSeenAt       *time.Time      `json:"last_seen_at"`
+	Status           json.RawMessage `json:"status,omitempty" swaggertype:"object"`
+	StatusReceivedAt *time.Time      `json:"status_received_at,omitempty"`
 }
 
 // pool answers the first and last address of the device pool of prefix:
@@ -208,6 +214,12 @@ func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) erro
 			Updates(map[string]any{"status": model.MeshChangeRejected, "note": "the device was removed", "decided_at": now}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("device_id = ?", id).Delete(&model.MeshDeviceToken{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("node_ref = ?", DeviceRef(id)).Delete(&model.MeshStatus{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&row).Error
 	})
 }
@@ -232,9 +244,31 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 	if err := query.Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	var tokens []model.MeshDeviceToken
+	if err := db.Find(&tokens).Error; err != nil {
+		return nil, err
+	}
+	seen := make(map[uint]*time.Time, len(tokens))
+	refs := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		seen[token.DeviceID] = token.LastSeenAt
+		refs = append(refs, DeviceRef(token.DeviceID))
+	}
+	var statuses []model.MeshStatus
+	if err := db.Where("node_ref IN ?", refs).Find(&statuses).Error; err != nil {
+		return nil, err
+	}
+	reports := make(map[string]model.MeshStatus, len(statuses))
+	for _, status := range statuses {
+		reports[status.NodeRef] = status
+	}
 	views := make([]DeviceView, 0, len(rows))
 	for _, row := range rows {
 		view := DeviceView{MeshDevice: row, RegionCode: codes[row.RegionID], Warnings: []string{}}
+		view.LastSeenAt, view.Enrolled = seen[row.ID]
+		if status, ok := reports[DeviceRef(row.ID)]; ok {
+			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
+		}
 		view.FQDN = fqdn(row.Hostname, view.RegionCode, settings.NameSuffix)
 		switch {
 		case row.Address == nil:

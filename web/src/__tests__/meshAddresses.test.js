@@ -11,12 +11,16 @@ const api = vi.hoisted(() => ({
   getKernelMeshNames: vi.fn(),
   listKernelMeshChanges: vi.fn(),
   decideKernelMeshChange: vi.fn(),
-  saveKernelMeshSettings: vi.fn()
+  saveKernelMeshSettings: vi.fn(),
+  listKernelMeshEnrollments: vi.fn(),
+  createKernelMeshEnrollment: vi.fn(),
+  revokeKernelMeshDevice: vi.fn()
 }))
 
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...api }))
 
 const MeshDevices = (await import('@/components/forward/mesh/MeshDevices.vue')).default
+const MeshEnrollments = (await import('@/components/forward/mesh/MeshEnrollments.vue')).default
 const MeshNames = (await import('@/components/forward/mesh/MeshNames.vue')).default
 const MeshChanges = (await import('@/components/forward/mesh/MeshChanges.vue')).default
 const MeshSettings = (await import('@/components/forward/mesh/MeshSettings.vue')).default
@@ -41,6 +45,39 @@ describe('mesh addresses', () => {
     expect(text).toContain('phone.cn.mesh.internal')
     expect(text).toContain('地址已回收')
     expect(text).toContain('已用 1 / 32767')
+    wrapper.unmount()
+  })
+
+  it('shows an enrolled device\'s reported status', async () => {
+    api.listKernelMeshDevices.mockResolvedValue([
+      { id: 3, region_id: 1, hostname: 'laptop', fqdn: 'laptop.cn.mesh.internal', address: '10.150.128.1', warnings: [], enrolled: true,
+        status: { networks: [{ id: 'cn', running: true }] }, status_received_at: new Date().toISOString() }
+    ])
+    const wrapper = mount(MeshDevices, { props: { regions: REGIONS, pools: [] }, attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="mesh-devices"]').text()).toContain('运行中')
+    wrapper.unmount()
+  })
+
+  it('lists the enrollment credentials and shows an issued token once', async () => {
+    api.listKernelMeshEnrollments.mockResolvedValue([
+      { id: 3, region_id: 0, hostname: 'laptop', expires_at: '2026-11-26T08:00:00Z', used_at: '2026-11-25T08:00:00Z', device_id: 5 }
+    ])
+    api.createKernelMeshEnrollment.mockResolvedValue({ id: 4, hostname: 'office', token: 'mse_ONETIME' })
+    const wrapper = mount(MeshEnrollments, { props: { regions: REGIONS }, attachTo: document.body })
+    await flushPromises()
+    const text = wrapper.get('[data-testid="mesh-enrollment-table"]').text()
+    expect(text).toContain('按延迟自动选择')
+    expect(text).toContain('已使用')
+    await wrapper.get('[data-testid="mesh-enrollment-add"]').trigger('click')
+    await flushPromises()
+    const input = document.querySelector('[data-testid="mesh-enrollment-hostname"] input') || document.querySelector('[data-testid="mesh-enrollment-form"] input')
+    input.value = 'office'
+    input.dispatchEvent(new Event('input'))
+    document.querySelector('[data-testid="mesh-enrollment-save"]').click()
+    await flushPromises()
+    expect(api.createKernelMeshEnrollment).toHaveBeenCalledWith(expect.objectContaining({ hostname: 'office', regionId: '0', hours: 24 }))
+    expect(document.querySelector('[data-testid="mesh-enrollment-issued"] input').value).toBe('mse_ONETIME')
     wrapper.unmount()
   })
 

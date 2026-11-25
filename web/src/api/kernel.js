@@ -855,6 +855,24 @@ export async function assignKernelMeshDeviceAddress(id) {
   return unwrap(await v4({ url: meshPath('devices', id, 'address'), method: 'post' }))
 }
 
+// Devices without an Agent: one-time enrollment credentials (the token is
+// answered only when issued) and revoking an enrolled device's token.
+export async function listKernelMeshEnrollments() {
+  return unwrap(await v4({ url: meshPath('enrollments'), method: 'get' }))
+}
+
+export async function createKernelMeshEnrollment({ regionId, hostname, hours }) {
+  return unwrap(await v4({ url: meshPath('enrollments'), method: 'post', data: { region_id: Number(regionId) || 0, hostname: String(hostname || '').trim(), hours: Number(hours) || 0 } }))
+}
+
+export async function deleteKernelMeshEnrollment(id) {
+  return unwrap(await v4({ url: meshPath('enrollments', id), method: 'delete' }))
+}
+
+export async function revokeKernelMeshDevice(id) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'revoke'), method: 'post' }))
+}
+
 export async function listKernelMeshHostGroups() {
   return unwrap(await v4({ url: meshPath('host-groups'), method: 'get' }))
 }
