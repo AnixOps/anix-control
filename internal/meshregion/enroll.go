@@ -382,6 +382,14 @@ func enrollmentRegion(tx *gorm.DB, id uint, latencies map[string]float64) (model
 	if best < 0 {
 		return region, invalid("latencies: the round trip to at least one enabled region, by code")
 	}
+	// Read again under the region's lock, which a change of its range
+	// takes too.
+	if err := findRegion(tx, region.ID, &region); err != nil {
+		return region, err
+	}
+	if !region.Enabled {
+		return region, conflict("the region %q was disabled meanwhile; enroll again", region.Code)
+	}
 	return region, nil
 }
 
@@ -431,7 +439,7 @@ func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
 func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now time.Time) (map[string]any, error) {
 	db = db.WithContext(ctx)
 	var region model.MeshRegion
-	if err := findRegion(db, device.RegionID, &region); err != nil {
+	if err := readRegion(db, device.RegionID, &region); err != nil {
 		return nil, err
 	}
 	if !region.Enabled {

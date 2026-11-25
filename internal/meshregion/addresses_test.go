@@ -2,6 +2,8 @@ package meshregion
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -369,7 +371,14 @@ func TestNormalizeName(t *testing.T) {
 	require.Equal(t, "xn--fiq"+strings.Repeat("a", 56), normalizeName(strings.Repeat("中", 85)))
 }
 
+// nameTableSHA256 is the SHA-256 of the generated name table. The node
+// kernel checks its copy against the same value, so the two cannot drift
+// apart; a new table changes it here and in the kernel together.
+const nameTableSHA256 = "f1f486fd79d9fd8b15183a5d4d1a6efa801af64c6744973d0c65ba958010cd7c"
+
 func TestNameTable(t *testing.T) {
+	sum := sha256.Sum256([]byte(nameTableText))
+	require.Equal(t, nameTableSHA256, hex.EncodeToString(sum[:]), "the table changed: update the kernel's copy and this value together")
 	table := loadNameTable()
 	require.True(t, table.kept('中'))
 	require.True(t, table.kept(0x0663), "Arabic-Indic digit three is Nd")

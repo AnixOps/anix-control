@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -171,6 +173,7 @@ func TestPostgresBoundaryNodesTogether(t *testing.T) {
 		require.NoError(t, err)
 		regions = append(regions, created)
 	}
+	retries := changeRetries.Load()
 	for round := 0; round < 3; round++ {
 		var fns []func() error
 		for i := 0; i < 3; i++ {
@@ -194,5 +197,76 @@ func TestPostgresBoundaryNodesTogether(t *testing.T) {
 		for _, home := range homes {
 			require.NoError(t, RemoveNode(ctx, db, home.ID))
 		}
+	}
+	require.Equal(t, retries, changeRetries.Load(), "no change collided: the regions are locked in one order")
+}
+
+// A range changes only while the region has no devices: a range change
+// and devices joining at the same time either refuse the change or give
+// the devices addresses of the new range, never of the old one.
+func TestPostgresRangeChangeTogether(t *testing.T) {
+	db := openPostgres(t)
+	ctx := context.Background()
+	for round := 0; round < 5; round++ {
+		created, err := CreateRegion(ctx, db, RegionInput{Code: fmt.Sprintf("r%d", round), Name: fmt.Sprintf("r%d", round), CIDR: fmt.Sprintf("10.152.%d.0/24", 2*round), Enabled: true}, now)
+		require.NoError(t, err)
+		fns := []func() error{func() error {
+			_, err := UpdateRegion(ctx, db, created.ID, RegionInput{Code: created.Code, Name: created.Name, CIDR: fmt.Sprintf("10.152.%d.0/24", 2*round+1), Enabled: true}, now)
+			if errors.Is(err, ErrConflict) {
+				return nil
+			}
+			return err
+		}}
+		for i := 0; i < 6; i++ {
+			fns = append(fns, func() error {
+				_, err := CreateDevice(ctx, db, created.ID, DeviceInput{Hostname: fmt.Sprintf("d-%d-%d", round, i)}, now)
+				return err
+			})
+		}
+		for i, err := range together(fns...) {
+			require.NoError(t, err, "round %d change %d", round, i)
+		}
+		var region model.MeshRegion
+		require.NoError(t, db.First(&region, created.ID).Error)
+		prefix := netip.MustParsePrefix(region.CIDR)
+		var devices []model.MeshDevice
+		require.NoError(t, db.Where("region_id = ?", region.ID).Find(&devices).Error)
+		require.Len(t, devices, 6)
+		for _, device := range devices {
+			require.True(t, prefix.Contains(netip.MustParseAddr(*device.Address)), "%s outside %s", *device.Address, region.CIDR)
+		}
+	}
+	requireDistinctAddresses(t, db)
+}
+
+// A full node's subnets and a new region over them, at the same time:
+// exactly one of the two is accepted.
+func TestPostgresPlanChangesTogether(t *testing.T) {
+	db := openPostgres(t)
+	ctx := context.Background()
+	home, err := CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "eu", CIDR: "10.152.0.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: home.ID, Hostname: "router", Role: RoleFull}, nil, now)
+	require.NoError(t, err)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: strings.Repeat("r", 32)}, now)
+	require.NoError(t, err)
+	for round := 0; round < 5; round++ {
+		subnet := fmt.Sprintf("192.168.%d.0/24", round)
+		errs := together(func() error {
+			_, err := SetDeviceSubnets(ctx, db, enrolled.DeviceID, []string{subnet}, now)
+			return err
+		}, func() error {
+			_, err := CreateRegion(ctx, db, RegionInput{Code: fmt.Sprintf("lan%d", round), Name: fmt.Sprintf("lan%d", round), CIDR: subnet}, now)
+			return err
+		})
+		accepted := 0
+		for _, err := range errs {
+			if err == nil {
+				accepted++
+			} else {
+				require.ErrorIs(t, err, ErrConflict)
+			}
+		}
+		require.Equal(t, 1, accepted, "round %d: %v", round, errs)
 	}
 }
