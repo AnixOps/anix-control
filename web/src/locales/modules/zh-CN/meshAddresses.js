@@ -193,7 +193,7 @@ export default {
       hostGroupPrefix: '宿主组地址段前缀长度',
       hostGroupHelp: '存在宿主组时不可更改。',
       reservedRanges: '保留网段',
-      reservedRangesHelp: '每行一个网段，地区与宿主组均不得与其重叠。',
+      reservedRangesHelp: '每行一个网段，地区与宿主组均不得与其重叠。用于迁移期间的旧网，前缀长度须与地区网段一致。',
       loadFailed: '无法加载组网设置'
     }
   }

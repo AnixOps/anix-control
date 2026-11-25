@@ -194,7 +194,7 @@ export default {
       hostGroupPrefix: 'Host group segment prefix length',
       hostGroupHelp: 'Cannot be changed while host groups exist.',
       reservedRanges: 'Reserved ranges',
-      reservedRangesHelp: 'One range per line. Regions and host groups may not overlap them.',
+      reservedRangesHelp: 'One range per line. Regions and host groups may not overlap them. For the old network during a migration; the prefix length must match the regions.',
       loadFailed: 'Mesh settings could not be loaded'
     }
   }
