@@ -83,9 +83,20 @@ func pickSegment(tx *gorm.DB, settings Settings, raw string) (netip.Prefix, erro
 	if err := tx.Model(&model.MeshHostGroup{}).Pluck("segment", &segments).Error; err != nil {
 		return netip.Prefix{}, err
 	}
+	// A segment an external bridge has not confirmed it dropped from its
+	// allow list stays out of use (heldPrefixes, read after the segments).
+	held, err := heldPrefixes(tx, 0)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
 	free := func(candidate netip.Prefix) bool {
 		for _, raw := range segments {
 			if other, err := netip.ParsePrefix(raw); err == nil && other.Overlaps(candidate) {
+				return false
+			}
+		}
+		for _, other := range held {
+			if other.Overlaps(candidate) {
 				return false
 			}
 		}
@@ -249,7 +260,8 @@ func findHostGroup(tx *gorm.DB, id uint, row *model.MeshHostGroup) error {
 }
 
 // checkGatewayStays refuses to move or remove a node that is a host
-// group's gateway or standby or publishes names: change those first.
+// group's gateway or standby, publishes names or is an external network
+// bridge: change those first.
 func checkGatewayStays(tx *gorm.DB, nodeRef string) error {
 	var groups int64
 	if err := tx.Model(&model.MeshHostGroup{}).Where("gateway_ref = ? OR standby_ref = ?", nodeRef, nodeRef).Count(&groups).Error; err != nil {
@@ -264,6 +276,13 @@ func checkGatewayStays(tx *gorm.DB, nodeRef string) error {
 	}
 	if names > 0 {
 		return conflict("the node publishes %d device names; remove them first", names)
+	}
+	bridge, err := isBridge(tx, nodeRef)
+	if err != nil {
+		return err
+	}
+	if bridge {
+		return conflict("the node is an external network bridge; remove the bridge first")
 	}
 	return nil
 }

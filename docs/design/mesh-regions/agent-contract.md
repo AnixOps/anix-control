@@ -30,7 +30,8 @@
       "subnets": { "accept": [], "advertise": [] },
       "routing": { "policy": "latency", "paths": [] },
       "dns": { "enabled": true, "suffix": "mesh.internal", "names": [{ "name": "nas.cn", "address": "10.150.128.7" }] },
-      "host_groups": [{ "cidr": "10.127.0.0/24", "gateway": "<实例 ID>", "backup_gateway": "<实例 ID>" }]
+      "host_groups": [{ "cidr": "10.127.0.0/24", "gateway": "<实例 ID>", "backup_gateway": "<实例 ID>" }],
+      "external_bridge": { "interface": "ext0", "routes": ["100.100.1.2/32", "192.168.50.0/24"], "allow": ["10.127.0.0/24", "10.150.128.7/32"] }
     }
   ],
   "takeover": { "process_names": [], "service_names": [], "config_paths": [] }
@@ -51,9 +52,10 @@
 | `routing` | `latency`，暂无自定义路径 |
 | `dns` | 内网域名（R28）：`suffix` 为面板设置的后缀；`names` 为全部地区的名称，`name` 写作「名称.地区代码」（不含后缀），来源为节点、设备、宿主组成员与网关局域网设备。重名的名称每个地址各下发一条，内核解析时返回全部地址并标出重名，面板同样标出「重名」。面板下发的名称优先于成员主机名。`resolver_address`：本地区的固定解析地址（规范 §15.9.2 第 8 条），见下文 |
 | `host_groups` | 宿主组（R21、R25）：网关所属地区的网络中列出该组；`gateway` / `backup_gateway` 为网关与备用网关上报的实例 ID（见第 3 节 `instance_id`）。网关未上报实例 ID 时不下发该组，备用网关未上报时省略 `backup_gateway` |
+| `external_bridge` | 外部网络桥接（R36，规范 §15.12，内核能力 `mesh_external_bridge`）：只在桥接节点所属地区的网络中出现，非桥接节点不带该节。`interface` 为节点在外部网络中的网卡名；`routes` 为管理员配置的外部地址（单个地址写作 `/32`、`/128`）与白名单内子网，面板已按规范校验；`allow` 为允许经桥接访问的来源，由面板按成员身份（节点、持有地址与静态公钥的设备、网关属于本地区的宿主组）展开为当前的虚拟地址 `/32` 与宿主组地址段，按地址排序。成员地址变更、移出地区、撤销或删除时面板立即重新下发 |
 | `takeover` | 部署层数据，由管理员在面板设置（后续阶段），仓库中无默认值；为空时省略 |
 
-`dns` 与 `host_groups` 只在对应内核版本支持后生效（内核拒绝未知字段）：Agent 按本机内核版本省略内核尚不支持的部分（包括 `dns.resolver_address`），面板始终下发。
+`dns`、`host_groups` 与 `external_bridge` 只在对应内核版本支持后生效（内核拒绝未知字段）：Agent 按本机内核版本省略内核尚不支持的部分（包括 `dns.resolver_address`；`external_bridge` 只交给列出 `mesh_external_bridge` 的内核），面板始终下发。
 
 普通节点 `networks` 只有所属地区一项；边界节点在每个已启用地区各一项。任一地区、成员或边界节点变更时，Control 立即推送受影响节点的配置。
 
@@ -75,7 +77,8 @@
       "peers": [{ "address": "10.150.0.1", "subnets": [], "via": [], "hops": 1, "latency_ms": 12, "forward_secrecy": true }],
       "rejected_advertisements": 0,
       "overlaps": [],
-      "alerts": [{ "code": "address_conflict", "address": "10.150.0.9", "peer": "", "detail": "" }]
+      "alerts": [{ "code": "address_conflict", "address": "10.150.0.9", "peer": "", "detail": "" }],
+      "external_bridge": { "allow": ["10.127.0.0/24", "10.150.128.7/32"] }
     }
   ],
   "takeover": { "found": false, "stopped": [], "error": "" }
@@ -86,6 +89,7 @@
 - `alerts.code`：`peer_not_native`（拒绝未准入节点，`peer` 为对端节点 ID；内核失败原因同名，Agent 也可原样放在网络的 `failure.code`，界面一并显示）、`native_keys_pending`（等待准入清单：清单为空或不含本机公钥，内核暂缓该网络，`detail` 为 `empty` 或 `self_missing`；同样可放在 `failure.code`。未运行的网络都因此暂缓时，节点状态显示「暂缓」而非「未运行」）、`native_keys_unsupported`（本机内核不支持准入清单，Agent 扣下该网络不交给内核；内核降级重启后也会出现）、`invalid_kind`（网络 `kind` 既不是 `managed` 也不是 `legacy`，区分大小写，Agent 扣下该网络，其他网络照常运行）、`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
 - Control 校验载荷为带 `networks` 数组的 JSON 对象，保存每个节点最新一份（`v5_mesh_status`）。
 - `instance_id`：内核的节点实例 ID（组网状态快照的 `self.id`，首次启动时生成，重启与升级不变），1–64 个字母、数字或连字符，首字符为字母或数字，不合规时按未上报处理。宿主组网关的实例 ID 新增或变化时，Control 立即推送该地区节点的配置。
+- `external_bridge.allow`：桥接节点内核**当前已应用**的来源名单（内核状态原样转述），未运行桥接的网络不带该节。规范 §15.12 第 4 条要求地址回收后先撤名单再分配：某地址或宿主组地址段从桥接节点的名单中移出后，面板把它记为「待桥接确认」，不再分配给其他成员或宿主组，直到该节点上报的、观测时间晚于移出时刻的名单中不再含它；桥接节点离线未确认期间一直保留，桥接列表标出 `bridge_unconfirmed` 并列出这些地址。设备地址池已满且唯一可回收的闲置地址在桥接名单中时，面板先从原设备收回该地址（本次分配回 `pool_full`），待桥接节点确认后再分配；同一时间每个地区只收回一个。节点离开该地区时，为它保留的地址随之释放（其静态公钥同时移出准入清单）。
 - 「控制面失联」由 Control 按最后接收时间判断（超过 3 分钟），Agent 不上报。
 
 - Control 只接受组网成员节点的上报；不在任何地区的节点的上报按 `not_assigned` 拒绝。

@@ -34,6 +34,7 @@ export default {
       unsetBoundary: '取消边界节点',
       remove: '移出组网…',
       boundary: '边界节点',
+      externalBridge: '外部网络桥接',
       member: '节点',
       columns: {
         region: '地区',

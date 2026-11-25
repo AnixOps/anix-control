@@ -213,6 +213,9 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 		if err := checkFullNodeSubnets(tx, "host_group_supernet", supernet); err != nil {
 			return err
 		}
+		if err := checkBridgeRoutes(tx, "host_group_supernet", supernet); err != nil {
+			return err
+		}
 		for _, raw := range reserved {
 			if err := checkFullNodeSubnets(tx, "reserved_ranges", netip.MustParsePrefix(raw)); err != nil {
 				return err

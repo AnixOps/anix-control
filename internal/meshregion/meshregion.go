@@ -133,6 +133,9 @@ type MemberView struct {
 	Status           json.RawMessage `json:"status" swaggertype:"object"`
 	StatusObservedAt *time.Time      `json:"status_observed_at"`
 	StatusReceivedAt *time.Time      `json:"status_received_at"`
+	// ExternalBridge: the node is an external network bridge of its home
+	// region (R36).
+	ExternalBridge bool `json:"external_bridge"`
 	// Warnings: WarningStaticKeyTaken when the node's static key in
 	// this region is a device's or another node's.
 	Warnings []string `json:"warnings"`
@@ -184,6 +187,14 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 	if err != nil {
 		return nil, err
 	}
+	var bridgeRefs []string
+	if err := db.Model(&model.MeshExternalBridge{}).Pluck("node_ref", &bridgeRefs).Error; err != nil {
+		return nil, err
+	}
+	bridges := make(map[string]bool, len(bridgeRefs))
+	for _, ref := range bridgeRefs {
+		bridges[ref] = true
+	}
 	answer := make([]Region, len(regions))
 	index := map[uint]int{}
 	for i, region := range regions {
@@ -204,7 +215,7 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		if !ok {
 			continue
 		}
-		view := MemberView{MeshMember: member, NodeName: infos[member.NodeRef].name, NodeHost: infos[member.NodeRef].host, Warnings: []string{}}
+		view := MemberView{MeshMember: member, NodeName: infos[member.NodeRef].name, NodeHost: infos[member.NodeRef].host, ExternalBridge: member.Home && bridges[member.NodeRef], Warnings: []string{}}
 		if warnings, ok := keyWarnings[member.ID]; ok {
 			view.Warnings = warnings
 		}
@@ -278,6 +289,9 @@ func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) e
 		}
 	}
 	if err := checkOutsideSettings(tx, prefix); err != nil {
+		return err
+	}
+	if err := checkBridgeRoutes(tx, "cidr", prefix); err != nil {
 		return err
 	}
 	return checkFullNodeSubnets(tx, "cidr", prefix)
@@ -783,7 +797,7 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 		if groups == nil {
 			groups = []map[string]any{}
 		}
-		networks = append(networks, map[string]any{
+		network := map[string]any{
 			"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
 			"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
@@ -793,7 +807,19 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			"routing":     map[string]any{"policy": policy, "paths": []any{}},
 			"dns":         regionDNS(dns, resolvers[region.ID]),
 			"host_groups": groups,
-		})
+		}
+		// An external network bridge bridges in its home region only
+		// (spec section 15.12).
+		if member.Home {
+			bridge, err := bridgeSection(db, node.String(), region.ID)
+			if err != nil {
+				return nil, err
+			}
+			if bridge != nil {
+				network["external_bridge"] = bridge
+			}
+		}
+		networks = append(networks, network)
 	}
 	if len(networks) == 0 {
 		return nil, nil
@@ -833,6 +859,11 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	if err := touchDevices(db, payload, observedAt); err != nil {
 		return err
 	}
+	// The allow list the node reports applied releases the addresses
+	// held for it (spec section 15.12 item 4).
+	if err := releaseHolds(db, node.String(), row.Payload, observedAt); err != nil {
+		return err
+	}
 	// A new or changed static key of the node changes its regions'
 	// native_keys.
 	if err := recordMemberKeys(ctx, db, node.String(), payload); err != nil {
@@ -869,7 +900,7 @@ func changeLast(ctx context.Context, db *gorm.DB, last string, write func(tx *go
 		return err
 	}
 	for attempt := 1; ; attempt++ {
-		err = db.Transaction(write)
+		err = db.Transaction(func(tx *gorm.DB) error { return withBridgeHolds(tx, write) })
 		if err == nil || !isUniqueViolation(err) && !isRetryable(err) {
 			break
 		}
@@ -882,6 +913,12 @@ func changeLast(ctx context.Context, db *gorm.DB, last string, write func(tx *go
 		var jitter [1]byte
 		_, _ = rand.Read(jitter[:])
 		time.Sleep(time.Duration(attempt)*10*time.Millisecond + time.Duration(jitter[0]%10)*time.Millisecond)
+	}
+	// The only address to reclaim is in an external bridge's allow
+	// list: it is taken from its device first (releaseFirst).
+	var release *releaseFirst
+	if errors.As(err, &release) {
+		return release.release(ctx, db)
 	}
 	if err != nil {
 		return err

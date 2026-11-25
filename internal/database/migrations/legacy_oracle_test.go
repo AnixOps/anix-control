@@ -245,6 +245,8 @@ func laterModels() []any {
 		&model.MeshEnrollment{},            // 0047_mesh_enrollment
 		&model.MeshDeviceToken{},           // 0047_mesh_enrollment
 		&model.MeshFullNode{},              // 0048_mesh_full_nodes
+		&model.MeshExternalBridge{},        // 0051_mesh_external_bridges
+		&model.MeshBridgeHold{},            // 0051_mesh_external_bridges
 	}
 }
 

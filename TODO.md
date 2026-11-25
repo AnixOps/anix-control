@@ -74,11 +74,16 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   take the fields too, and the Agents must report their static keys.
   Older devices without an Agent refuse the new fields and never give a
   key.
-  External bridge nodes (R36, kernel 0.4 / client 1.2): a node marked as
-  an external bridge advertises external /32 addresses and subnets (never
-  all of 100.64.0.0/10 nor a default route) to the members or host groups
-  allowed through it; those explicitly marked routes are exempt from the
-  `shared_address_space` warning. Follows the spec's 0.4 section.
+  External bridge nodes (R36, spec section 15.12): the panel side is
+  done for nodes with an Agent (0051_mesh_external_bridges). Still open:
+  bridges on full nodes without an Agent (0.5 installer); intranet names
+  for external devices (section 15.12 item 5); IPv6 allow entries once
+  members have IPv6 addresses; members of other regions in an allow list
+  (the external routes are advertised in the bridge's region only). The
+  Agent gives `external_bridge` only to kernels listing
+  `mesh_external_bridge`, and the kernel status must carry the applied
+  allow list (`networks[].external_bridge.allow`), which releases held
+  addresses.
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
@@ -86,14 +91,7 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   The Agent must leave out `dns.resolver_address` for kernels that do not
   take it (as for the other sections), or those kernels reject the whole
   configuration; devices without an Agent take it from the release that
-  supports it. Bridge allow lists (spec #328 U4, R36): configured by
-  member, delivered expanded to /32, /128 and host group segments, and
-  pushed again when a member changes or is revoked. Allow list entries
-  are keyed by device instance ID (spec #332). Before a reclaimed address
-  is given to another member, Control pushes the bridge nodes a list
-  without it and waits until each reports the list applied; while a
-  bridge node is offline or has not confirmed, the address is not given
-  out and the administrator is shown why.
+  supports it.
 - [ ] Mesh device configuration, audit lows (#643, #645; next minor
   version): more tests; avoid scanning every device on each config read;
   the node-side warning in the Agent contract; the Swagger text of the
