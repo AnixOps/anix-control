@@ -32,6 +32,15 @@ const (
 	// WarningAddressIdle: unused for PoolReclaimAfter; the address may go
 	// to another device.
 	WarningAddressIdle = "address_idle"
+	// WarningNoStaticKey: an enrolled device that has not named its
+	// static key yet; our nodes refuse it until its report does.
+	WarningNoStaticKey = "no_static_key"
+	// WarningStaticKeyMismatch: the device reports another static key
+	// than the one it is held to; it must enroll again to change it.
+	WarningStaticKeyMismatch = "static_key_mismatch"
+	// WarningStaticKeyTaken: the device reports a static key a member or
+	// another device has; it is not bound.
+	WarningStaticKeyTaken = "static_key_taken"
 )
 
 var deviceKeyPattern = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,128}$`)
@@ -290,6 +299,10 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 	for _, row := range rows {
 		ids = append(ids, row.ID)
 	}
+	owners, err := keyOwners(db)
+	if err != nil {
+		return nil, err
+	}
 	full, err := fullNodes(db, ids)
 	if err != nil {
 		return nil, err
@@ -306,6 +319,14 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
 		}
 		view.FQDN = fqdn(row.Hostname, view.RegionCode, settings.NameSuffix)
+		switch {
+		case view.Enrolled && row.StaticKey == nil && view.Status != nil && reportsTakenKey(owners, row, view.RegionCode, string(view.Status)):
+			view.Warnings = append(view.Warnings, WarningStaticKeyTaken)
+		case view.Enrolled && row.StaticKey == nil:
+			view.Warnings = append(view.Warnings, WarningNoStaticKey)
+		case view.Status != nil && keyMismatch(row, view.RegionCode, string(view.Status)):
+			view.Warnings = append(view.Warnings, WarningStaticKeyMismatch)
+		}
 		switch {
 		case row.Address == nil:
 			view.Warnings = append(view.Warnings, WarningNoAddress)

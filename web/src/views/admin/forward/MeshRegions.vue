@@ -194,7 +194,7 @@ const freeNodes = computed(() => {
 })
 const homeCount = region => region.members.filter(member => member.home).length
 const summary = member => statusSummary(member)
-const STATE_TONES = { none: 'neutral', running: 'success', stopped: 'warning', lost: 'danger' }
+const STATE_TONES = { none: 'neutral', running: 'success', pending: 'warning', stopped: 'warning', lost: 'danger' }
 const alertLabel = code => (te(`mesh.page.alerts.${code}`) ? t(`mesh.page.alerts.${code}`) : code)
 
 const regionColumns = computed(() => [

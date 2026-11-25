@@ -196,4 +196,7 @@
 //   - 0049_node_group_relays: v5_node_group.relays and release_caches, the
 //     region relays a group's nodes reach Control through
 //     (internal/nodegroup, docs/design/region-relay).
+//   - 0050_mesh_native_keys: v5_mesh_member.static_key and
+//     v5_mesh_device.static_key, the static public keys Control lists in
+//     each region network's native_keys (internal/meshregion).
 package migrations

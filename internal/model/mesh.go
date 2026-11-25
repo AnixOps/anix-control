@@ -33,10 +33,14 @@ type MeshMember struct {
 	ID       uint `gorm:"primaryKey" json:"id"`
 	RegionID uint `gorm:"not null;uniqueIndex:idx_v5_mesh_member_region_node,priority:1;uniqueIndex:idx_v5_mesh_member_region_address,priority:1" json:"region_id"`
 	// NodeRef is the node ("proxy-<id>" or "forward-<id>").
-	NodeRef   string    `gorm:"size:32;not null;uniqueIndex:idx_v5_mesh_member_region_node,priority:2;index" json:"node_ref"`
-	Address   string    `gorm:"size:15;not null;uniqueIndex:idx_v5_mesh_member_region_address,priority:2" json:"address"`
-	Home      bool      `gorm:"not null" json:"home"`
-	Boundary  bool      `gorm:"not null" json:"boundary"`
+	NodeRef  string `gorm:"size:32;not null;uniqueIndex:idx_v5_mesh_member_region_node,priority:2;index" json:"node_ref"`
+	Address  string `gorm:"size:15;not null;uniqueIndex:idx_v5_mesh_member_region_address,priority:2" json:"address"`
+	Home     bool   `gorm:"not null" json:"home"`
+	Boundary bool   `gorm:"not null" json:"boundary"`
+	// StaticKey is the node's static public key in this region's network
+	// as its Agent last reported it (0050_mesh_native_keys): 32 bytes of
+	// X25519 in standard base64; nil before the first report.
+	StaticKey *string   `gorm:"size:44" json:"static_key"`
 	CreatedAt time.Time `gorm:"not null" json:"created_at"`
 }
 
@@ -89,8 +93,12 @@ type MeshDevice struct {
 	// Address is nil after the address went to another device.
 	Address       *string    `gorm:"size:15;uniqueIndex:idx_v5_mesh_device_region_address,priority:2" json:"address"`
 	AddressUsedAt *time.Time `json:"address_used_at"`
-	CreatedAt     time.Time  `gorm:"not null" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"not null" json:"updated_at"`
+	// StaticKey is the device's static public key in its region's network
+	// (0050_mesh_native_keys), from its enrollment or its first report
+	// after it; nil before either and after a move to another region.
+	StaticKey *string   `gorm:"size:44" json:"static_key"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshDevice) TableName() string { return "v5_mesh_device" }

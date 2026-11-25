@@ -708,6 +708,10 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
+	keys, err := nativeKeys(db, ids)
+	if err != nil {
+		return nil, err
+	}
 	networks := []map[string]any{}
 	for _, region := range regions {
 		member, ok := mine[region.ID]
@@ -735,7 +739,8 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			groups = []map[string]any{}
 		}
 		networks = append(networks, map[string]any{
-			"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
+			"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
+			"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
 			"listen":      []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
 			"peers":       regionPeers,
@@ -783,6 +788,11 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	if err := touchDevices(db, payload, observedAt); err != nil {
 		return err
 	}
+	// A new or changed static key of the node changes its regions'
+	// native_keys.
+	if err := recordMemberKeys(ctx, db, node.String(), payload); err != nil {
+		return err
+	}
 	// A host group names its gateways by instance id: a new or changed id
 	// of a gateway changes the configuration of its region's nodes.
 	if statusInstanceID(row.Payload) == before[node.String()] {
@@ -801,6 +811,13 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 // unique indexes: a write that collides with a concurrent one runs again,
 // up to three times, and is then a conflict.
 func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) error {
+	return changeLast(ctx, db, "", write)
+}
+
+// changeLast is change that tells the listeners about the node last,
+// after every other node, when last is not empty: a node's new static key
+// reaches the other members before the node itself starts to use it.
+func changeLast(ctx context.Context, db *gorm.DB, last string, write func(tx *gorm.DB) error) error {
 	db = db.WithContext(ctx)
 	before, err := memberNodes(db)
 	if err != nil {
@@ -838,7 +855,21 @@ func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) err
 		}
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].String() < nodes[j].String() })
-	notify(nodes)
+	if last == "" {
+		notify(nodes)
+		return nil
+	}
+	others := make([]agentcontrol.AgentNode, 0, len(nodes))
+	var self []agentcontrol.AgentNode
+	for _, node := range nodes {
+		if node.String() == last {
+			self = append(self, node)
+		} else {
+			others = append(others, node)
+		}
+	}
+	notify(others)
+	notify(self)
 	return nil
 }
 

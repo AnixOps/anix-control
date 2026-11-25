@@ -94,7 +94,7 @@ const sheet = ref(null)
 const saving = ref(false)
 const saveError = ref('')
 
-const STATE_TONES = { none: 'neutral', running: 'success', stopped: 'warning', lost: 'danger' }
+const STATE_TONES = { none: 'neutral', running: 'success', pending: 'warning', stopped: 'warning', lost: 'danger' }
 const alertLabel = code => (te(`mesh.page.alerts.${code}`) ? t(`mesh.page.alerts.${code}`) : code)
 const regionName = id => props.regions.find(region => region.id === id)?.name || '—'
 const regionOptions = computed(() => props.regions.map(region => ({ value: String(region.id), label: `${region.name} (${region.code})` })))

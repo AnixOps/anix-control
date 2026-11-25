@@ -93,12 +93,12 @@ func TestEnrollmentIsUsedOnce(t *testing.T) {
 
 	// The report and the token show in the device list; revoking refuses
 	// the token.
-	require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, []byte(`[]`), now), ErrInvalid)
+	require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, second.DeviceToken, []byte(`[]`), now), ErrInvalid)
 	for _, bad := range []string{`{"networks":[{"peers":[{"latency_ms":-1}]}]}`, `{"networks":[{"peers":[{"latency_ms":"fast"}]}]}`} {
-		require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, []byte(bad), now), ErrInvalid, bad)
+		require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, second.DeviceToken, []byte(bad), now), ErrInvalid, bad)
 	}
-	require.NoError(t, RecordDeviceStatus(ctx, db, device, []byte(`{"networks":[{"peers":[{"latency_ms":12.5},{"latency_ms":null}]}]}`), now))
-	require.NoError(t, RecordDeviceStatus(ctx, db, device, []byte(`{"networks":[]}`), now))
+	require.NoError(t, RecordDeviceStatus(ctx, db, device, second.DeviceToken, []byte(`{"networks":[{"peers":[{"latency_ms":12.5},{"latency_ms":null}]}]}`), now))
+	require.NoError(t, RecordDeviceStatus(ctx, db, device, second.DeviceToken, []byte(`{"networks":[]}`), now))
 	views, err := Devices(ctx, db, 0, now)
 	require.NoError(t, err)
 	require.Len(t, views, 1)

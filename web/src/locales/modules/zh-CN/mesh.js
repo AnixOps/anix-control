@@ -45,6 +45,7 @@ export default {
       status: {
         none: '未上报',
         running: '运行中',
+        pending: '暂缓',
         stopped: '未运行',
         lost: '控制面失联'
       },
@@ -53,7 +54,9 @@ export default {
         address_unmanaged: '地址未受管',
         unsupported: '内核不支持组网',
         start_refused: '拒绝启动',
-        takeover_pending: '等待接管现有组网程序'
+        takeover_pending: '等待接管现有组网程序',
+        peer_not_native: '拒绝未准入节点',
+        native_keys_pending: '等待准入清单'
       }
     },
     region: {

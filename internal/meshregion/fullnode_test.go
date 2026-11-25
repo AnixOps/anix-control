@@ -54,7 +54,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "10.150.0.2", member.Address)
 
-	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: fixed.Token, DeviceKey: laptopKey}, now)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: fixed.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(1)}, now)
 	require.NoError(t, err)
 	network := enrolled.Config["networks"].([]map[string]any)[0]
 	require.Equal(t, RoleFull, network["role"])
@@ -64,7 +64,7 @@ func TestFullNodeCredentials(t *testing.T) {
 
 	// The lowest free address of the server segment, past the members and
 	// the full node.
-	server, err := Enroll(ctx, db, EnrollRequest{Token: auto.Token, DeviceKey: strings.Repeat("s", 32)}, now)
+	server, err := Enroll(ctx, db, EnrollRequest{Token: auto.Token, DeviceKey: strings.Repeat("s", 32), StaticKey: testStaticKey(2)}, now)
 	require.NoError(t, err)
 	require.Equal(t, "10.150.0.3/16", server.Config["networks"].([]map[string]any)[0]["address"])
 

@@ -158,6 +158,7 @@ every migration has both files; afterwards only the SQLite file remains.
 | `0047_mesh_enrollment` | Creates `v5_mesh_enrollment` (one-time enrollment credentials for mesh devices without an Agent: region or none, hostname, expiry, when and by which device it was used; the SHA-256 of the token only) and `v5_mesh_device_token` (the token each enrolled device reads its networks and reports with, SHA-256 only, and when it was last seen). Additive; rolling back to an older Control needs the pre-upgrade backup only to remove the tables |
 | `0048_mesh_full_nodes` | Creates `v5_mesh_full_node` (an enrollment credential, and the device it enrolled, that runs as a full mesh node without an Agent: its fixed address of the region's server segment and the subnets an administrator confirmed). Additive; rolling back to an older Control needs the pre-upgrade backup only to remove the table |
 | `0049_node_group_relays` | Adds `v5_node_group.relays` and `release_caches` (JSON arrays of the region relays, host:port, and their release caches, https URLs, that the group's nodes reach Control and download releases through; empty means none). Additive; an older Control ignores the columns |
+| `0050_mesh_native_keys` | Adds `v5_mesh_member.static_key` and `v5_mesh_device.static_key` (the static public key of each member and device in its region's network, 32 bytes of X25519 in standard base64, that Control lists in the network's `native_keys`; NULL until reported). Additive; an older Control ignores the columns |
 
 ## Adding A Migration
 

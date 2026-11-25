@@ -97,7 +97,7 @@ func (h *MeshHandler) DeleteMeshEnrollment(c *gin.Context) {
 
 // RevokeMeshDevice godoc
 // @Summary Revoke an enrolled device's token
-// @Description The device's token is refused from now on; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).
+// @Description The device's token is refused from now on and its static key leaves its region's native_keys; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -155,11 +155,11 @@ func meshDeviceError(c *gin.Context, err error) {
 
 // EnrollMeshDevice godoc
 // @Summary Enroll a mesh device
-// @Description A device without an Agent exchanges a one-time credential (token) for its device token, sent as `Authorization: Bearer <device_token>` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.
+// @Description A device without an Agent exchanges a one-time credential (token) for its device token, sent as `Authorization: Bearer <device_token>` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. static_key, when the device has one already, is its static public key in the region's network (32 bytes in standard base64 with padding), which the region's native_keys list; without it the device's first report names it, and it changes only with another enrollment. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.
 // @Tags Mesh
 // @Accept json
 // @Produce json
-// @Param request body meshregion.EnrollRequest true "token, device_key, latencies"
+// @Param request body meshregion.EnrollRequest true "token, device_key, latencies, static_key"
 // @Success 201 {object} meshregion.Enrolled
 // @Router /api/v5/mesh/device/enroll [post]
 func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
@@ -187,7 +187,7 @@ func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
 
 // MeshDeviceConfig godoc
 // @Summary A mesh device's networks
-// @Description The device's networks in the shape of the Agent's member mesh: its region's network as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
+// @Description The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
 // @Tags Mesh
 // @Produce json
 // @Security BearerAuth
@@ -208,7 +208,7 @@ func (h *MeshHandler) MeshDeviceConfig(c *gin.Context) {
 
 // MeshDeviceReport godoc
 // @Summary Report a mesh device's status
-// @Description The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. 401 for an unknown or revoked device token.
+// @Description The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. A device without a static key gets the one it reports for its region's network (networks[].static_key of the network whose id is the region code); later reports cannot change it. 401 for an unknown or revoked device token.
 // @Tags Mesh
 // @Accept json
 // @Security BearerAuth
@@ -225,7 +225,8 @@ func (h *MeshHandler) MeshDeviceReport(c *gin.Context) {
 		kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the report is too large")
 		return
 	}
-	if err := meshregion.RecordDeviceStatus(c.Request.Context(), h.db(), device, payload, h.now()); err != nil {
+	token, _ := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if err := meshregion.RecordDeviceStatus(c.Request.Context(), h.db(), device, token, payload, h.now()); err != nil {
 		meshError(c, err)
 		return
 	}

@@ -18,6 +18,8 @@
     {
       "id": "cn",
       "name": "mesh-cn",
+      "kind": "managed",
+      "native_keys": ["<静态公钥>"],
       "secret": "<网络密钥>",
       "secure_mode": true,
       "cipher": "aes-gcm",
@@ -39,6 +41,8 @@
 |---|---|
 | `id` | 地区代码，Agent 用作网络标识，去掉后其余字段即内核组网配置的扁平形式 |
 | `name` / `secret` | `mesh-<代码>`；密钥由 Control 生成（`crypto/rand.Text`），只出现在期望配置中 |
+| `kind` | 固定 `managed`：地区网络只接纳本方节点 |
+| `native_keys` | 准入清单：该地区网络全部成员节点（第 3 节 Agent 上报的 `static_key`）与持有设备令牌的无 Agent 设备（第 4 节）的静态公钥，每项为 32 字节 X25519 公钥的标准 base64（带填充，44 个字符），排序去重。尚无公钥时为空列表，内核暂缓该网络但仍生成并上报本机公钥。任一公钥新增、变化或移出时，Control 立即推送该地区节点的配置，节点自身的新公钥先推送给其他成员、最后推送给该节点（规格 §8.3.1 第 6 条）；清单之外的对端握手被拒，失败原因 `peer_not_native` |
 | `secure_mode` / `cipher` | 地区网络固定 `true`（R30）与 `aes-gcm` |
 | `address` | 节点在该地区服务器段（网段前半）的固定地址，带地区前缀长度 |
 | `role` / `listen` | 固定 `full`，监听 TCP 与 UDP 11010 |
@@ -65,6 +69,7 @@
       "id": "cn",
       "running": true,
       "error": "",
+      "static_key": "<本机在该网络的静态公钥>",
       "address": "10.150.0.5/16",
       "forward_secrecy": true,
       "peers": [{ "address": "10.150.0.1", "subnets": [], "via": [], "hops": 1, "latency_ms": 12, "forward_secrecy": true }],
@@ -77,7 +82,8 @@
 }
 ```
 
-- `alerts.code`：`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
+- `static_key`：本机内核在该网络的静态公钥（内核 `GET /v1/mesh` 的 `static_keys`，按网络名对应），格式同第 2 节 `native_keys`。Control 只采信 Agent 通道的值：新值或变化的值写入该节点在该地区的成员记录并列入 `native_keys`；格式不合规的值不采用。
+- `alerts.code`：`peer_not_native`（拒绝未准入节点，`peer` 为对端节点 ID；内核失败原因同名，Agent 也可原样放在网络的 `failure.code`，界面一并显示）、`native_keys_pending`（等待准入清单：清单为空或不含本机公钥，内核暂缓该网络，`detail` 为 `empty` 或 `self_missing`；同样可放在 `failure.code`。未运行的网络都因此暂缓时，节点状态显示「暂缓」而非「未运行」）、`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
 - Control 校验载荷为带 `networks` 数组的 JSON 对象，保存每个节点最新一份（`v5_mesh_status`）。
 - `instance_id`：内核的节点实例 ID（组网状态快照的 `self.id`，首次启动时生成，重启与升级不变），1–64 个字母、数字或连字符，首字符为字母或数字，不合规时按未上报处理。宿主组网关的实例 ID 新增或变化时，Control 立即推送该地区节点的配置。
 - 「控制面失联」由 Control 按最后接收时间判断（超过 3 分钟），Agent 不上报。
@@ -98,20 +104,21 @@
 
    ```
    POST /api/v5/mesh/device/enroll
-   {"token":"mse_…","device_key":"<设备身份密钥，16 至 128 位 base64 字符>","latencies":{"cn":35.2,"eu":180}}
+   {"token":"mse_…","device_key":"<设备身份密钥，16 至 128 位 base64 字符>","latencies":{"cn":35.2,"eu":180},"static_key":"<可选，静态公钥>"}
    → 201 {"data":{"device_id":5,"device_token":"msd_…","config":{"networks":[…]}}}
    ```
 
    - `device_key`：设备应持久保存。`device_key` 只是标识，不证明持有：新设备凭证遇到已登记的 `device_key` 回 409 `mesh_conflict`。重新接入须使用为该设备签发的凭证；设备已登记密钥时须与之一致（否则 401），未登记时以本次密钥登记。重新接入后旧设备令牌失效。
+   - `static_key`：可选，设备在所在地区网络的静态公钥（格式同第 2 节 `native_keys`，不合规回 400）。设备通常在取得配置后才有该网络的公钥，此时省略，由接入后首次上报提交（第 3 项）。为已有设备签发的凭证重新接入时，以本次提交的值替换原值（省略则清空，待首次上报）：更换公钥只能经重新接入。凭证首次使用后 10 分钟内的重试视同同一次接入：设备尚无公钥时登记本次的值，已有不同的公钥回 409。
    - `latencies`：设备到各地区的往返时延（毫秒，按地区代码，至多 64 项），凭证未指定地区时取已启用地区中时延最低者。
    - 凭证使用一次即作废，并发请求只有一个成功。接入应答丢失时，同一凭证与同一 `device_key` 在首次使用后 10 分钟内可再次接入，得到新令牌，此前的令牌失效。
    - 请求体不超过 16 KiB（否则 413）。凭证未知、已使用或已过期回 401 `unauthorized`。
 3. 此后以 `Authorization: Bearer <device_token>` 调用：
-   - `GET /api/v5/mesh/device/config`：回 `{"data":{"networks":[…]}}`，只含本设备的成员信息，字段固定为：`id`、`name`、`secret`、`secure_mode`、`cipher`、`address`、`role`、`listen`、`peers`（该地区的边界节点）、`subnets`、`routing`、`dns`（第 2 节）。设备拒绝其他字段，面板不经此接口下发任何指令。接入端：`role` 为 `access`，`listen` 与 `subnets` 为空，地址取自设备地址池。完整节点：`role` 为 `full`，`listen` 为 TCP 与 UDP 11010，地址为服务器段中的固定地址，`subnets.advertise` 为管理员确认的局域网网段（`PUT /api/v4/kernel/mesh/devices/{id}/subnets`），`subnets.accept` 为空。地区停用时 `networks` 为空，设备应停止该网络。设备每分钟读取一次。
-   - `POST /api/v5/mesh/device/report`：请求体即第 3 节 `mesh.status` 载荷（不超过 256 KiB；`peers[].latency_ms` 为 0 至 600000 的数值或 `null`，每个网络至多 1024 个对端），成功回 204，不带任何指令。最近一次上报超过 3 分钟，或接入后从未上报且超过 3 分钟未读取配置，显示为「控制面失联」。
+   - `GET /api/v5/mesh/device/config`：回 `{"data":{"networks":[…]}}`，只含本设备的成员信息，字段固定为：`id`、`name`、`kind`、`native_keys`、`secret`、`secure_mode`、`cipher`、`address`、`role`、`listen`、`peers`（该地区的边界节点）、`subnets`、`routing`、`dns`（第 2 节）。设备拒绝其他字段，面板不经此接口下发任何指令。接入端：`role` 为 `access`，`listen` 与 `subnets` 为空，地址取自设备地址池。完整节点：`role` 为 `full`，`listen` 为 TCP 与 UDP 11010，地址为服务器段中的固定地址，`subnets.advertise` 为管理员确认的局域网网段（`PUT /api/v4/kernel/mesh/devices/{id}/subnets`），`subnets.accept` 为空。地区停用时 `networks` 为空，设备应停止该网络。设备每分钟读取一次。
+   - `POST /api/v5/mesh/device/report`：请求体即第 3 节 `mesh.status` 载荷（不超过 256 KiB；`peers[].latency_ms` 为 0 至 600000 的数值或 `null`，每个网络至多 1024 个对端），成功回 204，不带任何指令。设备尚无静态公钥时，取上报中 `id` 为所在地区代码的网络的 `static_key` 登记，并推送该地区节点的配置；已登记后上报不同的值不予采用，设备列表标出「公钥不一致」，尚未登记的已接入设备标出「未登记公钥」。只有当前有效的设备令牌发出的上报才能登记（重新接入或吊销后，旧令牌在途的上报不予采用）；已属于成员或其他设备的公钥不予登记，标出「公钥与其他成员重复」，接入时提交这样的公钥回 409。设备经批准迁往其他地区时清空公钥（网络名改变，内核为新网络生成新公钥），由迁移后的首次上报重新登记。最近一次上报超过 3 分钟，或接入后从未上报且超过 3 分钟未读取配置，显示为「控制面失联」。
    - `POST /api/v5/mesh/device/region-change`：`{"region":"eu","reason":"可选，至多 500 字"}`，请求体不超过 16 KiB，申请迁移到其他地区，回 201；管理员在「地区变更」中批准后设备获得新地区的地址，下次读取配置即生效。每台设备同时至多一个待审批申请。
    - 令牌被吊销或设备被删除后回 401；重新接入需为该设备签发新凭证。
-4. 吊销与删除只作用于面板接口：设备仍持有地区网络密钥，可凭本地配置继续入网；删除后其地址可能分给其他设备。要阻止其入网，管理员须在地区列表中「更换网络密钥」（`POST /api/v4/kernel/mesh/regions/{id}/rotate-secret`）：新密钥立即推送到该地区全部节点，设备在下次读取配置时获得，期间该地区连接短暂中断。按成员的准入与吊销由内核在后续版本实现。
+4. 吊销与删除使设备的静态公钥移出 `native_keys`（吊销同时释放该公钥，重新接入时重新提交），Control 立即推送该地区节点的配置，各节点随即关闭并拒绝该设备的会话；删除后其地址可能分给其他设备。设备仍持有地区网络密钥，但地区网络只接纳清单中的公钥；如仍需更换网络密钥，在地区列表中「更换网络密钥」（`POST /api/v4/kernel/mesh/regions/{id}/rotate-secret`）：新密钥立即推送到该地区全部节点，设备在下次读取配置时获得，期间该地区连接短暂中断。
 5. 读取配置或上报都记为设备地址的使用（最近通信时间每分钟、地址使用时间每小时至多写入一次）；连续 30 天未使用的地址可回收给其他设备，设备再次读取配置时重新分配。完整节点的固定地址不回收。
 
 ## 5. 上报：`mesh.region_request`
