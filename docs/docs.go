@@ -10715,6 +10715,13 @@ const docTemplate = `{
                 },
                 "status_received_at": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings: WarningStaticKeyTaken when the node's static key in\nthis region is a device's or another node's.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
