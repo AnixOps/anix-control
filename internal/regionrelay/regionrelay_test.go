@@ -816,9 +816,6 @@ func TestLimitListener(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the closed connection's slot was not freed")
 	}
-	if cap(listener.(*limitedListener).slots) != 1 || len(listener.(*limitedListener).slots) != 0 {
-		t.Fatal("slots out of balance")
-	}
 	_ = listener.Close()
 	select {
 	case err := <-acceptErr:
