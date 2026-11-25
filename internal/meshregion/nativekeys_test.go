@@ -315,3 +315,28 @@ func TestDeviceConfigFollowsTheDeviceFeatures(t *testing.T) {
 	require.Empty(t, networks(nil), "a malformed list names nothing")
 	require.Contains(t, warnings(), WarningNativeKeysUnsupported)
 }
+
+func TestDeviceFeaturesFollowTheLatestReport(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "laptop", RegionID: cn.ID}, nil, now)
+	require.NoError(t, err)
+	// The enroll request's features answer only that request.
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: []string{"mesh", FeatureNativeKeys, FeatureResolverAddress}, Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(3)}, now)
+	require.NoError(t, err)
+	require.Len(t, enrolled.Config["networks"], 1)
+	device, err := Authenticate(ctx, db, enrolled.DeviceToken, now)
+	require.NoError(t, err)
+
+	// The kernel went back to a release without the admission list: its
+	// report, the latest, rules over the enrollment's list.
+	require.NoError(t, RecordDeviceStatus(ctx, db, device, enrolled.DeviceToken, []byte(`{"features":["mesh"],"networks":[]}`), now))
+	config, err := DeviceConfig(ctx, db, device, nil, now)
+	require.NoError(t, err)
+	require.Empty(t, config["networks"])
+	// A read naming its features rules over the report.
+	config, err = DeviceConfig(ctx, db, device, meshFeatures, now)
+	require.NoError(t, err)
+	require.Len(t, config["networks"], 1)
+}
