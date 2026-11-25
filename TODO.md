@@ -37,7 +37,16 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   `internal/meshregion` create their tables with AutoMigrate, not the
   migrations, and do not yet run enrollments or credentials against a
   range change. A partial unique index would hold a node or device to one
-  pending region change in the database too (now a lock of its row). The node kernel has
+  pending region change in the database too (now a lock of its row). Low
+  findings of the #634 re-review, for the next minor version: L-16
+  UpdateDevice always writes device_key (an empty input clears a key an
+  enrollment binds at the same time; write it only when it changes, on
+  the old value); L-17 device names read their host group without a
+  lock and UpdateDeviceName writes the whole row (lock the group row in
+  the three paths, DeleteHostGroup locks the group before its names, use
+  updateExisting); L-18 the rename test has no retry assertion or full
+  node, gateway and standby rows are not locked in id order, and a
+  request whose node was just moved answers 400 instead of 409. The node kernel has
   no copy of the name table yet: it is to embed
   `internal/meshregion/nametable-unicode-15.1.0.txt` and check the same
   SHA-256 as the panel's test.
