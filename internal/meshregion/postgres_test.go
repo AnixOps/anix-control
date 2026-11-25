@@ -408,9 +408,11 @@ func TestPostgresRenameTogether(t *testing.T) {
 		require.Equal(t, to.ID, row.RegionID, "round %d: the move stays", round)
 		require.Equal(t, fmt.Sprintf("m-%d-renamed", round), row.Hostname)
 		require.True(t, netip.MustParsePrefix(to.CIDR).Contains(netip.MustParseAddr(*row.Address)))
-		require.NoError(t, db.First(&row, lost.ID).Error)
-		require.NotNil(t, row.Address, "round %d: the new address stays", round)
-		require.Equal(t, fmt.Sprintf("l-%d-renamed", round), row.Hostname)
+		// A fresh row: First adds the primary key of a filled one.
+		var other model.MeshDevice
+		require.NoError(t, db.First(&other, lost.ID).Error)
+		require.NotNil(t, other.Address, "round %d: the new address stays", round)
+		require.Equal(t, fmt.Sprintf("l-%d-renamed", round), other.Hostname)
 		requireDistinctAddresses(t, db)
 	}
 }
