@@ -80,6 +80,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.L2Standby{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}, &model.ClientFailureReport{}, &model.Line{}, &model.Transport{}, &model.EntitlementDevice{}, &model.ReachVantage{}, &model.ReachProbe{}, &model.NodeTemporaryProxy{}, &model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}, &model.MeshSettings{}, &model.MeshDevice{}, &model.MeshHostGroup{}, &model.MeshDeviceName{}, &model.MeshRegionChange{}, &model.MeshEnrollment{}, &model.MeshDeviceToken{}))
 		require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
 		require.NoError(t, db.Exec("ALTER TABLE v4_kernel_lease DROP COLUMN generation").Error)
+		// 0048_node_group_relays added v5_node_group.relays and release_caches.
+		require.NoError(t, db.Exec("ALTER TABLE v5_node_group DROP COLUMN relays").Error)
+		require.NoError(t, db.Exec("ALTER TABLE v5_node_group DROP COLUMN release_caches").Error)
 		formerTableNames(t, db)
 		droppedTables(t, db)
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
