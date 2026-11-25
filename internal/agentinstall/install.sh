@@ -406,8 +406,9 @@ validate_args() {
   ((${#RELAYS[@]} <= MAX_RELAYS)) || die 2 "at most ${MAX_RELAYS} --relay"
   ((${#CACHES[@]} <= MAX_RELAYS)) || die 2 "at most ${MAX_RELAYS} --release-cache"
   for relay in ${RELAYS[@]+"${RELAYS[@]}"}; do
-    [[ "${relay}" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\]):[1-9][0-9]{0,4}$ ]] && ((${relay##*:} <= 65535)) ||
+    if [[ ! "${relay}" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\]):[1-9][0-9]{0,4}$ ]] || ((${relay##*:} > 65535)); then
       die 2 "--relay must be host:port ([v6]:port for an IPv6 address), not ${relay}"
+    fi
   done
   for cache in ${CACHES[@]+"${CACHES[@]}"}; do
     [[ "${cache}" =~ ^https://[][A-Za-z0-9.:-]+(/[A-Za-z0-9._~/-]*)?$ ]] ||
