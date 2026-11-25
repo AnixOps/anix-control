@@ -24,6 +24,30 @@ export default {
       address: '地址',
       name: '名称'
     },
+    enrollments: {
+      title: '接入凭证',
+      description: '未安装 Agent 的设备凭一次性接入凭证加入组网，换取设备令牌后定期读取配置并上报状态。',
+      issue: '签发接入凭证',
+      issueTitle: '签发接入凭证',
+      issueDescription: '凭证仅可使用一次。设备以个人设备身份加入，从设备地址池获得地址。',
+      issueConfirm: '签发',
+      empty: '暂无接入凭证',
+      loadFailed: '无法加载接入凭证',
+      anyRegion: '按延迟自动选择',
+      hours: '有效期（小时）',
+      hoursHelp: '1 至 168 小时。',
+      token: '接入凭证',
+      tokenHelp: '凭证仅显示一次，请立即复制并交给设备使用者。',
+      done: '完成',
+      state: '状态',
+      expires: '有效期至',
+      withdraw: '撤回',
+      states: {
+        valid: '未使用',
+        used: '已使用',
+        expired: '已过期'
+      }
+    },
     devices: {
       title: '设备',
       description: '手机与个人电脑从所在地区的设备地址池获得地址，地址按设备保持不变，连续 30 天未使用才可回收。',
@@ -46,6 +70,11 @@ export default {
       edit: '编辑…',
       deleteTitle: '删除设备 {name}',
       deleteMessage: '设备地址随即释放。',
+      revoke: '吊销令牌…',
+      revokeTitle: '吊销 {name} 的设备令牌',
+      revokeMessage: '设备令牌立即失效，设备无法再读取配置或上报状态；设备及其地址保留。重新接入需签发新凭证。',
+      revokeConfirm: '吊销',
+      revoked: '已吊销',
       warnings: {
         no_address: '地址已回收',
         address_idle: '30 天未使用'

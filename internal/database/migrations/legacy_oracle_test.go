@@ -242,6 +242,8 @@ func laterModels() []any {
 		&model.MeshHostGroup{},             // 0046_mesh_addresses
 		&model.MeshDeviceName{},            // 0046_mesh_addresses
 		&model.MeshRegionChange{},          // 0046_mesh_addresses
+		&model.MeshEnrollment{},            // 0047_mesh_enrollment
+		&model.MeshDeviceToken{},           // 0047_mesh_enrollment
 	}
 }
 

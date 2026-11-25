@@ -187,4 +187,7 @@
 //     publish and the region changes (v5_mesh_settings, v5_mesh_device,
 //     v5_mesh_host_group, v5_mesh_device_name, v5_mesh_region_change,
 //     internal/meshregion).
+//   - 0047_mesh_enrollment: one-time enrollment credentials for mesh
+//     devices without an Agent and the enrolled devices' tokens
+//     (v5_mesh_enrollment, v5_mesh_device_token, internal/meshregion).
 package migrations

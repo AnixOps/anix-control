@@ -161,7 +161,40 @@ const (
 	MeshChangeRejected = "rejected"
 )
 
-// MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses).
+// MeshEnrollment is a one-time enrollment credential for a device without
+// an Agent (R31): it is used once before ExpiresAt, and DeviceID is the
+// device that used it. Only the SHA-256 of its token is kept.
+type MeshEnrollment struct {
+	ID uint `gorm:"primaryKey" json:"id"`
+	// RegionID is the device's region; 0 lets the latencies the device
+	// reports choose among the enabled regions.
+	RegionID  uint       `gorm:"not null" json:"region_id"`
+	Hostname  string     `gorm:"size:63;not null" json:"hostname"`
+	TokenHash string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null" json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	DeviceID  *uint      `json:"device_id"`
+	CreatedBy *uint      `json:"created_by"`
+	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshEnrollment) TableName() string { return "v5_mesh_enrollment" }
+
+// MeshDeviceToken is the token an enrolled device reads its networks and
+// sends its status with; deleting the row revokes it. Only the SHA-256 of
+// the token is kept.
+type MeshDeviceToken struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	DeviceID   uint       `gorm:"not null;uniqueIndex" json:"device_id"`
+	TokenHash  string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
+	CreatedAt  time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshDeviceToken) TableName() string { return "v5_mesh_device_token" }
+
+// MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
+// 0047_mesh_enrollment).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}}
 }

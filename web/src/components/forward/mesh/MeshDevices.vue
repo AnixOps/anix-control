@@ -39,6 +39,8 @@
       </template>
       <template #cell-warnings="{ row }">
         <span class="mesh-badges">
+          <UiBadge v-if="row.enrolled" :tone="STATE_TONES[statusSummary(row).state]" :label="t(`mesh.page.status.${statusSummary(row).state}`)" />
+          <UiBadge v-for="code in row.enrolled ? statusSummary(row).alerts : []" :key="code" tone="danger" :label="alertLabel(code)" />
           <UiBadge v-for="code in row.warnings" :key="code" tone="warning" :label="t(`meshAddr.devices.warnings.${code}`)" />
         </span>
       </template>
@@ -65,18 +67,18 @@
 // 组网 → 设备: personal devices with their pool addresses (R29); an address
 // stays the device's until it has gone unused for 30 days.
 import { computed, onMounted, ref } from 'vue'
-import { MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { Ban, MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
-import { meshErrorMessage } from '../meshModel'
+import { createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
+import { meshErrorMessage, statusSummary } from '../meshModel'
 
 const props = defineProps({
   regions: { type: Array, default: () => [] },
   pools: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['changed'])
-const { t } = useAppI18n()
+const { t, te } = useAppI18n()
 const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
@@ -87,6 +89,8 @@ const sheet = ref(null)
 const saving = ref(false)
 const saveError = ref('')
 
+const STATE_TONES = { none: 'neutral', running: 'success', stopped: 'warning', lost: 'danger' }
+const alertLabel = code => (te(`mesh.page.alerts.${code}`) ? t(`mesh.page.alerts.${code}`) : code)
 const regionName = id => props.regions.find(region => region.id === id)?.name || '—'
 const regionOptions = computed(() => props.regions.map(region => ({ value: String(region.id), label: `${region.name} (${region.code})` })))
 const columns = computed(() => [
@@ -150,6 +154,30 @@ function rowActions(row) {
   return [
     { key: 'edit', label: t('meshAddr.devices.edit'), icon: Pencil, onSelect: () => openSheet('edit', row) },
     { key: 'move', label: t('meshAddr.devices.move'), icon: MoveRight, onSelect: () => openSheet('move', row) },
+    ...(row.enrolled
+      ? [{
+          key: 'revoke',
+          label: t('meshAddr.devices.revoke'),
+          icon: Ban,
+          danger: true,
+          separatorBefore: true,
+          onSelect: () => confirm({
+            title: t('meshAddr.devices.revokeTitle', { name: row.hostname }),
+            message: t('meshAddr.devices.revokeMessage'),
+            confirmLabel: t('meshAddr.devices.revokeConfirm'),
+            tone: 'danger',
+            onConfirm: async () => {
+              try {
+                await revokeKernelMeshDevice(row.id)
+              } catch (e) {
+                throw new Error(meshErrorMessage(e))
+              }
+              toast.success(t('meshAddr.devices.revoked'))
+              await load()
+            }
+          })
+        }]
+      : []),
     {
       key: 'delete',
       label: t('meshAddr.common.delete'),
