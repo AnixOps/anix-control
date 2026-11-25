@@ -105,6 +105,9 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   metric and rate-limit the warning log (S-1); the clock set-back test
   asserts the package-wide counter, which parallel tests would disturb
   (S-2).
+  Bridge downgrade residue (#655): show the alert's detail (the record
+  file's full path) next to its label (T-1); a test with two networks, one
+  reporting the alert and one releasing as usual (T-2).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
