@@ -8,6 +8,7 @@
 package relayroute
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,7 +164,9 @@ func OfGroup(group model.NodeGroup) Route {
 // ForNode answers the route of node: its group's, or an empty route for a
 // node without a group or of a deleted group.
 func ForNode(db *gorm.DB, node agentcontrol.AgentNode) (Route, error) {
-	var ids []*uint
+	// NullInt64: a node without a group has NULL, which a *uint pluck
+	// cannot scan on every driver.
+	var ids []sql.NullInt64
 	query := db.Model(&model.Node{})
 	if node.Kind == agentcontrol.NodeKindForward {
 		query = db.Model(&model.ForwardNode{})
@@ -173,11 +176,11 @@ func ForNode(db *gorm.DB, node agentcontrol.AgentNode) (Route, error) {
 	if err := query.Where("id = ?", node.ID).Limit(1).Pluck("node_group_id", &ids).Error; err != nil {
 		return Route{}, err
 	}
-	if len(ids) == 0 || ids[0] == nil {
+	if len(ids) == 0 || !ids[0].Valid {
 		return Route{}, nil
 	}
 	var groups []model.NodeGroup
-	if err := db.Where("id = ?", *ids[0]).Limit(1).Find(&groups).Error; err != nil {
+	if err := db.Where("id = ?", ids[0].Int64).Limit(1).Find(&groups).Error; err != nil {
 		return Route{}, err
 	}
 	if len(groups) == 0 {
