@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	mathrand "math/rand/v2"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -759,7 +758,9 @@ func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) err
 		}
 		// A short, growing and random pause, so that the transactions
 		// that collided do not collide again at once.
-		time.Sleep(time.Duration(attempt)*10*time.Millisecond + time.Duration(mathrand.IntN(10))*time.Millisecond)
+		var jitter [1]byte
+		_, _ = rand.Read(jitter[:])
+		time.Sleep(time.Duration(attempt)*10*time.Millisecond + time.Duration(jitter[0]%10)*time.Millisecond)
 	}
 	if err != nil {
 		return err
