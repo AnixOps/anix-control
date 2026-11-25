@@ -36,11 +36,12 @@
             :loading="loading"
             :error="loadError"
             :error-title="t('admin.nodes.table.loadFailed')"
-            :filtered="Boolean(search || statusFilter)"
+            :filtered="Boolean(search || statusFilter || groupFilter !== ALL_GROUPS)"
             :empty-icon="Server"
             :empty-title="t('admin.nodes.table.empty')"
             :empty-description="t('admin.nodes.table.emptyDescription')"
             :row-actions="nodeActions"
+            selectable
             activatable
             @update:sort="changeSort"
             @update:page="changePage"
@@ -59,6 +60,13 @@
                 @submit="searchNow"
               />
               <UiFilterChips v-model="statusFilter" :label="t('admin.nodes.filters.label')" :options="statusChips" />
+              <UiSelect
+                v-model="groupFilter"
+                size="md"
+                :aria-label="t('admin.nodes.filters.group')"
+                :options="groupChoices"
+                data-testid="node-group-filter"
+              />
               <p class="list-page__summary" data-testid="node-stats">
                 <span>{{ t('admin.nodes.stats.total') }} <strong>{{ stats.total }}</strong></span>
                 <span>{{ t('admin.nodes.stats.online') }} <strong>{{ stats.online }}</strong></span>
@@ -149,6 +157,9 @@
               />
               <span v-else>—</span>
             </template>
+            <template #bulk-actions="{ rows: chosen }">
+              <UiButton size="sm" :icon="FolderInput" data-testid="bulk-move-group" @click="openMove(chosen)">{{ t('admin.nodes.move.action') }}</UiButton>
+            </template>
           </UiDataTable>
         </div>
       </template>
@@ -165,12 +176,14 @@
           @reload="groupsState.load()"
           @toggle-approval="(group, value) => toggleApproval(group, value)"
         />
+        <NodeNetworkGroups />
       </template>
     </UiTabs>
 
     <NodeFormSheet v-model:open="formOpen" :node="editingNode" :candidates="nodes" @saved="reload" />
     <NodeJoinSheet v-model:open="joinOpen" :group-id="joinGroupId" @changed="reloadAll" />
     <NodeGroupSheet v-model:open="groupFormOpen" :group="editingGroup" @saved="reloadAll" />
+    <NodeGroupMoveDialog v-model:open="moveOpen" :nodes="movingNodes" :groups="groupsState.groups.value" @moved="reloadAll" />
   </div>
 </template>
 
@@ -178,18 +191,20 @@
 // Nodes (plan §7.1, §8.2; 5.0 node onboarding): one entry point for a new
 // machine, 接入节点, and two tabs. 节点 is the proxy nodes in a UiDataTable
 // with server search, status chips (and 待确认, the nodes waiting for an
-// administrator), sort and pages (all in the URL); a row opens the node page
+// administrator), a node group filter, sort and pages (all in the URL); rows
+// move into a node group one by one or selected together; a row opens the node page
 // (/admin/nodes/:id) and pending rows carry 批准 and 拒绝. The Agent connection,
 // certificate and version of the nodes in view come from one batched
 // inventory call after the list has loaded (it never holds the list up), and
 // so does their systemd services summary (服务状态, the machine-telemetry
 // package's; a dash without the package, its host or its permission). 节点组
-// lists the node groups behind the join command. There is one kind of node:
+// lists the node groups: an administrator's grouping, each with the join
+// command and the defaults of the nodes that join through it. There is one kind of node:
 // relaying is the network model's (ANX), not a kind of node.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, Cpu, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
+import { Check, Cpu, FileText, FolderInput, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
 import { getNodeStats } from '@/api/admin'
 import { approveKernelNode, getKernelAdminNodes, rejectKernelNode } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -198,6 +213,7 @@ import UiDataTable from '@/ui/UiDataTable.vue'
 import UiFilterChips from '@/ui/UiFilterChips.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
 import UiSearchField from '@/ui/UiSearchField.vue'
+import UiSelect from '@/ui/UiSelect.vue'
 import UiTabs from '@/ui/UiTabs.vue'
 import UiUsageBar from '@/ui/UiUsageBar.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
@@ -211,9 +227,11 @@ import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import NodeCertificateCell from './nodes/NodeCertificateCell.vue'
 import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'
 import NodeFormSheet from './nodes/NodeFormSheet.vue'
+import NodeGroupMoveDialog from './nodes/NodeGroupMoveDialog.vue'
 import NodeGroupSheet from './nodes/NodeGroupSheet.vue'
 import NodeGroupsPanel from './nodes/NodeGroupsPanel.vue'
 import NodeJoinSheet from './nodes/NodeJoinSheet.vue'
+import NodeNetworkGroups from './nodes/NodeNetworkGroups.vue'
 import NodeNotice from './nodes/NodeNotice.vue'
 import NodeServiceStatusCell from './nodes/NodeServiceStatusCell.vue'
 import NodeReachCell from './nodes/NodeReachCell.vue'
@@ -262,6 +280,9 @@ const stats = reactive({ total: 0, online: 0, offline: 0, pending: 0 })
 const pagination = reactive({ page: Math.max(1, Number(firstQuery('page')) || 1), size: 20, total: 0 })
 const search = ref(firstQuery('q'))
 const statusFilter = ref([...STATUS_VALUES, AWAITING].includes(firstQuery('status')) ? firstQuery('status') : '')
+// ?group=<id>, or 0 for the nodes without a group; absent is every node.
+const ALL_GROUPS = 'all'
+const groupFilter = ref(/^\d+$/.test(firstQuery('group')) ? firstQuery('group') : ALL_GROUPS)
 const sortState = ref(NODE_SORT.fromQuery(
   NODE_SORT.values.includes(firstQuery('sort')) ? firstQuery('sort') : '',
   SORT_ORDERS.includes(firstQuery('order')) ? firstQuery('order') : ''
@@ -276,6 +297,8 @@ const joinOpen = ref(false)
 const joinGroupId = ref(null)
 const groupFormOpen = ref(false)
 const editingGroup = ref(null)
+const moveOpen = ref(false)
+const movingNodes = ref([])
 
 // ?tab=groups; 节点 is the default and leaves the query clean.
 const TABS = ['groups']
@@ -306,6 +329,12 @@ const statusChips = computed(() => [...['online', 'offline', 'disabled', 'pendin
   value,
   label: t(`admin.nodes.statusText.${value}`)
 })), { value: AWAITING, label: t('admin.nodes.approval.pending') }])
+
+const groupChoices = computed(() => [
+  { value: ALL_GROUPS, label: t('admin.nodes.filters.allGroups') },
+  ...groupsState.groups.value.map(group => ({ value: String(group.id), label: group.name })),
+  { value: '0', label: t('admin.nodes.move.none') }
+])
 
 const parentName = (parentId) => {
   if (!parentId) return ''
@@ -348,7 +377,7 @@ const columns = computed(() => [
   { key: 'id', label: t('admin.nodes.table.id'), numeric: true, hidden: true, width: 72 },
   { key: 'name', label: t('admin.nodes.table.name'), primary: true, hideable: false },
   { key: 'address', label: t('admin.nodes.table.address'), secondary: true, nowrap: true },
-  { key: 'nodeGroup', label: t('admin.nodes.table.nodeGroup'), nowrap: true, value: node => node.node_group_name || '', hidden: true, card: false },
+  { key: 'nodeGroup', label: t('admin.nodes.table.nodeGroup'), nowrap: true, value: node => node.node_group_name || '', card: false },
   { key: 'protocols', label: t('admin.nodes.table.protocols'), numeric: true, align: 'end', nowrap: true, value: node => node.protocols?.length || 0, card: false },
   { key: 'status', label: t('admin.nodes.table.status') },
   { key: 'connection', label: t('admin.nodes.table.connection'), nowrap: true, breakpoint: 'lg', hidden: true, card: false },
@@ -377,6 +406,7 @@ const nodeActions = node => [
   { key: 'sync', label: t('admin.nodes.actions.syncReload'), icon: RefreshCcw, disabled: syncingNodeIds.has(node.id), onSelect: () => syncNode(node) },
   { key: 'upgradeKernel', label: t('admin.nodes.actions.upgradeKernel'), icon: Cpu, onSelect: () => openKernelUpgrade(nodeRef(node.id)) },
   { key: 'edit', label: t('admin.nodes.actions.edit'), icon: Pencil, onSelect: () => openEdit(node) },
+  { key: 'move', label: t('admin.nodes.move.action'), icon: FolderInput, onSelect: () => openMove([node]) },
   { key: 'delete', label: t('admin.nodes.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => deleteFromList(node) }
 ]
 
@@ -385,6 +415,7 @@ function listParams() {
   if (search.value.trim()) params.search = search.value.trim()
   if (statusFilter.value === AWAITING) params.approval = 'pending'
   else if (statusFilter.value) params.status = NODE_STATUS[statusFilter.value]
+  if (groupFilter.value !== ALL_GROUPS) params.node_group_id = Number(groupFilter.value)
   return { ...params, ...NODE_SORT.toParams(sortState.value) }
 }
 
@@ -394,6 +425,7 @@ function syncQuery({ url = true } = {}) {
   const query = {}
   if (search.value.trim()) query.q = search.value.trim()
   if (statusFilter.value) query.status = statusFilter.value
+  if (groupFilter.value !== ALL_GROUPS) query.group = groupFilter.value
   const { sort, order } = NODE_SORT.toQuery(sortState.value)
   if (sort) {
     query.sort = sort
@@ -405,6 +437,7 @@ function syncQuery({ url = true } = {}) {
   const current = { ...route.query }
   delete current.q
   delete current.status
+  delete current.group
   delete current.sort
   delete current.order
   delete current.page
@@ -482,13 +515,15 @@ function searchNow() {
   loadNodes()
 }
 
-watch(statusFilter, () => searchNow())
+watch([statusFilter, groupFilter], () => searchNow())
 
 function clearFilters() {
   search.value = ''
-  // Clearing the chip reloads through the watcher.
-  if (statusFilter.value) statusFilter.value = ''
-  else searchNow()
+  // Clearing a filter reloads through the watcher.
+  if (statusFilter.value || groupFilter.value !== ALL_GROUPS) {
+    statusFilter.value = ''
+    groupFilter.value = ALL_GROUPS
+  } else searchNow()
 }
 
 // The banner's 查看: the nodes waiting for approval, filtered on the nodes
@@ -540,6 +575,12 @@ async function decide(node, action) {
 function openJoin(group = null) {
   joinGroupId.value = group?.id ?? null
   joinOpen.value = true
+}
+
+// 移动到分组, for one row or the selected rows.
+function openMove(chosen) {
+  movingNodes.value = chosen
+  moveOpen.value = true
 }
 
 function openGroupCreate() {

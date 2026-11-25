@@ -203,4 +203,6 @@
 //     and the addresses held back until a bridge node confirms its new
 //     allow list (v5_mesh_external_bridge, v5_mesh_bridge_hold,
 //     internal/meshregion).
+//   - 0052_drop_legacy_node_tag: data only; v5_node.tags "legacy-node"
+//     (the only tag of the nodes from before the 5.0 Agent) becomes NULL.
 package migrations

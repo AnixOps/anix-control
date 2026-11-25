@@ -36,7 +36,8 @@ const kernelApi = vi.hoisted(() => ({
   listKernelNodeGroups: vi.fn(),
   approveKernelNode: vi.fn(),
   rejectKernelNode: vi.fn(),
-  getKernelReach: vi.fn()
+  getKernelReach: vi.fn(),
+  listKernelMeshRegions: vi.fn(async () => [])
 }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
 
@@ -506,7 +507,7 @@ describe('Nodes.vue', () => {
       expect(wrapper.find('[data-testid="node-groups-panel"]').text()).toContain('2')
 
       const tabs = wrapper.findAll('[role="tab"]')
-      expect(tabs.map(tab => tab.text())).toEqual(expect.arrayContaining([expect.stringContaining('Nodes'), expect.stringContaining('Node groups')]))
+      expect(tabs.map(tab => tab.text())).toEqual(expect.arrayContaining([expect.stringContaining('Nodes'), expect.stringContaining('Groups')]))
       await tabs.find(tab => tab.text().startsWith('Nodes')).trigger('mousedown')
       await flushPromises()
       expect(router.currentRoute.value.query.tab).toBeUndefined()
@@ -524,26 +525,24 @@ describe('Nodes.vue', () => {
       }]
     }
 
-    it('shows the certificate, the Agent version and when it was last seen by default; the group and connection are one click away', async () => {
+    it('shows the node group, the certificate, the Agent version and when it was last seen by default; the connection is one click away', async () => {
       kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [node], total: 1 })
       kernelApi.getKernelAgentTransports.mockResolvedValue(inventory)
       const user = userEvent.setup()
       const { wrapper } = await mountNodes()
 
       const headers = () => wrapper.findAll('thead th').map(th => th.text())
-      expect(headers()).toEqual(expect.arrayContaining(['Certificate', 'Agent version', 'Last seen']))
+      expect(headers()).toEqual(expect.arrayContaining(['Node group', 'Certificate', 'Agent version', 'Last seen']))
       expect(headers()).not.toContain('Connection')
-      expect(headers()).not.toContain('Node group')
+      expect(wrapper.find('tbody').text()).toContain('HK')
       // The Agent's own version wins over the one the node row remembers.
       expect(wrapper.find('[data-testid="node-agent-version"]').text()).toBe('v5.0.0')
       expect(wrapper.find('[data-testid="node-certificate"]').attributes('data-certificate')).toBe('valid')
 
       await user.click(screen.getByRole('button', { name: 'Table settings' }))
       const menu = await screen.findByRole('menu')
-      await user.click(within(menu).getByRole('menuitemcheckbox', { name: 'Node group' }))
       await user.click(within(menu).getByRole('menuitemcheckbox', { name: 'Connection' }))
-      expect(headers()).toEqual(expect.arrayContaining(['Node group', 'Connection']))
-      expect(wrapper.find('tbody').text()).toContain('HK')
+      expect(headers()).toContain('Connection')
       expect(wrapper.find('[data-testid="node-connection"]').attributes('data-connection')).toBe('mtls_stream')
     })
 

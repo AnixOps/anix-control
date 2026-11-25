@@ -25,7 +25,10 @@ const kernel = vi.hoisted(() => ({
   deleteKernelNodeGroup: vi.fn(),
   getKernelInstallReadiness: vi.fn(),
   getKernelNodeGroupCommand: vi.fn(),
-  getKernelNodeGroupNodes: vi.fn()
+  getKernelNodeGroupNodes: vi.fn(),
+  moveKernelNodesToGroup: vi.fn(),
+  getKernelReach: vi.fn(async () => ({})),
+  listKernelMeshRegions: vi.fn()
 }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernel }))
 vi.mock('@/api/machineTelemetry', async importOriginal => ({
@@ -75,6 +78,7 @@ describe('node groups', () => {
     kernel.getKernelAdminNodes.mockResolvedValue({ list: [], total: 0 })
     kernel.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernel.listKernelNodeGroups.mockResolvedValue({ groups: [hk(), edge()] })
+    kernel.listKernelMeshRegions.mockResolvedValue([])
     admin.getNodeStats.mockResolvedValue({ data: { total: 0, online: 0, offline: 0, pending: 0 } })
     admin.getSubscriptionGroups.mockResolvedValue({ data: [{ id: 9, name: 'default' }, { id: 10, name: 'vip' }] })
   })
@@ -266,5 +270,60 @@ describe('node groups', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     await waitFor(() => expect(toastMessages('success')).toEqual(['Node group HK deleted']))
     await waitFor(() => expect(within(screen.getByTestId('node-groups-panel')).queryByText('HK')).toBeNull())
+  })
+
+  it('moves a node into a group from its row, and selected nodes out of every group', async () => {
+    const user = userEvent.setup()
+    kernel.getKernelAdminNodes.mockResolvedValue({
+      list: [
+        { id: 29, name: 'JP', host: 'jp.example.com', status: 1, node_group_id: null, node_group_name: '' },
+        { id: 33, name: 'US', host: 'us.example.com', status: 1, node_group_id: 4, node_group_name: 'edge' }
+      ],
+      total: 2
+    })
+    kernel.listKernelNodeGroups.mockResolvedValue({ groups: [hk({ relays: ['relay.example.com:443'] }), edge()] })
+    kernel.moveKernelNodesToGroup.mockResolvedValue({ group_id: 3, nodes: ['proxy-29'] })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/admin/nodes', component: Harness }, { path: '/admin/nodes/:id', component: { template: '<div />' } }]
+    })
+    await router.push('/admin/nodes')
+    await router.isReady()
+    render(Harness, { global: { plugins: [router] } })
+
+    await rowAction(user, 'JP', 'Move to node group')
+    let dialog = await screen.findByRole('alertdialog', { name: 'Move node JP' })
+    await user.click(within(dialog).getByRole('combobox', { name: 'Node group' }))
+    await user.click(await screen.findByRole('option', { name: 'HK' }))
+    expect(within(dialog).getByTestId('node-group-move-relays')).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Move to node group' }))
+    await waitFor(() => expect(kernel.moveKernelNodesToGroup).toHaveBeenCalledWith(['proxy-29'], 3))
+    await waitFor(() => expect(toastMessages('success')).toContain('Moved 1 node to “HK”'))
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select JP' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select US' }))
+    await user.click(screen.getByTestId('bulk-move-group'))
+    dialog = await screen.findByRole('alertdialog', { name: 'Move 2 nodes' })
+    expect(within(dialog).queryByTestId('node-group-move-relays')).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Move to node group' }))
+    await waitFor(() => expect(kernel.moveKernelNodesToGroup).toHaveBeenLastCalledWith(['proxy-29', 'proxy-33'], null))
+  })
+
+  it('lists the mesh regions as network groups', async () => {
+    kernel.listKernelMeshRegions.mockResolvedValue([
+      { id: 2, code: 'apac', name: 'APAC', cidr: '10.151.0.0/16', enabled: true, members: [{ node_ref: 'proxy-29', home: true }, { node_ref: 'proxy-50', home: false }] }
+    ])
+    await renderGroups()
+    const section = await screen.findByTestId('node-network-groups')
+    expect(within(section).getByText('APAC')).toBeTruthy()
+    expect(within(section).getByText('10.151.0.0/16')).toBeTruthy()
+    expect(within(section).getByRole('link', { name: 'Manage mesh' }).getAttribute('href')).toBe('/admin/forward/mesh')
+  })
+
+  it('leaves the network groups out in builds without the mesh feature', async () => {
+    kernel.listKernelMeshRegions.mockRejectedValue({ response: { status: 404, data: { error: { code: 'feature_disabled' } } } })
+    await renderGroups()
+    await waitFor(() => expect(kernel.listKernelMeshRegions).toHaveBeenCalled())
+    expect(screen.queryByTestId('node-network-groups')).toBeNull()
   })
 })

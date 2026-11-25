@@ -511,6 +511,13 @@ export async function resetKernelNodeGroupToken(id) {
   return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}/reset-token`, method: 'post' }))
 }
 
+// Put nodes (proxy-<id>, forward-<id>) into a node group, or take them out of
+// every group with groupId null. The group's join defaults are not applied.
+// Answers { group_id, nodes }.
+export async function moveKernelNodesToGroup(nodes, groupId) {
+  return unwrap(await v4({ url: '/kernel/node-groups/move', method: 'post', data: { nodes, group_id: groupId } }))
+}
+
 // The group's live nodes, newest first: { nodes: [{ id, node, kind, name,
 // host, approval, online, last_seen, agent_version, created_at }] }.
 export async function getKernelNodeGroupNodes(id) {

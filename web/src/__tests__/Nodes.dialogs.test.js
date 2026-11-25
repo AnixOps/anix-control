@@ -26,7 +26,8 @@ const kernel = vi.hoisted(() => ({
   listKernelNodeGroups: vi.fn(),
   approveKernelNode: vi.fn(),
   rejectKernelNode: vi.fn(),
-  getKernelReach: vi.fn()
+  getKernelReach: vi.fn(),
+  listKernelMeshRegions: vi.fn(async () => [])
 }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernel }))
 vi.mock('@/api/machineTelemetry', async importOriginal => ({

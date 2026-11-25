@@ -53,7 +53,7 @@ type adminNodeRow struct {
 // @Param status query int false "节点状态"
 // @Param group_id query int false "订阅分组 ID"
 // @Param approval query string false "审批状态" Enums(pending, approved, rejected)
-// @Param node_group_id query int false "节点组 ID"
+// @Param node_group_id query int false "节点组 ID；0 为未分组的节点"
 // @Param sort query string false "排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage, online_users; 缺省为管理员排序" Enums(id, name, host, sort, created_at, last_check_at, cpu_usage, online_users)
 // @Param order query string false "排序方向, 仅与 sort 同用" Enums(asc, desc) default(asc)
 // @Success 200 {object} map[string]any
@@ -89,8 +89,8 @@ func (h *AdminNodesHandler) List(c *gin.Context) {
 	}
 	if value := c.Query("node_group_id"); value != "" {
 		parsed, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || parsed == 0 {
-			kernelError(c, http.StatusBadRequest, "invalid_request", "node_group_id must be a node group id")
+		if err != nil {
+			kernelError(c, http.StatusBadRequest, "invalid_request", "node_group_id must be a node group id, or 0 for nodes without a group")
 			return
 		}
 		id := uint(parsed)

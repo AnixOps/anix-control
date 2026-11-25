@@ -24,7 +24,9 @@ export default {
   filters: {
     label: 'Filter by status',
     search: 'Search nodes',
-    searchPlaceholder: 'Name or address'
+    searchPlaceholder: 'Name or address',
+    group: 'Filter by node group',
+    allGroups: 'All node groups'
   },
   table: {
     label: 'Nodes',
@@ -81,6 +83,17 @@ export default {
     loading: 'Loading service status',
     unavailable: 'Service status unavailable: requires the machine-telemetry package and its API permission',
     notEnabled: 'Service collection is off on this node'
+  },
+  move: {
+    action: 'Move to node group',
+    titleOne: 'Move node {name}',
+    titleMany: 'Move {count} nodes',
+    message: 'Group defaults apply only to nodes that join. Moved nodes keep their settings.',
+    target: 'Node group',
+    none: 'No group',
+    relays: 'This group uses relays. The nodes will reach Control through them within about a minute.',
+    moved: 'Moved {count} node to “{group}” | Moved {count} nodes to “{group}”',
+    removed: 'Removed {count} node from its group | Removed {count} nodes from their groups'
   },
   actions: {
     open: 'Open node',
@@ -632,7 +645,20 @@ export default {
   tabs: {
     label: 'Node sections',
     nodes: 'Nodes',
-    groups: 'Node groups'
+    groups: 'Groups'
+  },
+  networkGroups: {
+    title: 'Network groups',
+    summary: 'Mesh regions. A node can be in one node group and one mesh region at the same time.',
+    manage: 'Manage mesh',
+    empty: 'No mesh regions',
+    loadFailed: 'Unable to load mesh regions',
+    columns: {
+      name: 'Region',
+      cidr: 'Address range',
+      nodes: 'Nodes',
+      state: 'State'
+    }
   },
   // Join a node: one entry for a new machine (docs/design/node-onboarding).
   join: {
@@ -729,7 +755,8 @@ export default {
   },
   // Node groups (the tab and its sheet).
   groups: {
-    summary: 'A node group defines the defaults, protocols and join token of its nodes.',
+    title: 'Node groups',
+    summary: 'Node groups organize nodes and provide the join command and the defaults of new nodes. Move nodes from the node list.',
     add: 'New node group',
     table: {
       label: 'Node groups',
@@ -759,14 +786,16 @@ export default {
     deleteTitle: 'Delete node group {name}?',
     deleteMessage: 'The join token stops working immediately. Joined nodes are not affected.',
     deleteAction: 'Delete node group',
-    deleteInUse: 'The group still has nodes: delete or move them first.',
+    deleteInUse: 'The group still has nodes. Move them out first.',
     nameTaken: 'A node group with this name exists.',
     caKekMissing: 'module_runtime.ca_kek is not set. Node groups cannot be created.'
   },
   groupForm: {
     titleCreate: 'New node group',
     titleEdit: 'Edit node group',
-    createDescription: 'Settings apply to nodes that join later.',
+    createDescription: 'Defaults apply only to nodes that join later.',
+    defaults: 'Defaults for new nodes',
+    defaultsIntro: 'Apply only to nodes that join later. Nodes already in the group or moved in keep their settings.',
     create: 'Create node group',
     save: 'Save changes',
     saveFailed: 'Could not save: {message}',
@@ -791,7 +820,7 @@ export default {
       sort: 'Lower numbers come first.',
       monthlyLimit: 'Leave empty for no limit.',
       resetDay: '1 to 28.',
-      maxNodes: '0 means no limit.',
+      maxNodes: 'Limits joins only. 0 means no limit.',
       requireApproval: 'No configuration or users are sent until approved.'
     },
     expiry: {

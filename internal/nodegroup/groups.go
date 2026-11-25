@@ -32,7 +32,8 @@ const (
 // an update, which replaces every field.
 type GroupInput struct {
 	Name string `json:"name"`
-	// MaxNodes caps the group's live nodes; 0 is no cap.
+	// MaxNodes caps joins: a join is refused once the group has this many
+	// live nodes (moving nodes in is not capped); 0 is no cap.
 	MaxNodes        int  `json:"max_nodes"`
 	RequireApproval bool `json:"require_approval"`
 	// Rate is the billing rate of the group's proxy nodes; 1 when absent.

@@ -22,6 +22,13 @@
             data-testid="group-name"
             @blur="validateName"
           />
+        </div>
+      </section>
+
+      <section class="dialog-section">
+        <h3 class="dialog-section__title">{{ t('admin.nodes.groupForm.defaults') }}</h3>
+        <p class="dialog-section__intro">{{ t('admin.nodes.groupForm.defaultsIntro') }}</p>
+        <div class="form-grid">
           <UiNumberField
             v-model="form.rate"
             size="md"

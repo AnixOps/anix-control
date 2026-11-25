@@ -24,7 +24,9 @@ export default {
   filters: {
     label: '按状态筛选',
     search: '搜索节点',
-    searchPlaceholder: '名称或地址'
+    searchPlaceholder: '名称或地址',
+    group: '按节点组筛选',
+    allGroups: '全部节点组'
   },
   table: {
     label: '节点',
@@ -81,6 +83,17 @@ export default {
     loading: '正在加载服务状态',
     unavailable: '服务状态不可用：需启用机器遥测插件并授予 API 权限',
     notEnabled: '此节点未启用服务采集'
+  },
+  move: {
+    action: '移动到节点组',
+    titleOne: '移动节点 {name}',
+    titleMany: '移动 {count} 个节点',
+    message: '节点组的默认设置仅用于新接入的节点，移入的节点保持原有设置。',
+    target: '目标节点组',
+    none: '未分组',
+    relays: '该节点组配置了中继，节点将经中继连接主控，约一分钟内生效。',
+    moved: '已将 {count} 个节点移至“{group}”',
+    removed: '已将 {count} 个节点移出节点组'
   },
   actions: {
     open: '打开节点',
@@ -632,7 +645,20 @@ export default {
   tabs: {
     label: '节点分区',
     nodes: '节点',
-    groups: '节点组'
+    groups: '分组'
+  },
+  networkGroups: {
+    title: '网络分组',
+    summary: '组网区域。节点可同时属于一个节点组和一个组网区域。',
+    manage: '管理组网',
+    empty: '暂无组网区域',
+    loadFailed: '无法加载组网区域',
+    columns: {
+      name: '区域',
+      cidr: '地址段',
+      nodes: '节点',
+      state: '状态'
+    }
   },
   // 接入节点: one entry for a new machine (docs/design/node-onboarding).
   join: {
@@ -729,7 +755,8 @@ export default {
   },
   // 节点组 (the tab and its sheet).
   groups: {
-    summary: '节点组定义新节点的默认设置、协议和接入令牌。',
+    title: '节点组',
+    summary: '节点组用于归类节点，并提供接入命令和新节点的默认设置。可在节点列表中移动节点。',
     add: '新建节点组',
     table: {
       label: '节点组',
@@ -759,14 +786,16 @@ export default {
     deleteTitle: '删除节点组 {name}？',
     deleteMessage: '接入令牌立即失效，已接入节点不受影响。',
     deleteAction: '删除节点组',
-    deleteInUse: '组内仍有节点，请先删除或迁出。',
+    deleteInUse: '组内仍有节点，请先将其移出。',
     nameTaken: '节点组名称已存在。',
     caKekMissing: '未设置 module_runtime.ca_kek，无法创建节点组。'
   },
   groupForm: {
     titleCreate: '新建节点组',
     titleEdit: '编辑节点组',
-    createDescription: '设置将应用于之后接入的节点。',
+    createDescription: '默认设置仅用于之后接入的节点。',
+    defaults: '新节点默认值',
+    defaultsIntro: '仅用于之后接入的节点，已在组内或移入的节点不受影响。',
     create: '创建节点组',
     save: '保存更改',
     saveFailed: '无法保存：{message}',
@@ -791,7 +820,7 @@ export default {
       sort: '数值小者靠前。',
       monthlyLimit: '留空表示不限。',
       resetDay: '1 到 28。',
-      maxNodes: '0 表示不限。',
+      maxNodes: '仅限制接入，0 表示不限。',
       requireApproval: '确认前不下发配置和用户。'
     },
     expiry: {

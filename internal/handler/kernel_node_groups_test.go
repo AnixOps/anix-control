@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -77,6 +78,7 @@ func newNodeGroupsTestEnv(t *testing.T) *nodeGroupsTestEnv {
 	router.GET("/node-groups/:id/command", handler.Command)
 	router.GET("/node-groups/:id/nodes", handler.Nodes)
 	router.POST("/node-groups/default", handler.EnsureDefault)
+	router.POST("/node-groups/move", handler.MoveNodes)
 	router.GET("/install-readiness", handler.install.Readiness)
 	router.POST("/node-groups/:id/reset-token", handler.ResetToken)
 	router.POST("/nodes/:id/approve", handler.ApproveNode)
@@ -386,4 +388,32 @@ func TestInstallReadinessAnswer(t *testing.T) {
 	assert.False(t, result.Ready)
 	assert.False(t, result.Checks[0].OK)
 	assert.Contains(t, result.Checks[0].Message, "not https")
+}
+
+func TestNodeGroupsMoveAPI(t *testing.T) {
+	env := newNodeGroupsTestEnv(t)
+	created := env.call(t, 7, http.MethodPost, "/node-groups", `{"name": "HK"}`)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	group := decodeData[nodegroup.GroupView](t, created)
+	node := model.Node{Name: "manual", Host: "198.51.100.1", Approval: model.NodeApprovalApproved}
+	require.NoError(t, env.db.Create(&node).Error)
+	ref := fmt.Sprintf("proxy-%d", node.ID)
+
+	moved := env.call(t, 7, http.MethodPost, "/node-groups/move", fmt.Sprintf(`{"nodes": [%q], "group_id": %d}`, ref, group.ID))
+	require.Equal(t, http.StatusOK, moved.Code, moved.Body.String())
+	result := decodeData[nodegroup.MoveResult](t, moved)
+	assert.Equal(t, []string{ref}, result.Nodes)
+	require.NoError(t, env.db.First(&node, node.ID).Error)
+	assert.Equal(t, &group.ID, node.NodeGroupID)
+
+	out := env.call(t, 7, http.MethodPost, "/node-groups/move", fmt.Sprintf(`{"nodes": [%q], "group_id": null}`, ref))
+	require.Equal(t, http.StatusOK, out.Code, out.Body.String())
+	require.NoError(t, env.db.First(&node, node.ID).Error)
+	assert.Nil(t, node.NodeGroupID)
+
+	bad := env.call(t, 7, http.MethodPost, "/node-groups/move", `{"nodes": ["node-1"], "group_id": null}`)
+	assert.Equal(t, http.StatusBadRequest, bad.Code)
+	missing := env.call(t, 7, http.MethodPost, "/node-groups/move", `{"nodes": ["proxy-9999"], "group_id": null}`)
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Equal(t, "node_not_found", errorCode(t, missing))
 }
