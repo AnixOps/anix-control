@@ -101,6 +101,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   Two first reports of one node at the same time on PostgreSQL (no row to
   lock yet) can overwrite each other once; no hold is released wrongly
   (#652 recheck R-2).
+  Dropped out-of-order status reports (#653): export the count as a
+  metric and rate-limit the warning log (S-1); the clock set-back test
+  asserts the package-wide counter, which parallel tests would disturb
+  (S-2).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
