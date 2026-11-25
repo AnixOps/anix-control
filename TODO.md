@@ -81,9 +81,9 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   members have IPv6 addresses; members of other regions in an allow list
   (the external routes are advertised in the bridge's region only). The
   Agent gives `external_bridge` only to kernels listing
-  `mesh_external_bridge`, and the kernel status must carry the applied
-  allow list (`networks[].external_bridge.allow`), which releases held
-  addresses.
+  `mesh_external_bridge` and passes the kernel status's `externalBridge`
+  (allow list digest and applied time, spec #339) on as it is, which
+  releases held addresses.
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver

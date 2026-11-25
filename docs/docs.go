@@ -5798,7 +5798,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Every external network bridge: its node and home region, the external interface, the routes it advertises, the allow list with what each entry expands to in the region, the list the node is given (expanded) and the one it last reported applied (applied, null before a report), and the addresses and segments held back until the node confirms it dropped them (held). Warnings: bridge_unconfirmed (the applied list differs from the expanded one, or addresses are held), bridge_unsupported (the node's kernel does not list mesh_external_bridge), allow_outside_region (an entry is not in the bridge's region).",
+                "description": "Every external network bridge: its node and home region, the external interface, the routes it advertises, the allow list with what each entry expands to in the region, the list the node is given (expanded) with its digest (digest), the digest of the list the node last reported in force and since when (applied_digest, applied_at; null before a report) and whether they match (confirmed), and the addresses and segments held back until the node confirms it dropped them (held). Warnings: bridge_unconfirmed (not confirmed, or addresses are held), bridge_unsupported (the node's kernel does not list mesh_external_bridge), allow_outside_region (an entry is not in the bridge's region).",
                 "produces": [
                     "application/json"
                 ],
@@ -5863,7 +5863,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Changes the interface, routes and allow list; the node never changes. An address or segment that leaves the list is not given to another member until the node reports a list without it applied. Audited (module mesh, action mesh_bridge_update).",
+                "description": "Changes the interface, routes and allow list; the node never changes. An address or segment that leaves the list is not given to another member until the node reports the new list in force (its digest, applied after the change). Audited (module mesh, action mesh_bridge_update).",
                 "consumes": [
                     "application/json"
                 ],
@@ -10507,18 +10507,24 @@ const docTemplate = `{
                         "$ref": "#/definitions/meshregion.BridgeAllowView"
                     }
                 },
-                "applied": {
-                    "description": "Applied is the allow list the node last reported as applied, nil\nbefore it reported one.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "applied_at": {
+                    "type": "string"
+                },
+                "applied_digest": {
+                    "description": "AppliedDigest and AppliedAt are the digest of the allow list the\nnode last reported in force and since when (its status's\nexternalBridge), nil before it reported one; Confirmed: it equals\nDigest.",
+                    "type": "string"
+                },
+                "confirmed": {
+                    "type": "boolean"
                 },
                 "created_at": {
                     "type": "string"
                 },
+                "digest": {
+                    "type": "string"
+                },
                 "expanded": {
-                    "description": "Expanded is the allow list the node is given.",
+                    "description": "Expanded is the allow list the node is given, and Digest its\ndigest (AllowDigest).",
                     "type": "array",
                     "items": {
                         "type": "string"

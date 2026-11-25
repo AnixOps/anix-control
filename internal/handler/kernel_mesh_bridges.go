@@ -23,7 +23,7 @@ func bridgeAudit(row model.MeshExternalBridge) string {
 
 // ListMeshBridges godoc
 // @Summary The mesh's external network bridges
-// @Description Every external network bridge: its node and home region, the external interface, the routes it advertises, the allow list with what each entry expands to in the region, the list the node is given (expanded) and the one it last reported applied (applied, null before a report), and the addresses and segments held back until the node confirms it dropped them (held). Warnings: bridge_unconfirmed (the applied list differs from the expanded one, or addresses are held), bridge_unsupported (the node's kernel does not list mesh_external_bridge), allow_outside_region (an entry is not in the bridge's region).
+// @Description Every external network bridge: its node and home region, the external interface, the routes it advertises, the allow list with what each entry expands to in the region, the list the node is given (expanded) with its digest (digest), the digest of the list the node last reported in force and since when (applied_digest, applied_at; null before a report) and whether they match (confirmed), and the addresses and segments held back until the node confirms it dropped them (held). Warnings: bridge_unconfirmed (not confirmed, or addresses are held), bridge_unsupported (the node's kernel does not list mesh_external_bridge), allow_outside_region (an entry is not in the bridge's region).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -73,7 +73,7 @@ func (h *MeshHandler) CreateMeshBridge(c *gin.Context) {
 
 // UpdateMeshBridge godoc
 // @Summary Change an external network bridge
-// @Description Changes the interface, routes and allow list; the node never changes. An address or segment that leaves the list is not given to another member until the node reports a list without it applied. Audited (module mesh, action mesh_bridge_update).
+// @Description Changes the interface, routes and allow list; the node never changes. An address or segment that leaves the list is not given to another member until the node reports the new list in force (its digest, applied after the change). Audited (module mesh, action mesh_bridge_update).
 // @Tags Kernel
 // @Accept json
 // @Produce json

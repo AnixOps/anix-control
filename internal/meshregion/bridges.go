@@ -2,6 +2,8 @@ package meshregion
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,8 +57,9 @@ const (
 // Bridge warnings.
 const (
 	// WarningBridgeUnconfirmed: the bridge node has not reported the allow
-	// list it was given as applied (it may be offline); addresses that
-	// left the list stay held until it does.
+	// list it was given in force (its digest), or addresses wait for it to
+	// (it may be offline); addresses that left the list stay held until it
+	// does.
 	WarningBridgeUnconfirmed = "bridge_unconfirmed"
 	// WarningBridgeUnsupported: the node's kernel does not list
 	// mesh_external_bridge, so the Agent leaves the bridge out.
@@ -114,11 +117,17 @@ type BridgeView struct {
 	RegionCode string            `json:"region_code"`
 	Routes     []string          `json:"routes"`
 	Allow      []BridgeAllowView `json:"allow"`
-	// Expanded is the allow list the node is given.
+	// Expanded is the allow list the node is given, and Digest its
+	// digest (AllowDigest).
 	Expanded []string `json:"expanded"`
-	// Applied is the allow list the node last reported as applied, nil
-	// before it reported one.
-	Applied []string `json:"applied"`
+	Digest   string   `json:"digest"`
+	// AppliedDigest and AppliedAt are the digest of the allow list the
+	// node last reported in force and since when (its status's
+	// externalBridge), nil before it reported one; Confirmed: it equals
+	// Digest.
+	AppliedDigest *string    `json:"applied_digest"`
+	AppliedAt     *time.Time `json:"applied_at"`
+	Confirmed     bool       `json:"confirmed"`
 	// Held are the addresses and segments that left the node's list and
 	// are not given out until it reports a list without them.
 	Held []string `json:"held"`
@@ -566,40 +575,72 @@ func (r *releaseFirst) release(ctx context.Context, db *gorm.DB) error {
 	return fmt.Errorf("%w: %s; the address %s unused longest is released and is given out once the external network bridges confirm it", ErrPoolFull, r.region, r.address)
 }
 
-// reportedAllows answers, by network id (region code), the allow list a
-// "mesh.status" payload reports applied: networks[].external_bridge.allow.
-// A network without the section applies none.
-func reportedAllows(payload string) map[string]map[netip.Prefix]bool {
+// AllowDigest is the digest of an allow list both sides compute (spec
+// mesh-status.md, externalBridge): each entry as CIDR text (netip's form:
+// dotted IPv4, RFC 5952 IPv6, always with the prefix length), without
+// duplicates, sorted bytewise, joined by "\n" (none after the last), SHA-256
+// in lower-case hex.
+func AllowDigest(set map[netip.Prefix]bool) string {
+	list := make([]string, 0, len(set))
+	for prefix := range set {
+		list = append(list, prefix.Masked().String())
+	}
+	sort.Strings(list)
+	sum := sha256.Sum256([]byte(strings.Join(list, "\n")))
+	return hex.EncodeToString(sum[:])
+}
+
+// appliedBridge is what a bridge node reports in force in one network.
+type appliedBridge struct {
+	AllowDigest string    `json:"allowDigest"`
+	AllowCount  int       `json:"allowCount"`
+	AppliedAt   time.Time `json:"appliedAt"`
+}
+
+// reportedBridges answers, by network id (region code), the bridge
+// configuration a "mesh.status" payload reports in force: the network's
+// externalBridge as the kernel status has it (the Agent passes it on as
+// it is). A network whose externalBridge is null or missing runs no bridge.
+func reportedBridges(payload string) map[string]appliedBridge {
 	var shape struct {
 		Networks []struct {
-			ID             string `json:"id"`
-			ExternalBridge *struct {
-				Allow []string `json:"allow"`
-			} `json:"external_bridge"`
+			ID             string         `json:"id"`
+			ExternalBridge *appliedBridge `json:"externalBridge"`
 		} `json:"networks"`
 	}
-	answer := map[string]map[netip.Prefix]bool{}
+	answer := map[string]appliedBridge{}
 	if json.Unmarshal([]byte(payload), &shape) != nil {
 		return answer
 	}
 	for _, network := range shape.Networks {
-		if network.ExternalBridge == nil {
-			continue
+		if network.ExternalBridge != nil && network.ExternalBridge.AllowDigest != "" && !network.ExternalBridge.AppliedAt.IsZero() {
+			answer[network.ID] = *network.ExternalBridge
 		}
-		set := map[netip.Prefix]bool{}
-		for _, raw := range network.ExternalBridge.Allow {
-			if prefix, err := parseRoute(raw); err == nil {
-				set[prefix] = true
-			}
-		}
-		answer[network.ID] = set
 	}
 	return answer
 }
 
-// releaseHolds deletes the holds of nodeRef its report shows released: a
-// report observed after the hold whose network's applied allow list no
-// longer has the prefix.
+// desiredOf answers the allow list nodeRef is given in region regionID,
+// and whether it bridges there at all.
+func desiredOf(db *gorm.DB, nodeRef string, regionID uint) (map[netip.Prefix]bool, bool, error) {
+	var rows []model.MeshExternalBridge
+	if err := db.Where("node_ref = ?", nodeRef).Limit(1).Find(&rows).Error; err != nil || len(rows) == 0 {
+		return nil, false, err
+	}
+	home, err := bridgeHome(db, rows[0])
+	if err != nil || home != regionID {
+		return nil, false, err
+	}
+	set, _, err := expandBridge(db, rows[0], regionID)
+	return set, err == nil, err
+}
+
+// releaseHolds deletes the holds of nodeRef its report shows released
+// (spec section 15.12 item 4): where the node bridges, the digest of the
+// list it reports in force, applied after the hold, equals the digest of
+// the list it is given now, which no longer has the prefix; where it no
+// longer bridges, a report observed after the hold without a bridge in
+// that network.
 func releaseHolds(db *gorm.DB, nodeRef, payload string, observedAt time.Time) error {
 	var holds []model.MeshBridgeHold
 	if err := db.Where("node_ref = ?", nodeRef).Find(&holds).Error; err != nil || len(holds) == 0 {
@@ -609,15 +650,37 @@ func releaseHolds(db *gorm.DB, nodeRef, payload string, observedAt time.Time) er
 	if err != nil {
 		return err
 	}
-	applied := reportedAllows(payload)
+	reported := reportedBridges(payload)
+	type desired struct {
+		set    map[netip.Prefix]bool
+		bridge bool
+	}
+	byRegion := map[uint]desired{}
 	released := []uint{}
 	for _, hold := range holds {
 		prefix, err := netip.ParsePrefix(hold.Prefix)
-		if err != nil || !observedAt.After(hold.CreatedAt) {
+		if err != nil {
 			continue
 		}
-		if !applied[codes[hold.RegionID]][prefix] {
-			released = append(released, hold.ID)
+		want, done := byRegion[hold.RegionID]
+		if !done {
+			set, bridge, err := desiredOf(db, nodeRef, hold.RegionID)
+			if err != nil {
+				return err
+			}
+			want = desired{set, bridge}
+			byRegion[hold.RegionID] = want
+		}
+		applied, running := reported[codes[hold.RegionID]]
+		switch {
+		case want.bridge && running:
+			if applied.AppliedAt.After(hold.CreatedAt) && !want.set[prefix] && applied.AllowDigest == AllowDigest(want.set) {
+				released = append(released, hold.ID)
+			}
+		case !want.bridge && !running:
+			if observedAt.After(hold.CreatedAt) {
+				released = append(released, hold.ID)
+			}
 		}
 	}
 	if len(released) == 0 {
@@ -859,17 +922,17 @@ func Bridges(ctx context.Context, db *gorm.DB) ([]BridgeView, error) {
 		if err := db.Where("node_ref = ?", row.NodeRef).Limit(1).Find(&statuses).Error; err != nil {
 			return nil, err
 		}
-		confirmed := false
+		view.Digest = AllowDigest(set)
 		if len(statuses) > 0 {
-			if applied, ok := reportedAllows(statuses[0].Payload)[view.RegionCode]; ok {
-				view.Applied = sortedPrefixes(applied)
-				confirmed = strings.Join(view.Applied, ",") == strings.Join(view.Expanded, ",")
+			if applied, ok := reportedBridges(statuses[0].Payload)[view.RegionCode]; ok {
+				view.AppliedDigest, view.AppliedAt = &applied.AllowDigest, &applied.AppliedAt
+				view.Confirmed = applied.AllowDigest == view.Digest
 			}
 			if features := reportedFeatures(statuses[0].Payload); len(features) > 0 && !features[FeatureExternalBridge] {
 				view.Warnings = append(view.Warnings, WarningBridgeUnsupported)
 			}
 		}
-		if !confirmed || len(view.Held) > 0 {
+		if !view.Confirmed || len(view.Held) > 0 {
 			view.Warnings = append(view.Warnings, WarningBridgeUnconfirmed)
 		}
 		if outside {

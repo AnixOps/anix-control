@@ -78,7 +78,7 @@
       "rejected_advertisements": 0,
       "overlaps": [],
       "alerts": [{ "code": "address_conflict", "address": "10.150.0.9", "peer": "", "detail": "" }],
-      "external_bridge": { "allow": ["10.127.0.0/24", "10.150.128.7/32"] }
+      "externalBridge": { "allowDigest": "<SHA-256>", "routesDigest": "<SHA-256>", "allowCount": 2, "appliedAt": "2026-11-25T21:00:00Z" }
     }
   ],
   "takeover": { "found": false, "stopped": [], "error": "" }
@@ -89,7 +89,7 @@
 - `alerts.code`：`peer_not_native`（拒绝未准入节点，`peer` 为对端节点 ID；内核失败原因同名，Agent 也可原样放在网络的 `failure.code`，界面一并显示）、`native_keys_pending`（等待准入清单：清单为空或不含本机公钥，内核暂缓该网络，`detail` 为 `empty` 或 `self_missing`；同样可放在 `failure.code`。未运行的网络都因此暂缓时，节点状态显示「暂缓」而非「未运行」）、`native_keys_unsupported`（本机内核不支持准入清单，Agent 扣下该网络不交给内核；内核降级重启后也会出现）、`invalid_kind`（网络 `kind` 既不是 `managed` 也不是 `legacy`，区分大小写，Agent 扣下该网络，其他网络照常运行）、`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
 - Control 校验载荷为带 `networks` 数组的 JSON 对象，保存每个节点最新一份（`v5_mesh_status`）。
 - `instance_id`：内核的节点实例 ID（组网状态快照的 `self.id`，首次启动时生成，重启与升级不变），1–64 个字母、数字或连字符，首字符为字母或数字，不合规时按未上报处理。宿主组网关的实例 ID 新增或变化时，Control 立即推送该地区节点的配置。
-- `external_bridge.allow`：桥接节点内核**当前已应用**的来源名单（内核状态原样转述），未运行桥接的网络不带该节。规范 §15.12 第 4 条要求地址回收后先撤名单再分配：某地址或宿主组地址段从桥接节点的名单中移出后，面板把它记为「待桥接确认」，不再分配给其他成员或宿主组，直到该节点上报的、观测时间晚于移出时刻的名单中不再含它；桥接节点离线未确认期间一直保留，桥接列表标出 `bridge_unconfirmed` 并列出这些地址。设备地址池已满且唯一可回收的闲置地址在桥接名单中时，面板先从原设备收回该地址（本次分配回 `pool_full`），待桥接节点确认后再分配；同一时间每个地区只收回一个。节点离开该地区时，为它保留的地址随之释放（其静态公钥同时移出准入清单）。
+- `externalBridge`：桥接节点内核**已生效**的桥接配置摘要，按内核状态（networkcore `docs/architecture/mesh-status.md`，规范 #339）原样转述，未运行桥接的网络为 `null` 或不带该项。`allowDigest` 的算法：`allow` 各条目写成 CIDR 文本（IPv4 点分十进制，IPv6 按 RFC 5952 小写压缩，单个地址也带前缀长度），去重后按字节序排序，以 `\n` 连接（末尾无换行），取 SHA-256 小写十六进制；空名单为 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`，`10.150.0.2/32`、`10.127.0.0/24`、`fd7a:115c:a1e0::5/128`、`10.150.0.128/32` 为 `c2125301582f23d00252ec7ea3ae881359c66f9333fcae94ba95c64931257366`（排序为 `10.127.0.0/24`、`10.150.0.128/32`、`10.150.0.2/32`、`fd7a:115c:a1e0::5/128`）。规范 §15.12 第 4 条要求地址回收后先撤名单再分配：某地址或宿主组地址段从桥接节点的名单中移出后，面板把它记为「待桥接确认」，不再分配给其他成员或宿主组，直到该节点上报的 `allowDigest` 等于面板对当前下发名单算出的摘要、`appliedAt` 晚于移出时刻，且当前名单不含它；节点已不再桥接时，以观测时间晚于移出时刻、该网络没有 `externalBridge` 的上报为准。桥接节点离线未确认期间一直保留，桥接列表标出 `bridge_unconfirmed` 并列出这些地址。设备地址池已满且唯一可回收的闲置地址在桥接名单中时，面板先从原设备收回该地址（本次分配回 `pool_full`），待桥接节点确认后再分配；同一时间每个地区只收回一个。节点离开该地区时，为它保留的地址随之释放（其静态公钥同时移出准入清单）。
 - 「控制面失联」由 Control 按最后接收时间判断（超过 3 分钟），Agent 不上报。
 
 - Control 只接受组网成员节点的上报；不在任何地区的节点的上报按 `not_assigned` 拒绝。

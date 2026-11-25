@@ -161,7 +161,7 @@ describe('mesh addresses', () => {
     ]
     api.listKernelMeshBridges.mockResolvedValue([
       { id: 1, node_ref: 'proxy-1', node_name: 'edge', region_id: 1, interface: 'ext0', routes: ['100.100.1.2/32'],
-        allow: [{ entry: 'device:4', kind: 'device', name: 'phone', prefixes: [] }], expanded: [], applied: ['10.150.128.4/32'],
+        allow: [{ entry: 'device:4', kind: 'device', name: 'phone', prefixes: [] }], expanded: [], applied_digest: 'x', confirmed: false,
         held: ['10.150.128.4/32'], warnings: ['bridge_unconfirmed'] }
     ])
     api.listKernelMeshDevices.mockResolvedValue([{ id: 4, region_id: 1, hostname: 'phone', address: '10.150.128.4' }, { id: 5, region_id: 2, hostname: 'laptop', address: '10.152.128.0' }])

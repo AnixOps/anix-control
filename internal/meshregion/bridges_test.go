@@ -21,14 +21,26 @@ func admitted(t *testing.T, db *gorm.DB, device model.MeshDevice, b byte) {
 	require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", device.ID).Update("static_key", testStaticKey(b)).Error)
 }
 
-// bridgeStatus is a bridge node's report with the allow list it applied in
-// network code.
-func bridgeStatus(code string, allow ...string) []byte {
-	if allow == nil {
-		allow = []string{}
+// bridgeStatus is a bridge node's report that the allow list allow is in
+// force in network code since appliedAt (externalBridge, mesh-status.md).
+func bridgeStatus(code string, appliedAt time.Time, allow ...string) []byte {
+	set := map[netip.Prefix]bool{}
+	for _, entry := range allow {
+		set[netip.MustParsePrefix(entry)] = true
 	}
-	list, _ := json.Marshal(allow)
-	return fmt.Appendf(nil, `{"features":["mesh","mesh_native_keys","mesh_external_bridge"],"networks":[{"id":%q,"running":true,"external_bridge":{"allow":%s}}]}`, code, list)
+	bridge, _ := json.Marshal(map[string]any{"allowDigest": AllowDigest(set), "allowCount": len(set), "routesDigest": "", "appliedAt": appliedAt.Format(time.RFC3339Nano)})
+	return fmt.Appendf(nil, `{"features":["mesh","mesh_native_keys","mesh_external_bridge"],"networks":[{"id":%q,"running":true,"externalBridge":%s}]}`, code, bridge)
+}
+
+func TestAllowDigest(t *testing.T) {
+	// The vectors of mesh-status.md (externalBridge): bytewise order, so
+	// 10.150.0.128/32 before 10.150.0.2/32.
+	require.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", AllowDigest(nil))
+	set := map[netip.Prefix]bool{}
+	for _, entry := range []string{"10.150.0.2/32", "10.127.0.0/24", "fd7a:115c:a1e0::5/128", "10.150.0.128/32"} {
+		set[netip.MustParsePrefix(entry)] = true
+	}
+	require.Equal(t, "c2125301582f23d00252ec7ea3ae881359c66f9333fcae94ba95c64931257366", AllowDigest(set))
 }
 
 func bridgeView(t *testing.T, db *gorm.DB, nodeRef string) BridgeView {
@@ -138,11 +150,12 @@ func TestExternalBridge(t *testing.T) {
 	}
 	view := bridgeView(t, db, "proxy-1")
 	require.Equal(t, cn.ID, view.RegionID)
-	require.Nil(t, view.Applied, "not reported yet")
+	require.Nil(t, view.AppliedDigest, "not reported yet")
 	require.Equal(t, []string{WarningBridgeUnconfirmed}, view.Warnings)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", network["external_bridge"].(map[string]any)["allow"].([]string)...), now, now))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now, network["external_bridge"].(map[string]any)["allow"].([]string)...), now, now))
 	view = bridgeView(t, db, "proxy-1")
-	require.Equal(t, view.Expanded, view.Applied)
+	require.True(t, view.Confirmed)
+	require.Equal(t, view.Digest, *view.AppliedDigest)
 	require.Empty(t, view.Warnings, "confirmed")
 
 	// Our ranges stay clear of the bridge's routes, and the bridge node
@@ -170,10 +183,12 @@ func TestExternalBridge(t *testing.T) {
 	var holds int64
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Where("node_ref = ?", "proxy-1").Count(&holds).Error)
 	require.EqualValues(t, 3, holds, "the phone, the host group and the former member wait for the node")
+	later := time.Now().UTC().Add(time.Minute)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), later, later))
+	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
+	require.Zero(t, holds, "the node reports the bridge gone")
 	require.NoError(t, DeleteHostGroup(ctx, db, group.ID))
 	require.NoError(t, RemoveNode(ctx, db, nodeHome.ID))
-	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
-	require.Zero(t, holds, "a node that left the mesh holds nothing")
 }
 
 func mustHome(t *testing.T, db *gorm.DB, nodeRef string) uint {
@@ -200,7 +215,7 @@ func TestBridgeHoldsAReleasedAddress(t *testing.T) {
 		Allow: []string{"device:" + strconv.FormatUint(uint64(phone.ID), 10), "host_group:" + strconv.FormatUint(uint64(group.ID), 10)}}, now)
 	require.NoError(t, err)
 	address := *phone.Address
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", "10.127.0.0/24", address+"/32"), now, now))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now, "10.127.0.0/24", address+"/32"), now, now))
 
 	// Removed, the phone's address and the group's segment are held until
 	// the bridge node reports a list without them.
@@ -214,15 +229,17 @@ func TestBridgeHoldsAReleasedAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "10.127.1.0/24", next.Segment)
 
-	// A report observed before the release does not count; one after
-	// that still lets the address through neither.
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn"), now, now))
+	// A list applied before the release does not count, nor one other
+	// than the list the node is given now.
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now), now, now))
 	require.Len(t, bridgeView(t, db, "proxy-1").Held, 2)
 	later := time.Now().UTC().Add(time.Minute)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", address+"/32"), later, later))
-	require.Equal(t, []string{address + "/32"}, bridgeView(t, db, "proxy-1").Held)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn"), later, later))
-	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later, address+"/32"), later, later))
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 2)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later), later, later))
+	view := bridgeView(t, db, "proxy-1")
+	require.Empty(t, view.Held)
+	require.True(t, view.Confirmed)
 	again, err := CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "again"}, now)
 	require.NoError(t, err)
 	require.Equal(t, address, *again.Address, "a confirmed address is free again")
@@ -258,7 +275,7 @@ func TestPoolReclaimWaitsForTheBridge(t *testing.T) {
 	require.ErrorIs(t, err, ErrPoolFull, "still held")
 
 	later := time.Now().UTC().Add(time.Minute)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("lab"), later, later))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("lab", later), later, later))
 	next, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
 	require.NoError(t, err)
 	require.Equal(t, *idle.Address, *next.Address)
