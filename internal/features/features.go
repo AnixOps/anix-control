@@ -49,8 +49,12 @@ type Status struct {
 	Enabled bool `json:"enabled"`
 }
 
-// registry lists the gated features. Empty while nothing is gated.
-var registry = []Feature{}
+// registry lists the gated features.
+var registry = []Feature{
+	// The intranet mesh regions (internal/meshregion): dev builds only
+	// until the kernel runs the mesh.
+	{Name: "mesh", Description: "Intranet mesh: regions, fixed addresses and the nodes' mesh configuration", Stage: StageDev},
+}
 
 var devBuild atomic.Bool
 

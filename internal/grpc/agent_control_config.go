@@ -400,7 +400,7 @@ type configMetrics struct {
 // configTriggers and configResults are the label values, in the order the
 // metrics are written.
 var (
-	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward, configTriggerNetwork, configTriggerApproval, configTriggerTemporaryProxy}
+	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward, configTriggerNetwork, configTriggerApproval, configTriggerTemporaryProxy, configTriggerMesh}
 	configResults  = []string{model.ConfigVerdictApplied, model.ConfigVerdictFailed, model.ConfigVerdictStale, model.ConfigVerdictMismatch, configStatusUnrecorded}
 )
 

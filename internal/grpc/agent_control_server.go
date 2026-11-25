@@ -110,6 +110,9 @@ type AgentControlConnection struct {
 	// networkNegotiated is whether the session negotiated network.v1
 	// (agent_control_network.go); set before the session is registered.
 	networkNegotiated bool
+	// meshNegotiated is whether the session negotiated mesh.v1
+	// (agent_control_mesh.go); set before the session is registered.
+	meshNegotiated bool
 }
 
 // send writes message through the session's writer (agent_control_writer.go).
@@ -758,6 +761,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 	followNetworkPlans(server.manager, server.forwardManager)
 	followApprovals(server.manager, server.forwardManager)
 	followTemporaryProxies(server.manager)
+	followMesh(server.manager, server.forwardManager)
 	return server
 }
 
@@ -940,6 +944,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	}
 	connection.forwardNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityForward)
 	connection.networkNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityNetwork)
+	connection.meshNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityMesh)
 
 	// The revision decides, among others, whether the node's subscriptions
 	// carry the users' stored Shadowsocks 2022 keys.
@@ -1243,6 +1248,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesNetwork(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityNetwork, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if servesMesh(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityMesh, Version: agentcontrol.CapabilityVersionV1})
 	}
 	if s.servesMaintenance(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityMaintenance, Version: agentcontrol.CapabilityVersionV1})

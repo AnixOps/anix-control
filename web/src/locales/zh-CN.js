@@ -205,6 +205,7 @@ export default {
       forwardEgress: '域名分流',
       forwardStandby: '过境应急',
       reverseProxies: '反向代理',
+      mesh: '组网',
       control: '控制内核',
       accessGroups: '访问组',
       payment: '支付',

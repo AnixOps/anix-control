@@ -777,3 +777,34 @@ export async function setKernelEntitlementDeviceRevoked(id, revoked, feature = '
   const action = revoked ? 'revoke' : 'restore'
   return unwrap(await v4({ url: `/kernel/entitlements/${encodeURIComponent(feature)}/devices/${encodeURIComponent(id)}/${action}`, method: 'post' }))
 }
+
+// Intranet mesh (组网): the regions in order, each with its members
+// [{ id, node_ref, address, home, boundary, node_name, node_host, status,
+// status_received_at }]. Every call answers 404 feature_disabled while the
+// mesh is not available in this build.
+export async function listKernelMeshRegions() {
+  return unwrap(await v4({ url: '/kernel/mesh/regions', method: 'get' }))
+}
+
+export async function saveKernelMeshRegion(id, { code, name, cidr, enabled, sort }) {
+  const data = { code: String(code || '').trim(), name: String(name || '').trim(), cidr: String(cidr || '').trim(), enabled: Boolean(enabled), sort: Number(sort) || 0 }
+  return unwrap(await v4(id ? { url: `/kernel/mesh/regions/${encodeURIComponent(id)}`, method: 'put', data } : { url: '/kernel/mesh/regions', method: 'post', data }))
+}
+
+export async function deleteKernelMeshRegion(id) {
+  return unwrap(await v4({ url: `/kernel/mesh/regions/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
+export async function addKernelMeshMember(regionId, { node, boundary }) {
+  return unwrap(await v4({ url: `/kernel/mesh/regions/${encodeURIComponent(regionId)}/members`, method: 'post', data: { node, boundary: Boolean(boundary) } }))
+}
+
+// Moves the node to region_id (0 keeps its region) and sets whether it is
+// a boundary node; `id` is its home membership.
+export async function updateKernelMeshMember(id, { regionId, boundary }) {
+  return unwrap(await v4({ url: `/kernel/mesh/members/${encodeURIComponent(id)}`, method: 'put', data: { region_id: Number(regionId) || 0, boundary: Boolean(boundary) } }))
+}
+
+export async function removeKernelMeshMember(id) {
+  return unwrap(await v4({ url: `/kernel/mesh/members/${encodeURIComponent(id)}`, method: 'delete' }))
+}

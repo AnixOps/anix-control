@@ -671,6 +671,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/nodes/:id/temporary-proxies", temporaryProxies.List)
 		v4.POST("/kernel/nodes/:id/temporary-proxies", temporaryProxies.Open)
 		v4.DELETE("/kernel/nodes/:id/temporary-proxies/:proxy_id", temporaryProxies.Close)
+		// Intranet mesh (组网): regions, the nodes' fixed addresses and
+		// boundary nodes (internal/meshregion); 404 while the gated
+		// feature "mesh" is off.
+		mesh := handler.NewMeshHandler()
+		v4.GET("/kernel/mesh/regions", mesh.ListRegions)
+		v4.POST("/kernel/mesh/regions", mesh.CreateRegion)
+		v4.PUT("/kernel/mesh/regions/:id", mesh.UpdateRegion)
+		v4.DELETE("/kernel/mesh/regions/:id", mesh.DeleteRegion)
+		v4.POST("/kernel/mesh/regions/:id/members", mesh.AddMember)
+		v4.PUT("/kernel/mesh/members/:member_id", mesh.UpdateMember)
+		v4.DELETE("/kernel/mesh/members/:member_id", mesh.RemoveMember)
 		// Feature licensing (internal/entitlement): the ANX
 		// licensing settings, the devices that asked for a license, revoke
 		// and restore. Off by default.

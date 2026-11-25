@@ -205,6 +205,7 @@ export default {
       forwardEgress: 'Domain egress',
       forwardStandby: 'Cross-border standby',
       reverseProxies: 'Reverse proxies',
+      mesh: 'Mesh',
       control: 'Control Kernel',
       accessGroups: 'Access groups',
       payment: 'Payments',

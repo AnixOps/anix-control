@@ -16,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/egressroute"
 	"github.com/AnixOps/anix-control/v5/internal/exitpolicy"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/meshregion"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -90,6 +91,15 @@ func BuildDesiredConfig(db *gorm.DB, node agentcontrol.AgentNode) (*DesiredConfi
 	}
 	if negotiated {
 		document[network.NodeConfigMember] = member
+	}
+	// The intranet mesh networks of the node's regions
+	// (internal/meshregion), only when it is in an enabled one.
+	mesh, err := meshregion.NodeMember(db, node)
+	if err != nil {
+		return nil, err
+	}
+	if mesh != nil {
+		document[meshregion.Member] = mesh
 	}
 	return newDesiredConfig(node, format, document)
 }
