@@ -338,26 +338,47 @@ func TestNodeConfigNamesAndHostGroups(t *testing.T) {
 	require.Equal(t, "c41b7d0e-9a2f-4e63-8d15-0f7e6b5a4c39", network(1)["host_groups"].([]map[string]any)[0]["backup_gateway"])
 }
 
+// The vectors of the node kernel's name rule (spec §22.5), which the
+// panel must match exactly.
 func TestNormalizeName(t *testing.T) {
 	for raw, want := range map[string]string{
-		"DB-01":      "db-01",
-		" web_1 ":    "web-1",
-		"--edge--":   "edge",
-		"中国":         "xn--fiqs8s",
-		"Bücher":     "xn--bcher-kva",
-		"香港 01":      "xn---01-by5gj66p",
-		"cafe\u0301": "cafe",
-		"!!!":        "",
-		"":           "",
+		"中国":     "xn--fiqs8s",
+		"Bücher": "xn--bcher-kva",
+		"香港 01":  "xn---01-by5gj66p",
+		"北京上海广州深圳杭州南京成都重庆武汉西安天津苏州长沙郑州青岛": "xn--fhq3ob536bhjr1rcwim2eba12nmcw58c4qr78mkhd0rglncb29td03a4nd",
+		"北京上海广州深圳杭州南京成都重庆武汉西 安天津苏州":      "xn--fhq3ob536bhjr1rnqnba06lfc366cwwq5fm24ce3f36brv1ukg2a6hd",
+		"e\u0301x":                     "e-x",
+		"①号机":                          "xn--rpr216b",
+		"٣":                            "xn--cib",
+		"İstanbul":                     "istanbul",
+		"ΟΔΟΣ":                         "xn--pxavbq",
+		strings.Repeat("a", 62) + "-b": strings.Repeat("a", 62),
+		strings.Repeat("a", 60) + "é":  strings.Repeat("a", 60),
+		"！！":                           "",
+		"a\U000105C0b":                 "a-b",
+		"cafe\u0301":                   "cafe",
+		"DB-01":                        "db-01",
+		" web_1 ":                      "web-1",
+		"--edge--":                     "edge",
+		"!!!":                          "",
+		"":                             "",
 	} {
 		require.Equal(t, want, normalizeName(raw), raw)
 	}
-	long := normalizeName(strings.Repeat("a", 70) + "-b")
-	require.Len(t, long, 63)
-	require.NotRegexp(t, `-$`, normalizeName(strings.Repeat("a", 62)+"-bc"), "no hyphen at the end after the cut")
-	// A long name is encoded whole, then cut.
-	wide := strings.Repeat("中", 85)
-	require.Equal(t, strings.TrimRight(("xn--" + punycode(wide))[:63], "-"), normalizeName(wide))
+	// A long name loses whole characters until its encoding fits.
+	require.Equal(t, "xn--fiq"+strings.Repeat("a", 56), normalizeName(strings.Repeat("中", 85)))
+}
+
+func TestNameTable(t *testing.T) {
+	table := loadNameTable()
+	require.True(t, table.kept('中'))
+	require.True(t, table.kept(0x0663), "Arabic-Indic digit three is Nd")
+	require.False(t, table.kept(0x0301), "a combining mark is not kept")
+	require.False(t, table.kept(0x105C0), "unassigned in Unicode 15.1.0")
+	require.Equal(t, rune('i'), table.lower[0x0130])
+	require.Equal(t, rune(0x03C3), table.lower[0x03A3], "final sigma is not context dependent")
+	_, err := parseNameTable("keep 20 10\n")
+	require.Error(t, err)
 }
 
 func TestUsedPoolAddressStays(t *testing.T) {
