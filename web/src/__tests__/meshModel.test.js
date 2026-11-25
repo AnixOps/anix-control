@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boundaryCount, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
+import { boundaryCount, enrollmentState, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
 import zhMesh from '@/locales/modules/zh-CN/mesh'
 import enMesh from '@/locales/modules/en/mesh'
 
@@ -47,5 +47,12 @@ describe('mesh model', () => {
 
   it('has the same message keys in both languages', () => {
     expect(keys(enMesh).sort()).toEqual(keys(zhMesh).sort())
+  })
+
+  it('answers the state of an enrollment credential', () => {
+    const now = Date.parse('2026-11-25T08:00:00Z')
+    expect(enrollmentState({ used_at: '2026-11-25T07:00:00Z', expires_at: '2026-11-25T07:30:00Z' }, now)).toBe('used')
+    expect(enrollmentState({ expires_at: '2026-11-25T07:30:00Z' }, now)).toBe('expired')
+    expect(enrollmentState({ expires_at: '2026-11-26T07:30:00Z' }, now)).toBe('valid')
   })
 })

@@ -46,3 +46,9 @@ export function meshErrorMessage(error) {
 export function isFeatureDisabled(error) {
   return error?.response?.status === 404 && error?.response?.data?.error?.code === 'feature_disabled'
 }
+
+// enrollmentState is used, expired or valid.
+export function enrollmentState(enrollment, now = Date.now()) {
+  if (enrollment.used_at) return 'used'
+  return Date.parse(enrollment.expires_at) <= now ? 'expired' : 'valid'
+}

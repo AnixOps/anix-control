@@ -1,0 +1,253 @@
+package handler
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v5/internal/meshregion"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/gin-gonic/gin"
+)
+
+// Mesh devices without an Agent (internal/meshregion/enroll.go): the
+// administrator's one-time enrollment credentials and device revocation
+// under /api/v4/kernel/mesh, and the devices' own API under
+// /api/v5/mesh/device (docs/design/mesh-regions/agent-contract.md,
+// section 4).
+
+// ListMeshEnrollments godoc
+// @Summary The mesh enrollment credentials
+// @Description The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} model.MeshEnrollment
+// @Router /api/v4/kernel/mesh/enrollments [get]
+func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	rows, err := meshregion.Enrollments(c.Request.Context(), db)
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, rows)
+}
+
+// CreateMeshEnrollment godoc
+// @Summary Issue a mesh enrollment credential
+// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body meshregion.EnrollmentInput true "region_id, hostname, hours"
+// @Success 201 {object} meshregion.IssuedEnrollment
+// @Router /api/v4/kernel/mesh/enrollments [post]
+func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	var input meshregion.EnrollmentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "region_id, hostname and hours are expected")
+		return
+	}
+	row, err := meshregion.CreateEnrollment(c.Request.Context(), db, input, h.actor(c), h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_enrollment_create", row.ID, fmt.Sprintf(`{"region_id":%d,"hostname":%q}`, row.RegionID, row.Hostname))
+	kernelData(c, http.StatusCreated, row)
+}
+
+// DeleteMeshEnrollment godoc
+// @Summary Withdraw a mesh enrollment credential
+// @Description Deletes the credential; a device that already used it stays enrolled. Audited (module mesh, action mesh_enrollment_delete).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param enrollment_id path int true "credential id"
+// @Success 204
+// @Router /api/v4/kernel/mesh/enrollments/{enrollment_id} [delete]
+func (h *MeshHandler) DeleteMeshEnrollment(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "enrollment_id")
+	if !ok {
+		return
+	}
+	if err := meshregion.DeleteEnrollment(c.Request.Context(), db, id); err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_enrollment_delete", id, fmt.Sprintf(`{"enrollment_id":%d}`, id))
+	c.Status(http.StatusNoContent)
+}
+
+// RevokeMeshDevice godoc
+// @Summary Revoke an enrolled device's token
+// @Description The device's token is refused from now on; the device and its address stay until removed. Enrolling again needs a new credential. 404 when the device holds no token. Audited (module mesh, action mesh_device_revoke).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param device_id path int true "device id"
+// @Success 204
+// @Router /api/v4/kernel/mesh/devices/{device_id}/revoke [post]
+func (h *MeshHandler) RevokeMeshDevice(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "device_id")
+	if !ok {
+		return
+	}
+	if err := meshregion.RevokeDevice(c.Request.Context(), db, id); err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_device_revoke", id, fmt.Sprintf(`{"device_id":%d}`, id))
+	c.Status(http.StatusNoContent)
+}
+
+// device authenticates the request's device token.
+func (h *MeshHandler) device(c *gin.Context) (model.MeshDevice, bool) {
+	db, ok := h.database(c)
+	if !ok {
+		return model.MeshDevice{}, false
+	}
+	token, _ := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	device, err := meshregion.Authenticate(c.Request.Context(), db, token, h.now())
+	if err != nil {
+		meshDeviceError(c, err)
+		return device, false
+	}
+	return device, true
+}
+
+func meshDeviceError(c *gin.Context, err error) {
+	if errors.Is(err, meshregion.ErrUnauthorized) {
+		kernelError(c, http.StatusUnauthorized, "unauthorized", err.Error())
+		return
+	}
+	meshError(c, err)
+}
+
+// EnrollMeshDevice godoc
+// @Summary Enroll a mesh device
+// @Description A device without an Agent exchanges a one-time credential (token) for its device token, sent as `Authorization: Bearer <device_token>` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps: enrolling the same key again keeps the device, its region and its address. latencies (milliseconds by region code) choose the region when the credential names none. 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.
+// @Tags Mesh
+// @Accept json
+// @Produce json
+// @Param request body meshregion.EnrollRequest true "token, device_key, latencies"
+// @Success 201 {object} meshregion.Enrolled
+// @Router /api/v5/mesh/device/enroll [post]
+func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	var request meshregion.EnrollRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "token and device_key are expected")
+		return
+	}
+	enrolled, err := meshregion.Enroll(c.Request.Context(), db, request, h.now())
+	if err != nil {
+		meshDeviceError(c, err)
+		return
+	}
+	kernelData(c, http.StatusCreated, enrolled)
+}
+
+// MeshDeviceConfig godoc
+// @Summary A mesh device's networks
+// @Description The device's networks in the shape of the Agent's member mesh: its region's network as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object
+// @Router /api/v5/mesh/device/config [get]
+func (h *MeshHandler) MeshDeviceConfig(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	config, err := meshregion.DeviceConfig(c.Request.Context(), h.db(), device, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, config)
+}
+
+// MeshDeviceReport godoc
+// @Summary Report a mesh device's status
+// @Description The read-only status of the device, the payload of the Agent's mesh.status report (a JSON object with a networks array, at most the package report size). Answered 204 with no instructions; the administrator sees the latest report. 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Accept json
+// @Security BearerAuth
+// @Param request body object true "mesh.status payload"
+// @Success 204
+// @Router /api/v5/mesh/device/report [post]
+func (h *MeshHandler) MeshDeviceReport(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	payload, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, agentcontrol.MaxPackageReportPayloadBytes))
+	if err != nil {
+		kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the report is too large")
+		return
+	}
+	if err := meshregion.RecordDeviceStatus(c.Request.Context(), h.db(), device, payload, h.now()); err != nil {
+		meshError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+type meshDeviceChangeRequest struct {
+	// Region is the code of the region to move to.
+	Region string `json:"region"`
+	Reason string `json:"reason"`
+}
+
+// MeshDeviceChange godoc
+// @Summary Ask to move a mesh device to another region
+// @Description Records the device's request to move to the region of code region, with an optional reason (at most 500 characters), for an administrator to approve or reject on the region changes. 409 mesh_conflict when a request is already pending. 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body meshDeviceChangeRequest true "region, reason"
+// @Success 201 {object} model.MeshRegionChange
+// @Router /api/v5/mesh/device/region-change [post]
+func (h *MeshHandler) MeshDeviceChange(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	var request meshDeviceChangeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "region and reason are expected")
+		return
+	}
+	row, err := meshregion.RequestDeviceChange(c.Request.Context(), h.db(), device, request.Region, request.Reason, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	kernelData(c, http.StatusCreated, row)
+}
