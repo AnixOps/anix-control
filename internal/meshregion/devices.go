@@ -80,6 +80,9 @@ type DeviceView struct {
 	// server segment, R32); Subnets are a full node's confirmed subnets.
 	Role    string   `json:"role"`
 	Subnets []string `json:"subnets"`
+	// SubnetRequest is a full node's pending request for other subnets
+	// (R35), absent when none is pending.
+	SubnetRequest *SubnetRequest `json:"subnet_request,omitempty"`
 }
 
 // pool answers the first and last address of the device pool of prefix:
@@ -382,7 +385,7 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 		view := DeviceView{MeshDevice: row, RegionCode: codes[row.RegionID], Warnings: []string{}, Role: RoleAccess, Subnets: []string{}}
 		node, isFull := full[row.ID]
 		if isFull {
-			view.Role, view.Subnets = RoleFull, splitSubnets(node.Subnets)
+			view.Role, view.Subnets, view.SubnetRequest = RoleFull, splitSubnets(node.Subnets), pendingRequest(node)
 		}
 		view.LastSeenAt, view.Enrolled = seen[row.ID]
 		if status, ok := reports[DeviceRef(row.ID)]; ok {

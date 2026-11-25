@@ -313,6 +313,74 @@ func (h *MeshHandler) SetMeshDeviceSubnets(c *gin.Context) {
 	kernelData(c, http.StatusOK, subnets)
 }
 
+// ApproveMeshDeviceSubnets godoc
+// @Summary Approve a full node's subnet request
+// @Description Confirms the subnets a full node without an Agent asked to advertise (its subnet_request on the devices) as its subnets, with the checks of the subnets route (409 mesh_conflict on an overlap). subnets repeats the requested list as the administrator saw it; 409 mesh_conflict when the node has changed its request since. 404 not_found when nothing is pending. Audited (module mesh, action mesh_device_subnets_approve).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param device_id path int true "device id"
+// @Param request body meshSubnetsInput true "subnets"
+// @Success 200 {array} string
+// @Router /api/v4/kernel/mesh/devices/{device_id}/subnet-request/approve [post]
+func (h *MeshHandler) ApproveMeshDeviceSubnets(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "device_id")
+	if !ok {
+		return
+	}
+	var input meshSubnetsInput
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, meshDeviceRequestBytes)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		if tooLarge(err) {
+			kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the request is too large")
+			return
+		}
+		kernelError(c, http.StatusBadRequest, "invalid_request", "subnets is expected")
+		return
+	}
+	subnets, err := meshregion.ApproveDeviceSubnets(c.Request.Context(), db, id, input.Subnets, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	detail, _ := json.Marshal(map[string]any{"device_id": id, "subnets": subnets})
+	h.audit(c, db, "mesh_device_subnets_approve", id, string(detail))
+	kernelData(c, http.StatusOK, subnets)
+}
+
+// RejectMeshDeviceSubnets godoc
+// @Summary Reject a full node's subnet request
+// @Description Removes the pending subnet request of a full node without an Agent; its confirmed subnets stay. 404 not_found when nothing is pending. Audited (module mesh, action mesh_device_subnets_reject).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param device_id path int true "device id"
+// @Success 204
+// @Router /api/v4/kernel/mesh/devices/{device_id}/subnet-request [delete]
+func (h *MeshHandler) RejectMeshDeviceSubnets(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "device_id")
+	if !ok {
+		return
+	}
+	subnets, err := meshregion.RejectDeviceSubnets(c.Request.Context(), db, id, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	detail, _ := json.Marshal(map[string]any{"device_id": id, "subnets": subnets})
+	h.audit(c, db, "mesh_device_subnets_reject", id, string(detail))
+	c.Status(http.StatusNoContent)
+}
+
 // ListMeshHostGroups godoc
 // @Summary The mesh's host groups
 // @Description Every host group by segment, with its gateway node, standby node and the gateway's home region.

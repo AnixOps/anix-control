@@ -83,7 +83,16 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   Agent gives `external_bridge` only to kernels listing
   `mesh_external_bridge` and passes the kernel status's `externalBridge`
   (allow list digest and applied time, spec #339) on as it is, which
-  releases held addresses.
+  releases held addresses; a missing `externalBridge` is unknown and only
+  an explicit null releases, and the Agent reports the alert
+  `external_bridge_unsupported` when it withholds the section. Audit lows
+  of #647 left for the next minor: every mesh change takes the global
+  bridge lock and expands every allow list twice (skip both when there is
+  no bridge, or when the change touches no address, key, host group or
+  bridge); members' IPv6 /128 entries with IPv6 addresses; the Linux limit
+  rests on the kernel capability (check the node's system if the panel
+  learns it); tests for host group segment holds and concurrent changes
+  on PostgreSQL.
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver

@@ -113,7 +113,19 @@ export default {
       subnetsDescription: '完整节点仅通告此处确认的局域网网段。每行一个私有 IPv4 网段，至多 32 个，不得与地区网段、宿主组总网段、保留网段或其他完整节点的网段重叠。留空则不通告。',
       subnetsLabel: '网段',
       subnetsSaved: '已保存，节点下次读取配置时生效',
-      advertised: '通告 {subnets}'
+      advertised: '通告 {subnets}',
+      requested: '申请通告 {subnets}',
+      requestPending: '网段申请待审批',
+      approveRequest: '批准网段申请',
+      approveTitle: '批准 {name} 的网段申请',
+      approveMessage: '以下网段将替换当前通告的网段：{subnets}',
+      approveConfirm: '批准',
+      approved: '已批准，节点下次读取配置时生效',
+      rejectRequest: '驳回网段申请',
+      rejectTitle: '驳回 {name} 的网段申请',
+      rejectMessage: '当前通告的网段保持不变。',
+      rejectConfirm: '驳回',
+      rejected: '已驳回'
     },
     hostGroups: {
       title: '宿主组',
@@ -134,7 +146,7 @@ export default {
     },
     bridges: {
       title: '外部网络桥接',
-      description: '桥接节点同时位于其他组网软件的网络中，在所属地区通告指定的外部地址，仅允许名单中的来源访问。',
+      description: '桥接节点同时位于外部网络中，在所属地区通告指定的外部地址，仅允许名单中的来源访问。',
       add: '新建桥接',
       empty: '暂无外部网络桥接',
       loadFailed: '无法加载外部网络桥接',

@@ -30,6 +30,7 @@
           <span>{{ row.hostname }}</span>
           <span class="mesh-muted mesh-mono">{{ row.fqdn }}</span>
           <span v-if="row.role === 'full'" class="mesh-muted">{{ t('meshAddr.devices.fullNode') }}<template v-if="row.subnets?.length"> · {{ t('meshAddr.devices.advertised', { subnets: row.subnets.join(', ') }) }}</template></span>
+          <span v-if="row.subnet_request" class="mesh-muted" data-testid="mesh-device-request">{{ t('meshAddr.devices.requested', { subnets: row.subnet_request.subnets.join(', ') }) }}</span>
           <span v-if="row.last_seen_at" class="mesh-muted">{{ t('meshAddr.devices.lastSeen') }} {{ format.dateTime(row.last_seen_at) }}</span>
         </span>
       </template>
@@ -43,6 +44,7 @@
         <span class="mesh-badges">
           <UiBadge v-if="row.enrolled" :tone="STATE_TONES[deviceStatus(row).state]" :label="t(`mesh.page.status.${deviceStatus(row).state}`)" />
           <UiBadge v-for="code in row.enrolled ? deviceStatus(row).alerts : []" :key="code" tone="danger" :label="alertLabel(code)" />
+          <UiBadge v-if="row.subnet_request" tone="warning" :label="t('meshAddr.devices.requestPending')" />
           <UiBadge v-for="code in row.warnings" :key="code" tone="warning" :label="t(`meshAddr.devices.warnings.${code}`)" />
         </span>
       </template>
@@ -70,12 +72,13 @@
 // 组网 → 设备: personal devices with their pool addresses (R29); an address
 // stays the device's until it has gone unused for 30 days. Full nodes
 // without an Agent (R32) keep a fixed address and advertise the subnets an
-// administrator confirms here (R17).
+// administrator confirms here (R17), or that they ask for themselves and an
+// administrator approves or rejects (R35).
 import { computed, onMounted, ref } from 'vue'
-import { Ban, MapPinPlus, MoveRight, Network, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { Ban, Check, MapPinPlus, MoveRight, Network, Pencil, Plus, Trash2, X } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextarea, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, setKernelMeshDeviceSubnets, updateKernelMeshDevice } from '@/api/kernel'
+import { approveKernelMeshDeviceSubnets, assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, rejectKernelMeshDeviceSubnets, revokeKernelMeshDevice, setKernelMeshDeviceSubnets, updateKernelMeshDevice } from '@/api/kernel'
 import { deviceStatus, inSharedAddressSpace, meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
@@ -176,8 +179,36 @@ async function assignAddress(row) {
   emit('changed')
 }
 
+// The approve and reject actions of a full node's pending subnet request.
+function requestActions(row) {
+  const request = row.subnet_request
+  if (!request) return []
+  const decide = (approve) => confirm({
+    title: t(approve ? 'meshAddr.devices.approveTitle' : 'meshAddr.devices.rejectTitle', { name: row.hostname }),
+    message: approve ? t('meshAddr.devices.approveMessage', { subnets: request.subnets.join(', ') }) : t('meshAddr.devices.rejectMessage'),
+    confirmLabel: t(approve ? 'meshAddr.devices.approveConfirm' : 'meshAddr.devices.rejectConfirm'),
+    tone: approve ? 'default' : 'danger',
+    onConfirm: async () => {
+      try {
+        if (approve) await approveKernelMeshDeviceSubnets(row.id, request.subnets)
+        else await rejectKernelMeshDeviceSubnets(row.id)
+      } catch (e) {
+        throw new Error(meshErrorMessage(e))
+      }
+      toast.success(t(approve ? 'meshAddr.devices.approved' : 'meshAddr.devices.rejected'))
+      await load()
+      emit('changed')
+    }
+  })
+  return [
+    { key: 'approve-subnets', label: t('meshAddr.devices.approveRequest'), icon: Check, onSelect: () => decide(true) },
+    { key: 'reject-subnets', label: t('meshAddr.devices.rejectRequest'), icon: X, onSelect: () => decide(false) }
+  ]
+}
+
 function rowActions(row) {
   return [
+    ...requestActions(row),
     ...(row.address && !(row.warnings || []).includes('reserved_address') ? [] : [{ key: 'assign', label: t('meshAddr.devices.assign'), icon: MapPinPlus, onSelect: () => assignAddress(row) }]),
     { key: 'edit', label: t('meshAddr.devices.edit'), icon: Pencil, onSelect: () => openSheet('edit', row) },
     ...(row.role === 'full' ? [{ key: 'subnets', label: t('meshAddr.devices.subnets'), icon: Network, onSelect: () => openSheet('subnets', row) }] : []),

@@ -65,7 +65,8 @@ describe('mesh addresses', () => {
 
   it('marks a full node and the subnets it advertises', async () => {
     api.listKernelMeshDevices.mockResolvedValue([
-      { id: 4, region_id: 1, hostname: 'router', fqdn: 'router.cn.mesh.internal', address: '10.150.0.9', warnings: [], role: 'full', subnets: ['192.168.1.0/24'] }
+      { id: 4, region_id: 1, hostname: 'router', fqdn: 'router.cn.mesh.internal', address: '10.150.0.9', warnings: [], role: 'full', subnets: ['192.168.1.0/24'],
+        subnet_request: { subnets: ['192.168.2.0/24', '172.16.0.0/16'], requested_at: '2026-11-25T08:00:00Z' } }
     ])
     api.listKernelMeshEnrollments.mockResolvedValue([
       { id: 5, region_id: 1, hostname: 'router', role: 'full', address: '10.150.0.9', expires_at: '2026-11-26T08:00:00Z', used_at: null, device_id: null }
@@ -74,6 +75,8 @@ describe('mesh addresses', () => {
     const enrollments = mount(MeshEnrollments, { props: { regions: REGIONS }, attachTo: document.body })
     await flushPromises()
     expect(devices.get('[data-testid="mesh-devices"]').text()).toContain('完整节点 · 通告 192.168.1.0/24')
+    expect(devices.get('[data-testid="mesh-device-request"]').text()).toBe('申请通告 192.168.2.0/24, 172.16.0.0/16')
+    expect(devices.get('[data-testid="mesh-devices"]').text()).toContain('网段申请待审批')
     expect(enrollments.get('[data-testid="mesh-enrollment-table"]').text()).toContain('完整节点 · 10.150.0.9')
     devices.unmount()
     enrollments.unmount()
