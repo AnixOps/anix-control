@@ -12,7 +12,8 @@ const api = vi.hoisted(() => ({
   deleteKernelMeshRegion: vi.fn(),
   addKernelMeshMember: vi.fn(),
   updateKernelMeshMember: vi.fn(),
-  removeKernelMeshMember: vi.fn()
+  removeKernelMeshMember: vi.fn(),
+  getKernelMeshSummary: vi.fn()
 }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 
@@ -27,6 +28,7 @@ describe('MeshRegions', () => {
   beforeEach(async () => {
     await setLocale('zh-CN')
     Object.values(api).forEach(fn => fn.mockReset())
+    api.getKernelMeshSummary.mockResolvedValue({ settings: {}, pools: [], pending_changes: 0 })
     api.getKernelAdminNodes.mockResolvedValue({ list: [{ id: 1, name: 'hk-01', host: 'hk.example.com' }, { id: 2, name: 'jp-01' }] })
   })
 

@@ -57,7 +57,7 @@ func TestAgentControlMeshNegotiation(t *testing.T) {
 func TestAgentControlMeshMemberAndStatus(t *testing.T) {
 	enableMesh(t)
 	env := newConfigTestEnvironment(t)
-	requireAutoMigrate(t, &model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}, &model.ForwardNode{})
+	requireAutoMigrate(t, append(model.MeshModels(), &model.ForwardNode{})...)
 	node := env.agentNode()
 	db := database.GetDB()
 	ctx := context.Background()

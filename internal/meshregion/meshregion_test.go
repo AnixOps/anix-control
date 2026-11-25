@@ -26,7 +26,7 @@ func openDB(t *testing.T) *gorm.DB {
 	t.Cleanup(func() { features.SetVersion("") })
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "mesh.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}, &model.Node{}, &model.ForwardNode{}))
+	require.NoError(t, db.AutoMigrate(append(model.MeshModels(), &model.Node{}, &model.ForwardNode{})...))
 	for i, host := range []string{"a.example.com", "b.example.com", "c.example.com", "d.example.com"} {
 		require.NoError(t, db.Create(&model.Node{ID: uint(i + 1), Name: host[:1], Host: host}).Error)
 	}

@@ -808,3 +808,85 @@ export async function updateKernelMeshMember(id, { regionId, boundary }) {
 export async function removeKernelMeshMember(id) {
   return unwrap(await v4({ url: `/kernel/mesh/members/${encodeURIComponent(id)}`, method: 'delete' }))
 }
+
+// The mesh's addresses and names: the settings and device pools, the
+// personal devices, the host groups and published names, the intranet name
+// list and the region changes.
+const meshPath = (...parts) => '/kernel/mesh/' + parts.map(part => encodeURIComponent(part)).join('/')
+
+export async function getKernelMeshSummary() {
+  return unwrap(await v4({ url: meshPath('summary'), method: 'get' }))
+}
+
+export async function saveKernelMeshSettings({ nameSuffix, hostGroupSupernet, hostGroupPrefix, reservedRanges }) {
+  return unwrap(await v4({
+    url: meshPath('settings'),
+    method: 'put',
+    data: {
+      name_suffix: String(nameSuffix || '').trim(),
+      host_group_supernet: String(hostGroupSupernet || '').trim(),
+      host_group_prefix: Number(hostGroupPrefix) || 0,
+      reserved_ranges: (reservedRanges || []).map(item => String(item).trim()).filter(Boolean)
+    }
+  }))
+}
+
+export async function listKernelMeshDevices() {
+  return unwrap(await v4({ url: meshPath('devices'), method: 'get' }))
+}
+
+export async function createKernelMeshDevice(regionId, { hostname, deviceKey }) {
+  return unwrap(await v4({ url: meshPath('regions', regionId, 'devices'), method: 'post', data: { hostname: String(hostname || '').trim(), device_key: String(deviceKey || '').trim() } }))
+}
+
+export async function updateKernelMeshDevice(id, { hostname, deviceKey }) {
+  return unwrap(await v4({ url: meshPath('devices', id), method: 'put', data: { hostname: String(hostname || '').trim(), device_key: String(deviceKey || '').trim() } }))
+}
+
+export async function deleteKernelMeshDevice(id) {
+  return unwrap(await v4({ url: meshPath('devices', id), method: 'delete' }))
+}
+
+export async function moveKernelMeshDevice(id, regionId) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'move'), method: 'post', data: { region_id: Number(regionId) || 0 } }))
+}
+
+export async function listKernelMeshHostGroups() {
+  return unwrap(await v4({ url: meshPath('host-groups'), method: 'get' }))
+}
+
+export async function saveKernelMeshHostGroup(id, { name, segment, gateway, standby }) {
+  const data = { name: String(name || '').trim(), segment: String(segment || '').trim(), gateway: gateway || '', standby: standby || '' }
+  return unwrap(await v4(id ? { url: meshPath('host-groups', id), method: 'put', data } : { url: meshPath('host-groups'), method: 'post', data }))
+}
+
+export async function deleteKernelMeshHostGroup(id) {
+  return unwrap(await v4({ url: meshPath('host-groups', id), method: 'delete' }))
+}
+
+export async function listKernelMeshDeviceNames() {
+  return unwrap(await v4({ url: meshPath('device-names'), method: 'get' }))
+}
+
+// A published name: hostGroupId for a host of a host group, or gateway for
+// a device of the gateway's local network.
+export async function saveKernelMeshDeviceName(id, { gateway, hostGroupId, name, address }) {
+  const data = { gateway: gateway || '', host_group_id: Number(hostGroupId) || 0, name: String(name || '').trim(), address: String(address || '').trim() }
+  return unwrap(await v4(id ? { url: meshPath('device-names', id), method: 'put', data } : { url: meshPath('device-names'), method: 'post', data }))
+}
+
+export async function deleteKernelMeshDeviceName(id) {
+  return unwrap(await v4({ url: meshPath('device-names', id), method: 'delete' }))
+}
+
+export async function getKernelMeshNames() {
+  return unwrap(await v4({ url: meshPath('names'), method: 'get' }))
+}
+
+export async function listKernelMeshChanges(status = '') {
+  return unwrap(await v4({ url: meshPath('changes'), method: 'get', params: status ? { status } : {} }))
+}
+
+export async function decideKernelMeshChange(id, approve, note = '') {
+  return unwrap(await v4({ url: meshPath('changes', id, approve ? 'approve' : 'reject'), method: 'post', data: { note: String(note || '').trim() } }))
+}

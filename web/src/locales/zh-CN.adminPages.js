@@ -18,6 +18,7 @@ import topology from './modules/zh-CN/topology'
 import lines from './modules/zh-CN/lines'
 import reverseProxies from './modules/zh-CN/reverseProxies'
 import mesh from './modules/zh-CN/mesh'
+import meshAddresses from './modules/zh-CN/meshAddresses'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
 import realityTargets from './modules/zh-CN/realityTargets'
 import nodeEntries from './modules/zh-CN/nodeEntries'
@@ -40,6 +41,7 @@ export default {
   ...standby,
   ...reverseProxies,
   ...mesh,
+  ...meshAddresses,
   ...nodeDiagnostics,
   ...realityTargets,
   ...nodeEntries,

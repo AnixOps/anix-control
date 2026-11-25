@@ -18,6 +18,7 @@ import topology from './modules/en/topology'
 import lines from './modules/en/lines'
 import reverseProxies from './modules/en/reverseProxies'
 import mesh from './modules/en/mesh'
+import meshAddresses from './modules/en/meshAddresses'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
 import nodeEntries from './modules/en/nodeEntries'
@@ -40,6 +41,7 @@ export default {
   ...standby,
   ...reverseProxies,
   ...mesh,
+  ...meshAddresses,
   ...nodeDiagnostics,
   ...realityTargets,
   ...nodeEntries,

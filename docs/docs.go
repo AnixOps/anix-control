@@ -5791,6 +5791,606 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/changes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The latest 500 region changes, pending first, or those of one status (pending, approved, rejected), with their regions' codes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The region changes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "pending, approved or rejected",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.ChangeView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records, for a node (node) or a device (device_id), a pending request to move to to_region_id, on the member's behalf; it moves when approved. A member has at most one pending request (409 mesh_conflict). Audited (module mesh, action mesh_change_request).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Record a region change request",
+                "parameters": [
+                    {
+                        "description": "node or device_id, to_region_id, reason",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.ChangeInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegionChange"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/changes/{change_id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves the node or device to the requested region, where it gets a new address, and records the decision with the optional note. 409 mesh_conflict when the change is no longer pending or the member has moved since (reject it then). Audited (module mesh, action mesh_change_approve).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Approve a region change",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region change id",
+                        "name": "change_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "note",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshDecisionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegionChange"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/changes/{change_id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records the rejection with the optional note; nothing moves. Audited (module mesh, action mesh_change_reject).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Reject a region change",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region change id",
+                        "name": "change_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "note",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshDecisionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegionChange"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/device-names": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every published name by gateway: a host of a host group (host_group_id) or a device of the gateway's local network.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The names gateway nodes publish",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.MeshDeviceName"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "name is one DNS label. With host_group_id: an address in the group's segment, published by the group's gateway. Without: gateway (a node in the mesh) and a private address outside every region and the host group supernet (a device of the gateway's local network). Audited (module mesh, action mesh_device_name_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Publish a name for a host behind a gateway",
+                "parameters": [
+                    {
+                        "description": "gateway, host_group_id, name, address",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.DeviceNameInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshDeviceName"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/device-names/{name_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "As when publishing it. Audited (module mesh, action mesh_device_name_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a published name",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device name id",
+                        "name": "name_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "gateway, host_group_id, name, address",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.DeviceNameInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshDeviceName"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Audited (module mesh, action mesh_device_name_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Remove a published name",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device name id",
+                        "name": "name_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/devices": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every device (or those of region_id) with its region, pool address, when the address was last used, its intranet name and its warnings: no_address (the address went to another device), address_idle (unused for 30 days; it may go to another device when the pool is full).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh's personal devices",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "region_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.DeviceView"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/devices/{device_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes hostname and device_key; the region changes only through a region change. Audited (module mesh, action mesh_device_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a personal device",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "hostname and device_key",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.DeviceInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshDevice"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Its address becomes free; its pending region change is rejected. Audited (module mesh, action mesh_device_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Remove a personal device",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/devices/{device_id}/move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "At once: the device gets an address of the other region's device pool, recorded as an administrator's approved region change; its pending change is settled. Audited (module mesh, action mesh_device_move).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Move a personal device to another region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "region_id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshDeviceMoveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegionChange"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/host-groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every host group by segment, with its gateway node, standby node and the gateway's home region.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh's host groups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.HostGroupView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A host group is the virtual machines or containers behind a gateway node, on a segment of the host group supernet: segment (empty for the next free one), gateway and standby (nodes in the mesh; the standby, which may be empty, has the gateway's home region). Audited (module mesh, action mesh_host_group_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a host group",
+                "parameters": [
+                    {
+                        "description": "name, segment, gateway, standby",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.HostGroupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshHostGroup"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/host-groups/{group_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the name, gateway and standby; the segment never changes. The names published for its hosts follow the new gateway. Audited (module mesh, action mesh_host_group_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a host group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "host group id",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "name, gateway, standby",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.HostGroupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshHostGroup"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the host group and the names of its hosts. Audited (module mesh, action mesh_host_group_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Remove a host group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "host group id",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/members/{member_id}": {
             "put": {
                 "security": [
@@ -5862,6 +6462,31 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/names": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every node in the mesh, every device with an address and every published name as name.region-code.suffix (the node's or the gateway's home region), by name. A name that occurs more than once is answered every time, marked duplicate. unnamed lists the nodes whose name is no DNS label.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The intranet name list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.NameList"
+                        }
                     }
                 }
             }
@@ -6006,6 +6631,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/regions/{id}/devices": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device gets the lowest free address of the region's device pool (the upper half of its range), or else the address unused longest if unused for 30 days, which its device loses. hostname is one DNS label; device_key, the device's identity key, may be empty. 409 pool_full when the pool has neither. Audited (module mesh, action mesh_device_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a personal device to a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "hostname and device_key",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.DeviceInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshDevice"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/regions/{id}/members": {
             "post": {
                 "security": [
@@ -6047,6 +6718,70 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/model.MeshMember"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/settings": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "name_suffix (DNS labels, such as mesh.internal: a name is name.region-code.suffix), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change the mesh settings",
+                "parameters": [
+                    {
+                        "description": "settings",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.SettingsInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.Settings"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The global settings (intranet domain suffix, host group supernet and segment length, reserved ranges; the defaults until saved), each region's device pool (size, addresses in use, low when less than a tenth is free) and how many region changes wait for a decision.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh settings, device pools and pending region changes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.Summary"
                         }
                     }
                 }
@@ -8856,6 +9591,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshDecisionRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.meshDeviceMoveRequest": {
+            "type": "object",
+            "properties": {
+                "region_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "handler.meshMemberRequest": {
             "type": "object",
             "properties": {
@@ -9156,6 +9907,205 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.ChangeInput": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "integer"
+                },
+                "node": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "to_region_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "meshregion.ChangeView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string"
+                },
+                "decided_by": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "from_region_code": {
+                    "type": "string"
+                },
+                "from_region_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "new_address": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "old_address": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "requested_by": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "Source is \"member\" or \"admin\".",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is \"pending\", \"approved\" or \"rejected\".",
+                    "type": "string"
+                },
+                "to_region_code": {
+                    "type": "string"
+                },
+                "to_region_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "meshregion.DeviceInput": {
+            "type": "object",
+            "properties": {
+                "device_key": {
+                    "description": "DeviceKey is the device's identity key, empty for none.",
+                    "type": "string"
+                },
+                "hostname": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.DeviceNameInput": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "gateway": {
+                    "type": "string"
+                },
+                "host_group_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.DeviceView": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Address is nil after the address went to another device.",
+                    "type": "string"
+                },
+                "address_used_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "device_key": {
+                    "description": "DeviceKey is the device's identity key once it enrolled; nil for a\ndevice an administrator added.",
+                    "type": "string"
+                },
+                "fqdn": {
+                    "type": "string"
+                },
+                "hostname": {
+                    "description": "Hostname is the device's DNS label in the intranet names.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_code": {
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.HostGroupInput": {
+            "type": "object",
+            "properties": {
+                "gateway": {
+                    "description": "Gateway and Standby are nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e) in the\nmesh; Standby is empty for none and has the gateway's home region.",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "segment": {
+                    "type": "string"
+                },
+                "standby": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.HostGroupView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "gateway_ref": {
+                    "description": "GatewayRef and StandbyRef are nodes (\"proxy-\u003cid\u003e\", \"forward-\u003cid\u003e\").",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "region_code": {
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "segment": {
+                    "type": "string"
+                },
+                "standby_ref": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "meshregion.MemberView": {
             "type": "object",
             "properties": {
@@ -9196,6 +10146,54 @@ const docTemplate = `{
                 },
                 "status_received_at": {
                     "type": "string"
+                }
+            }
+        },
+        "meshregion.NameEntry": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "duplicate": {
+                    "description": "Duplicate: another entry has the same name; every one is answered\n(R28).",
+                    "type": "boolean"
+                },
+                "fqdn": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "ref": {
+                    "type": "string"
+                },
+                "region_code": {
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Source is node, device, host_group or local; Ref is the node, the\ndevice id or the device name id.",
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.NameList": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.NameEntry"
+                    }
+                },
+                "suffix": {
+                    "type": "string"
+                },
+                "unnamed": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.UnnamedNode"
+                    }
                 }
             }
         },
@@ -9256,6 +10254,98 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.RegionPool": {
+            "type": "object",
+            "properties": {
+                "low": {
+                    "description": "Low: less than a tenth of the pool is free.",
+                    "type": "boolean"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "used": {
+                    "type": "integer"
+                }
+            }
+        },
+        "meshregion.Settings": {
+            "type": "object",
+            "properties": {
+                "host_group_prefix": {
+                    "type": "integer"
+                },
+                "host_group_supernet": {
+                    "description": "HostGroupSupernet and HostGroupPrefix: the host groups' segments\nare /HostGroupPrefix ranges of the supernet (R21).",
+                    "type": "string"
+                },
+                "name_suffix": {
+                    "description": "NameSuffix: a name is \u003cname\u003e.\u003cregion code\u003e.\u003csuffix\u003e (R28).",
+                    "type": "string"
+                },
+                "reserved_ranges": {
+                    "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.SettingsInput": {
+            "type": "object",
+            "properties": {
+                "host_group_prefix": {
+                    "type": "integer"
+                },
+                "host_group_supernet": {
+                    "type": "string"
+                },
+                "name_suffix": {
+                    "type": "string"
+                },
+                "reserved_ranges": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.Summary": {
+            "type": "object",
+            "properties": {
+                "pending_changes": {
+                    "type": "integer"
+                },
+                "pools": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.RegionPool"
+                    }
+                },
+                "settings": {
+                    "$ref": "#/definitions/meshregion.Settings"
+                }
+            }
+        },
+        "meshregion.UnnamedNode": {
+            "type": "object",
+            "properties": {
+                "node_name": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "type": "string"
+                }
+            }
+        },
         "model.EgressExit": {
             "type": "object",
             "properties": {
@@ -9267,6 +10357,91 @@ const docTemplate = `{
                 },
                 "relay_port": {
                     "type": "integer"
+                }
+            }
+        },
+        "model.MeshDevice": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Address is nil after the address went to another device.",
+                    "type": "string"
+                },
+                "address_used_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "device_key": {
+                    "description": "DeviceKey is the device's identity key once it enrolled; nil for a\ndevice an administrator added.",
+                    "type": "string"
+                },
+                "hostname": {
+                    "description": "Hostname is the device's DNS label in the intranet names.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.MeshDeviceName": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "gateway_ref": {
+                    "type": "string"
+                },
+                "host_group_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.MeshHostGroup": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "gateway_ref": {
+                    "description": "GatewayRef and StandbyRef are nodes (\"proxy-\u003cid\u003e\", \"forward-\u003cid\u003e\").",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "segment": {
+                    "type": "string"
+                },
+                "standby_ref": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -9325,6 +10500,58 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "model.MeshRegionChange": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string"
+                },
+                "decided_by": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "from_region_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "new_address": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "old_address": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "requested_by": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "Source is \"member\" or \"admin\".",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is \"pending\", \"approved\" or \"rejected\".",
+                    "type": "string"
+                },
+                "to_region_id": {
+                    "type": "integer"
                 }
             }
         },
