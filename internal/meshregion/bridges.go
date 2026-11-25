@@ -608,6 +608,12 @@ type appliedBridge struct {
 // mesh_external_bridge.
 const AlertBridgeUnsupported = "external_bridge_unsupported"
 
+// AlertBridgeDowngradeResidue is the alert of a node now on a kernel
+// without mesh_external_bridge whose old bridge rules may still be in
+// place (spec section 15.12 item 9): while a network reports it, nothing
+// held for the node there is released, whatever else the report says.
+const AlertBridgeDowngradeResidue = "external_bridge_downgrade_residue"
+
 // networkAlert tells whether a "mesh.status" payload reports the alert
 // code in the network id.
 func networkAlert(payload, id, code string) bool {
@@ -639,7 +645,8 @@ func networkAlert(payload, id, code string) bool {
 // network: Running with the configuration in force (Applied), Stopped for
 // an explicit null externalBridge or, without one, the alert
 // external_bridge_unsupported (the Agent never gives that kernel the
-// section, so the node runs no bridge there), or
+// section, so the node runs no bridge there), or neither while the alert
+// external_bridge_downgrade_residue is reported (old rules may remain), or
 // neither when the key is missing or unreadable (the state is unknown: the
 // configuration may not have been applied or the kernel not read).
 type reportedBridge struct {
@@ -668,11 +675,14 @@ func reportedBridges(payload string) map[string]reportedBridge {
 	}
 	for _, network := range shape.Networks {
 		raw := bytes.TrimSpace(network.ExternalBridge)
-		unsupported := false
+		unsupported, residue := false, false
 		for _, alert := range network.Alerts {
 			unsupported = unsupported || alert.Code == AlertBridgeUnsupported
+			residue = residue || alert.Code == AlertBridgeDowngradeResidue
 		}
 		switch {
+		case residue:
+			// Old bridge rules may remain: unknown, never released.
 		case len(raw) == 0 && unsupported:
 			answer[network.ID] = reportedBridge{Stopped: true}
 		case len(raw) == 0:
