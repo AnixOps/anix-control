@@ -318,7 +318,7 @@ func TestBridgeHoldWaitsAgainWhenRemovedAgain(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	cn := region(t, db, "cn", "10.150.0.0/24")
-	for i := 1; i <= 2; i++ {
+	for _, i := range []uint32{1, 2} {
 		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
 		require.NoError(t, err)
 	}
