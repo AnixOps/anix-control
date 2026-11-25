@@ -127,7 +127,7 @@ func CreateHostGroup(ctx context.Context, db *gorm.DB, input HostGroupInput, now
 		return model.MeshHostGroup{}, err
 	}
 	var row model.MeshHostGroup
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = change(ctx, db, func(tx *gorm.DB) error {
 		home, standby, err := checkGateways(tx, input.Gateway, input.Standby)
 		if err != nil {
 			return err
@@ -154,7 +154,7 @@ func UpdateHostGroup(ctx context.Context, db *gorm.DB, id uint, input HostGroupI
 		return model.MeshHostGroup{}, err
 	}
 	var row model.MeshHostGroup
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = change(ctx, db, func(tx *gorm.DB) error {
 		if err := findHostGroup(tx, id, &row); err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func UpdateHostGroup(ctx context.Context, db *gorm.DB, id uint, input HostGroupI
 
 // DeleteHostGroup removes a host group and the names of its hosts.
 func DeleteHostGroup(ctx context.Context, db *gorm.DB, id uint) error {
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
 		var row model.MeshHostGroup
 		if err := findHostGroup(tx, id, &row); err != nil {
 			return err

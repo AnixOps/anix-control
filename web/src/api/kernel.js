@@ -851,6 +851,10 @@ export async function moveKernelMeshDevice(id, regionId) {
   return unwrap(await v4({ url: meshPath('devices', id, 'move'), method: 'post', data: { region_id: Number(regionId) || 0 } }))
 }
 
+export async function assignKernelMeshDeviceAddress(id) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'address'), method: 'post' }))
+}
+
 export async function listKernelMeshHostGroups() {
   return unwrap(await v4({ url: meshPath('host-groups'), method: 'get' }))
 }

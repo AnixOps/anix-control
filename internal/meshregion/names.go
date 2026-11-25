@@ -48,8 +48,8 @@ type NameEntry struct {
 	Duplicate bool `json:"duplicate"`
 }
 
-// UnnamedNode is a node whose name is no DNS label, so it has no
-// intranet name.
+// UnnamedNode is a node whose name has no letter or digit, so it has no
+// intranet name (normalizeName).
 type UnnamedNode struct {
 	NodeRef  string `json:"node_ref"`
 	NodeName string `json:"node_name"`
@@ -115,7 +115,7 @@ func checkDeviceName(tx *gorm.DB, input DeviceNameInput) (model.MeshDeviceName, 
 // CreateDeviceName adds a published name.
 func CreateDeviceName(ctx context.Context, db *gorm.DB, input DeviceNameInput, now time.Time) (model.MeshDeviceName, error) {
 	var row model.MeshDeviceName
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := change(ctx, db, func(tx *gorm.DB) error {
 		var err error
 		if row, err = checkDeviceName(tx, input); err != nil {
 			return err
@@ -129,7 +129,7 @@ func CreateDeviceName(ctx context.Context, db *gorm.DB, input DeviceNameInput, n
 // UpdateDeviceName changes a published name.
 func UpdateDeviceName(ctx context.Context, db *gorm.DB, id uint, input DeviceNameInput, now time.Time) (model.MeshDeviceName, error) {
 	var row model.MeshDeviceName
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := change(ctx, db, func(tx *gorm.DB) error {
 		var current model.MeshDeviceName
 		if err := findDeviceName(tx, id, &current); err != nil {
 			return err
@@ -147,7 +147,7 @@ func UpdateDeviceName(ctx context.Context, db *gorm.DB, id uint, input DeviceNam
 
 // DeleteDeviceName removes a published name.
 func DeleteDeviceName(ctx context.Context, db *gorm.DB, id uint) error {
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
 		var row model.MeshDeviceName
 		if err := findDeviceName(tx, id, &row); err != nil {
 			return err
@@ -206,8 +206,8 @@ func Names(ctx context.Context, db *gorm.DB) (NameList, error) {
 		if err != nil {
 			continue
 		}
-		label, err := normalizeLabel("name", info.name)
-		if err != nil {
+		label := normalizeName(info.name)
+		if label == "" {
 			list.Unnamed = append(list.Unnamed, UnnamedNode{NodeRef: home.NodeRef, NodeName: info.name})
 			continue
 		}

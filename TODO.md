@@ -21,8 +21,7 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   gated feature `mesh`) and the second (device pool, host groups and
   names, the name list, region change approval, settings): one-time
   enrollment credentials and the read-only report of nodes without an Agent
-  (R31), the names and host groups in the nodes' configuration, the
-  `takeover` setting, forward nodes in the node picker, and turning the
+  (R31), the `takeover` setting, forward nodes in the node picker, and turning the
   feature on once the node kernel runs the mesh.
 
 ## Plugin Platform

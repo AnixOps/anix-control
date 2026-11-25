@@ -267,7 +267,7 @@ func (h *MeshHandler) UpdateMember(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "invalid_request", "boundary and region_id are expected")
 		return
 	}
-	row, err := meshregion.UpdateMember(c.Request.Context(), db, id, request.RegionID, request.Boundary, h.now())
+	row, err := meshregion.UpdateMember(c.Request.Context(), db, id, request.RegionID, request.Boundary, h.actor(c), h.now())
 	if err != nil {
 		meshError(c, err)
 		return

@@ -38,6 +38,8 @@ export default {
       pool: '设备地址池',
       poolUsage: '已用 {used} / {size}',
       poolLow: '地址池余量不足',
+      assign: '分配新地址',
+      assigned: '已分配新地址',
       move: '迁移地区…',
       moveTitle: '迁移 {name}',
       moveDescription: '设备将获得目标地区设备地址池中的新地址。',
@@ -133,7 +135,7 @@ export default {
     settings: {
       title: '设置',
       nameSuffix: '域名后缀',
-      nameSuffixHelp: '名称格式为 名称.地区代码.后缀。',
+      nameSuffixHelp: '名称格式为 名称.地区代码.后缀。后缀须位于 internal 或 home.arpa 之下。',
       hostGroupSupernet: '宿主组地址范围',
       hostGroupPrefix: '宿主组地址段前缀长度',
       hostGroupHelp: '存在宿主组时不可更改。',

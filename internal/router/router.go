@@ -689,6 +689,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.PUT("/kernel/mesh/devices/:device_id", mesh.UpdateMeshDevice)
 		v4.DELETE("/kernel/mesh/devices/:device_id", mesh.DeleteMeshDevice)
 		v4.POST("/kernel/mesh/devices/:device_id/move", mesh.MoveMeshDevice)
+		v4.POST("/kernel/mesh/devices/:device_id/address", mesh.AssignMeshDeviceAddress)
 		v4.GET("/kernel/mesh/host-groups", mesh.ListMeshHostGroups)
 		v4.POST("/kernel/mesh/host-groups", mesh.CreateMeshHostGroup)
 		v4.PUT("/kernel/mesh/host-groups/:group_id", mesh.UpdateMeshHostGroup)

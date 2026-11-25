@@ -39,6 +39,8 @@ export default {
       pool: 'Device pool',
       poolUsage: '{used} of {size} in use',
       poolLow: 'Device pool nearly full',
+      assign: 'Assign a new address',
+      assigned: 'New address assigned',
       move: 'Move to region…',
       moveTitle: 'Move {name}',
       moveDescription: 'The device receives a new address from the target region\'s device pool.',
@@ -134,7 +136,7 @@ export default {
     settings: {
       title: 'Settings',
       nameSuffix: 'Domain suffix',
-      nameSuffixHelp: 'Names take the form name.region-code.suffix.',
+      nameSuffixHelp: 'Names take the form name.region-code.suffix. The suffix lies under internal or home.arpa.',
       hostGroupSupernet: 'Host group range',
       hostGroupPrefix: 'Host group segment prefix length',
       hostGroupHelp: 'Cannot be changed while host groups exist.',

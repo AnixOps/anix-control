@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"strings"
 	"testing"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -21,6 +23,8 @@ func TestSettings(t *testing.T) {
 
 	for _, input := range []SettingsInput{
 		{NameSuffix: "Mesh..internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: "corp.example", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: "com", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "8.8.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 12},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24, ReservedRanges: []string{"10.127.5.0/24"}},
@@ -31,9 +35,9 @@ func TestSettings(t *testing.T) {
 	region(t, db, "cn", "10.150.0.0/16")
 	_, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: "mesh.internal", HostGroupSupernet: "10.150.0.0/16", HostGroupPrefix: 24}, now)
 	require.ErrorIs(t, err, ErrConflict, "the supernet may not overlap a region")
-	saved, err := SaveSettings(ctx, db, SettingsInput{NameSuffix: ".Corp.Example.", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 26, ReservedRanges: []string{"10.126.0.0/16", " "}}, now)
+	saved, err := SaveSettings(ctx, db, SettingsInput{NameSuffix: ".Corp.Internal.", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 26, ReservedRanges: []string{"10.126.0.0/16", " "}}, now)
 	require.NoError(t, err)
-	require.Equal(t, "corp.example", saved.NameSuffix)
+	require.Equal(t, "corp.internal", saved.NameSuffix)
 	require.Equal(t, []string{"10.126.0.0/16"}, saved.ReservedRanges)
 	require.NotNil(t, saved.UpdatedAt)
 
@@ -47,7 +51,7 @@ func TestDevicePool(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	cn := region(t, db, "cn", "10.150.0.0/24")
-	eu := region(t, db, "eu", "10.152.0.0/16")
+	eu := region(t, db, "eu", "10.152.0.0/24")
 
 	first, err := CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "Phone-1"}, now)
 	require.NoError(t, err)
@@ -73,7 +77,8 @@ func TestDevicePool(t *testing.T) {
 		pools[pool.RegionID] = pool
 	}
 	require.Equal(t, RegionPool{RegionID: cn.ID, Size: 127, Used: 2}, pools[cn.ID])
-	require.Equal(t, 32767, pools[eu.ID].Size, "a /16 pool is .128.0 to .255.254")
+	require.Equal(t, 127, pools[eu.ID].Size)
+	require.Equal(t, 32767, PoolSize(netip.MustParsePrefix("10.153.0.0/16")), "a /16 pool is .128.0 to .255.254")
 }
 
 func TestIdlePoolAddressGoesToTheNextDevice(t *testing.T) {
@@ -167,7 +172,7 @@ func TestRegionChanges(t *testing.T) {
 	// A move through the membership is recorded and settles a pending change.
 	_, err = RequestChange(ctx, db, ChangeInput{Node: "proxy-1", ToRegionID: cn.ID}, model.MeshChangeMember, nil, now)
 	require.NoError(t, err)
-	_, err = UpdateMember(ctx, db, home.ID, cn.ID, false, now)
+	_, err = UpdateMember(ctx, db, home.ID, cn.ID, false, nil, now)
 	require.NoError(t, err)
 	changes, err = Changes(ctx, db, model.MeshChangePending)
 	require.NoError(t, err)
@@ -212,7 +217,7 @@ func TestHostGroupsAndNames(t *testing.T) {
 	_, err = CreateDeviceName(ctx, db, DeviceNameInput{Gateway: "proxy-1", Name: "a", Address: "192.168.1.21"}, now)
 	require.NoError(t, err)
 
-	_, err = UpdateMember(ctx, db, gateway.ID, eu.ID, false, now)
+	_, err = UpdateMember(ctx, db, gateway.ID, eu.ID, false, nil, now)
 	require.ErrorIs(t, err, ErrConflict, "a gateway stays while it has host groups")
 	require.ErrorIs(t, RemoveNode(ctx, db, gateway.ID), ErrConflict)
 
@@ -257,4 +262,114 @@ func requireNoNames(t *testing.T, db *gorm.DB, gateway string) {
 	var count int64
 	require.NoError(t, db.Model(&model.MeshDeviceName{}).Where("gateway_ref = ?", gateway).Count(&count).Error)
 	require.Zero(t, count)
+}
+
+func TestNodeConfigNamesAndHostGroups(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/16")
+	eu := region(t, db, "eu", "10.152.0.0/16")
+	for _, id := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(id), false, now)
+		require.NoError(t, err)
+	}
+	_, err := AddNode(ctx, db, eu.ID, proxy(3), false, now)
+	require.NoError(t, err)
+	_, err = CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "phone"}, now)
+	require.NoError(t, err)
+	_, err = CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "a"}, now)
+	require.NoError(t, err)
+	_, err = CreateHostGroup(ctx, db, HostGroupInput{Name: "vms", Gateway: "proxy-1", Standby: "proxy-2"}, now)
+	require.NoError(t, err)
+
+	network := func(id uint32) map[string]any {
+		doc, err := NodeMember(db, proxy(id))
+		require.NoError(t, err)
+		networks := doc["networks"].([]map[string]any)
+		require.Len(t, networks, 1)
+		return networks[0]
+	}
+	// Every name but the duplicate "a.cn" (node a and the device a), as
+	// <name>.<region code>; no host group before its gateway reports.
+	cnNet := network(1)
+	require.Equal(t, map[string]any{"enabled": true, "suffix": "mesh.internal", "names": []map[string]any{
+		{"name": "b.cn", "address": "10.150.0.2"},
+		{"name": "c.eu", "address": "10.152.0.1"},
+		{"name": "phone.cn", "address": "10.150.128.0"},
+	}}, cnNet["dns"])
+	require.Equal(t, []map[string]any{}, cnNet["host_groups"])
+
+	var pushed int
+	cancel := OnChange(func([]agentcontrol.AgentNode) { pushed++ })
+	defer cancel()
+	status := func(id uint32, instance string) {
+		payload := fmt.Sprintf(`{"networks":[],"instance_id":%q}`, instance)
+		require.NoError(t, RecordStatus(ctx, db, proxy(id), []byte(payload), now, now))
+	}
+	status(1, "2f6d7c1e-0b8a-4c55-9e0e-6a1f3b9d2c10")
+	require.Equal(t, 1, pushed, "a gateway's new instance id pushes")
+	status(1, "2f6d7c1e-0b8a-4c55-9e0e-6a1f3b9d2c10")
+	status(3, "7a0c9e42-51d3-4b1e-8f7a-3c2d1e0f9b88")
+	require.Equal(t, 1, pushed, "an unchanged id or a node that is no gateway does not")
+	require.Equal(t, []map[string]any{{"cidr": "10.127.0.0/24", "gateway": "2f6d7c1e-0b8a-4c55-9e0e-6a1f3b9d2c10"}}, network(2)["host_groups"])
+	require.Equal(t, []map[string]any{}, network(3)["host_groups"], "only the gateway's region")
+
+	status(2, "bad id")
+	require.NotContains(t, network(1)["host_groups"].([]map[string]any)[0], "backup_gateway", "an invalid id is ignored")
+	status(2, "c41b7d0e-9a2f-4e63-8d15-0f7e6b5a4c39")
+	require.Equal(t, "c41b7d0e-9a2f-4e63-8d15-0f7e6b5a4c39", network(1)["host_groups"].([]map[string]any)[0]["backup_gateway"])
+}
+
+func TestNormalizeName(t *testing.T) {
+	for raw, want := range map[string]string{
+		"DB-01":    "db-01",
+		" web_1 ":  "web-1",
+		"--edge--": "edge",
+		"中国":       "xn--fiqs8s",
+		"Bücher":   "xn--bcher-kva",
+		"香港 01":    "xn---01-by5gj66p",
+		"!!!":      "",
+		"":         "",
+	} {
+		require.Equal(t, want, normalizeName(raw), raw)
+	}
+	long := normalizeName(strings.Repeat("a", 70) + "-b")
+	require.Len(t, long, 63)
+	require.NotRegexp(t, `-$`, normalizeName(strings.Repeat("a", 62)+"-bc"), "no hyphen at the end after the cut")
+}
+
+func TestUsedPoolAddressStays(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	lab := region(t, db, "lab", "192.168.9.0/24")
+	_, err := AddNode(ctx, db, lab.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	old := now.Add(-PoolReclaimAfter - 1)
+	seen, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "seen"}, old)
+	require.NoError(t, err)
+	for i := 1; i < PoolSize(netip.MustParsePrefix(lab.CIDR)); i++ {
+		_, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: fmt.Sprintf("d%d", i)}, now)
+		require.NoError(t, err)
+	}
+	// A node sees the device: its address is in use, so it stays its own.
+	report := fmt.Sprintf(`{"networks":[{"id":"lab","peers":[{"address":%q},{"address":"bad"}]}]}`, *seen.Address)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(report), now, now))
+	_, err = CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
+	require.ErrorIs(t, err, ErrPoolFull, "a seen address is in use")
+	require.ErrorIs(t, RecordStatus(ctx, db, proxy(2), []byte(report), now, now), ErrNotMember)
+
+	// A device that lost its address gets a free one again.
+	later := now.Add(PoolReclaimAfter + 1)
+	next, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, later)
+	require.NoError(t, err)
+	var lost model.MeshDevice
+	require.NoError(t, db.Where("address IS NULL").First(&lost).Error)
+	_, err = AssignDeviceAddress(ctx, db, lost.ID, now)
+	require.ErrorIs(t, err, ErrPoolFull, "no address is unused for 30 days")
+	require.NoError(t, DeleteDevice(ctx, db, next.ID, now))
+	again, err := AssignDeviceAddress(ctx, db, lost.ID, now)
+	require.NoError(t, err)
+	require.Equal(t, *next.Address, *again.Address)
+	_, err = AssignDeviceAddress(ctx, db, lost.ID, later)
+	require.ErrorIs(t, err, ErrConflict, "a device with an address keeps it")
 }

@@ -65,6 +65,14 @@ func TestRegionValidation(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflict)
 	_, err = CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "x", CIDR: "10.150.128.0/17"}, now)
 	require.ErrorIs(t, err, ErrConflict)
+	_, err = CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "x", CIDR: "10.152.0.0/17"}, now)
+	require.ErrorIs(t, err, ErrConflict, "every region has the same prefix length")
+	_, err = CreateRegion(ctx, db, RegionInput{Code: "eu-", Name: "x", CIDR: "10.152.0.0/16"}, now)
+	require.ErrorIs(t, err, ErrInvalid, "a code ends with a letter or digit")
+	_, err = AddNode(ctx, db, first.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	_, err = UpdateRegion(ctx, db, first.ID, RegionInput{Code: "cn2", Name: "x", CIDR: first.CIDR, Enabled: true}, now)
+	require.ErrorIs(t, err, ErrConflict, "the code of a region with members stays")
 }
 
 func TestAddressesComeFromTheServerSegment(t *testing.T) {
@@ -154,26 +162,26 @@ func TestUpdateAndRemoveMember(t *testing.T) {
 	home, err := AddNode(ctx, db, cn.ID, proxy(1), false, now)
 	require.NoError(t, err)
 
-	home, err = UpdateMember(ctx, db, home.ID, 0, true, now)
+	home, err = UpdateMember(ctx, db, home.ID, 0, true, nil, now)
 	require.NoError(t, err)
 	var rows []model.MeshMember
 	require.NoError(t, db.Where("node_ref = ?", "proxy-1").Order("region_id").Find(&rows).Error)
 	require.Len(t, rows, 2)
 
 	// Moving keeps it a boundary node: home in eu, an address in cn.
-	home, err = UpdateMember(ctx, db, home.ID, eu.ID, true, now)
+	home, err = UpdateMember(ctx, db, home.ID, eu.ID, true, nil, now)
 	require.NoError(t, err)
 	require.Equal(t, eu.ID, home.RegionID)
 	require.True(t, home.Home && home.Boundary)
 	require.NoError(t, db.Where("node_ref = ?", "proxy-1").Find(&rows).Error)
 	require.Len(t, rows, 2)
 
-	home, err = UpdateMember(ctx, db, home.ID, 0, false, now)
+	home, err = UpdateMember(ctx, db, home.ID, 0, false, nil, now)
 	require.NoError(t, err)
 	require.NoError(t, db.Where("node_ref = ?", "proxy-1").Find(&rows).Error)
 	require.Len(t, rows, 1)
 
-	_, err = UpdateMember(ctx, db, home.ID+100, 0, false, now)
+	_, err = UpdateMember(ctx, db, home.ID+100, 0, false, nil, now)
 	require.ErrorIs(t, err, ErrNotFound)
 	require.NoError(t, RemoveNode(ctx, db, home.ID))
 	require.NoError(t, db.Where("node_ref = ?", "proxy-1").Find(&rows).Error)

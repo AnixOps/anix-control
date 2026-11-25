@@ -65,10 +65,10 @@
 // 组网 → 设备: personal devices with their pool addresses (R29); an address
 // stays the device's until it has gone unused for 30 days.
 import { computed, onMounted, ref } from 'vue'
-import { MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { MapPinPlus, MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
+import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
 import { meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
@@ -146,8 +146,21 @@ async function save() {
   }
 }
 
+async function assignAddress(row) {
+  try {
+    await assignKernelMeshDeviceAddress(row.id)
+  } catch (e) {
+    toast.error(meshErrorMessage(e))
+    return
+  }
+  toast.success(t('meshAddr.devices.assigned'))
+  await load()
+  emit('changed')
+}
+
 function rowActions(row) {
   return [
+    ...(row.address ? [] : [{ key: 'assign', label: t('meshAddr.devices.assign'), icon: MapPinPlus, onSelect: () => assignAddress(row) }]),
     { key: 'edit', label: t('meshAddr.devices.edit'), icon: Pencil, onSelect: () => openSheet('edit', row) },
     { key: 'move', label: t('meshAddr.devices.move'), icon: MoveRight, onSelect: () => openSheet('move', row) },
     {

@@ -29,6 +29,7 @@ import (
 	"net/netip"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -66,6 +67,8 @@ var (
 	ErrConflict = errors.New("mesh conflict")
 	// ErrFull: the region's server segment has no free address.
 	ErrFull = errors.New("the region's server segment is full")
+	// ErrNotMember: a report of a node that is in no region.
+	ErrNotMember = errors.New("the node is not in the mesh")
 )
 
 func invalid(format string, args ...any) error {
@@ -76,7 +79,7 @@ func conflict(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrConflict, fmt.Sprintf(format, args...))
 }
 
-var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,15}$`)
+var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,14}[a-z0-9]$`)
 
 // privateRanges are the ranges a region's range must fall in.
 var privateRanges = []netip.Prefix{
@@ -99,7 +102,14 @@ type RegionInput struct {
 type Region struct {
 	model.MeshRegion
 	Members []MemberView `json:"members"`
+	// Warnings: WarningFewBoundaryNodes when the region is enabled with
+	// fewer than two boundary nodes (R19).
+	Warnings []string `json:"warnings"`
 }
+
+// WarningFewBoundaryNodes: an enabled region has fewer than two boundary
+// nodes, so a failing one cuts it off from the other regions.
+const WarningFewBoundaryNodes = "few_boundary_nodes"
 
 // MemberView is a membership with its node and the node's last status.
 type MemberView struct {
@@ -146,7 +156,7 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 	answer := make([]Region, len(regions))
 	index := map[uint]int{}
 	for i, region := range regions {
-		answer[i] = Region{MeshRegion: region, Members: []MemberView{}}
+		answer[i] = Region{MeshRegion: region, Members: []MemberView{}, Warnings: []string{}}
 		index[region.ID] = i
 	}
 	for _, member := range members {
@@ -161,13 +171,24 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		}
 		answer[i].Members = append(answer[i].Members, view)
 	}
+	for i := range answer {
+		boundaries := 0
+		for _, member := range answer[i].Members {
+			if !member.Home || member.Boundary {
+				boundaries++
+			}
+		}
+		if answer[i].Enabled && boundaries < 2 {
+			answer[i].Warnings = append(answer[i].Warnings, WarningFewBoundaryNodes)
+		}
+	}
 	return answer, nil
 }
 
 // normalize checks input and answers its canonical range.
 func normalize(input *RegionInput) (netip.Prefix, error) {
 	if !codePattern.MatchString(input.Code) {
-		return netip.Prefix{}, invalid("code: 2 to 16 lowercase letters, digits or dashes, starting with a letter")
+		return netip.Prefix{}, invalid("code: 2 to 16 lowercase letters, digits or dashes, starting with a letter and ending with a letter or digit")
 	}
 	if n := utf8.RuneCountInString(input.Name); n == 0 || n > 32 {
 		return netip.Prefix{}, invalid("name: 1 to 32 characters")
@@ -190,7 +211,9 @@ func normalize(input *RegionInput) (netip.Prefix, error) {
 	return prefix, nil
 }
 
-// checkRegion refuses a code or range another region (not id) has.
+// checkRegion refuses a code or range another region (not id) has, and a
+// prefix length other than the other regions': every region network has
+// the same one, or nodes of one region drop traffic for another.
 func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) error {
 	var others []model.MeshRegion
 	if err := tx.Where("id <> ?", id).Find(&others).Error; err != nil {
@@ -200,8 +223,15 @@ func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) e
 		if other.Code == input.Code {
 			return conflict("another region has the code %q", input.Code)
 		}
-		if otherPrefix, err := netip.ParsePrefix(other.CIDR); err == nil && otherPrefix.Overlaps(prefix) {
+		otherPrefix, err := netip.ParsePrefix(other.CIDR)
+		if err != nil {
+			continue
+		}
+		if otherPrefix.Overlaps(prefix) {
 			return conflict("the range overlaps region %q (%s)", other.Code, other.CIDR)
+		}
+		if otherPrefix.Bits() != prefix.Bits() {
+			return conflict("every region has the same prefix length: /%d like region %q", otherPrefix.Bits(), other.Code)
 		}
 	}
 	return checkOutsideSettings(tx, prefix)
@@ -251,13 +281,14 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 		if err := checkRegion(tx, id, input, prefix); err != nil {
 			return err
 		}
-		if input.CIDR != row.CIDR {
+		// The code names the network and every name in the region.
+		if input.CIDR != row.CIDR || input.Code != row.Code {
 			var count int64
 			if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", id).Count(&count).Error; err != nil {
 				return err
 			}
 			if count > 0 {
-				return conflict("the range of a region with members cannot change")
+				return conflict("the range and the code of a region with members cannot change")
 			}
 			if err := regionHasDevices(tx, id); err != nil {
 				return err
@@ -334,8 +365,9 @@ func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.
 // UpdateMember changes the node of the home membership memberID: it moves
 // to the region regionID (0 keeps its region), where it gets a new fixed
 // address, and becomes a boundary node (an address in every other region)
-// or an ordinary member. It answers the node's home membership.
-func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, boundary bool, now time.Time) (model.MeshMember, error) {
+// or an ordinary member. It answers the node's home membership. actor is
+// the administrator recorded on a move.
+func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, boundary bool, actor *uint, now time.Time) (model.MeshMember, error) {
 	var row model.MeshMember
 	err := change(ctx, db, func(tx *gorm.DB) error {
 		home, err := findHome(tx, memberID)
@@ -347,7 +379,7 @@ func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, bou
 			if row, err = moveNode(tx, home, regionID, boundary, now); err != nil {
 				return err
 			}
-			if err := recordMove(tx, &home.NodeRef, nil, home.RegionID, regionID, home.Address, row.Address, now); err != nil {
+			if err := recordMove(tx, &home.NodeRef, nil, home.RegionID, regionID, home.Address, row.Address, actor, now); err != nil {
 				return err
 			}
 		} else if home.Boundary != boundary {
@@ -546,6 +578,14 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			peers[peer.RegionID] = append(peers[peer.RegionID], map[string]any{"server": host, "port": Port, "transport": "tcp"})
 		}
 	}
+	dns, err := dnsSection(db)
+	if err != nil {
+		return nil, err
+	}
+	hostGroups, err := hostGroupSections(db)
+	if err != nil {
+		return nil, err
+	}
 	networks := []map[string]any{}
 	for _, region := range regions {
 		member, ok := mine[region.ID]
@@ -568,13 +608,19 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 		if regionPeers == nil {
 			regionPeers = []map[string]any{}
 		}
+		groups := hostGroups[region.ID]
+		if groups == nil {
+			groups = []map[string]any{}
+		}
 		networks = append(networks, map[string]any{
 			"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
 			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
-			"listen":  []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
-			"peers":   regionPeers,
-			"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
-			"routing": map[string]any{"policy": policy, "paths": []any{}},
+			"listen":      []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
+			"peers":       regionPeers,
+			"subnets":     map[string]any{"accept": []string{}, "advertise": advertise},
+			"routing":     map[string]any{"policy": policy, "paths": []any{}},
+			"dns":         dns,
+			"host_groups": groups,
 		})
 	}
 	if len(networks) == 0 {
@@ -585,7 +631,7 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 
 // RecordStatus keeps payload, a "mesh.status" report of node, as the
 // node's latest status. payload must be a JSON object with a "networks"
-// array.
+// array; its "instance_id", when valid, names the node in the host groups.
 func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, payload []byte, observedAt, receivedAt time.Time) error {
 	var shape struct {
 		Networks []json.RawMessage `json:"networks"`
@@ -593,22 +639,61 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	if err := json.Unmarshal(payload, &shape); err != nil || shape.Networks == nil {
 		return invalid("payload: a JSON object with a networks array")
 	}
+	db = db.WithContext(ctx)
+	var members int64
+	if err := db.Model(&model.MeshMember{}).Where("node_ref = ?", node.String()).Count(&members).Error; err != nil {
+		return err
+	}
+	if members == 0 {
+		return ErrNotMember
+	}
+	before, err := instanceIDs(db, []string{node.String()})
+	if err != nil {
+		return err
+	}
 	row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
-	return db.WithContext(ctx).Clauses(clause.OnConflict{
+	if err := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "node_ref"}},
 		DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),
-	}).Create(&row).Error
+	}).Create(&row).Error; err != nil {
+		return err
+	}
+	if err := touchDevices(db, payload, observedAt); err != nil {
+		return err
+	}
+	// A host group names its gateways by instance id: a new or changed id
+	// of a gateway changes the configuration of its region's nodes.
+	if statusInstanceID(row.Payload) == before[node.String()] {
+		return nil
+	}
+	gateway, err := isGateway(db, node.String())
+	if err != nil || !gateway {
+		return err
+	}
+	return change(ctx, db, func(*gorm.DB) error { return nil })
 }
 
 // change runs write in a transaction and then tells the listeners every
 // node that was or is a member, whose configurations may have changed.
+// Addresses are taken by reading the free ones and inserting, guarded by
+// unique indexes: a write that collides with a concurrent one runs again,
+// up to three times, and is then a conflict.
 func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) error {
 	db = db.WithContext(ctx)
 	before, err := memberNodes(db)
 	if err != nil {
 		return err
 	}
-	if err := db.Transaction(write); err != nil {
+	for attempt := 1; ; attempt++ {
+		err = db.Transaction(write)
+		if err == nil || !isUniqueViolation(err) {
+			break
+		}
+		if attempt == 3 {
+			return conflict("a concurrent change took the same address; try again")
+		}
+	}
+	if err != nil {
 		return err
 	}
 	after, err := memberNodes(db)
@@ -677,4 +762,13 @@ func notify(nodes []agentcontrol.AgentNode) {
 	for _, listener := range called {
 		listener(nodes)
 	}
+}
+
+// isUniqueViolation tells whether err is a unique index violation.
+func isUniqueViolation(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "unique constraint") || strings.Contains(text, "duplicate key")
 }

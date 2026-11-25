@@ -6205,6 +6205,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/devices/{device_id}/address": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool. Audited (module mesh, action mesh_device_address).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Give a personal device a new pool address",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshDevice"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/devices/{device_id}/move": {
             "post": {
                 "security": [
@@ -10231,6 +10265,13 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings: WarningFewBoundaryNodes when the region is enabled with\nfewer than two boundary nodes (R19).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

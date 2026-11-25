@@ -240,6 +240,33 @@ func (h *MeshHandler) MoveMeshDevice(c *gin.Context) {
 	kernelData(c, http.StatusOK, row)
 }
 
+// AssignMeshDeviceAddress godoc
+// @Summary Give a personal device a new pool address
+// @Description For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool. Audited (module mesh, action mesh_device_address).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param device_id path int true "device id"
+// @Success 200 {object} model.MeshDevice
+// @Router /api/v4/kernel/mesh/devices/{device_id}/address [post]
+func (h *MeshHandler) AssignMeshDeviceAddress(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "device_id")
+	if !ok {
+		return
+	}
+	row, err := meshregion.AssignDeviceAddress(c.Request.Context(), db, id, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_device_address", id, fmt.Sprintf(`{"device_id":%d,"address":%q}`, id, *row.Address))
+	kernelData(c, http.StatusOK, row)
+}
+
 // ListMeshHostGroups godoc
 // @Summary The mesh's host groups
 // @Description Every host group by segment, with its gateway node, standby node and the gateway's home region.

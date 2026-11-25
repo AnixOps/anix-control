@@ -27,7 +27,11 @@ import (
 //     missed.
 //   - Status. A PackageReport with plugin_id "mesh" and kind "mesh.status"
 //     is accepted only on a session that negotiated mesh.v1, at version
-//     v1, and recorded by meshregion.RecordStatus.
+//     v1, and recorded by meshregion.RecordStatus, from a node in a region.
+//   - Region requests. A PackageReport with plugin_id "mesh" and kind
+//     "mesh.region_request" (v1, same session rule) is the node's own
+//     request for another region, recorded as a pending region change for
+//     the network manager (meshregion.RequestNodeChange).
 
 // configTriggerMesh: a mesh region or membership changed.
 const configTriggerMesh = "mesh"
@@ -74,8 +78,46 @@ func handleMeshStatus(connection *AgentControlConnection, node agentcontrol.Agen
 			refuse(service.PackageReportRefusedBadPayload, err)
 			return
 		}
+		if errors.Is(err, meshregion.ErrNotMember) {
+			refuse(service.PackageReportRefusedNotAssigned, err)
+			return
+		}
 		agentPackageReportMetrics.result(packageReportUnrecorded)
 		slog.Warn("failed to record agent mesh status", "component", "agent-control", "node", node.String(), "error", err)
+		return
+	}
+	agentPackageReportMetrics.result(packageReportAccepted)
+}
+
+// handleMeshRegionRequest records the node's own region change request.
+// Like every package report it is never acknowledged: the decision reaches
+// the node as its configuration.
+func handleMeshRegionRequest(connection *AgentControlConnection, node agentcontrol.AgentNode, report *agentv1pb.PackageReport) {
+	refuse := func(reason string, err error) {
+		agentPackageReportMetrics.refused(reason)
+		slog.Warn("refused agent mesh region request", "component", "agent-control", "node", node.String(), "reason", reason, "error", err)
+	}
+	switch {
+	case !connection.meshNegotiated:
+		refuse(service.PackageReportRefusedUnnegotiated, nil)
+		return
+	case report.GetVersion() != meshregion.RegionRequestVersion:
+		refuse(service.PackageReportRefusedInvalid, nil)
+		return
+	}
+	if err := agentcontrol.ValidatePackageReportPayloadSize(report.GetPayloadJson()); err != nil {
+		refuse(service.PackageReportRefusedOversize, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), forwardHelloTimeout)
+	defer cancel()
+	if _, err := meshregion.RequestNodeChange(ctx, databaseForAgentChecks(), node, report.GetPayloadJson(), time.Now()); err != nil {
+		if errors.Is(err, meshregion.ErrInvalid) || errors.Is(err, meshregion.ErrNotFound) || errors.Is(err, meshregion.ErrConflict) {
+			refuse(service.PackageReportRefusedBadPayload, err)
+			return
+		}
+		agentPackageReportMetrics.result(packageReportUnrecorded)
+		slog.Warn("failed to record agent mesh region request", "component", "agent-control", "node", node.String(), "error", err)
 		return
 	}
 	agentPackageReportMetrics.result(packageReportAccepted)
