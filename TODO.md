@@ -88,7 +88,17 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   configuration; devices without an Agent take it from the release that
   supports it. Bridge allow lists (spec #328 U4, R36): configured by
   member, delivered expanded to /32, /128 and host group segments, and
-  pushed again when a member changes or is revoked.
+  pushed again when a member changes or is revoked. Allow list entries
+  are keyed by device instance ID (spec #332). Before a reclaimed address
+  is given to another member, Control pushes the bridge nodes a list
+  without it and waits until each reports the list applied; while a
+  bridge node is offline or has not confirmed, the address is not given
+  out and the administrator is shown why.
+- [ ] Mesh device configuration, audit lows (#643, #645; next minor
+  version): more tests; avoid scanning every device on each config read;
+  the node-side warning in the Agent contract; the Swagger text of the
+  device config `features` query; a report listing more than 64 features
+  is cut by position, reject it or keep only known capability names.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against
