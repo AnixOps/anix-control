@@ -21,3 +21,6 @@
   `externalBridge` counts as a node running no bridge.
   Two consecutive reports received after the removal must both show the
   release, so a late or out-of-order report cannot release alone.
+  A node's report observed before the stored one is dropped, and reading
+  the previous report, storing the new one and releasing holds happen
+  under one lock.

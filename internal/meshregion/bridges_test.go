@@ -213,6 +213,9 @@ func TestExternalBridge(t *testing.T) {
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), now.Add(-time.Hour), now.Add(-time.Hour)))
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
 	require.EqualValues(t, 3, holds, "a null observed before the bridge was removed")
+	var stored model.MeshStatus
+	require.NoError(t, db.Where("node_ref = ?", "proxy-1").First(&stored).Error)
+	require.True(t, stored.ObservedAt.Equal(later), "a report observed before the stored one is dropped")
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), later, later))
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
 	require.EqualValues(t, 3, holds, "one report alone releases nothing")
@@ -270,8 +273,8 @@ func TestBridgeHoldsAReleasedAddress(t *testing.T) {
 	require.Len(t, bridgeView(t, db, "proxy-1").Held, 2)
 	// Received after the hold, the list without them releases them, even
 	// when the node's clock puts appliedAt a day earlier.
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(-24*time.Hour), later))
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(-24*time.Hour), later.Add(time.Second)))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(time.Second), later.Add(time.Second)))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(2*time.Second), later.Add(2*time.Second)))
 	view := bridgeView(t, db, "proxy-1")
 	require.Empty(t, view.Held)
 	require.True(t, view.Confirmed)
@@ -381,5 +384,36 @@ func TestBridgeUnsupportedAlert(t *testing.T) {
 	later := time.Now().UTC().Add(time.Minute)
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, later, later))
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, later, later.Add(time.Second)))
+	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
+}
+
+// A hold is released by two consecutive reports that show the release:
+// never by the first report of a node, nor across one that does not.
+func TestBridgeHoldNeedsTwoConsecutiveReports(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	bridge, err := CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	_, err = UpdateBridge(ctx, db, bridge.ID, BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	require.NoError(t, err)
+
+	at := time.Now().UTC().Add(time.Minute)
+	report := func(payload []byte) {
+		t.Helper()
+		at = at.Add(time.Second)
+		require.NoError(t, RecordStatus(ctx, db, proxy(1), payload, at, at))
+	}
+	released, other := bridgeStatus("cn", at), bridgeStatus("cn", at, "10.150.0.9/32")
+	report(released)
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "the node's first report has none before it")
+	report(other)
+	report(released)
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "yes, no, yes")
+	report(released)
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }

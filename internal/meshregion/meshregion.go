@@ -849,29 +849,40 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	if err != nil {
 		return err
 	}
-	// The node's report before this one: a hold is released by two
-	// consecutive reports.
-	var previous []model.MeshStatus
-	if err := db.Where("node_ref = ?", node.String()).Limit(1).Find(&previous).Error; err != nil {
-		return err
-	}
-	row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
-	if err := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "node_ref"}},
-		DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),
-	}).Create(&row).Error; err != nil {
-		return err
-	}
-	if err := touchDevices(db, payload, observedAt); err != nil {
-		return err
-	}
-	// The allow list the node reports applied releases the addresses
-	// held for it (spec section 15.12 item 4).
-	var last *model.MeshStatus
-	if len(previous) > 0 {
-		last = &previous[0]
-	}
-	if err := releaseHolds(db, node.String(), last, row.Payload, receivedAt); err != nil {
+	// Reading the node's report before this one, writing this one and
+	// releasing holds happen under a lock on the node's row (PostgreSQL):
+	// a hold is released by two consecutive reports, and a report observed
+	// before the stored one (late, or out of order between two
+	// connections) is dropped.
+	dropped := false
+	err = db.Transaction(func(tx *gorm.DB) error {
+		var previous []model.MeshStatus
+		if err := forUpdate(tx).Where("node_ref = ?", node.String()).Limit(1).Find(&previous).Error; err != nil {
+			return err
+		}
+		var last *model.MeshStatus
+		if len(previous) > 0 {
+			last = &previous[0]
+			if observedAt.Before(last.ObservedAt) {
+				dropped = true
+				return nil
+			}
+		}
+		row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "node_ref"}},
+			DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),
+		}).Create(&row).Error; err != nil {
+			return err
+		}
+		if err := touchDevices(tx, payload, observedAt); err != nil {
+			return err
+		}
+		// The allow list the node reports applied releases the
+		// addresses held for it (spec section 15.12 item 4).
+		return releaseHolds(tx, node.String(), last, row.Payload, receivedAt)
+	})
+	if err != nil || dropped {
 		return err
 	}
 	// A new or changed static key of the node changes its regions'
@@ -881,7 +892,7 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	}
 	// A host group names its gateways by instance id: a new or changed id
 	// of a gateway changes the configuration of its region's nodes.
-	if statusInstanceID(row.Payload) == before[node.String()] {
+	if statusInstanceID(string(payload)) == before[node.String()] {
 		return nil
 	}
 	gateway, err := isGateway(db, node.String())
