@@ -45,7 +45,7 @@ cache:
 		t.Fatalf("forward = %+v", forward)
 	}
 	if config.Cache.MaxBytes != DefaultCacheMaxBytes || config.Cache.MaxFetches != DefaultCacheFetches ||
-		config.Cache.MaxRequestsPerSource != DefaultCacheRequestsPerSource || len(config.Cache.RedirectHosts) != len(DefaultRedirectHosts) {
+		config.Cache.MaxRequestsPerSource != DefaultCacheRequestsPerSource || config.Cache.MaxConnections != DefaultCacheMaxConnections || len(config.Cache.RedirectHosts) != len(DefaultRedirectHosts) {
 		t.Fatalf("cache = %+v", config.Cache)
 	}
 }
@@ -591,6 +591,71 @@ func TestCacheRefusesAKnownSourceWithAnotherHash(t *testing.T) {
 	}
 }
 
+// Spellings of one source share its learned SHA-256, and a query or a
+// fragment cannot make a new source (re-audit N1).
+func TestCacheCanonicalizesSources(t *testing.T) {
+	var hits atomic.Int32
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, "release-bytes")
+	}))
+	defer origin.Close()
+	cache := testCache(t, origin, 1<<20)
+	source := origin.URL + "/releases/big.zip"
+	for _, refused := range []string{source + "?x=1", source + "?", source + "#frag", source + "/../big.zip"} {
+		if recorder := cacheGet(cache, sumOf("one"), refused); recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s: code %d", refused, recorder.Code)
+		}
+	}
+	if hits.Load() != 0 {
+		t.Fatal("the origin was contacted")
+	}
+	if recorder := cacheGet(cache, sumOf("one"), source); recorder.Code != http.StatusBadGateway {
+		t.Fatalf("first wrong hash: %d", recorder.Code)
+	}
+	for _, spelling := range []string{
+		origin.URL + "/%72eleases/big.zip",
+		origin.URL + "/releases/%62ig.zip",
+		strings.Replace(origin.URL, "https://", "HTTPS://", 1) + "/releases/big.zip",
+	} {
+		if recorder := cacheGet(cache, sumOf("two"), spelling); recorder.Code != http.StatusNotFound {
+			t.Fatalf("%s: %d, want 404 without a download", spelling, recorder.Code)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("origin downloaded %d times, want 1", got)
+	}
+}
+
+// A learned SHA-256 expires, so a replaced release can be fetched again
+// (re-audit N3).
+func TestCacheForgetsAKnownSumAfterItsLifetime(t *testing.T) {
+	var hits atomic.Int32
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, "release-bytes")
+	}))
+	defer origin.Close()
+	cache := testCache(t, origin, 1<<20)
+	clock := time.Unix(1_700_000_000, 0)
+	cache.now = func() time.Time { return clock }
+	source := origin.URL + "/releases/big.zip"
+	if recorder := cacheGet(cache, sumOf("one"), source); recorder.Code != http.StatusBadGateway {
+		t.Fatalf("first wrong hash: %d", recorder.Code)
+	}
+	clock = clock.Add(knownSumLifetime - time.Second)
+	if recorder := cacheGet(cache, sumOf("two"), source); recorder.Code != http.StatusNotFound {
+		t.Fatalf("inside the lifetime: %d", recorder.Code)
+	}
+	clock = clock.Add(2 * time.Second)
+	if recorder := cacheGet(cache, sumOf("two"), source); recorder.Code != http.StatusBadGateway {
+		t.Fatalf("after the lifetime: %d, want a new download", recorder.Code)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("origin downloaded %d times, want 2", got)
+	}
+}
+
 // Concurrent requests for one file share one download.
 func TestCacheDedupesConcurrentDownloads(t *testing.T) {
 	var hits atomic.Int32
@@ -685,5 +750,88 @@ func TestRedirectPolicy(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://github.com/AnixOps/x", nil)
 	if err := policy(request, make([]*http.Request, 5)); err == nil {
 		t.Fatal("a sixth redirect was allowed")
+	}
+}
+
+// One IPv6 host holds a /64: its addresses share one limit (re-audit N6).
+func TestSourceGroup(t *testing.T) {
+	for address, want := range map[string]string{
+		"203.0.113.10:443":            "203.0.113.10",
+		"[::ffff:203.0.113.10]:443":   "203.0.113.10",
+		"[2001:db8:1:2::1]:443":       "2001:db8:1:2::/64",
+		"[2001:db8:1:2:ffff::9]:5000": "2001:db8:1:2::/64",
+		"[fe80::1%eth0]:443":          "fe80::/64",
+	} {
+		if got := sourceGroup(remoteIP(address)); got != want {
+			t.Fatalf("%s: %s, want %s", address, got, want)
+		}
+	}
+	addr := &net.TCPAddr{IP: net.ParseIP("2001:db8:1:2::abcd"), Port: 1}
+	if got := sourceKey(addr); got != "2001:db8:1:2::/64" {
+		t.Fatalf("sourceKey = %s", got)
+	}
+}
+
+// The cache listener holds at most max_connections open; a closed one
+// frees its slot, and Close ends a waiting Accept (re-audit N7).
+func TestLimitListener(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener := limitListener(inner, 1)
+	accepted := make(chan net.Conn, 2)
+	acceptErr := make(chan error, 1)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				acceptErr <- err
+				return
+			}
+			accepted <- conn
+		}
+	}()
+	dial := func() net.Conn {
+		conn, err := net.Dial("tcp", inner.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conn.Close() })
+		return conn
+	}
+	dial()
+	first := <-accepted
+	dial()
+	select {
+	case <-accepted:
+		t.Fatal("a second connection was accepted over max_connections 1")
+	case <-time.After(200 * time.Millisecond):
+	}
+	_ = first.Close()
+	_ = first.Close() // a second Close does not free another slot
+	select {
+	case second := <-accepted:
+		_ = second.Close()
+	case <-time.After(5 * time.Second):
+		t.Fatal("the closed connection's slot was not freed")
+	}
+	if cap(listener.(*limitedListener).slots) != 1 || len(listener.(*limitedListener).slots) != 0 {
+		t.Fatal("slots out of balance")
+	}
+	_ = listener.Close()
+	select {
+	case err := <-acceptErr:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("Accept after Close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Accept did not return after Close")
+	}
+}
+
+func TestCacheWriteTimeoutCoversTheDownload(t *testing.T) {
+	if got := cacheWriteTimeout(DefaultCacheFetchTimeout); got <= DefaultCacheFetchTimeout+time.Minute {
+		t.Fatalf("write timeout %s does not leave time to transfer after a download", got)
 	}
 }

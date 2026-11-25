@@ -48,6 +48,15 @@ func TestRelaySourcesValidation(t *testing.T) {
 			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"2001:db8::/32\"]\n",
 			want: "wider than /64",
 		},
+		// net.ParseCIDR reads ::ffff:0.0.0.0/96 as all of IPv4 (re-audit N2).
+		"ipv4-mapped range": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"::ffff:0.0.0.0/96\"]\n",
+			want: "IPv4-mapped",
+		},
+		"ipv4-mapped narrow range": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"::ffff:203.0.113.10/128\"]\n",
+			want: "IPv4-mapped",
+		},
 		"excludes edge proxies": {
 			text: "domain: panel.example.com\ntls:\n  mode: external\ngrpc:\n  edge_proxies: [10.0.0.2]\n  relay_sources: [203.0.113.10]\n",
 			want: "grpc.relay_sources excludes grpc.edge_proxies",
