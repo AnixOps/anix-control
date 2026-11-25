@@ -43,6 +43,17 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   and the hourly miss bound per certificate identity rather than per
   address (two allowed hosts can still take every slot, nodes behind one
   NAT share 30 misses an hour). Next minor version.
+- [ ] Region relays, sixth R34 re-audit (requirements thread decision
+  2026-11-25, next minor version): P1 a generation number on the Agent's
+  relay check so a result that Control's later route superseded is
+  dropped; P2 a close() on the route that cancels a running check when the
+  node identity stops or reloads; P3 check the relays in parallel, so two
+  that connect but never answer do not use up the 30 s; P5 when the host
+  cannot verify a cached zip strictly (OpenSSL older than 3: CentOS 7,
+  RHEL 8, Ubuntu 20.04) download from the mirror instead of stopping; P6
+  report a failed check to Control; P7 require the negotiated protocol to
+  be h2; P9 apply a route's release caches while its relays are being
+  checked or held back.
 - [ ] Region relays, with the 0.4 region model (G3): Control checks that a
   node of the mainland region is in a group with relays and warns
   otherwise; the per-region fallback setting of the R33 assessment. Before
