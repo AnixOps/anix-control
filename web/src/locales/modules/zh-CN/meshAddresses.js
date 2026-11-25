@@ -103,7 +103,8 @@ export default {
         static_key_mismatch: '公钥不一致',
         static_key_taken: '公钥与其他成员重复',
         reserved_address: '占用保留的解析地址',
-        shared_address_space: '通告网段位于共享地址段'
+        shared_address_space: '通告网段位于共享地址段',
+        native_keys_unsupported: '未上报准入能力'
       },
       fullNode: '完整节点',
       subnets: '通告网段…',

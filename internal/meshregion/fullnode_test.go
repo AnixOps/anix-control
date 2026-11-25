@@ -55,7 +55,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "10.150.0.2", member.Address)
 
-	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: fixed.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(1)}, now)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: fixed.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(1)}, now)
 	require.NoError(t, err)
 	network := enrolled.Config["networks"].([]map[string]any)[0]
 	require.Equal(t, RoleFull, network["role"])
@@ -65,7 +65,7 @@ func TestFullNodeCredentials(t *testing.T) {
 
 	// The lowest free address of the server segment, past the members and
 	// the full node.
-	server, err := Enroll(ctx, db, EnrollRequest{Token: auto.Token, DeviceKey: strings.Repeat("s", 32), StaticKey: testStaticKey(2)}, now)
+	server, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: auto.Token, DeviceKey: strings.Repeat("s", 32), StaticKey: testStaticKey(2)}, now)
 	require.NoError(t, err)
 	require.Equal(t, "10.150.0.3/16", server.Config["networks"].([]map[string]any)[0]["address"])
 
@@ -74,7 +74,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	require.Len(t, views, 2)
 	for _, view := range views {
 		require.Equal(t, RoleFull, view.Role)
-		require.Empty(t, view.Warnings, "a fixed address is never idle")
+		require.NotContains(t, view.Warnings, WarningAddressIdle, "a fixed address is never idle")
 	}
 
 	// A fixed address never goes back to the pool, however long unused.
@@ -95,7 +95,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, RoleFull, again.Role)
 	require.Equal(t, "10.150.0.9", again.Address)
-	second, err := Enroll(ctx, db, EnrollRequest{Token: again.Token, DeviceKey: laptopKey}, now)
+	second, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: again.Token, DeviceKey: laptopKey}, now)
 	require.NoError(t, err)
 	require.Equal(t, router.ID, second.DeviceID)
 	require.Equal(t, "10.150.0.9/16", second.Config["networks"].([]map[string]any)[0]["address"])
@@ -180,7 +180,7 @@ func TestFullNodeSubnets(t *testing.T) {
 	for i, name := range []string{"router", "office"} {
 		issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: name, RegionID: cn.ID, Role: RoleFull}, nil, now)
 		require.NoError(t, err)
-		enrolled, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: strings.Repeat(string(rune('a'+i)), 32)}, now)
+		enrolled, err := Enroll(ctx, db, EnrollRequest{Features: meshFeatures, Token: issued.Token, DeviceKey: strings.Repeat(string(rune('a'+i)), 32)}, now)
 		require.NoError(t, err)
 		routers = append(routers, enrolled.DeviceID)
 	}
@@ -213,7 +213,7 @@ func TestFullNodeSubnets(t *testing.T) {
 
 	var router model.MeshDevice
 	require.NoError(t, db.First(&router, routers[0]).Error)
-	config, err := DeviceConfig(ctx, db, router, now)
+	config, err := DeviceConfig(ctx, db, router, meshFeatures, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{"192.168.1.0/24", "172.16.0.0/16"}, config["networks"].([]map[string]any)[0]["subnets"].(map[string]any)["advertise"])
 	views, err := Devices(ctx, db, cn.ID, now)
