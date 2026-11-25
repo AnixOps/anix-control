@@ -54,6 +54,10 @@ describe('mesh model', () => {
     }, now).state).toBe('stopped')
     expect(enMesh.mesh.page.status.pending).toBeTruthy()
     expect(enMesh.mesh.page.alerts.native_keys_pending).toBeTruthy()
+    for (const code of ['native_keys_unsupported', 'invalid_kind']) {
+      expect(enMesh.mesh.page.alerts[code]).toBeTruthy()
+      expect(zhMesh.mesh.page.alerts[code]).toBeTruthy()
+    }
     expect(enMesh.mesh.page.alerts.peer_not_native).toBeTruthy()
     expect(zhMesh.mesh.page.alerts.peer_not_native).toBeTruthy()
     expect(statusSummary({ status: { networks: [] }, status_received_at: new Date(now - STATUS_STALE_MS - 1).toISOString() }, now).state).toBe('lost')

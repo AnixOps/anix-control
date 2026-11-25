@@ -57,7 +57,9 @@ export default {
         start_refused: 'Start refused',
         takeover_pending: 'Waiting to take over the existing mesh program',
         peer_not_native: 'Refused a peer not admitted',
-        native_keys_pending: 'Waiting for the admission list'
+        native_keys_pending: 'Waiting for the admission list',
+        native_keys_unsupported: 'Kernel without admission list',
+        invalid_kind: 'Invalid network kind'
       }
     },
     region: {

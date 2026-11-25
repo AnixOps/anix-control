@@ -56,7 +56,9 @@ export default {
         start_refused: '拒绝启动',
         takeover_pending: '等待接管现有组网程序',
         peer_not_native: '拒绝未准入节点',
-        native_keys_pending: '等待准入清单'
+        native_keys_pending: '等待准入清单',
+        native_keys_unsupported: '内核不支持准入清单',
+        invalid_kind: '网络类型无效'
       }
     },
     region: {

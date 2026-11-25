@@ -82,8 +82,8 @@
 }
 ```
 
-- `static_key`：本机内核在该网络的静态公钥（内核 `GET /v1/mesh` 的 `static_keys`，按网络名对应），格式同第 2 节 `native_keys`。Control 只采信 Agent 通道的值：新值或变化的值写入该节点在该地区的成员记录并列入 `native_keys`；格式不合规的值不采用。
-- `alerts.code`：`peer_not_native`（拒绝未准入节点，`peer` 为对端节点 ID；内核失败原因同名，Agent 也可原样放在网络的 `failure.code`，界面一并显示）、`native_keys_pending`（等待准入清单：清单为空或不含本机公钥，内核暂缓该网络，`detail` 为 `empty` 或 `self_missing`；同样可放在 `failure.code`。未运行的网络都因此暂缓时，节点状态显示「暂缓」而非「未运行」）、`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
+- `static_key`：本机内核在该网络的静态公钥（内核 `GET /v1/mesh` 的 `static_keys`，按网络名对应），格式同第 2 节 `native_keys`。Control 只采信 Agent 通道的值：新值或变化的值写入该节点在该地区的成员记录并列入 `native_keys`；格式不合规的值、已属于设备或其他节点的值不采用（后者记录告警日志）。
+- `alerts.code`：`peer_not_native`（拒绝未准入节点，`peer` 为对端节点 ID；内核失败原因同名，Agent 也可原样放在网络的 `failure.code`，界面一并显示）、`native_keys_pending`（等待准入清单：清单为空或不含本机公钥，内核暂缓该网络，`detail` 为 `empty` 或 `self_missing`；同样可放在 `failure.code`。未运行的网络都因此暂缓时，节点状态显示「暂缓」而非「未运行」）、`native_keys_unsupported`（本机内核不支持准入清单，Agent 扣下该网络不交给内核；内核降级重启后也会出现）、`invalid_kind`（网络 `kind` 既不是 `managed` 也不是 `legacy`，区分大小写，Agent 扣下该网络，其他网络照常运行）、`address_conflict`（地址冲突）、`address_unmanaged`（地址未受管，R29）、`unsupported`（内核无组网功能）、`start_refused`（内核按 R12 拒绝启动）、`takeover_pending`（现有组网程序仍在运行，等待接管）。界面对未知代码原样显示。
 - Control 校验载荷为带 `networks` 数组的 JSON 对象，保存每个节点最新一份（`v5_mesh_status`）。
 - `instance_id`：内核的节点实例 ID（组网状态快照的 `self.id`，首次启动时生成，重启与升级不变），1–64 个字母、数字或连字符，首字符为字母或数字，不合规时按未上报处理。宿主组网关的实例 ID 新增或变化时，Control 立即推送该地区节点的配置。
 - 「控制面失联」由 Control 按最后接收时间判断（超过 3 分钟），Agent 不上报。

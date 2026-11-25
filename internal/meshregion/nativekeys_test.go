@@ -156,6 +156,13 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 	require.NoError(t, db.First(&row, device.ID).Error)
 	require.Equal(t, testStaticKey(9), *row.StaticKey)
 
+	// The Agent channel takes no key a device has either.
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), statusWithKey("cn", testStaticKey(9)), now, now))
+	require.Equal(t, []string{testStaticKey(1), testStaticKey(9)}, nodeNetwork(t, db, proxy(1), "cn")["native_keys"])
+	var member model.MeshMember
+	require.NoError(t, db.Where("node_ref = ?", proxy(1).String()).First(&member).Error)
+	require.Equal(t, testStaticKey(1), *member.StaticKey)
+
 	// A revoked device releases its key for another device.
 	require.NoError(t, RevokeDevice(ctx, db, device.ID))
 	require.NoError(t, db.First(&row, device.ID).Error)
