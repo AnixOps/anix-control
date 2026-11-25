@@ -46,7 +46,9 @@ func homeOf(tx *gorm.DB, nodeRef string) (model.MeshMember, error) {
 // checkGateways answers the gateway's home membership and the normalized
 // standby; the standby is another node of the same home region.
 func checkGateways(tx *gorm.DB, gateway, standby string) (model.MeshMember, *string, error) {
-	home, err := homeOf(tx, strings.TrimSpace(gateway))
+	// Locked, as removing a node locks it before it checks the node is no
+	// gateway: a node leaving at the same time is not made a gateway.
+	home, err := homeOf(forUpdate(tx), strings.TrimSpace(gateway))
 	if err != nil {
 		return home, nil, err
 	}
@@ -57,7 +59,7 @@ func checkGateways(tx *gorm.DB, gateway, standby string) (model.MeshMember, *str
 	if standby == home.NodeRef {
 		return home, nil, invalid("standby: another node than the gateway")
 	}
-	other, err := homeOf(tx, standby)
+	other, err := homeOf(forUpdate(tx), standby)
 	if err != nil {
 		return home, nil, err
 	}

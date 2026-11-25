@@ -85,7 +85,7 @@ func checkDeviceName(tx *gorm.DB, input DeviceNameInput) (model.MeshDeviceName, 
 		row.HostGroupID, row.GatewayRef = &id, group.GatewayRef
 		return row, nil
 	}
-	home, err := homeOf(tx, strings.TrimSpace(input.Gateway))
+	home, err := homeOf(forUpdate(tx), strings.TrimSpace(input.Gateway))
 	if err != nil {
 		return row, err
 	}

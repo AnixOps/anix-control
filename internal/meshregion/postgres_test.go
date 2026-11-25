@@ -366,3 +366,51 @@ func TestPostgresChangesTogether(t *testing.T) {
 	}
 	require.Equal(t, retries, changeRetries.Load(), "no change collided")
 }
+
+// A rename at the same time as a move or a new address keeps both: each
+// change writes only its own columns.
+func TestPostgresRenameTogether(t *testing.T) {
+	db := openPostgres(t)
+	ctx := context.Background()
+	from, err := CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "eu", CIDR: "10.152.0.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	to, err := CreateRegion(ctx, db, RegionInput{Code: "as", Name: "as", CIDR: "10.152.1.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	for round := 0; round < 4; round++ {
+		moved, err := CreateDevice(ctx, db, from.ID, DeviceInput{Hostname: fmt.Sprintf("m-%d", round)}, now)
+		require.NoError(t, err)
+		lost, err := CreateDevice(ctx, db, from.ID, DeviceInput{Hostname: fmt.Sprintf("l-%d", round)}, now)
+		require.NoError(t, err)
+		require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", lost.ID).Updates(map[string]any{"address": nil, "address_used_at": nil}).Error)
+		errs := together(
+			func() error {
+				_, err := MoveDevice(ctx, db, moved.ID, to.ID, nil, now)
+				return err
+			},
+			func() error {
+				_, err := UpdateDevice(ctx, db, moved.ID, DeviceInput{Hostname: fmt.Sprintf("m-%d-renamed", round)}, now)
+				return err
+			},
+			func() error {
+				_, err := AssignDeviceAddress(ctx, db, lost.ID, now)
+				return err
+			},
+			func() error {
+				_, err := UpdateDevice(ctx, db, lost.ID, DeviceInput{Hostname: fmt.Sprintf("l-%d-renamed", round)}, now)
+				return err
+			},
+		)
+		for i, err := range errs {
+			require.NoError(t, err, "round %d change %d", round, i)
+		}
+		var row model.MeshDevice
+		require.NoError(t, db.First(&row, moved.ID).Error)
+		require.Equal(t, to.ID, row.RegionID, "round %d: the move stays", round)
+		require.Equal(t, fmt.Sprintf("m-%d-renamed", round), row.Hostname)
+		require.True(t, netip.MustParsePrefix(to.CIDR).Contains(netip.MustParseAddr(*row.Address)))
+		require.NoError(t, db.First(&row, lost.ID).Error)
+		require.NotNil(t, row.Address, "round %d: the new address stays", round)
+		require.Equal(t, fmt.Sprintf("l-%d-renamed", round), row.Hostname)
+		requireDistinctAddresses(t, db)
+	}
+}
