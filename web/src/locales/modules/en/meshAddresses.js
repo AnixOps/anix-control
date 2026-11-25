@@ -30,7 +30,7 @@ export default {
       description: 'Devices without an Agent join the mesh with a one-time enrollment credential, exchange it for a device token, then read their configuration and report their status periodically.',
       issue: 'Issue enrollment credential',
       issueTitle: 'Issue enrollment credential',
-      issueDescription: 'A credential can be used once. The device joins as a personal device with an address from the device pool.',
+      issueDescription: 'A credential can be used once. An access device receives an address from the device pool; a full node uses a fixed address of the server segment.',
       issueConfirm: 'Issue',
       empty: 'No enrollment credentials',
       loadFailed: 'Could not load the enrollment credentials',
@@ -39,6 +39,15 @@ export default {
       device: 'Device',
       newDevice: 'New device',
       deviceHelp: 'Enrolls this device again: its name, region and address stay and its earlier device token stops working. A device with a registered key must use the same key.',
+      role: 'Role',
+      roles: {
+        access: 'Access device',
+        full: 'Full node'
+      },
+      roleHelp: 'For a router or server without an Agent: a fixed address, accepts connections and relays traffic, and advertises only the subnets an administrator confirms. Requires a region.',
+      address: 'Fixed address',
+      addressHelp: 'An address of the region\'s server segment (the lower half of its range). Leave empty to assign the lowest free address on enrollment. The address is kept until the credential is used or withdrawn.',
+      regionRequired: 'A full node requires a region',
       hours: 'Validity (hours)',
       hoursHelp: '1 to 168 hours.',
       token: 'Enrollment credential',
@@ -89,7 +98,14 @@ export default {
       warnings: {
         no_address: 'Address reclaimed',
         address_idle: 'Unused for 30 days'
-      }
+      },
+      fullNode: 'Full node',
+      subnets: 'Advertised subnets…',
+      subnetsTitle: 'Subnets advertised by {name}',
+      subnetsDescription: 'A full node advertises only the local subnets confirmed here. One private IPv4 network per line, at most 32, not overlapping a region, the host group supernet, a reserved range or another full node\'s subnets. Leave empty to advertise none.',
+      subnetsLabel: 'Subnets',
+      subnetsSaved: 'Saved. The node applies it on its next configuration read.',
+      advertised: 'Advertises {subnets}'
     },
     hostGroups: {
       title: 'Host groups',
@@ -178,7 +194,7 @@ export default {
       hostGroupPrefix: 'Host group segment prefix length',
       hostGroupHelp: 'Cannot be changed while host groups exist.',
       reservedRanges: 'Reserved ranges',
-      reservedRangesHelp: 'One range per line. Regions and host groups may not overlap them.',
+      reservedRangesHelp: 'One range per line. Regions and host groups may not overlap them. For the old network during a migration; the prefix length must match the regions.',
       loadFailed: 'Mesh settings could not be loaded'
     }
   }

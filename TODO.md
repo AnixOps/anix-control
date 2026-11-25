@@ -20,11 +20,15 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   step (regions, fixed addresses, boundary nodes, configuration and status;
   gated feature `mesh`) and the second (device pool, host groups and
   names, the name list, region change approval, settings, enrollment
-  credentials and devices without an Agent): devices without an Agent as
-  full nodes with a fixed address (R32, OpenWrt and servers), per-member
+  credentials and devices without an Agent, full nodes without an Agent
+  with a fixed address and confirmed subnets): per-member
   admission in the kernel instead of the region key, the `takeover` setting,
   forward nodes in the node picker, and turning the
-  feature on once the node kernel runs the mesh.
+  feature on once the node kernel runs the mesh. Also: the bridge to the
+  old network during a migration, the 「未启用前向保密」 display and the
+  migration progress (R30); the result of a node's own region request back
+  to the node (a refused `mesh.region_request` is only in the panel); a
+  warning when two gateways report the same instance id.
 
 ## Plugin Platform
 

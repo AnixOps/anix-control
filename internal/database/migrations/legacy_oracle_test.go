@@ -244,6 +244,7 @@ func laterModels() []any {
 		&model.MeshRegionChange{},          // 0046_mesh_addresses
 		&model.MeshEnrollment{},            // 0047_mesh_enrollment
 		&model.MeshDeviceToken{},           // 0047_mesh_enrollment
+		&model.MeshFullNode{},              // 0048_mesh_full_nodes
 	}
 }
 

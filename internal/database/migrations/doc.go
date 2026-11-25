@@ -190,7 +190,10 @@
 //   - 0047_mesh_enrollment: one-time enrollment credentials for mesh
 //     devices without an Agent and the enrolled devices' tokens
 //     (v5_mesh_enrollment, v5_mesh_device_token, internal/meshregion).
-//   - 0048_node_group_relays: v5_node_group.relays and release_caches, the
+//   - 0048_mesh_full_nodes: mesh devices without an Agent that run as full
+//     nodes with a fixed address and confirmed subnets (v5_mesh_full_node,
+//     internal/meshregion).
+//   - 0049_node_group_relays: v5_node_group.relays and release_caches, the
 //     region relays a group's nodes reach Control through
 //     (internal/nodegroup, docs/design/region-relay).
 package migrations

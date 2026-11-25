@@ -22,6 +22,7 @@ func TestKernelMeshRoutesAreAdminOnly(t *testing.T) {
 		{http.MethodPut, "/api/v4/kernel/mesh/settings"},
 		{http.MethodGet, "/api/v4/kernel/mesh/devices"},
 		{http.MethodPost, "/api/v4/kernel/mesh/devices/1/address"},
+		{http.MethodPut, "/api/v4/kernel/mesh/devices/1/subnets"},
 		{http.MethodPost, "/api/v4/kernel/mesh/changes"},
 		{http.MethodPost, "/api/v4/kernel/mesh/changes/1/approve"},
 		{http.MethodGet, "/api/v4/kernel/mesh/names"},

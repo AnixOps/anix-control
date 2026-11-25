@@ -7,10 +7,13 @@ import (
 )
 
 // normalizeName turns a node's name into its intranet name label the way
-// the node kernel does (R28): letters to lowercase, a name with other than
-// ASCII characters to its IDNA form (xn-- and Punycode), every character
-// other than a letter, digit or hyphen to a hyphen, no hyphen at either
-// end, at most 63 bytes. It answers "" for a name with no label.
+// the node kernel does (R28, docs/design/mesh-regions/README.md): letters
+// to lowercase; every character other than an ASCII letter, digit or
+// hyphen, or a non-ASCII letter (Unicode L) or decimal digit (Nd), to a
+// hyphen (combining marks too); no hyphen at either end; a name with
+// other than ASCII characters to xn-- and Punycode; cut to 63 bytes; no
+// hyphen at the end. It answers "" for a name with no label. The name is
+// encoded whole (a node's name is at most 255 bytes).
 func normalizeName(raw string) string {
 	var builder strings.Builder
 	ascii := true
@@ -18,14 +21,11 @@ func normalizeName(raw string) string {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
 			builder.WriteRune(r)
-		case r < utf8.RuneSelf || !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsMark(r):
+		case r < utf8.RuneSelf || !unicode.IsLetter(r) && !unicode.Is(unicode.Nd, r):
 			builder.WriteByte('-')
 		default:
 			ascii = false
 			builder.WriteRune(r)
-		}
-		if builder.Len() > 4*63 {
-			break
 		}
 	}
 	label := strings.Trim(builder.String(), "-")

@@ -1,7 +1,7 @@
 ### Added
 
 - Node groups hold their region relays (`relays`, host:port) and the
-  relays' release caches (`release_caches`, https), migration 0048. The
+  relays' release caches (`release_caches`, https), migration 0049. The
   group's install command and a group node's enrollment command carry
   `--relay` and `--release-cache`; `install.sh` checks Control through the
   relays (one working is enough, none fails the preflight), joins through

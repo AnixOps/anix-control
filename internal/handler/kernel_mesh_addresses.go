@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -242,7 +243,7 @@ func (h *MeshHandler) MoveMeshDevice(c *gin.Context) {
 
 // AssignMeshDeviceAddress godoc
 // @Summary Give a personal device a new pool address
-// @Description For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool. Audited (module mesh, action mesh_device_address).
+// @Description For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool; for a full node, the lowest free address of the server segment. Audited (module mesh, action mesh_device_address).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -265,6 +266,46 @@ func (h *MeshHandler) AssignMeshDeviceAddress(c *gin.Context) {
 	}
 	h.audit(c, db, "mesh_device_address", id, fmt.Sprintf(`{"device_id":%d,"address":%q}`, id, *row.Address))
 	kernelData(c, http.StatusOK, row)
+}
+
+// meshSubnetsInput is the body of SetMeshDeviceSubnets.
+type meshSubnetsInput struct {
+	Subnets []string `json:"subnets"`
+}
+
+// SetMeshDeviceSubnets godoc
+// @Summary Confirm the subnets a full node advertises
+// @Description Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none. The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param device_id path int true "device id"
+// @Param request body meshSubnetsInput true "subnets"
+// @Success 200 {array} string
+// @Router /api/v4/kernel/mesh/devices/{device_id}/subnets [put]
+func (h *MeshHandler) SetMeshDeviceSubnets(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "device_id")
+	if !ok {
+		return
+	}
+	var input meshSubnetsInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "subnets is expected")
+		return
+	}
+	subnets, err := meshregion.SetDeviceSubnets(c.Request.Context(), db, id, input.Subnets, h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	detail, _ := json.Marshal(map[string]any{"device_id": id, "subnets": subnets})
+	h.audit(c, db, "mesh_device_subnets", id, string(detail))
+	kernelData(c, http.StatusOK, subnets)
 }
 
 // ListMeshHostGroups godoc
