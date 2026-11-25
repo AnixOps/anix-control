@@ -46,6 +46,7 @@ export default {
       status: {
         none: 'Not reported',
         running: 'Running',
+        pending: 'On hold',
         stopped: 'Not running',
         lost: 'Control link lost'
       },
@@ -55,7 +56,8 @@ export default {
         unsupported: 'Kernel without mesh',
         start_refused: 'Start refused',
         takeover_pending: 'Waiting to take over the existing mesh program',
-        peer_not_native: 'Refused a peer not admitted'
+        peer_not_native: 'Refused a peer not admitted',
+        native_keys_pending: 'Waiting for the admission list'
       }
     },
     region: {

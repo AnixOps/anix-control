@@ -99,7 +99,8 @@ export default {
         no_address: 'Address reclaimed',
         address_idle: 'Unused for 30 days',
         no_static_key: 'No static key',
-        static_key_mismatch: 'Static key mismatch'
+        static_key_mismatch: 'Static key mismatch',
+        static_key_taken: 'Static key used by another member'
       },
       fullNode: 'Full node',
       subnets: 'Advertised subnets…',

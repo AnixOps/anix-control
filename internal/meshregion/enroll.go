@@ -304,11 +304,15 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 				return ErrUnauthorized
 			}
 			device = known[0]
-			if static != nil {
+			// The same enrollment again: a key the device named
+			// meanwhile stays; changing it takes a new credential.
+			if static != nil && device.StaticKey == nil {
 				device.StaticKey = static
-				if err := tx.Model(&model.MeshDevice{}).Where("id = ?", device.ID).Update("static_key", *static).Error; err != nil {
+				if err := updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"static_key": *static, "updated_at": now}, "device"); err != nil {
 					return err
 				}
+			} else if static != nil && *device.StaticKey != *static {
+				return conflict("the device has another static key; enroll again with a new credential to change it")
 			}
 		case enrollment.DeviceID != nil:
 			if err := findDevice(tx, *enrollment.DeviceID, &device); err != nil {
@@ -358,6 +362,15 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 				if err := tx.Model(&nodes[0]).Updates(map[string]any{"device_id": device.ID, "address": address, "updated_at": now}).Error; err != nil {
 					return err
 				}
+			}
+		}
+		if static != nil {
+			taken, err := keyTaken(tx, *static, device.ID)
+			if err != nil {
+				return err
+			}
+			if taken {
+				return conflict("static_key: a member or another device has this key")
 			}
 		}
 		if enrollment.UsedAt == nil {
@@ -540,7 +553,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 		role, advertise = RoleFull, splitSubnets(node.Subnets)
 		listen = []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}}
 	}
-	keys, err := nativeKeys(db)
+	keys, err := nativeKeys(db, []uint{region.ID})
 	if err != nil {
 		return nil, err
 	}
@@ -555,10 +568,11 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	}}}, nil
 }
 
-// RecordDeviceStatus keeps payload, the device's "mesh.status" report, as
-// its latest status; a device without a static key gets the one it
-// reports for its region's network (nativekeys.go).
-func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevice, payload []byte, now time.Time) error {
+// RecordDeviceStatus keeps payload, the device's "mesh.status" report sent
+// with its device token, as its latest status; a device without a static
+// key gets the one it reports for its region's network while token is
+// still its token (nativekeys.go).
+func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevice, token string, payload []byte, now time.Time) error {
 	var shape struct {
 		Networks []json.RawMessage `json:"networks"`
 	}
@@ -575,7 +589,7 @@ func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevic
 	}).Create(&row).Error; err != nil {
 		return err
 	}
-	return bindDeviceKey(ctx, db.WithContext(ctx), device, payload)
+	return bindDeviceKey(ctx, db.WithContext(ctx), device, token, payload)
 }
 
 // RequestDeviceChange records the device's request to move to the region

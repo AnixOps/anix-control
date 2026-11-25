@@ -57,16 +57,19 @@ func reportedKeys(payload []byte) map[string]string {
 	return keys
 }
 
-// nativeKeys answers the native_keys of every region network, by region
-// id: the keys of its members and of its devices that hold a device token,
-// sorted and without repeats.
-func nativeKeys(db *gorm.DB) (map[uint][]string, error) {
+// nativeKeys answers the native_keys of the region networks regionIDs, by
+// region id: the keys of its members and of its devices that hold a device
+// token, sorted and without repeats.
+func nativeKeys(db *gorm.DB, regionIDs []uint) (map[uint][]string, error) {
+	if len(regionIDs) == 0 {
+		return map[uint][]string{}, nil
+	}
 	var rows []struct {
 		RegionID  uint
 		StaticKey string
 	}
 	if err := db.Model(&model.MeshMember{}).Select("region_id", "static_key").
-		Where("static_key IS NOT NULL AND static_key <> ''").Scan(&rows).Error; err != nil {
+		Where("region_id IN ? AND static_key IS NOT NULL AND static_key <> ''", regionIDs).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	var devices []struct {
@@ -74,7 +77,7 @@ func nativeKeys(db *gorm.DB) (map[uint][]string, error) {
 		StaticKey string
 	}
 	if err := db.Model(&model.MeshDevice{}).Select("region_id", "static_key").
-		Where("static_key IS NOT NULL AND static_key <> '' AND id IN (?)", db.Model(&model.MeshDeviceToken{}).Select("device_id")).
+		Where("region_id IN ? AND static_key IS NOT NULL AND static_key <> '' AND id IN (?)", regionIDs, db.Model(&model.MeshDeviceToken{}).Select("device_id")).
 		Scan(&devices).Error; err != nil {
 		return nil, err
 	}
@@ -106,7 +109,8 @@ func regionKeys(keys map[uint][]string, regionID uint) []string {
 
 // recordMemberKeys keeps the static keys a node's Agent reported for its
 // member rows, the regions' networks; a new or changed key changes the
-// configuration of every member of the region at once.
+// configuration of every member of the region at once, the node's own
+// last (§8.3.1: the others admit its key before it uses it).
 func recordMemberKeys(ctx context.Context, db *gorm.DB, nodeRef string, payload []byte) error {
 	reported := reportedKeys(payload)
 	if len(reported) == 0 {
@@ -132,7 +136,7 @@ func recordMemberKeys(ctx context.Context, db *gorm.DB, nodeRef string, payload 
 	if len(updates) == 0 {
 		return nil
 	}
-	return change(ctx, db, func(tx *gorm.DB) error {
+	return changeLast(ctx, db, nodeRef, func(tx *gorm.DB) error {
 		for id, key := range updates {
 			// A row that left meanwhile stays gone.
 			if err := tx.Model(&model.MeshMember{}).Where("id = ? AND node_ref = ?", id, nodeRef).
@@ -145,9 +149,12 @@ func recordMemberKeys(ctx context.Context, db *gorm.DB, nodeRef string, payload 
 }
 
 // bindDeviceKey keeps the static key a device without one reported for
-// its region's network: the first report after its enrollment, or after a
-// move to another region, names it; later reports cannot change it.
-func bindDeviceKey(ctx context.Context, db *gorm.DB, device model.MeshDevice, payload []byte) error {
+// its region's network, sent with token: the first report after its
+// enrollment, or after a move to another region, names it; later reports
+// cannot change it. A report sent with a token the device no longer holds
+// (it enrolled again or was revoked meanwhile) binds nothing, nor does a
+// key a member or another device has already.
+func bindDeviceKey(ctx context.Context, db *gorm.DB, device model.MeshDevice, token string, payload []byte) error {
 	if device.StaticKey != nil {
 		return nil
 	}
@@ -160,10 +167,30 @@ func bindDeviceKey(ctx context.Context, db *gorm.DB, device model.MeshDevice, pa
 		return nil
 	}
 	return change(ctx, db, func(tx *gorm.DB) error {
-		// Only while it still has none, in the region the key is of.
-		return tx.Model(&model.MeshDevice{}).Where("id = ? AND region_id = ? AND static_key IS NULL", device.ID, region.ID).
+		taken, err := keyTaken(tx, key, device.ID)
+		if err != nil || taken {
+			return err
+		}
+		// Only while it still has none, in the region the key is of, and
+		// while the token is the device's.
+		return tx.Model(&model.MeshDevice{}).
+			Where("id = ? AND region_id = ? AND static_key IS NULL", device.ID, region.ID).
+			Where("EXISTS (?)", tx.Model(&model.MeshDeviceToken{}).Select("1").Where("device_id = ? AND token_hash = ?", device.ID, hashToken(token))).
 			Update("static_key", key).Error
 	})
+}
+
+// keyTaken answers whether key is the static key of a member or of a
+// device other than deviceID.
+func keyTaken(db *gorm.DB, key string, deviceID uint) (bool, error) {
+	var members, devices int64
+	if err := db.Model(&model.MeshMember{}).Where("static_key = ?", key).Count(&members).Error; err != nil {
+		return false, err
+	}
+	if err := db.Model(&model.MeshDevice{}).Where("static_key = ? AND id <> ?", key, deviceID).Count(&devices).Error; err != nil {
+		return false, err
+	}
+	return members+devices > 0, nil
 }
 
 // keyMismatch answers whether the device's latest report names another
@@ -174,4 +201,41 @@ func keyMismatch(device model.MeshDevice, code, payload string) bool {
 	}
 	key, ok := reportedKeys([]byte(payload))[code]
 	return ok && key != *device.StaticKey
+}
+
+// keyOwners answers the device id of every bound static key, 0 for a
+// member's key.
+func keyOwners(db *gorm.DB) (map[string]uint, error) {
+	owners := map[string]uint{}
+	var members []string
+	if err := db.Model(&model.MeshMember{}).Where("static_key IS NOT NULL").Pluck("static_key", &members).Error; err != nil {
+		return nil, err
+	}
+	for _, key := range members {
+		owners[key] = 0
+	}
+	var devices []struct {
+		ID        uint
+		StaticKey string
+	}
+	if err := db.Model(&model.MeshDevice{}).Select("id", "static_key").Where("static_key IS NOT NULL").Scan(&devices).Error; err != nil {
+		return nil, err
+	}
+	for _, device := range devices {
+		if _, member := owners[device.StaticKey]; !member {
+			owners[device.StaticKey] = device.ID
+		}
+	}
+	return owners, nil
+}
+
+// reportsTakenKey answers whether the device's latest report names, for
+// its region's network, a static key that a member or another device has.
+func reportsTakenKey(owners map[string]uint, device model.MeshDevice, code, payload string) bool {
+	key, ok := reportedKeys([]byte(payload))[code]
+	if !ok {
+		return false
+	}
+	owner, taken := owners[key]
+	return taken && owner != device.ID
 }

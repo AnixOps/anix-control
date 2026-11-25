@@ -22,8 +22,10 @@ export function memberRows(regions) {
 }
 
 // statusSummary answers { state, alerts } of a member: state is none,
-// lost, running or stopped; alerts the codes of every network's alerts
-// and of its failure (such as peer_not_native).
+// lost, running, pending (a network the kernel holds until the admission
+// list names its key, failure native_keys_pending) or stopped; alerts the
+// codes of every network's alerts and of its failure (such as
+// peer_not_native).
 export function statusSummary(member, now = Date.now()) {
   if (!member?.status) return { state: 'none', alerts: [] }
   const networks = Array.isArray(member.status.networks) ? member.status.networks : []
@@ -32,7 +34,11 @@ export function statusSummary(member, now = Date.now()) {
   const received = Date.parse(member.status_received_at || '')
   if (Number.isFinite(received) && now - received > STATUS_STALE_MS) return { state: 'lost', alerts }
   const running = networks.length > 0 && networks.every(network => network?.running)
-  return { state: running ? 'running' : 'stopped', alerts }
+  if (running) return { state: 'running', alerts }
+  const held = network => network?.failure?.code === 'native_keys_pending' ||
+    (Array.isArray(network?.alerts) && network.alerts.some(alert => alert?.code === 'native_keys_pending'))
+  const pending = networks.length > 0 && networks.every(network => network?.running || held(network))
+  return { state: pending ? 'pending' : 'stopped', alerts }
 }
 
 // deviceStatus answers { state, alerts } of an enrolled device without an

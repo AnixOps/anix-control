@@ -52,10 +52,15 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   request whose node was just moved answers 400 instead of 409. The node kernel has
   no copy of the name table yet: it is to embed
   `internal/meshregion/nametable-unicode-15.1.0.txt` and check the same
-  SHA-256 as the panel's test. A device's static key is bound by its
-  first report when it enrolled without one (it has no network
-  configuration, hence no key, before it enrolls): the specification's
-  §8.3.1 item 7 is to say so too.
+  SHA-256 as the panel's test. Admission list (#637 review, deferred to
+  the next minor version): a size bound for `native_keys` agreed with the
+  kernel and the Agent, and a cached list per region (L-2); an audit
+  record and an overview count when a device reports another static key
+  than its bound one (L-5); concurrent first reports in the PostgreSQL
+  tests (L-7). Turning the feature on needs the node kernels and the
+  clients that take `kind` and `native_keys` first, and the Agents
+  reporting their static keys (L-6): older devices without an Agent
+  refuse the new fields and never give a key.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

@@ -98,7 +98,8 @@ export default {
         no_address: '地址已回收',
         address_idle: '30 天未使用',
         no_static_key: '未登记公钥',
-        static_key_mismatch: '公钥不一致'
+        static_key_mismatch: '公钥不一致',
+        static_key_taken: '公钥与其他成员重复'
       },
       fullNode: '完整节点',
       subnets: '通告网段…',

@@ -225,7 +225,8 @@ func (h *MeshHandler) MeshDeviceReport(c *gin.Context) {
 		kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the report is too large")
 		return
 	}
-	if err := meshregion.RecordDeviceStatus(c.Request.Context(), h.db(), device, payload, h.now()); err != nil {
+	token, _ := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if err := meshregion.RecordDeviceStatus(c.Request.Context(), h.db(), device, token, payload, h.now()); err != nil {
 		meshError(c, err)
 		return
 	}

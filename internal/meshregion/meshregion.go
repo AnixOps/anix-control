@@ -708,7 +708,7 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
-	keys, err := nativeKeys(db)
+	keys, err := nativeKeys(db, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -811,6 +811,13 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 // unique indexes: a write that collides with a concurrent one runs again,
 // up to three times, and is then a conflict.
 func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) error {
+	return changeLast(ctx, db, "", write)
+}
+
+// changeLast is change that tells the listeners about the node last,
+// after every other node, when last is not empty: a node's new static key
+// reaches the other members before the node itself starts to use it.
+func changeLast(ctx context.Context, db *gorm.DB, last string, write func(tx *gorm.DB) error) error {
 	db = db.WithContext(ctx)
 	before, err := memberNodes(db)
 	if err != nil {
@@ -848,7 +855,21 @@ func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) err
 		}
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].String() < nodes[j].String() })
-	notify(nodes)
+	if last == "" {
+		notify(nodes)
+		return nil
+	}
+	others := make([]agentcontrol.AgentNode, 0, len(nodes))
+	var self []agentcontrol.AgentNode
+	for _, node := range nodes {
+		if node.String() == last {
+			self = append(self, node)
+		} else {
+			others = append(others, node)
+		}
+	}
+	notify(others)
+	notify(self)
 	return nil
 }
 
