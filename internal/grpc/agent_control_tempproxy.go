@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"math"
 	"sync"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -37,6 +38,10 @@ func followTemporaryProxies(proxy *AgentControlManager) {
 // pushTemporaryProxies pushes the configuration of the proxy node nodeID on
 // every manager's session that negotiated config.v1.
 func pushTemporaryProxies(nodeID uint) {
+	// Node ids are uint32 on the stream; a larger one has no session.
+	if nodeID > math.MaxUint32 {
+		return
+	}
 	node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(nodeID)}
 	temporaryProxyMu.Lock()
 	var targets []*AgentControlConnection
