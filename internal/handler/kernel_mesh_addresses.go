@@ -275,7 +275,7 @@ type meshSubnetsInput struct {
 
 // SetMeshDeviceSubnets godoc
 // @Summary Confirm the subnets a full node advertises
-// @Description Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none. The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).
+// @Description Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none; the body is at most 16 KiB (413 payload_too_large). The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -294,7 +294,12 @@ func (h *MeshHandler) SetMeshDeviceSubnets(c *gin.Context) {
 		return
 	}
 	var input meshSubnetsInput
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, meshDeviceRequestBytes)
 	if err := c.ShouldBindJSON(&input); err != nil {
+		if tooLarge(err) {
+			kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the request is too large")
+			return
+		}
 		kernelError(c, http.StatusBadRequest, "invalid_request", "subnets is expected")
 		return
 	}

@@ -6323,7 +6323,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none. The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).",
+                "description": "Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none; the body is at most 16 KiB (413 payload_too_large). The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).",
                 "consumes": [
                     "application/json"
                 ],

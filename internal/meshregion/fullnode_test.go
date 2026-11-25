@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestFullNodeCredentials(t *testing.T) {
@@ -131,8 +132,32 @@ func TestWithdrawnFullNodeCredentialFreesItsAddress(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&model.MeshFullNode{}).Count(&count).Error)
 	require.Zero(t, count)
-	_, err = CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "router", RegionID: cn.ID, Role: RoleFull, Address: "10.150.0.1"}, nil, now)
+	_, err = CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "router", RegionID: cn.ID, Role: RoleFull, Address: "10.150.0.1", Hours: 1}, nil, now)
 	require.NoError(t, err)
+
+	// An expired credential keeps no address.
+	_, err = CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "nas", RegionID: cn.ID, Role: RoleFull, Address: "10.150.0.1"}, nil, now)
+	require.ErrorIs(t, err, ErrConflict)
+	_, err = CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "nas", RegionID: cn.ID, Role: RoleFull, Address: "10.150.0.1"}, nil, now.Add(2*time.Hour))
+	require.NoError(t, err)
+}
+
+// A new range clears the kept addresses; deleting the region removes its
+// unused credentials.
+func TestFullNodeCredentialsFollowTheirRegion(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	other := region(t, db, "eu", "10.152.0.0/16")
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "edge", RegionID: other.ID, Role: RoleFull, Address: "10.152.0.5"}, nil, now)
+	require.NoError(t, err)
+	_, err = UpdateRegion(ctx, db, other.ID, RegionInput{Code: "eu", Name: "eu", CIDR: "10.154.0.0/16", Enabled: true}, now)
+	require.NoError(t, err)
+	var node model.MeshFullNode
+	require.NoError(t, db.Where("enrollment_id = ?", issued.ID).First(&node).Error)
+	require.Empty(t, node.Address)
+	require.NoError(t, DeleteRegion(ctx, db, other.ID))
+	require.ErrorIs(t, db.Where("enrollment_id = ?", issued.ID).First(&node).Error, gorm.ErrRecordNotFound)
+	require.ErrorIs(t, DeleteEnrollment(ctx, db, issued.ID), ErrNotFound)
 }
 
 func TestFullNodeSubnets(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Full nodes without an Agent (R32, R29): an OpenWrt router or a server
@@ -25,10 +26,31 @@ const (
 // maxFullNodeSubnets bounds the subnets a full node advertises.
 const maxFullNodeSubnets = 32
 
+// subnetsLock is the PostgreSQL advisory lock key of the full nodes'
+// subnets ("mesh_sn" in ASCII).
+const subnetsLock int64 = 0x6d6573685f736e
+
+// lockRegion locks the region's row until the transaction ends, so that
+// two transactions choosing an address of the region (a node's, a full
+// node's or a pool address) take turns (PostgreSQL; SQLite writes one
+// transaction at a time). The members, the devices and the credentials
+// keep their addresses in separate tables, which no one unique index
+// covers.
+func lockRegion(tx *gorm.DB, regionID uint) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", regionID).Find(&[]model.MeshRegion{}).Error
+}
+
 // usedServerAddresses answers the addresses of region the members and the
-// devices hold, and those that unused full node credentials other than
-// except keep, which a new fixed address must avoid.
-func usedServerAddresses(tx *gorm.DB, regionID, except uint) ([]string, error) {
+// devices hold, and those that unused, unexpired full node credentials
+// other than except keep, which a new fixed address must avoid. It locks
+// the region first.
+func usedServerAddresses(tx *gorm.DB, regionID, except uint, now time.Time) ([]string, error) {
+	if err := lockRegion(tx, regionID); err != nil {
+		return nil, err
+	}
 	var used []string
 	if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", regionID).Pluck("address", &used).Error; err != nil {
 		return nil, err
@@ -40,7 +62,7 @@ func usedServerAddresses(tx *gorm.DB, regionID, except uint) ([]string, error) {
 	var kept []string
 	if err := tx.Model(&model.MeshFullNode{}).
 		Joins("JOIN v5_mesh_enrollment ON v5_mesh_enrollment.id = v5_mesh_full_node.enrollment_id").
-		Where("v5_mesh_enrollment.region_id = ? AND v5_mesh_enrollment.used_at IS NULL AND v5_mesh_full_node.device_id IS NULL AND v5_mesh_full_node.address <> '' AND v5_mesh_full_node.enrollment_id <> ?", regionID, except).
+		Where("v5_mesh_enrollment.region_id = ? AND v5_mesh_enrollment.used_at IS NULL AND v5_mesh_enrollment.expires_at > ? AND v5_mesh_full_node.device_id IS NULL AND v5_mesh_full_node.address <> '' AND v5_mesh_full_node.enrollment_id <> ?", regionID, now, except).
 		Pluck("v5_mesh_full_node.address", &kept).Error; err != nil {
 		return nil, err
 	}
@@ -50,12 +72,12 @@ func usedServerAddresses(tx *gorm.DB, regionID, except uint) ([]string, error) {
 // serverAddress answers a fixed address of region's server segment:
 // requested, which must be in the segment and free, or the lowest free one.
 // The address the credential except keeps counts as free.
-func serverAddress(tx *gorm.DB, region model.MeshRegion, requested string, except uint) (string, error) {
+func serverAddress(tx *gorm.DB, region model.MeshRegion, requested string, except uint, now time.Time) (string, error) {
 	prefix, err := netip.ParsePrefix(region.CIDR)
 	if err != nil {
 		return "", err
 	}
-	used, err := usedServerAddresses(tx, region.ID, except)
+	used, err := usedServerAddresses(tx, region.ID, except, now)
 	if err != nil {
 		return "", err
 	}
@@ -159,6 +181,13 @@ func SetDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, raw []str
 	}
 	// Only the full node's own configuration changes, which it reads.
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Two full nodes saving at once take turns, so that the overlap
+		// check sees the other's subnets (PostgreSQL).
+		if tx.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", subnetsLock).Error; err != nil {
+				return err
+			}
+		}
 		row, full, err := isFullNode(tx, deviceID)
 		if err != nil {
 			return err
@@ -202,4 +231,9 @@ func SetDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, raw []str
 		return tx.Model(&row).Updates(map[string]any{"subnets": strings.Join(subnets, ","), "updated_at": now}).Error
 	})
 	return subnets, err
+}
+
+// unusedEnrollments is a subquery of the unused credentials for region id.
+func unusedEnrollments(tx *gorm.DB, id uint) *gorm.DB {
+	return tx.Session(&gorm.Session{NewDB: true}).Model(&model.MeshEnrollment{}).Select("id").Where("region_id = ? AND used_at IS NULL", id)
 }
