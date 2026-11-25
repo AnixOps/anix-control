@@ -2,6 +2,170 @@
 
 ## Unreleased
 
+## 5.0.14 - 2026-11-25
+
+### Added
+
+- Intranet mesh addresses and names (组网, gated feature `mesh`). 节点 → 组网
+  gains the sections 设备, 宿主组, 内网域名, 地区变更 and 设置:
+  personal devices take an address from their region's device pool (the
+  upper half of the range) that stays theirs until it has gone unused for 30
+  days, and only then goes to the next device when the pool is full; host
+  groups behind a gateway node take a segment of the host group range
+  (10.127.0.0/16 by default, outside the regions) with an optional standby
+  gateway of the same region; gateway nodes publish names for the hosts of
+  their host groups and their local networks; the intranet name list shows
+  every node, device and published name as `name.region-code.suffix` and
+  marks duplicates; region change requests of nodes and devices are
+  approved (the member moves and gets a new address) or rejected, and a
+  direct move settles a pending request; the settings hold the domain
+  suffix, the host group range and the reserved ranges no region may
+  overlap. A gateway node moves or leaves only after its host groups and
+  names change. Routes under `/api/v4/kernel/mesh/` (`summary`,
+  `settings`, `devices`, `host-groups`, `device-names`, `names`,
+  `changes`); tables `v5_mesh_settings`, `v5_mesh_device`,
+  `v5_mesh_host_group`, `v5_mesh_device_name`, `v5_mesh_region_change`
+  (migration 0046, back up the database before upgrading); audited in the
+  operation log (module `mesh`).
+- 组网 devices without an Agent, behind the gated feature `mesh`. 节点 →
+  组网 → 设备 issues one-time enrollment credentials (hostname, a region or
+  the lowest latency, 1 to 168 hours; the token is shown once and only its
+  SHA-256 is stored). A device enrolls with one at
+  `POST /api/v5/mesh/device/enroll` and joins as a personal device with a
+  pool address; with its device token it then reads its network
+  (`GET /api/v5/mesh/device/config`), sends a read-only status
+  (`POST /api/v5/mesh/device/report`, answered 204) and asks to change
+  region (`POST /api/v5/mesh/device/region-change`). Every read or report
+  uses the address. The device list shows the reported status; a token can
+  be revoked. Tables `v5_mesh_enrollment`, `v5_mesh_device_token`
+  (migration 0047, back up the database before upgrading); audited (module
+  `mesh`). Contract: `docs/design/mesh-regions/agent-contract.md`, section 4.
+- Intranet mesh (组网, gated feature `mesh`): each region network of a
+  node's configuration now carries the intranet names (`dns`: the suffix and
+  every name as `name.region-code` with its address; duplicate names are
+  left out and stay marked in the panel) and the host groups whose gateway's
+  home is the region (`host_groups`: the segment and the instance ids of the
+  gateway and the standby). The Agent's `mesh.status` may carry the node's
+  `instance_id`; a host group is sent once its gateway has reported one, and
+  a gateway's new instance id pushes the configuration at once. Changes to
+  devices, host groups, names and the mesh settings now push the members'
+  configurations too.
+- Intranet mesh: a node asks for another region itself with the Agent's
+  package report `mesh.region_request` (recorded as a member's pending
+  change for the network manager), and a device whose pool address went to
+  another device gets a new one (设备 → 分配新地址,
+  `POST /api/v4/kernel/mesh/devices/{device_id}/address`, audited as
+  `mesh_device_address`). The region list warns about an enabled region
+  with fewer than two boundary nodes (`few_boundary_nodes`).
+- Intranet mesh regions (组网), behind the gated feature `mesh` (dev builds
+  only until the node kernel runs the mesh). 节点 → 组网 lists the regions
+  (four defaults: 中国大陆 `cn` 10.150.0.0/16, 亚太 `apac` 10.151.0.0/16,
+  欧洲 `eu` 10.152.0.0/16, 北美 `na` 10.153.0.0/16, all disabled) and the
+  nodes in them. A node gets the lowest free fixed address of its region's
+  server segment (the lower half of the range); a boundary node gets an
+  address in every region. The desired configuration of a node in an enabled
+  region carries the member `mesh` (its networks, peers and advertised
+  ranges; forward secrecy always on), and every change pushes it at once.
+  The node's Agent reports `mesh.status` on `mesh.v1`, shown with its
+  alerts and a lost control link after three minutes. Routes under
+  `/api/v4/kernel/mesh/`; tables `v5_mesh_region`, `v5_mesh_member`,
+  `v5_mesh_status` (migration 0045, back up the database before upgrading);
+  audited in the operation log (module `mesh`). Contract with the Agent:
+  `docs/design/mesh-regions/agent-contract.md`.
+- Region relay `anix-relay` (`cmd/anix-relay`, `docs/design/region-relay`):
+  a machine inside a region, mainland China first, that forwards the
+  region's node connections to Control byte for byte (TLS and the client
+  certificate stay end to end, so the relay cannot read or forge a stream)
+  and keeps a read-only cache of release files addressed by SHA-256. It has
+  no web interface and no API.
+- `grpc.relay_sources` (`ANIX_CONTROL_GRPC_RELAY_SOURCES`): the relays'
+  addresses. Their connections must open with a PROXY v2 header, whose
+  address then stands for the node's; no header is read from any other peer.
+  Not combinable with `grpc.edge_proxies`. The configuration is now eleven
+  operator keys.
+- Temporary SOCKS5 proxies on proxy nodes. 节点 → 协议 → 临时 SOCKS5 代理
+  opens a SOCKS5 proxy on an internal address of the node (10/8, 172.16/12,
+  192.168/16, 100.64/10, link-local, loopback or fc00::/7; never a wildcard or
+  public address) for 1 to 1440 minutes, 15 by default, so that devices of
+  that network send traffic out through the node. Control generates the
+  username and password and shows the password once. The node's kernel
+  closes the proxy at its end time by itself; it can also be closed early.
+  At most 8 open proxies per node. Routes: `GET`/`POST
+  /api/v4/kernel/nodes/:id/temporary-proxies`, `DELETE
+  /api/v4/kernel/nodes/:id/temporary-proxies/:proxy_id`; table
+  `v5_node_temporary_proxy` (migration 0044); audited in the operation log
+  (module `temporary_proxy`). The desired configuration carries the open
+  proxies in `temporary_proxies`. It needs an Agent and anx-node kernel that
+  run temporary proxies: an older Agent ignores the member, and a newer
+  Agent on an older kernel reports the configuration as failed while a proxy
+  is open.
+
+### Changed
+
+- Admin dashboard, monitoring, settings, notifications, security, payments, plans, users, coupons, orders, invite codes, referrals, tickets, Help Center, subscription groups, API tokens and device licenses now use formal, concise wording in Chinese and English: no spoken phrasing, no explanatory sentences, “暂无…”/“…加载失败” in place of “还没有…”/“…没有加载出来”, and no contractions. Behaviour is unchanged.
+- Interface wording is formal and concise: the sign-in, registration and
+  claim pages, the user portal (overview, subscription, help, tickets, plans,
+  orders, site statistics), the account page, the shell and the component
+  library drop spoken phrasing and explanatory sentences, in Chinese and
+  English (English without contractions). Message keys and behavior are
+  unchanged. The rules are in `docs/reference/frontend-design.md` ("Copy").
+- Interface wording is formal and concise in the forwarding area: overview,
+  routes, route editor and detail, diagnosis, forwarding nodes, DNS
+  providers and entry high availability, egress routes, cross-border
+  standby and reverse proxies, in Chinese and English. Hints that described
+  removed engines or internal mechanisms were shortened. Message keys and
+  behavior are unchanged.
+- Interface wording is formal and concise on the node pages: the node list
+  and node page (overview, Agent connection, deployment, traffic,
+  credentials, services, logs, protocol form), join and node groups, Agent
+  upgrades, entries, network, forward ports, exit policy, reachability,
+  diagnostics, Reality targets, topology and lines, in Chinese and English.
+  Message keys and behavior are unchanged.
+
+### Fixed
+
+- Intranet mesh: a device's pool address now counts as used whenever a
+  mesh node reports it among its peers, so only an address really unused
+  for 30 days goes to another device. Every region has the same prefix
+  length, a region code ends with a letter or digit and stays while the
+  region has members or devices, and the domain suffix lies under
+  `internal` or `home.arpa` and keeps full names within 253 characters.
+  Node names become intranet names the way the node kernel normalizes them
+  (lowercase, `xn--` Punycode for other than ASCII, other characters to
+  hyphens) instead of being left out. Concurrent address allocations retry
+  and end in a conflict instead of a server error; two decisions on one
+  region change no longer both apply; an administrator's direct move
+  records the administrator. Status reports of nodes that are in no region
+  are refused.
+
+### Security
+
+- Intranet mesh devices without an Agent: a device key no longer claims an
+  existing device. A credential for a new device refuses a key another
+  device has; re-enrolling a device takes a credential issued for it
+  (`device_id`), and a registered key must match. A credential is claimed
+  atomically, so two requests at once cannot both use it; within 10 minutes
+  of a use the same credential and key may enroll again for a lost answer.
+  The enrollment and region change bodies are limited to 16 KiB and the
+  reported latencies are checked. A used credential stays as the record of
+  its device. A region's network key can be changed
+  (`POST /api/v4/kernel/mesh/regions/{id}/rotate-secret`, 更换网络密钥),
+  which keeps a revoked or deleted device out. Device configurations now
+  carry the intranet names, and token use is written at most once a minute.
+- The PROXY v2 listener no longer clears gRPC's handshake deadline after
+  reading a relay's header, so a peer that sends one byte and stays silent
+  is timed out instead of holding the connection.
+- `anix-relay`: Control must answer within `handshake_timeout` (30 s) of the
+  node's first bytes; `max_connections_per_source` (256) bounds one node
+  address; `dial_timeout` defaults to 2 s, under the Agent's 5-second wait.
+  The cache refuses another hash for a source whose SHA-256 it already
+  knows instead of downloading it again, bounds open requests per address
+  (`max_requests_per_source`), can serve `allowed_sources` only, follows
+  redirects only to the origins' hosts and `redirect_hosts`, refuses more
+  reserved ranges (including NAT64 and 6to4), and keys concurrent downloads
+  by hash and source.
+- `grpc.relay_sources` refuses a CIDR wider than /24 (IPv6 /64).
+
 ## 5.0.13 - 2026-11-24
 
 Installs Agent v5.0.11 on nodes (`config/AGENT_RELEASE`). Carries migration
