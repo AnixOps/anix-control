@@ -449,7 +449,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 		err := change(ctx, db, func(tx *gorm.DB) error {
 			// Read again under the region's lock: a request at the same
 			// time may have given the device its address already.
-			if err := lockRegion(tx, region.ID); err != nil {
+			if err := findRegion(tx, region.ID, &region); err != nil {
 				return err
 			}
 			var current model.MeshDevice

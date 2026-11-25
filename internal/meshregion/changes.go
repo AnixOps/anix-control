@@ -88,8 +88,12 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		if err != nil {
 			return err
 		}
+		// A plain read: the request chooses no address, and its approval
+		// checks the region again under the region locks. Locking the
+		// region after the member or device row would take the two kinds
+		// of lock in the opposite order to the changes that move them.
 		var region model.MeshRegion
-		if err := findRegion(tx, input.ToRegionID, &region); err != nil {
+		if err := readRegion(tx, input.ToRegionID, &region); err != nil {
 			return err
 		}
 		if from == region.ID {

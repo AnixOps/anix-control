@@ -477,6 +477,11 @@ func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 		if err := checkGatewayStays(tx, home.NodeRef); err != nil {
 			return err
 		}
+		// The node's member rows before its changes, in the order an
+		// approval of a change takes them.
+		if err := lockRows(tx, &model.MeshMember{}, "node_ref = ?", home.NodeRef); err != nil {
+			return err
+		}
 		if err := rejectPendingOf(tx, home.NodeRef, "the node left the mesh", time.Now().UTC()); err != nil {
 			return err
 		}
@@ -489,6 +494,16 @@ func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 // change before the transaction ends.
 func findRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
 	return findLockedRegion(tx, id, row)
+}
+
+// lockRows locks the rows of table that match the condition until the
+// transaction ends (PostgreSQL).
+func lockRows(tx *gorm.DB, table any, query string, args ...any) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	var ids []uint
+	return tx.Model(table).Clauses(clause.Locking{Strength: "UPDATE"}).Where(query, args...).Pluck("id", &ids).Error
 }
 
 // readRegion reads a region without locking it, for an answer that
