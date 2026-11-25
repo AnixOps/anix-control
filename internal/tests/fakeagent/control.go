@@ -113,6 +113,36 @@ func (c *Control) Dial(t testing.TB, certificate *tls.Certificate) *grpc.ClientC
 	return conn
 }
 
+// StartRelayed starts a TLS listener in the shape of grpc.relay_sources
+// (docs/design/region-relay) over the agent PKI of control: connections
+// from 127.0.0.1 must open with a PROXY v2 header, then run TLS end to end.
+func StartRelayed(t testing.TB, control *Control) *Control {
+	t.Helper()
+	cfg := grpcserver.DefaultServerConfig()
+	cfg.Host, cfg.Port, cfg.AgentPKI = "127.0.0.1", 0, control.PKI
+	var roots *x509.CertPool
+	cfg.TLSCertFile, cfg.TLSKeyFile, roots = writeServerCertificate(t)
+	cfg.RelaySources = []string{"127.0.0.1/32"}
+	server := grpcserver.NewServer(cfg)
+	require.NoError(t, server.Start())
+	t.Cleanup(server.Stop)
+	return &Control{Server: server, Addr: server.Addr(), PKI: control.PKI, Streams: grpcserver.GetAgentStreams(), roots: roots}
+}
+
+// DialVia connects over TLS to address, a relay in front of the listener,
+// verifying the listener's certificate as a node does when it dials a relay.
+func (c *Control) DialVia(t testing.TB, address string, certificate *tls.Certificate) *grpc.ClientConn {
+	t.Helper()
+	tlsConfig := &tls.Config{RootCAs: c.roots, MinVersion: tls.VersionTLS12}
+	if certificate != nil {
+		tlsConfig.Certificates = []tls.Certificate{*certificate}
+	}
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
 // Enroll obtains node's agent certificate with a one-time enrollment
 // credential, as the node's Agent does at its first start.
 func (c *Control) Enroll(t testing.TB, node agentcontrol.AgentNode) *tls.Certificate {

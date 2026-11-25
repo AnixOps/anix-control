@@ -373,7 +373,7 @@ again with a node group's command.
 2. **Check the configuration** with the new binary before you replace the
    running one: `./anix-control config check --file <config.yaml>` from the
    extracted release archive (it opens no database and writes nothing; exit 1
-   means Control would refuse the file). The configuration is ten operator
+   means Control would refuse the file). The configuration is eleven operator
    keys now; a 4.x file keeps loading, every old key read or ignored with a
    warning, and `anix-control config rewrite` turns it into the new keys after
    the first start ([Configuration Rewrite On Upgrade](#configuration-rewrite-on-upgrade)).
@@ -746,9 +746,9 @@ the CI job) switched route modes and imported packages and is gone.
 
 ## Configuration Rewrite On Upgrade
 
-From the release after 4.2.x on, the configuration is ten operator keys
+From the release after 4.2.x on, the configuration is eleven operator keys
 (`domain`, `tls.mode`, `tls.cert_file`, `tls.key_file`, `listen`,
-`grpc.port`, `grpc.public_name`, `grpc.edge_proxies` (edge mode only), `subscribe_path`, `data_dir`), and an
+`grpc.port`, `grpc.public_name`, `grpc.edge_proxies` (edge mode only), `grpc.relay_sources` (region relays only), `subscribe_path`, `data_dir`), and an
 ordinary file is one line, `domain: panel.example.com`
 ([`reference/configuration.md`](reference/configuration.md#operator-keys)).
 

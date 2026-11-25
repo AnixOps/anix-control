@@ -76,6 +76,7 @@ var operatorKeys = []Key{
 	{Path: "grpc.port", Description: "The port of the node gRPC listener; nodes dial <grpc.public_name or domain>:<grpc.port>."},
 	{Path: "grpc.public_name", Description: "Only when domain sits behind a CDN: another name that reaches this machine directly, for the nodes' gRPC (mutual TLS cannot cross a CDN)."},
 	{Path: "grpc.edge_proxies", Description: "Non-empty: a reverse proxy on another machine (its IPs or CIDRs) terminates the nodes' TLS, with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires tls.mode external and no certificate files."},
+	{Path: "grpc.relay_sources", Description: "Region relays (their IPs or CIDRs, as Control sees them) that forward nodes' gRPC connections byte for byte. A connection from one of them must open with a PROXY v2 header carrying the node's address; TLS and the client certificate still run end to end between the node and Control. Cannot be combined with grpc.edge_proxies."},
 	{Path: "subscribe_path", Description: "The subscription path (/<subscribe_path>/:token). Change it only to keep links already handed out working.", field: "app.subscribe_path"},
 	{Path: "source_url", Description: "The source code address the web app links to (the AGPL-3.0 offer of the source to the panel's users). Point it at your repository when you run modified code."},
 	{Path: "data_dir", Description: "The data directory: the root key (root.key) and the backups (backups/). Absolute."},
