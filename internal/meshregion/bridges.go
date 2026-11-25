@@ -608,6 +608,11 @@ type appliedBridge struct {
 // mesh_external_bridge.
 const AlertBridgeUnsupported = "external_bridge_unsupported"
 
+// AlertBridgeLockHeld is the alert of a node where another process on the
+// host holds the bridge lock, so the node does not declare
+// mesh_external_bridge (spec #359): released like AlertBridgeUnsupported.
+const AlertBridgeLockHeld = "external_bridge_lock_held"
+
 // AlertBridgeDowngradeResidue is the alert of a node now on a kernel
 // without mesh_external_bridge whose old bridge rules may still be in
 // place (spec section 15.12 item 9): while a network reports it, nothing
@@ -677,7 +682,7 @@ func reportedBridges(payload string) map[string]reportedBridge {
 		raw := bytes.TrimSpace(network.ExternalBridge)
 		unsupported, residue := false, false
 		for _, alert := range network.Alerts {
-			unsupported = unsupported || alert.Code == AlertBridgeUnsupported
+			unsupported = unsupported || alert.Code == AlertBridgeUnsupported || alert.Code == AlertBridgeLockHeld
 			residue = residue || alert.Code == AlertBridgeDowngradeResidue
 		}
 		switch {
@@ -1030,7 +1035,7 @@ func Bridges(ctx context.Context, db *gorm.DB) ([]BridgeView, error) {
 			// The Agent withholds the section from a kernel without the
 			// capability and reports the alert; a report's features say
 			// so too.
-			if features := reportedFeatures(statuses[0].Payload); (len(features) > 0 && !features[FeatureExternalBridge]) || networkAlert(statuses[0].Payload, view.RegionCode, AlertBridgeUnsupported) {
+			if features := reportedFeatures(statuses[0].Payload); (len(features) > 0 && !features[FeatureExternalBridge]) || networkAlert(statuses[0].Payload, view.RegionCode, AlertBridgeUnsupported) || networkAlert(statuses[0].Payload, view.RegionCode, AlertBridgeLockHeld) {
 				view.Warnings = append(view.Warnings, WarningBridgeUnsupported)
 			}
 		}
