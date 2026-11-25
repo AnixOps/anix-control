@@ -649,8 +649,10 @@ func TestCacheBoundsRequestsPerSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	ip := remoteIP("192.0.2.1:1234")
-	if !cache.claimRequest(ip) || !cache.claimRequest(ip) {
-		t.Fatal("refused within the limit")
+	for i := 0; i < 2; i++ {
+		if !cache.claimRequest(ip) {
+			t.Fatalf("request %d refused within the limit", i+1)
+		}
 	}
 	if cache.claimRequest(ip) {
 		t.Fatal("a third request from one address was admitted")

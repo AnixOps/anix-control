@@ -314,7 +314,7 @@ func (c *answeredConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
 	if n > 0 && !c.answered {
 		c.answered = true
-		_ = c.Conn.SetReadDeadline(time.Time{})
+		_ = c.SetReadDeadline(time.Time{})
 	}
 	return n, err
 }
@@ -324,7 +324,7 @@ func (c *answeredConn) CloseWrite() error {
 	if tcp, ok := c.Conn.(*net.TCPConn); ok {
 		return tcp.CloseWrite()
 	}
-	return c.Conn.Close()
+	return c.Close()
 }
 
 // pipe copies both ways. When one side ends its stream, the other side's
