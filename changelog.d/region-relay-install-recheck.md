@@ -18,3 +18,12 @@
   route sets `GRPCRelays` and `ReleaseCaches` in place and keeps every
   other line (the Forward section, manual edits); a configuration that
   cannot be edited line by line is rewritten as before, the old one kept.
+- A zip from a release cache needs OpenSSL 3 to check its signature: the
+  installer requires `openssl` with `--release-cache`, and refuses the zip
+  when its OpenSSL cannot verify Ed25519.
+- A configuration rewritten for the route (one that cannot be edited line
+  by line) keeps the node's one-line Forward section.
+- Running a group's command with relays removes the route the Agent stored
+  from Control (`control-route-*.json` in the stream state directory), so
+  the command's route applies; Control sends its current route again over
+  the stream.

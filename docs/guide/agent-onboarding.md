@@ -253,7 +253,8 @@ Control names the node after the address the relay's PROXY header gives
 its gRPC listener. The Agent zip comes from the release caches first, by
 its SHA-256, and from the mirror through the relay otherwise; checksum and
 signature are checked as always, and a zip from a cache is installed only
-with its signature (from the mirror, or from Control through the relay).
+with its signature (from the mirror, or from Control through the relay),
+which needs OpenSSL 3 on the host.
 Control rate limits the install routes for addresses in
 `grpc.relay_sources` with a budget of their own (50 requests a second,
 burst 200), as every install of the region arrives from the relay.
@@ -264,8 +265,10 @@ older one ignores it and keeps the route it was installed with. Running
 the group's command again on a node installed directly also moves it: the
 script sets the group's relays and caches in a configuration that lacks
 them and keeps every other line, or rewrites a configuration it cannot
-edit line by line (the old one is kept as `config.json.bak.<time>` either
-way). A route removed from the group is
+edit line by line, keeping its one-line Forward section (the old one is
+kept as `config.json.bak.<time>` either way). It also removes the route the
+Agent stored from Control, so the command's route applies until Control
+sends its own again. A route removed from the group is
 not taken away from installed nodes: an empty or missing relay list never
 means "reach Control directly" (`control_route` contract in
 `internal/relayroute`), so an Agent behind relays keeps them and warns.
