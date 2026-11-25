@@ -457,15 +457,18 @@ func Authenticate(ctx context.Context, db *gorm.DB, token string, now time.Time)
 }
 
 // RevokeDevice deletes the device's token: it is refused from now on and
-// enrolls again only with a new credential. Its static key leaves its
-// region's native_keys, so our nodes refuse it at once.
+// enrolls again only with a new credential. Its static key is released
+// and leaves its region's native_keys, so our nodes refuse it at once.
 func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
 	return change(ctx, db, func(tx *gorm.DB) error {
 		result := tx.Where("device_id = ?", id).Delete(&model.MeshDeviceToken{})
 		if result.Error == nil && result.RowsAffected == 0 {
 			return fmt.Errorf("%w: enrolled device %d", ErrNotFound, id)
 		}
-		return result.Error
+		if result.Error != nil {
+			return result.Error
+		}
+		return tx.Model(&model.MeshDevice{}).Where("id = ?", id).Update("static_key", gorm.Expr("NULL")).Error
 	})
 }
 

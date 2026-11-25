@@ -156,6 +156,14 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 	require.NoError(t, db.First(&row, device.ID).Error)
 	require.Equal(t, testStaticKey(9), *row.StaticKey)
 
+	// A revoked device releases its key for another device.
+	require.NoError(t, RevokeDevice(ctx, db, device.ID))
+	require.NoError(t, db.First(&row, device.ID).Error)
+	require.Nil(t, row.StaticKey)
+	taken, err := keyTaken(db, testStaticKey(9), 0)
+	require.NoError(t, err)
+	require.False(t, taken)
+
 	// A deleted device leaves the list.
 	require.NoError(t, DeleteDevice(ctx, db, device.ID, now))
 	require.Equal(t, []string{testStaticKey(1)}, nodeNetwork(t, db, proxy(1), "cn")["native_keys"])

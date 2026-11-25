@@ -57,10 +57,17 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   kernel and the Agent, and a cached list per region (L-2); an audit
   record and an overview count when a device reports another static key
   than its bound one (L-5); concurrent first reports in the PostgreSQL
-  tests (L-7). Turning the feature on needs the node kernels and the
-  clients that take `kind` and `native_keys` first, and the Agents
-  reporting their static keys (L-6): older devices without an Agent
-  refuse the new fields and never give a key.
+  tests (L-7); the other members' push of a node's new key is started
+  first but each push runs on its own, so arrival in that order is not
+  guaranteed (N-1); a key bound by two devices at once, or by a device
+  and a member's report at once, is not refused (N-2). HARD
+  PREREQUISITE before the feature is turned on anywhere but development
+  (L-6): no node kernel may list the mesh capability before it parses
+  `kind` and `native_keys`, or the Agent gates those fields by the
+  kernel's capability (Agent #196 M1); the clients without an Agent must
+  take the fields too, and the Agents must report their static keys.
+  Older devices without an Agent refuse the new fields and never give a
+  key.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against
