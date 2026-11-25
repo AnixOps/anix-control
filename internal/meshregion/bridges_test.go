@@ -215,6 +215,9 @@ func TestExternalBridge(t *testing.T) {
 	require.EqualValues(t, 3, holds, "a null observed before the bridge was removed")
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), later, later))
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
+	require.EqualValues(t, 3, holds, "one report alone releases nothing")
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), later, later.Add(time.Second)))
+	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
 	require.Zero(t, holds, "the node reports the bridge gone")
 	require.NoError(t, DeleteHostGroup(ctx, db, group.ID))
 	require.NoError(t, RemoveNode(ctx, db, nodeHome.ID))
@@ -268,6 +271,7 @@ func TestBridgeHoldsAReleasedAddress(t *testing.T) {
 	// Received after the hold, the list without them releases them, even
 	// when the node's clock puts appliedAt a day earlier.
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(-24*time.Hour), later))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(-24*time.Hour), later.Add(time.Second)))
 	view := bridgeView(t, db, "proxy-1")
 	require.Empty(t, view.Held)
 	require.True(t, view.Confirmed)
@@ -307,6 +311,7 @@ func TestPoolReclaimWaitsForTheBridge(t *testing.T) {
 
 	later := time.Now().UTC().Add(time.Minute)
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("lab", later), later, later))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("lab", later), later, later.Add(time.Second)))
 	next, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
 	require.NoError(t, err)
 	require.Equal(t, *idle.Address, *next.Address)
@@ -344,6 +349,7 @@ func TestBridgeHoldWaitsAgainWhenRemovedAgain(t *testing.T) {
 	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "received before the second removal")
 	later := time.Now().UTC().Add(time.Minute)
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later), later, later))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later), later, later.Add(time.Second)))
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }
 
@@ -374,5 +380,6 @@ func TestBridgeUnsupportedAlert(t *testing.T) {
 	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "received before the removal")
 	later := time.Now().UTC().Add(time.Minute)
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, later, later))
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, later, later.Add(time.Second)))
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }

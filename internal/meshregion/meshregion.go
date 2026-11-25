@@ -849,6 +849,12 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	if err != nil {
 		return err
 	}
+	// The node's report before this one: a hold is released by two
+	// consecutive reports.
+	var previous []model.MeshStatus
+	if err := db.Where("node_ref = ?", node.String()).Limit(1).Find(&previous).Error; err != nil {
+		return err
+	}
 	row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
 	if err := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "node_ref"}},
@@ -861,7 +867,11 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	}
 	// The allow list the node reports applied releases the addresses
 	// held for it (spec section 15.12 item 4).
-	if err := releaseHolds(db, node.String(), row.Payload, receivedAt); err != nil {
+	var last *model.MeshStatus
+	if len(previous) > 0 {
+		last = &previous[0]
+	}
+	if err := releaseHolds(db, node.String(), last, row.Payload, receivedAt); err != nil {
 		return err
 	}
 	// A new or changed static key of the node changes its regions'
