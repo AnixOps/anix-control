@@ -694,6 +694,8 @@ func TestAgentControlDispatchRejectsUnadvertisedCapability(t *testing.T) {
 	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
 	_, err = stream.Recv()
 	require.NoError(t, err)
+	// The HelloAck goes out before the session is registered.
+	requireAgentRegistered(t, environment.manager, uint32(environment.node.ID))
 
 	_, err = environment.manager.DispatchOperation(ctx, uint32(environment.node.ID), &agentv1pb.DesiredOperation{
 		OperationId: "unsupported-operation",
