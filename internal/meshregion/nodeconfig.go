@@ -14,8 +14,9 @@ import (
 
 // instanceIDPattern is the node instance id a status may carry: the
 // kernel's id of the node, kept across restarts and upgrades.
-// 1 to 64 letters, digits or hyphens, as the Agent checks it.
-var instanceIDPattern = regexp.MustCompile(`^[0-9A-Za-z-]{1,64}$`)
+// 1 to 64 letters, digits or hyphens, the first a letter or digit, as the
+// kernel and the Agent check it.
+var instanceIDPattern = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z-]{0,63}$`)
 
 // statusInstanceID answers the instance id of a "mesh.status" payload, ""
 // when it has none.
