@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"log/slog"
 	"sort"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -135,24 +134,26 @@ func recordMemberKeys(ctx context.Context, db *gorm.DB, nodeRef string, payload 
 			continue
 		}
 		// A key a device or another node has is not taken: it would
-		// keep that device admitted through this node's entry.
+		// keep that device admitted through this node's entry. The
+		// region list marks the member (memberKeyWarnings).
 		owned, err := keyOwnedElsewhere(db, key, nodeRef)
 		if err != nil {
 			return err
 		}
-		if owned {
-			slog.Warn("mesh: a node reported a static key a device or another node has; not taken", "node", nodeRef, "region", row.Code)
-			continue
+		if !owned {
+			updates[row.ID] = key
 		}
-		updates[row.ID] = key
 	}
 	if len(updates) == 0 {
 		return nil
 	}
 	return changeLast(ctx, db, nodeRef, func(tx *gorm.DB) error {
 		for id, key := range updates {
-			// A row that left meanwhile stays gone.
+			// A row that left meanwhile stays gone; a key another
+			// owner took meanwhile is not taken, in the same statement.
 			if err := tx.Model(&model.MeshMember{}).Where("id = ? AND node_ref = ?", id, nodeRef).
+				Where("NOT EXISTS (?)", tx.Table(model.MeshMember{}.TableName()+" AS o").Select("1").Where("o.static_key = ? AND o.node_ref <> ?", key, nodeRef)).
+				Where("NOT EXISTS (?)", tx.Table(model.MeshDevice{}.TableName()+" AS d").Select("1").Where("d.static_key = ?", key)).
 				Update("static_key", key).Error; err != nil {
 				return err
 			}
@@ -264,4 +265,59 @@ func reportsTakenKey(owners map[string]uint, device model.MeshDevice, code, payl
 	}
 	owner, taken := owners[key]
 	return taken && owner != device.ID
+}
+
+// memberKeyWarnings answers, by member id, WarningStaticKeyTaken for the
+// members whose bound key, or whose node's latest reported key for the
+// member's region, a device or another node has (also a repeat that
+// predates the check). reports are the nodes' latest payloads; codes the
+// region codes by id.
+func memberKeyWarnings(db *gorm.DB, members []model.MeshMember, reports map[string]string, codes map[uint]string) (map[uint][]string, error) {
+	owners := map[string]map[string]bool{}
+	own := func(key, owner string) {
+		if owners[key] == nil {
+			owners[key] = map[string]bool{}
+		}
+		owners[key][owner] = true
+	}
+	for _, member := range members {
+		if member.StaticKey != nil {
+			own(*member.StaticKey, member.NodeRef)
+		}
+	}
+	var devices []struct {
+		ID        uint
+		StaticKey string
+	}
+	if err := db.Model(&model.MeshDevice{}).Select("id", "static_key").Where("static_key IS NOT NULL").Scan(&devices).Error; err != nil {
+		return nil, err
+	}
+	for _, device := range devices {
+		own(device.StaticKey, DeviceRef(device.ID))
+	}
+	elsewhere := func(key, nodeRef string) bool {
+		for owner := range owners[key] {
+			if owner != nodeRef {
+				return true
+			}
+		}
+		return false
+	}
+	reported := map[string]map[string]string{}
+	warnings := map[uint][]string{}
+	for _, member := range members {
+		keys, done := reported[member.NodeRef]
+		if !done {
+			keys = reportedKeys([]byte(reports[member.NodeRef]))
+			reported[member.NodeRef] = keys
+		}
+		taken := member.StaticKey != nil && elsewhere(*member.StaticKey, member.NodeRef)
+		if key, ok := keys[codes[member.RegionID]]; ok && elsewhere(key, member.NodeRef) {
+			taken = true
+		}
+		if taken {
+			warnings[member.ID] = []string{WarningStaticKeyTaken}
+		}
+	}
+	return warnings, nil
 }

@@ -162,6 +162,16 @@ func TestDeviceKeyBindingGuards(t *testing.T) {
 	var member model.MeshMember
 	require.NoError(t, db.Where("node_ref = ?", proxy(1).String()).First(&member).Error)
 	require.Equal(t, testStaticKey(1), *member.StaticKey)
+	regions, err := List(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{WarningStaticKeyTaken}, regions[0].Members[0].Warnings, "the region list says why")
+	// A repeat that predates the check shows too.
+	require.NoError(t, db.Model(&model.MeshMember{}).Where("id = ?", member.ID).Update("static_key", testStaticKey(9)).Error)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), statusWithKey("cn", testStaticKey(9)), now, now))
+	regions, err = List(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{WarningStaticKeyTaken}, regions[0].Members[0].Warnings)
+	require.NoError(t, db.Model(&model.MeshMember{}).Where("id = ?", member.ID).Update("static_key", testStaticKey(1)).Error)
 
 	// A revoked device releases its key for another device.
 	require.NoError(t, RevokeDevice(ctx, db, device.ID))

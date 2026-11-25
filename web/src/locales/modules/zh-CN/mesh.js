@@ -58,7 +58,8 @@ export default {
         peer_not_native: '拒绝未准入节点',
         native_keys_pending: '等待准入清单',
         native_keys_unsupported: '内核不支持准入清单',
-        invalid_kind: '网络类型无效'
+        invalid_kind: '网络类型无效',
+        static_key_taken: '公钥与其他成员重复'
       }
     },
     region: {

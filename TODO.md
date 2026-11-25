@@ -60,7 +60,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   tests (L-7); the other members' push of a node's new key is started
   first but each push runs on its own, so arrival in that order is not
   guaranteed (N-1); a key bound by two devices at once, or by a device
-  and a member's report at once, is not refused (N-2). HARD
+  and a member's report at once, is not refused (N-2); a unique index
+  on the static keys across members and devices would make it a
+  constraint (#638 review; the node channel writes conditionally in one
+  statement, the device channel checks first). HARD
   PREREQUISITE before the feature is turned on anywhere but development
   (L-6): no node kernel may list the mesh capability before it parses
   `kind` and `native_keys`, or the Agent gates those fields by the
