@@ -170,6 +170,11 @@ func ApproveChange(ctx context.Context, db *gorm.DB, id uint, note string, decid
 	}
 	var row model.MeshRegionChange
 	err = change(ctx, db, func(tx *gorm.DB) error {
+		// A move chooses an address in another region, and a boundary
+		// node's in every region.
+		if err := lockAllRegions(tx); err != nil {
+			return err
+		}
 		if err := findPending(tx, id, &row); err != nil {
 			return err
 		}
@@ -268,6 +273,9 @@ func RejectChange(ctx context.Context, db *gorm.DB, id uint, note string, decide
 func MoveDevice(ctx context.Context, db *gorm.DB, deviceID, toRegionID uint, decidedBy *uint, now time.Time) (model.MeshRegionChange, error) {
 	var row model.MeshRegionChange
 	err := change(ctx, db, func(tx *gorm.DB) error {
+		if err := lockAllRegions(tx); err != nil {
+			return err
+		}
 		var device model.MeshDevice
 		if err := findDevice(tx, deviceID, &device); err != nil {
 			return err

@@ -150,9 +150,13 @@ func TestFullNodeCredentialsFollowTheirRegion(t *testing.T) {
 	other := region(t, db, "eu", "10.152.0.0/16")
 	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "edge", RegionID: other.ID, Role: RoleFull, Address: "10.152.0.5"}, nil, now)
 	require.NoError(t, err)
+	var node model.MeshFullNode
+	_, err = UpdateRegion(ctx, db, other.ID, RegionInput{Code: "eu2", Name: "eu", CIDR: "10.152.0.0/16", Enabled: true}, now)
+	require.NoError(t, err)
+	require.NoError(t, db.Where("enrollment_id = ?", issued.ID).First(&node).Error)
+	require.Equal(t, "10.152.0.5", node.Address, "a new code keeps the address")
 	_, err = UpdateRegion(ctx, db, other.ID, RegionInput{Code: "eu", Name: "eu", CIDR: "10.154.0.0/16", Enabled: true}, now)
 	require.NoError(t, err)
-	var node model.MeshFullNode
 	require.NoError(t, db.Where("enrollment_id = ?", issued.ID).First(&node).Error)
 	require.Empty(t, node.Address)
 	require.NoError(t, DeleteRegion(ctx, db, other.ID))
@@ -196,6 +200,15 @@ func TestFullNodeSubnets(t *testing.T) {
 	require.Equal(t, []string{"192.168.1.0/24", "172.16.0.0/16"}, subnets)
 	_, err = SetDeviceSubnets(ctx, db, routers[1], []string{"192.168.1.128/25"}, now)
 	require.ErrorIs(t, err, ErrConflict, "the other full node advertises it")
+	// The address plan keeps out of the confirmed subnets too.
+	_, err = CreateRegion(ctx, db, RegionInput{Code: "lan", Name: "lan", CIDR: "192.168.0.0/16"}, now)
+	require.ErrorIs(t, err, ErrConflict, "a region over a confirmed subnet")
+	settings := SettingsInput{NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet, HostGroupPrefix: DefaultHostGroupPrefix}
+	_, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: settings.NameSuffix, HostGroupSupernet: "172.16.0.0/16", HostGroupPrefix: 24}, now)
+	require.ErrorIs(t, err, ErrConflict, "a host group supernet over a confirmed subnet")
+	settings.ReservedRanges = []string{"172.16.0.0/16"}
+	_, err = SaveSettings(ctx, db, settings, now)
+	require.ErrorIs(t, err, ErrConflict, "a reserved range over a confirmed subnet")
 
 	var router model.MeshDevice
 	require.NoError(t, db.First(&router, routers[0]).Error)

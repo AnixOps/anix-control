@@ -161,6 +161,9 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 	}
 	var answer Settings
 	err = change(ctx, db, func(tx *gorm.DB) error {
+		if err := lockAddressPlan(tx); err != nil {
+			return err
+		}
 		current, err := loadSettings(tx)
 		if err != nil {
 			return err
@@ -193,6 +196,14 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 				if bits := netip.MustParsePrefix(raw).Bits(); bits != prefix.Bits() {
 					return conflict("reserved_ranges: %s has /%d; the regions have /%d", raw, bits, prefix.Bits())
 				}
+			}
+		}
+		if err := checkFullNodeSubnets(tx, "host_group_supernet", supernet); err != nil {
+			return err
+		}
+		for _, raw := range reserved {
+			if err := checkFullNodeSubnets(tx, "reserved_ranges", netip.MustParsePrefix(raw)); err != nil {
+				return err
 			}
 		}
 		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), UpdatedAt: now}

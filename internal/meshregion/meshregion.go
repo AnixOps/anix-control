@@ -37,6 +37,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/features"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -234,7 +235,10 @@ func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) e
 			return conflict("every region has the same prefix length: /%d like region %q", otherPrefix.Bits(), other.Code)
 		}
 	}
-	return checkOutsideSettings(tx, prefix)
+	if err := checkOutsideSettings(tx, prefix); err != nil {
+		return err
+	}
+	return checkFullNodeSubnets(tx, "cidr", prefix)
 }
 
 // CreateRegion creates a region; every boundary node gets an address in it.
@@ -245,6 +249,9 @@ func CreateRegion(ctx context.Context, db *gorm.DB, input RegionInput, now time.
 	}
 	row := model.MeshRegion{Code: input.Code, Name: input.Name, CIDR: input.CIDR, Enabled: input.Enabled, Sort: input.Sort, CreatedAt: now, UpdatedAt: now}
 	err = change(ctx, db, func(tx *gorm.DB) error {
+		if err := lockAddressPlan(tx); err != nil {
+			return err
+		}
 		if err := checkRegion(tx, 0, input, prefix); err != nil {
 			return err
 		}
@@ -275,7 +282,12 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 	}
 	var row model.MeshRegion
 	err = change(ctx, db, func(tx *gorm.DB) error {
-		if err := findRegion(tx, id, &row); err != nil {
+		if err := lockAddressPlan(tx); err != nil {
+			return err
+		}
+		// Locked first, so that no member or device joins the region
+		// between the checks below and the change.
+		if err := findLockedRegion(tx, id, &row); err != nil {
 			return err
 		}
 		if err := checkRegion(tx, id, input, prefix); err != nil {
@@ -293,6 +305,8 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 			if err := regionHasDevices(tx, id); err != nil {
 				return err
 			}
+		}
+		if input.CIDR != row.CIDR {
 			// A full node credential not yet used takes the lowest free
 			// address of the new range.
 			if err := tx.Model(&model.MeshFullNode{}).Where("device_id IS NULL AND enrollment_id IN (?)", unusedEnrollments(tx, id)).
@@ -316,7 +330,7 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 func RotateRegionSecret(ctx context.Context, db *gorm.DB, id uint, now time.Time) error {
 	return change(ctx, db, func(tx *gorm.DB) error {
 		var row model.MeshRegion
-		if err := findRegion(tx, id, &row); err != nil {
+		if err := findLockedRegion(tx, id, &row); err != nil {
 			return err
 		}
 		return tx.Model(&row).Updates(map[string]any{"secret": rand.Text(), "updated_at": now}).Error
@@ -327,8 +341,10 @@ func RotateRegionSecret(ctx context.Context, db *gorm.DB, id uint, now time.Time
 // nodes leave it.
 func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 	return change(ctx, db, func(tx *gorm.DB) error {
+		// Locked first, so that no member or device joins the region
+		// between the checks below and the delete.
 		var row model.MeshRegion
-		if err := findRegion(tx, id, &row); err != nil {
+		if err := findLockedRegion(tx, id, &row); err != nil {
 			return err
 		}
 		var count int64
@@ -363,6 +379,11 @@ func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.AgentNode, boundary bool, now time.Time) (model.MeshMember, error) {
 	var row model.MeshMember
 	err := change(ctx, db, func(tx *gorm.DB) error {
+		if boundary {
+			if err := lockAllRegions(tx); err != nil {
+				return err
+			}
+		}
 		if _, err := lookupNode(tx, node.String()); err != nil {
 			return err
 		}
@@ -397,6 +418,11 @@ func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.
 func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, boundary bool, actor *uint, now time.Time) (model.MeshMember, error) {
 	var row model.MeshMember
 	err := change(ctx, db, func(tx *gorm.DB) error {
+		// A move or a boundary node chooses addresses in more than one
+		// region.
+		if err := lockAllRegions(tx); err != nil {
+			return err
+		}
 		home, err := findHome(tx, memberID)
 		if err != nil {
 			return err
@@ -713,11 +739,11 @@ func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) err
 	}
 	for attempt := 1; ; attempt++ {
 		err = db.Transaction(write)
-		if err == nil || !isUniqueViolation(err) {
+		if err == nil || !isUniqueViolation(err) && !isRetryable(err) {
 			break
 		}
 		if attempt == 3 {
-			return conflict("a concurrent change took the same address; try again")
+			return conflict("a concurrent change conflicted with this one; try again")
 		}
 	}
 	if err != nil {
@@ -789,6 +815,18 @@ func notify(nodes []agentcontrol.AgentNode) {
 	for _, listener := range called {
 		listener(nodes)
 	}
+}
+
+// isRetryable tells whether PostgreSQL ended the transaction for a
+// deadlock (40P01) or a serialization failure (40001), after which the
+// whole transaction can run again.
+func isRetryable(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "40P01" || pgErr.Code == "40001"
+	}
+	text := err.Error()
+	return strings.Contains(text, "SQLSTATE 40P01") || strings.Contains(text, "SQLSTATE 40001")
 }
 
 // isUniqueViolation tells whether err is a unique index violation.
