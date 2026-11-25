@@ -319,7 +319,8 @@ func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) erro
 			return err
 		}
 		// A full node's credential stays as its record, without the device.
-		if err := tx.Model(&model.MeshFullNode{}).Where("device_id = ?", id).Updates(map[string]any{"device_id": nil, "updated_at": now}).Error; err != nil {
+		// Its pending subnet request goes with the device.
+		if err := tx.Model(&model.MeshFullNode{}).Where("device_id = ?", id).Updates(map[string]any{"device_id": nil, "requested_subnets": nil, "requested_at": nil, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&row).Error

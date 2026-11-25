@@ -97,7 +97,11 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   bridge may never be released (let an administrator release them while
   the alert persists and the node no longer bridges); release by receive
   time leaves a window of seconds (require two matching reports after the
-  removal).
+  removal). A report with `external_bridge_unsupported` counts as no bridge
+  and releases holds: a kernel downgraded from a version that bridged may
+  leave its old firewall rules behind, which the deployment layer must
+  clean up. Subnet requests take IPv4 networks only (IPv6 with the next
+  minor).
   A device holding a region's resolver address (from before #641) is
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver

@@ -95,4 +95,11 @@ func TestSubnetRequests(t *testing.T) {
 	config, err := DeviceConfig(ctx, db, office, meshFeatures, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{"192.168.4.0/24", "172.17.0.0/16"}, config["networks"].([]map[string]any)[0]["subnets"].(map[string]any)["advertise"])
+
+	// A deleted device's pending request goes with it.
+	require.NoError(t, RequestDeviceSubnets(ctx, db, router, []string{"192.168.8.0/24"}, now))
+	require.NoError(t, DeleteDevice(ctx, db, router.ID, now))
+	var left int64
+	require.NoError(t, db.Model(&model.MeshFullNode{}).Where("requested_subnets IS NOT NULL OR requested_at IS NOT NULL").Count(&left).Error)
+	require.Zero(t, left)
 }

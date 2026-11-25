@@ -637,7 +637,9 @@ func networkAlert(payload, id, code string) bool {
 
 // reportedBridge is what a "mesh.status" payload says of the bridge in one
 // network: Running with the configuration in force (Applied), Stopped for
-// an explicit null externalBridge (the node runs no bridge there), or
+// an explicit null externalBridge or, without one, the alert
+// external_bridge_unsupported (the Agent never gives that kernel the
+// section, so the node runs no bridge there), or
 // neither when the key is missing or unreadable (the state is unknown: the
 // configuration may not have been applied or the kernel not read).
 type reportedBridge struct {
@@ -655,6 +657,9 @@ func reportedBridges(payload string) map[string]reportedBridge {
 		Networks []struct {
 			ID             string          `json:"id"`
 			ExternalBridge json.RawMessage `json:"externalBridge"`
+			Alerts         []struct {
+				Code string `json:"code"`
+			} `json:"alerts"`
 		} `json:"networks"`
 	}
 	answer := map[string]reportedBridge{}
@@ -663,7 +668,13 @@ func reportedBridges(payload string) map[string]reportedBridge {
 	}
 	for _, network := range shape.Networks {
 		raw := bytes.TrimSpace(network.ExternalBridge)
+		unsupported := false
+		for _, alert := range network.Alerts {
+			unsupported = unsupported || alert.Code == AlertBridgeUnsupported
+		}
 		switch {
+		case len(raw) == 0 && unsupported:
+			answer[network.ID] = reportedBridge{Stopped: true}
 		case len(raw) == 0:
 			// Missing: unknown.
 		case bytes.Equal(raw, []byte("null")):
@@ -697,8 +708,9 @@ func desiredOf(db *gorm.DB, nodeRef string, regionID uint) (map[netip.Prefix]boo
 // receivedAt, shows released (spec section 15.12 item 4): where the node
 // bridges, a report received after the hold whose digest of the list in
 // force equals the digest of the list it is given now, which no longer has
-// the prefix; where it no longer bridges, a report received after the hold
-// without a bridge in that network (an explicit null; a missing
+// the prefix; where it runs no bridge, a report received after the hold
+// without a bridge in that network (an explicit null, or the alert
+// external_bridge_unsupported without externalBridge; a missing
 // externalBridge is unknown and releases nothing). Both times are the
 // panel's: the node's appliedAt, by another clock, is only shown.
 func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) error {
@@ -737,7 +749,10 @@ func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) er
 			if receivedAt.After(hold.CreatedAt) && !want.set[prefix] && report.Applied.AllowDigest == AllowDigest(want.set) {
 				released = append(released, hold.ID)
 			}
-		case !want.bridge && report.Stopped:
+		case report.Stopped:
+			// The node runs no bridge in the network: nothing it held
+			// back is reachable through it, whether or not it is still
+			// meant to bridge.
 			if receivedAt.After(hold.CreatedAt) {
 				released = append(released, hold.ID)
 			}
