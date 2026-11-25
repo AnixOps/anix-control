@@ -664,6 +664,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		exitPolicy := handler.NewExitPolicyHandler()
 		v4.GET("/kernel/nodes/:id/exit-policy", exitPolicy.Get)
 		v4.PUT("/kernel/nodes/:id/exit-policy", exitPolicy.Set)
+		// Temporary proxies: a SOCKS5 proxy a proxy node serves for a
+		// limited time on an internal address, for its mesh or LAN to go
+		// out through it (internal/tempproxy).
+		temporaryProxies := handler.NewTemporaryProxyHandler()
+		v4.GET("/kernel/nodes/:id/temporary-proxies", temporaryProxies.List)
+		v4.POST("/kernel/nodes/:id/temporary-proxies", temporaryProxies.Open)
+		v4.DELETE("/kernel/nodes/:id/temporary-proxies/:proxy_id", temporaryProxies.Close)
 		// Feature licensing (internal/entitlement): the ANX
 		// licensing settings, the devices that asked for a license, revoke
 		// and restore. Off by default.

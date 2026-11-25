@@ -300,6 +300,29 @@ export async function setKernelNodeExitPolicy(node, blockMainland) {
   }))
 }
 
+// A proxy node's temporary SOCKS5 proxies, `node` is "proxy-<id>": open ones
+// as [{ id, listen, port, username, expires_at, created_by, created_at }],
+// the soonest to end first. Opening answers the same with the password,
+// which no later answer carries.
+export async function listKernelNodeTemporaryProxies(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/temporary-proxies`, method: 'get' }))
+}
+
+export async function openKernelNodeTemporaryProxy(node, { listen, port, minutes }) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/temporary-proxies`,
+    method: 'post',
+    data: { listen: String(listen || '').trim(), port: Number(port) || 0, minutes: Number(minutes) || 0 }
+  }))
+}
+
+export async function closeKernelNodeTemporaryProxy(node, id) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/temporary-proxies/${encodeURIComponent(id)}`,
+    method: 'delete'
+  }))
+}
+
 // Reachability by region (internal/reachprobe): { vantages: [{ node_id,
 // region (domestic | overseas), capable }], nodes: [{ node_id, status (ok |
 // region_unreachable | overseas_unreachable | unreachable | unknown),

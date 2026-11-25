@@ -757,6 +757,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 	followForwardStates(server.manager, server.forwardManager)
 	followNetworkPlans(server.manager, server.forwardManager)
 	followApprovals(server.manager, server.forwardManager)
+	followTemporaryProxies(server.manager)
 	return server
 }
 

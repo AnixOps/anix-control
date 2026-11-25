@@ -6938,6 +6938,128 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/temporary-proxies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The SOCKS5 proxies the node serves now for a limited time on an internal address, the soonest to end first: id, listen, port, username, expires_at, created_by and created_at. Passwords are never answered here.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A proxy node's open temporary proxies",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.NodeTemporaryProxy"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node serves a SOCKS5 proxy on listen:port for minutes (1 to 1440, 15 when 0), for devices of its internal network (a mesh address or a LAN address) to send traffic out through the node. listen must be an internal address of the node (10/8, 172.16/12, 192.168/16, 100.64/10, link-local, loopback or fc00::/7), never a wildcard or public address. Control generates the username and password; the password is answered only here. The node's Agent gets the proxy at once, and the node's kernel closes it at expires_at by itself. It needs an Agent and anx-node kernel that run temporary proxies. At most 8 open proxies per node; 409 port_taken when a protocol or another proxy of the node uses the port. Audited (module temporary_proxy, action temporary_proxy_open).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Open a temporary SOCKS5 proxy on a proxy node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "listen, port and minutes",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.temporaryProxyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/tempproxy.Opened"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/temporary-proxies/{proxy_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node's Agent stops the proxy at once and its open connections end. 404 when the node has no open proxy with this id (also after it ended). Audited (module temporary_proxy, action temporary_proxy_close).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Close a temporary proxy before its end",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "temporary proxy id",
+                        "name": "proxy_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.NodeTemporaryProxy"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/traffic": {
             "get": {
                 "security": [
@@ -8663,6 +8785,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.temporaryProxyRequest": {
+            "type": "object",
+            "properties": {
+                "listen": {
+                    "description": "Listen is the node's internal address, such as its mesh address.",
+                    "type": "string"
+                },
+                "minutes": {
+                    "description": "Minutes the proxy stays open: 1 to 1440, 15 when 0.",
+                    "type": "integer"
+                },
+                "port": {
+                    "type": "integer"
+                }
+            }
+        },
         "iwanline.Input": {
             "type": "object",
             "properties": {
@@ -9048,6 +9186,40 @@ const docTemplate = `{
                 "NodeStatusOffline",
                 "NodeStatusDisabled"
             ]
+        },
+        "model.NodeTemporaryProxy": {
+            "type": "object",
+            "properties": {
+                "closed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "CreatedBy is the administrator who opened it; nil for an API token\nwithout a user.",
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "listen": {
+                    "description": "Listen is the internal address the node listens on.",
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "integer"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
         },
         "model.ProtocolType": {
             "type": "string",
@@ -10377,6 +10549,43 @@ const docTemplate = `{
                 },
                 "last_name": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "tempproxy.Opened": {
+            "type": "object",
+            "properties": {
+                "closed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "CreatedBy is the administrator who opened it; nil for an API token\nwithout a user.",
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "listen": {
+                    "description": "Listen is the internal address the node listens on.",
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "integer"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
                 },
                 "username": {
                     "type": "string"

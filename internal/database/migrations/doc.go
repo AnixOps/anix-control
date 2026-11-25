@@ -175,4 +175,7 @@
 //     with the features the 2026-11 slimming audit removed.
 //   - 0043_lease_generation: v4_kernel_lease.generation, the fencing token
 //     leader work checks in the transaction of its writes (internal/lease).
+//   - 0044_node_temporary_proxies: the SOCKS5 proxies a proxy node serves
+//     for a limited time on an internal address (v5_node_temporary_proxy,
+//     internal/tempproxy).
 package migrations

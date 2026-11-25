@@ -23,6 +23,7 @@ import nodeEntries from './modules/en/nodeEntries'
 import nodeNetwork from './modules/en/nodeNetwork'
 import nodeForwardPorts from './modules/en/nodeForwardPorts'
 import nodeExitPolicy from './modules/en/nodeExitPolicy'
+import nodeTemporaryProxies from './modules/en/nodeTemporaryProxies'
 import nodeReach from './modules/en/nodeReach'
 import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
@@ -43,6 +44,7 @@ export default {
   ...nodeNetwork,
   ...nodeForwardPorts,
   ...nodeExitPolicy,
+  ...nodeTemporaryProxies,
   ...nodeReach,
   ...agentUpgradeSheet,
   ...networkPages,
