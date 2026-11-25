@@ -10820,7 +10820,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "warnings": {
-                    "description": "Warnings: WarningFewBoundaryNodes when the region is enabled with\nfewer than two boundary nodes (R19); WarningSharedAddressSpace when\nits range lies in 100.64.0.0/10.",
+                    "description": "Warnings: WarningFewBoundaryNodes when the region is enabled with\nfewer than two boundary nodes (R19); WarningSharedAddressSpace when\nits range lies in 100.64.0.0/10; WarningResolverAddressHeld while a\ndevice holds its resolver address, which is then not delivered.",
                     "type": "array",
                     "items": {
                         "type": "string"
