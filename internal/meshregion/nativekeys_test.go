@@ -305,10 +305,13 @@ func TestDeviceConfigFollowsTheDeviceFeatures(t *testing.T) {
 	}
 	report(`["mesh","mesh_native_keys"]`)
 	require.Equal(t, KindManaged, networks(nil)[0]["kind"])
+	require.NotContains(t, networks(nil)[0], "dns")
 	require.NotContains(t, warnings(), WarningNativeKeysUnsupported)
 	require.Empty(t, networks([]string{}), "the request's features come first")
 
 	report(`["mesh","mesh_native_keys","mesh_resolver_address"]`)
+	require.NotContains(t, networks(nil)[0], "dns", "no dns section without mesh_dns")
+	report(`["mesh","mesh_native_keys","mesh_dns","mesh_resolver_address"]`)
 	require.Equal(t, "10.150.0.254", networks(nil)[0]["dns"].(map[string]any)["resolver_address"])
 
 	report(`"not a list"`)
@@ -322,6 +325,9 @@ func TestDeviceFeaturesFollowTheLatestReport(t *testing.T) {
 	cn := region(t, db, "cn", "10.150.0.0/24")
 	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "laptop", RegionID: cn.ID}, nil, now)
 	require.NoError(t, err)
+	tooMany := make([]string, MaxFeatures+1)
+	_, err = Enroll(ctx, db, EnrollRequest{Features: tooMany, Token: issued.Token, DeviceKey: laptopKey}, now)
+	require.ErrorIs(t, err, ErrInvalid)
 	// The enroll request's features answer only that request.
 	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: []string{"mesh", FeatureNativeKeys, FeatureResolverAddress}, Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(3)}, now)
 	require.NoError(t, err)

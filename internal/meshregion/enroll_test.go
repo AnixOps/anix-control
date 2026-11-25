@@ -189,4 +189,4 @@ func TestEnrollmentOfAnAdministratorsDevice(t *testing.T) {
 
 // meshFeatures are the capabilities of a device kernel that takes region
 // networks.
-var meshFeatures = []string{"mesh", FeatureNativeKeys}
+var meshFeatures = []string{"mesh", FeatureNativeKeys, FeatureDNS}
