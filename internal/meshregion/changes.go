@@ -115,7 +115,7 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 // request is recorded, so that of two requests at once only one finds no
 // pending change (PostgreSQL; SQLite writes one transaction at a time).
 func lockSubject(tx *gorm.DB, nodeRef *string, deviceID *uint) error {
-	if tx.Dialector.Name() != "postgres" {
+	if tx.Name() != "postgres" {
 		return nil
 	}
 	locked := tx.Clauses(clause.Locking{Strength: "UPDATE"})
