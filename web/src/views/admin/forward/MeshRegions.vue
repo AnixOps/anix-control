@@ -52,6 +52,7 @@
             <UiBadge :tone="row.enabled ? 'success' : 'neutral'" :label="row.enabled ? t('mesh.page.enabled') : t('mesh.page.disabled')" />
             <UiBadge v-if="row.enabled && boundaryCount(row) < 2" tone="warning" :label="t('mesh.page.fewBoundaries')" />
             <UiBadge v-if="(row.warnings || []).includes('shared_address_space')" tone="warning" :label="t('mesh.page.sharedAddressSpace')" />
+            <UiBadge v-if="(row.warnings || []).includes('resolver_address_held')" tone="warning" :label="t('mesh.page.resolverAddressHeld')" />
           </span>
         </template>
       </UiDataTable>

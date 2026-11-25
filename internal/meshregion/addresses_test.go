@@ -459,13 +459,21 @@ func TestResolverAddressIsNeverGiven(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	lab := region(t, db, "lab", "192.168.9.0/24")
+	_, err := AddNode(ctx, db, lab.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	resolver := func() any {
+		doc, err := NodeMember(db, proxy(1))
+		require.NoError(t, err)
+		return doc["networks"].([]map[string]any)[0]["dns"].(map[string]any)["resolver_address"]
+	}
+	require.Equal(t, "192.168.9.254", resolver(), "the nodes are given the resolver address")
 	old := now.Add(-PoolReclaimAfter - 1)
 	for i := 0; i < PoolSize(netip.MustParsePrefix(lab.CIDR)); i++ {
 		device, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: fmt.Sprintf("d%d", i)}, now)
 		require.NoError(t, err)
 		require.NotEqual(t, "192.168.9.254", *device.Address)
 	}
-	_, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "full"}, now)
+	_, err = CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "full"}, now)
 	require.ErrorIs(t, err, ErrPoolFull)
 
 	// A device that holds the resolver address from before it was
@@ -482,6 +490,8 @@ func TestResolverAddressIsNeverGiven(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, regions, 1)
 	require.Equal(t, "192.168.9.254", regions[0].ResolverAddress)
+	require.ElementsMatch(t, []string{WarningFewBoundaryNodes, WarningResolverAddressHeld}, regions[0].Warnings)
+	require.Nil(t, resolver(), "not given while a device holds it")
 	devices, err := Devices(ctx, db, lab.ID, now)
 	require.NoError(t, err)
 	for _, device := range devices {
@@ -499,6 +509,7 @@ func TestResolverAddressIsNeverGiven(t *testing.T) {
 	moved, err := AssignDeviceAddress(ctx, db, held.ID, now)
 	require.NoError(t, err)
 	require.Equal(t, *freed.Address, *moved.Address)
+	require.Equal(t, "192.168.9.254", resolver(), "given again once the device moved")
 	_, err = AssignDeviceAddress(ctx, db, held.ID, now)
 	require.ErrorIs(t, err, ErrConflict, "a pool address stays")
 }
