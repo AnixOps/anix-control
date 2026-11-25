@@ -486,6 +486,17 @@ func TestAgentControlHeartbeatRejectsOversizedRuntimeObservationEnvelope(t *test
 	require.Zero(t, count)
 }
 
+// requireAgentRegistered waits until node's stream is registered with the
+// manager, which happens just after its HelloAck is sent.
+func requireAgentRegistered(t *testing.T, manager *AgentControlManager, nodeID uint32) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		manager.mu.RLock()
+		defer manager.mu.RUnlock()
+		return manager.connections[nodeID] != nil
+	}, 5*time.Second, 5*time.Millisecond, "the agent stream was not registered")
+}
+
 func TestAgentControlStreamReplaysUnobservedOperationAfterReconnect(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	firstCtx, cancelFirst := context.WithCancel(environment.authContext(context.Background()))
@@ -494,6 +505,9 @@ func TestAgentControlStreamReplaysUnobservedOperationAfterReconnect(t *testing.T
 	require.NoError(t, firstStream.Send(validAgentHello(uint32(environment.node.ID))))
 	_, err = firstStream.Recv()
 	require.NoError(t, err)
+	// The HelloAck goes out before the stream is registered; a dispatch in
+	// between fails with "not connected" and nothing reaches the stream.
+	requireAgentRegistered(t, environment.manager, uint32(environment.node.ID))
 
 	dispatchResult := make(chan error, 1)
 	go func() {

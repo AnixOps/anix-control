@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -327,6 +328,11 @@ func (c *Config) validatePanel() error {
 		if len(c.GRPC.EdgeProxies) > 0 {
 			return fmt.Errorf("grpc.relay_sources excludes grpc.edge_proxies: behind an edge proxy the relays' PROXY header belongs to the proxy (docs/design/region-relay)")
 		}
+		for _, source := range c.GRPC.RelaySources {
+			if err := narrowRelaySource(source); err != nil {
+				return fmt.Errorf("grpc.relay_sources: %w", err)
+			}
+		}
 	}
 	if listen := strings.TrimSpace(c.Listen); listen != "" {
 		host, port, err := net.SplitHostPort(listen)
@@ -351,6 +357,28 @@ func (c *Config) validatePanel() error {
 	}
 	if strings.TrimSpace(c.TLS.Domain) != "" && c.PanelDomain() == "" {
 		log.Printf("tls.domain is not read: set domain to the panel's name (Control then serves it over https with its own certificate, tls.mode acme)")
+	}
+	return nil
+}
+
+// narrowRelaySource refuses a relay source wider than an IPv4 /24 or an
+// IPv6 /64: every address in it may claim any node's address, and a wide
+// range is almost always a typo that would also refuse every direct node.
+func narrowRelaySource(source string) error {
+	source = strings.TrimSpace(source)
+	if !strings.Contains(source, "/") {
+		return nil
+	}
+	prefix, err := netip.ParsePrefix(source)
+	if err != nil {
+		return nil // NewPolicy already judged the syntax.
+	}
+	limit := 24
+	if !prefix.Addr().Unmap().Is4() {
+		limit = 64
+	}
+	if prefix.Bits() < limit {
+		return fmt.Errorf("%s is wider than /%d: list the relays' own addresses", source, limit)
 	}
 	return nil
 }

@@ -46,6 +46,17 @@ type Cache struct {
 	slots   chan struct{}
 	// mu serialises eviction against new files.
 	mu sync.Mutex
+
+	// allowedSources are the addresses served; empty serves any.
+	allowedSources []netip.Prefix
+	// requestsMu guards requests, the open requests of each address.
+	requestsMu sync.Mutex
+	requests   map[string]int
+	// sumsMu guards sums: the SHA-256 each source was found to have, so a
+	// request that names another hash for a known source is refused without
+	// downloading it again.
+	sumsMu sync.Mutex
+	sums   map[string]string
 	// now is time.Now, replaced in tests.
 	now func() time.Time
 }
@@ -76,14 +87,31 @@ func NewCache(config CacheConfig, logger *slog.Logger) (*Cache, error) {
 	if err != nil {
 		return nil, err
 	}
+	var allowed []netip.Prefix
+	for _, source := range config.AllowedSources {
+		prefix, err := parseSource(source)
+		if err != nil {
+			return nil, fmt.Errorf("allowed_sources %q: %w", source, err)
+		}
+		allowed = append(allowed, prefix)
+	}
+	if config.MaxRequestsPerSource <= 0 {
+		config.MaxRequestsPerSource = DefaultCacheRequestsPerSource
+	}
 	return &Cache{
-		config: config,
-		logger: logger.With("component", "cache"),
-		client: client,
-		slots:  make(chan struct{}, config.MaxFetches),
-		now:    time.Now,
+		config:         config,
+		logger:         logger.With("component", "cache"),
+		client:         client,
+		slots:          make(chan struct{}, config.MaxFetches),
+		now:            time.Now,
+		allowedSources: allowed,
+		requests:       map[string]int{},
+		sums:           map[string]string{},
 	}, nil
 }
+
+// maxKnownSums bounds the remembered source hashes.
+const maxKnownSums = 4096
 
 // downloadClient is the client of the origin downloads: https only, at
 // most five redirects, every one https, and, unless allow_private_origins,
@@ -129,17 +157,36 @@ func downloadClient(config CacheConfig) (*http.Client, error) {
 		IdleConnTimeout:       90 * time.Second,
 	}
 	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(request *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("more than five redirects")
-			}
-			if request.URL.Scheme != "https" {
-				return fmt.Errorf("redirect to %s is not https", request.URL.Redacted())
-			}
-			return nil
-		},
+		Transport:     transport,
+		CheckRedirect: redirectPolicy(config),
 	}, nil
+}
+
+// redirectPolicy allows at most five redirects, each https and to an
+// origin's host or one of redirect_hosts: an open redirect on an origin
+// cannot send the relay to an arbitrary site.
+func redirectPolicy(config CacheConfig) func(*http.Request, []*http.Request) error {
+	hosts := map[string]bool{}
+	for _, origin := range config.Origins {
+		if parsed, err := url.Parse(origin); err == nil {
+			hosts[strings.ToLower(parsed.Hostname())] = true
+		}
+	}
+	for _, host := range config.RedirectHosts {
+		hosts[strings.ToLower(host)] = true
+	}
+	return func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("more than five redirects")
+		}
+		if request.URL.Scheme != "https" || request.URL.User != nil {
+			return fmt.Errorf("redirect to %s is not https", request.URL.Redacted())
+		}
+		if !hosts[strings.ToLower(request.URL.Hostname())] {
+			return fmt.Errorf("redirect to %s is outside the origins and redirect_hosts", request.URL.Hostname())
+		}
+		return nil
+	}
 }
 
 // refusePrivate refuses a dial to an address the relay must not reach for
@@ -154,15 +201,52 @@ func refusePrivate(address string) error {
 		return fmt.Errorf("dial address %q is not an IP", host)
 	}
 	ip = ip.Unmap()
-	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
-		netip.MustParsePrefix("100.64.0.0/10").Contains(ip) {
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 		return fmt.Errorf("origin address %s is not public (cache.allow_private_origins is off)", ip)
+	}
+	for _, reserved := range reservedPrefixes {
+		if reserved.Contains(ip) {
+			return fmt.Errorf("origin address %s is in reserved %s (cache.allow_private_origins is off)", ip, reserved)
+		}
 	}
 	return nil
 }
 
-// ServeHTTP serves GET and HEAD of CachePathPrefix<hex> and nothing else.
+// reservedPrefixes are the ranges besides private, loopback and link-local
+// that are not public origins, or that translate into IPv4 (NAT64, 6to4)
+// and could reach a private address that way.
+var reservedPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"),
+}
+
+// ServeHTTP serves GET and HEAD of CachePathPrefix<hex> and nothing else,
+// to the allowed sources, a bounded number of requests per address.
 func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	remote := remoteIP(r.RemoteAddr)
+	if !c.sourceAllowed(remote) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !c.claimRequest(remote) {
+		http.Error(w, "too many requests from this address", http.StatusTooManyRequests)
+		return
+	}
+	defer c.releaseRequest(remote)
+	c.serveHTTP(w, r)
+}
+
+func (c *Cache) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -188,7 +272,13 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "source is not an allowed origin", http.StatusForbidden)
 		return
 	}
-	_, err, _ := c.fetches.Do(sum, func() (any, error) {
+	if known, ok := c.knownSum(source); ok && known != sum {
+		http.Error(w, "the source does not have this SHA-256", http.StatusNotFound)
+		return
+	}
+	// Keyed by both: a request with a wrong source does not fail the
+	// others for the same hash.
+	_, err, _ := c.fetches.Do(sum+"\n"+source, func() (any, error) {
 		return nil, c.fetch(r.Context(), sum, source)
 	})
 	if err != nil {
@@ -321,7 +411,9 @@ func (c *Cache) fetch(ctx context.Context, sum, source string) error {
 	if written > c.config.MaxObjectBytes {
 		return fmt.Errorf("%w: over %d bytes", errOverLimit, c.config.MaxObjectBytes)
 	}
-	if got := hex.EncodeToString(hash.Sum(nil)); got != sum {
+	got := hex.EncodeToString(hash.Sum(nil))
+	c.rememberSum(source, got)
+	if got != sum {
 		return fmt.Errorf("%w: got %s", errHashMismatch, got)
 	}
 	c.mu.Lock()
@@ -337,6 +429,70 @@ func (c *Cache) fetch(ctx context.Context, sum, source string) error {
 	_ = os.Chtimes(c.path(sum), stored, stored)
 	c.logger.Info("cached", "sha256", sum, "bytes", written, "src", redact(source))
 	return nil
+}
+
+func (c *Cache) knownSum(source string) (string, bool) {
+	c.sumsMu.Lock()
+	defer c.sumsMu.Unlock()
+	sum, ok := c.sums[source]
+	return sum, ok
+}
+
+func (c *Cache) rememberSum(source, sum string) {
+	c.sumsMu.Lock()
+	defer c.sumsMu.Unlock()
+	if _, ok := c.sums[source]; !ok && len(c.sums) >= maxKnownSums {
+		// Forget everything rather than track an order: the price is one
+		// more download per source.
+		c.sums = map[string]string{}
+	}
+	c.sums[source] = sum
+}
+
+func remoteIP(remote string) netip.Addr {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return ip.Unmap()
+}
+
+func (c *Cache) sourceAllowed(ip netip.Addr) bool {
+	if len(c.allowedSources) == 0 {
+		return true
+	}
+	for _, prefix := range c.allowedSources {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Cache) claimRequest(ip netip.Addr) bool {
+	key := ip.String()
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	if c.requests[key] >= c.config.MaxRequestsPerSource {
+		return false
+	}
+	c.requests[key]++
+	return true
+}
+
+func (c *Cache) releaseRequest(ip netip.Addr) {
+	key := ip.String()
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	if c.requests[key] <= 1 {
+		delete(c.requests, key)
+		return
+	}
+	c.requests[key]--
 }
 
 func (c *Cache) tempFile() (*os.File, error) {

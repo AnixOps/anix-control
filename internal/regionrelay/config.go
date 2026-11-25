@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -36,14 +37,29 @@ import (
 
 // Defaults of the optional settings.
 const (
-	DefaultDialTimeout       = 10 * time.Second
+	// DefaultDialTimeout is well under the 5 seconds an Agent waits for
+	// Control's first bytes through a relay (anix-agent relayAnswerTimeout),
+	// so a relay whose first upstream is blackholed moves to the next one
+	// before the Agent gives the relay up.
+	DefaultDialTimeout = 2 * time.Second
+	// DefaultHandshakeTimeout bounds the wait for Control's first bytes
+	// after the node's first bytes were forwarded.
+	DefaultHandshakeTimeout  = 30 * time.Second
+	DefaultMaxPerSource      = 256
 	DefaultKeepAlive         = 30 * time.Second
 	DefaultMaxConnections    = 20000
 	DefaultCacheMaxBytes     = int64(20) << 30
 	DefaultCacheObjectBytes  = int64(2) << 30
 	DefaultCacheFetches      = 4
 	DefaultCacheFetchTimeout = 30 * time.Minute
+	// DefaultCacheRequestsPerSource bounds the cache requests one address
+	// has open at once.
+	DefaultCacheRequestsPerSource = 16
 )
+
+// DefaultRedirectHosts are the hosts, besides the origins' own, that an
+// origin download may be redirected to: where GitHub serves release assets.
+var DefaultRedirectHosts = []string{"objects.githubusercontent.com", "release-assets.githubusercontent.com"}
 
 // Config is the relay's configuration file (YAML). Unknown keys are refused.
 type Config struct {
@@ -69,8 +85,17 @@ type ForwardConfig struct {
 	// MaxConnections bounds the open node connections; zero is
 	// DefaultMaxConnections.
 	MaxConnections int `yaml:"max_connections"`
+	// MaxConnectionsPerSource bounds the open connections of one node
+	// address, so one address cannot take every slot; zero is
+	// DefaultMaxPerSource.
+	MaxConnectionsPerSource int `yaml:"max_connections_per_source"`
 	// DialTimeout bounds one upstream dial; zero is DefaultDialTimeout.
+	// Keep it well under the Agent's 5-second wait for Control's answer.
 	DialTimeout time.Duration `yaml:"dial_timeout"`
+	// HandshakeTimeout bounds the wait for the upstream's first bytes once
+	// the node's first bytes were forwarded; zero is
+	// DefaultHandshakeTimeout.
+	HandshakeTimeout time.Duration `yaml:"handshake_timeout"`
 	// KeepAlive is the TCP keepalive period on both sides; zero is
 	// DefaultKeepAlive. There is no idle timeout: the control streams are
 	// long-lived and carry their own keepalive.
@@ -92,15 +117,31 @@ type CacheConfig struct {
 	// ("https://github.com/AnixOps/"). A src outside them is refused, so the
 	// cache is not an open proxy. Each must be an https URL ending in "/".
 	Origins []string `yaml:"origins"`
+	// RedirectHosts are the hosts, besides the origins' own, a download may
+	// be redirected to (https only). Unset is DefaultRedirectHosts; an
+	// empty list allows the origins' hosts only.
+	RedirectHosts []string `yaml:"redirect_hosts"`
 	// UpstreamProxy, when set, is an HTTP proxy the downloads go through
-	// (for example over the backbone to Control's region).
+	// (for example over the backbone to Control's region). The proxy then
+	// resolves and connects to the origins, so allow_private_origins off
+	// only covers the relay's own dials: limit what the proxy may reach on
+	// the proxy itself. The origins and redirect_hosts still apply.
 	UpstreamProxy string `yaml:"upstream_proxy"`
-	// AllowPrivateOrigins lets downloads reach private, loopback and
-	// link-local addresses. Off: an origin or a redirect that resolves to
-	// one is refused.
+	// AllowPrivateOrigins lets downloads reach private, loopback, link-local
+	// and other reserved addresses. Off: an origin or a redirect that
+	// resolves to one is refused.
 	AllowPrivateOrigins bool `yaml:"allow_private_origins"`
-	// MaxBytes bounds the cache; the least recently used files go first.
-	// Zero is DefaultCacheMaxBytes.
+	// AllowedSources, when set, are the node addresses (IPs or CIDRs) the
+	// cache serves; others get 403. Also keep the cache port closed to
+	// anyone but the region's nodes in the firewall.
+	AllowedSources []string `yaml:"allowed_sources"`
+	// MaxRequestsPerSource bounds the open requests of one address; zero
+	// is DefaultCacheRequestsPerSource.
+	MaxRequestsPerSource int `yaml:"max_requests_per_source"`
+	// MaxBytes bounds the stored files; the least recently used go first.
+	// Zero is DefaultCacheMaxBytes. Downloads in progress are not counted:
+	// the disk needs room for max_bytes plus max_fetches times
+	// max_object_bytes.
 	MaxBytes int64 `yaml:"max_bytes"`
 	// MaxObjectBytes bounds one file; zero is DefaultCacheObjectBytes.
 	MaxObjectBytes int64 `yaml:"max_object_bytes"`
@@ -174,8 +215,14 @@ func (c *Config) validate() error {
 			}
 			forward.Upstreams[j] = upstream
 		}
-		if forward.MaxConnections < 0 || forward.DialTimeout < 0 || forward.KeepAlive < 0 {
-			return fmt.Errorf("%s: max_connections, dial_timeout and keep_alive cannot be negative", owner)
+		if forward.MaxConnections < 0 || forward.MaxConnectionsPerSource < 0 || forward.DialTimeout < 0 || forward.HandshakeTimeout < 0 || forward.KeepAlive < 0 {
+			return fmt.Errorf("%s: max_connections, max_connections_per_source, dial_timeout, handshake_timeout and keep_alive cannot be negative", owner)
+		}
+		if forward.MaxConnectionsPerSource == 0 {
+			forward.MaxConnectionsPerSource = DefaultMaxPerSource
+		}
+		if forward.HandshakeTimeout == 0 {
+			forward.HandshakeTimeout = DefaultHandshakeTimeout
 		}
 		if forward.MaxConnections == 0 {
 			forward.MaxConnections = DefaultMaxConnections
@@ -222,8 +269,28 @@ func (c *Config) validate() error {
 		}
 		cache.UpstreamProxy = proxy
 	}
-	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 {
-		return errors.New("cache: max_bytes, max_object_bytes, max_fetches and fetch_timeout cannot be negative")
+	if cache.RedirectHosts == nil {
+		cache.RedirectHosts = append([]string(nil), DefaultRedirectHosts...)
+	}
+	for i, host := range cache.RedirectHosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if host == "" || strings.ContainsAny(host, "/:@?#") {
+			return fmt.Errorf("cache: redirect_hosts entry %q must be a host name", host)
+		}
+		cache.RedirectHosts[i] = host
+	}
+	for i, source := range cache.AllowedSources {
+		source = strings.TrimSpace(source)
+		if _, err := parseSource(source); err != nil {
+			return fmt.Errorf("cache: allowed_sources entry %q: %w", source, err)
+		}
+		cache.AllowedSources[i] = source
+	}
+	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 || cache.MaxRequestsPerSource < 0 {
+		return errors.New("cache: max_bytes, max_object_bytes, max_fetches, fetch_timeout and max_requests_per_source cannot be negative")
+	}
+	if cache.MaxRequestsPerSource == 0 {
+		cache.MaxRequestsPerSource = DefaultCacheRequestsPerSource
 	}
 	if cache.MaxBytes == 0 {
 		cache.MaxBytes = DefaultCacheMaxBytes
@@ -264,4 +331,21 @@ func validHostPort(address string) error {
 		return errors.New("no host")
 	}
 	return validListen(address)
+}
+
+// parseSource reads an allowed_sources entry: an IP or a CIDR.
+func parseSource(source string) (netip.Prefix, error) {
+	if strings.Contains(source, "/") {
+		prefix, err := netip.ParsePrefix(source)
+		if err != nil {
+			return netip.Prefix{}, err
+		}
+		return prefix.Masked(), nil
+	}
+	ip, err := netip.ParseAddr(source)
+	if err != nil {
+		return netip.Prefix{}, errors.New("not an IP address or CIDR")
+	}
+	ip = ip.Unmap()
+	return netip.PrefixFrom(ip, ip.BitLen()), nil
 }
