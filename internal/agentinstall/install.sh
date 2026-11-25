@@ -874,7 +874,7 @@ read_metadata() {
 # https port answers /install/agent.env with Control's certificate. With
 # relays, the host never contacts Control directly (R34).
 select_control_relay() {
-  local authority="${CONTROL_URL#https://}" relay host port candidate
+  local authority="${CONTROL_URL#https://}" relay host port candidate code
   ((${#RELAYS[@]} > 0)) || return 0
   if [[ "${authority}" =~ :[0-9]+$ ]]; then
     port="${authority##*:}"
@@ -886,10 +886,15 @@ select_control_relay() {
   for relay in "${RELAYS[@]}"; do
     host="${relay%:*}"
     candidate="${host}:${port}"
-    if curl -fsS -g --proto '=https' -o /dev/null --connect-timeout 10 -m 20 \
-      --connect-to "${CONTROL_AUTHORITY}:${candidate}" "${CONTROL_URL}/install/agent.env" 2>/dev/null; then
+    # Any HTTP answer means the relay carries Control: TLS completed with
+    # Control's certificate. A busy Control (429, 5xx) is retried by the
+    # downloads that follow; only no answer at all rules the relay out.
+    code="$(curl -sS -g --proto '=https' -o /dev/null -w '%{http_code}' --retry 2 --connect-timeout 10 -m 30 \
+      --connect-to "${CONTROL_AUTHORITY}:${candidate}" "${CONTROL_URL}/install/agent.env" 2>/dev/null)" || code="000"
+    if [[ "${code}" =~ ^[1-5][0-9][0-9]$ ]]; then
       CONTROL_RELAY="${candidate}"
       info "Reaching ${CONTROL_URL} through the region relay ${candidate}"
+      [[ "${code}" == 2* ]] || note "Control answered HTTP ${code} through the region relay ${candidate}; the downloads retry"
       return 0
     fi
     note "the region relay ${candidate} does not carry ${CONTROL_URL}"
@@ -899,8 +904,11 @@ select_control_relay() {
 
 fetch_metadata() {
   info "Reading the Agent release from ${CONTROL_URL}"
-  fetch "${CONTROL_URL}/install/agent.env" "${TMP_DIR}/agent.env" "${TMP_DIR}/agent.env.headers" ||
+  if ! fetch "${CONTROL_URL}/install/agent.env" "${TMP_DIR}/agent.env" "${TMP_DIR}/agent.env.headers"; then
+    [[ -z "${CONTROL_RELAY}" ]] ||
+      die "cannot read ${CONTROL_URL}/install/agent.env through the region relay ${CONTROL_RELAY}: Control may be busy (HTTP 429) or the relay lost it; re-run the command in a minute (curl -v --connect-to ${CONTROL_AUTHORITY}:${CONTROL_RELAY} ${CONTROL_URL}/install/agent.env)"
     die "cannot reach ${CONTROL_URL}/install/agent.env: check the address, DNS, the firewall and Control's https certificate (curl -v ${CONTROL_URL}/install/agent.env)"
+  fi
   read_metadata "${TMP_DIR}/agent.env"
 }
 
@@ -1034,18 +1042,35 @@ download_from_cache() {
   return 1
 }
 
+# fetch_agent_signature fetches the Agent zip's signature from the mirror,
+# then from Control (through the region relay when there is one).
+fetch_agent_signature() {
+  local out="$1" source
+  for source in "${SOURCE}" "${META_SOURCE[control]:-}"; do
+    [[ -n "${source}" ]] || continue
+    fetch "${source}/${META_VERSION}/${ASSET}.sig" "${out}" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 download_agent() {
-  local zip="${TMP_DIR}/${ASSET}" actual
+  local zip="${TMP_DIR}/${ASSET}" actual cached=0
   expected_digest
-  if ! download_from_cache "${zip}"; then
+  if download_from_cache "${zip}"; then
+    cached=1
+  else
     info "Downloading the AnixOps Agent ${META_VERSION} (${ARCH}) from ${SOURCE}"
     fetch "${SOURCE}/${META_VERSION}/${ASSET}" "${zip}" || die "cannot download ${SOURCE}/${META_VERSION}/${ASSET}; try another --mirror"
   fi
   actual="$(sha256sum "${zip}" | awk '{print $1}')"
   [[ "${actual}" == "${EXPECTED_DIGEST}" ]] || die "checksum mismatch for ${ASSET}: expected ${EXPECTED_DIGEST}, got ${actual}; nothing was installed"
   info "Checksum verified (sha256 ${actual})"
-  if fetch "${SOURCE}/${META_VERSION}/${ASSET}.sig" "${zip}.sig" 2>/dev/null; then
+  if fetch_agent_signature "${zip}.sig"; then
     verify_signature "${zip}" "${zip}.sig"
+  elif ((cached == 1)); then
+    # A release cache is a third party's copy: its zip is installed only
+    # with the release signature (R34).
+    die "cannot get the signature of ${ASSET} from ${SOURCE} or Control; a zip from a release cache is not installed without it. Nothing was installed"
   else
     note "the Agent release has no signature yet: only its SHA-256 was checked"
   fi
@@ -1353,10 +1378,38 @@ route_kept() {
   return 0
 }
 
+# merge_route writes to $2 the configuration $1 with this command's region
+# route (GRPCRelays, ReleaseCaches) in place of its own, every other line
+# as it was: the Forward section and manual edits stay. It refuses (status
+# 1) a configuration it cannot edit line by line: other than one node
+# entry, that of NODE, or a route key not written on one line.
+merge_route() {
+  local config="$1" out="$2" key relays="" caches=""
+  [[ "$(grep -c '"AgentNode":' "${config}" || true)" == 1 ]] || return 1
+  [[ "$(grep -c "\"AgentNode\": \"${NODE}\"," "${config}" || true)" == 1 ]] || return 1
+  for key in GRPCRelays ReleaseCaches; do
+    [[ "$(grep -c "\"${key}\"" "${config}" || true)" == "$(grep -Ec "^[[:space:]]*\"${key}\": \[[^]]*\],[[:space:]]*\$" "${config}" || true)" ]] || return 1
+  done
+  ((${#RELAYS[@]} == 0)) || relays="$(json_strings "${RELAYS[@]}")"
+  ((${#CACHES[@]} == 0)) || caches="$(json_strings "${CACHES[@]}")"
+  awk -v node="\"AgentNode\": \"${NODE}\"," -v relays="${relays}" -v caches="${caches}" '
+    /^[[:space:]]*"(GRPCRelays|ReleaseCaches)": \[[^]]*\],[[:space:]]*$/ { next }
+    index($0, node) {
+      match($0, /^[[:space:]]*/)
+      indent = substr($0, 1, RLENGTH)
+      if (relays != "") print indent "\"GRPCRelays\": " relays ","
+      if (caches != "") print indent "\"ReleaseCaches\": " caches ","
+    }
+    { print }
+  ' "${config}" >"${out}"
+}
+
 # write_config writes the configuration for NODE, keeping an existing one
 # for the same node unless --reset was given or it lacks this command's
-# region route (route_kept); a replaced one is kept as
-# config.json.bak.<time>. It carries no token: the identity is enrolled.
+# region route (route_kept). A configuration that lacks the route gets it
+# in place (merge_route), or is rewritten when it cannot be edited so; the
+# previous one is kept as config.json.bak.<time>. It carries no token: the
+# identity is enrolled.
 write_config() {
   local config
   config="$(path "${CONFIG_FILE}")"
@@ -1364,15 +1417,20 @@ write_config() {
     CONFIG_STATE="kept ${CONFIG_FILE}"
     return 0
   fi
-  local backup="" state="wrote ${CONFIG_FILE}"
+  local backup="" state="wrote ${CONFIG_FILE}" merged=0
   if [[ -f "${config}" ]]; then
     backup="${config}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
     cp -p "${config}" "${backup}"
     if ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
-      state="rewrote ${CONFIG_FILE} for the node group's region relays (the previous one is ${backup#"${ROOT}"})"
+      if merge_route "${config}" "${config}.new"; then
+        merged=1
+        state="set the node group's region relays in ${CONFIG_FILE}, the rest kept (the previous one is ${backup#"${ROOT}"})"
+      else
+        state="rewrote ${CONFIG_FILE} for the node group's region relays (the previous one is ${backup#"${ROOT}"})"
+      fi
     fi
   fi
-  render_config >"${config}.new"
+  ((merged == 1)) || render_config >"${config}.new"
   chmod 0640 "${config}.new"
   chown "root:${AGENT_USER}" "${config}.new"
   mv -f "${config}.new" "${config}"

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"math"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -168,5 +169,26 @@ func (rl *RateLimiter) middleware(keyFor func(*gin.Context) string) gin.HandlerF
 		}
 
 		c.Next()
+	}
+}
+
+// SplitByClient returns a gin.HandlerFunc that rate limits requests from
+// clients that pick reports true with other, and every other request with
+// rl. Both key buckets by client IP. The install routes use it for region
+// relays (grpc.relay_sources): every node behind a relay reaches Control
+// from the relay's address, so the per-address public limit would let a
+// handful of parallel installs exhaust the region's budget.
+func (rl *RateLimiter) SplitByClient(pick func(net.IP) bool, other *RateLimiter) gin.HandlerFunc {
+	mine := rl.Middleware()
+	if pick == nil || other == nil {
+		return mine
+	}
+	theirs := other.Middleware()
+	return func(c *gin.Context) {
+		if pick(net.ParseIP(c.ClientIP())) {
+			theirs(c)
+			return
+		}
+		mine(c)
 	}
 }

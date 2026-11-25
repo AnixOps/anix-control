@@ -244,7 +244,7 @@ for a node of the group. Control must list the relays in
 With relays, the host never contacts Control directly (R34). Each relay
 also forwards Control's https port, on the same port number
 (AnixOps-ansible `region_relay_control_https`): the command fetches the
-script through the first relay (`curl --connect-to`), and the script picks
+script through the relays (`curl --connect-to`, each tried in turn), and the script picks
 the first relay that carries Control's https address for every request to
 Control (release metadata, kernel packages); TLS and the certificate check
 stay with Control's name. Without such a relay the install stops before it
@@ -252,14 +252,20 @@ changes anything. The script does not ask `/install/ip` through a relay:
 Control names the node after the address the relay's PROXY header gives
 its gRPC listener. The Agent zip comes from the release caches first, by
 its SHA-256, and from the mirror through the relay otherwise; checksum and
-signature are checked as always.
+signature are checked as always, and a zip from a cache is installed only
+with its signature (from the mirror, or from Control through the relay).
+Control rate limits the install routes for addresses in
+`grpc.relay_sources` with a budget of their own (50 requests a second,
+burst 200), as every install of the region arrives from the relay.
 
 Nodes that already joined get the route in their desired configuration
 (`control_route`); an Agent that reads it switches without a reinstall, an
 older one ignores it and keeps the route it was installed with. Running
 the group's command again on a node installed directly also moves it: the
-script rewrites a configuration that lacks the group's relays (the old one
-is kept as `config.json.bak.<time>`). A route removed from the group is
+script sets the group's relays and caches in a configuration that lacks
+them and keeps every other line, or rewrites a configuration it cannot
+edit line by line (the old one is kept as `config.json.bak.<time>` either
+way). A route removed from the group is
 not taken away from installed nodes: an empty or missing relay list never
 means "reach Control directly" (`control_route` contract in
 `internal/relayroute`), so an Agent behind relays keeps them and warns.

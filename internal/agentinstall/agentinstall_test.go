@@ -139,12 +139,15 @@ func TestRenderCommand(t *testing.T) {
 		Relays:        []string{"relay-a.example.cn:50051", "[2001:db8::1]:50051"},
 		ReleaseCaches: []string{"https://relay-a.example.cn:8443"},
 	})
-	assert.Equal(t, "curl -fsSL --connect-to ctl.example.com:443:relay-a.example.cn:443 https://ctl.example.com/install.sh"+
-		" | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN"+
+	// The script comes through each relay in turn, read whole before bash
+	// runs it.
+	assert.Equal(t, `script="$(curl -fsSL --connect-to ctl.example.com:443:relay-a.example.cn:443 https://ctl.example.com/install.sh)"`+
+		` || script="$(curl -fsSL --connect-to 'ctl.example.com:443:[2001:db8::1]:443' https://ctl.example.com/install.sh)"`+
+		` && printf '%s\n' "$script" | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN`+
 		" --relay relay-a.example.cn:50051 --relay '[2001:db8::1]:50051' --release-cache https://relay-a.example.cn:8443", routed)
 
-	// The script comes through the first relay, on Control's https port;
-	// an IPv6 relay gets brackets.
+	// One relay: the script comes through it, on Control's https port; an
+	// IPv6 relay gets brackets.
 	routedV6 := RenderCommand(CommandInput{
 		ControlURL: "https://ctl.example.com:8443", ScriptURL: "https://ctl.example.com:8443/install.sh",
 		Token: "anixjoin_TOKEN", Mirror: MirrorControl, Relays: []string{"[2001:db8::1]:50051"},
@@ -158,6 +161,14 @@ func TestRenderCommand(t *testing.T) {
 		Token: "anixjoin_TOKEN", Mirror: MirrorGitHub, Relays: []string{"relay-a.example.cn:50051"},
 	})
 	assert.NotContains(t, routedGitHub, "--connect-to")
+
+	// Two relays on one host are one attempt.
+	sameHost := RenderCommand(CommandInput{
+		ControlURL: "https://ctl.example.com", ScriptURL: "https://ctl.example.com/install.sh",
+		Token: "anixjoin_TOKEN", Mirror: MirrorControl,
+		Relays: []string{"relay-a.example.cn:50051", "RELAY-A.example.cn:50052"},
+	})
+	assert.True(t, strings.HasPrefix(sameHost, "curl -fsSL --connect-to ctl.example.com:443:relay-a.example.cn:443 https://ctl.example.com/install.sh | sudo bash"), sameHost)
 }
 
 func TestSettingsCommands(t *testing.T) {
