@@ -34,6 +34,18 @@ type Settings struct {
 	// carry traffic for each other (spec section 15.7, item 2).
 	ReservedRanges []string   `json:"reserved_ranges"`
 	UpdatedAt      *time.Time `json:"updated_at"`
+	// Warnings: WarningSharedAddressSpace when the host group supernet
+	// lies in 100.64.0.0/10.
+	Warnings []string `json:"warnings"`
+}
+
+// withWarnings answers settings with their warnings.
+func withWarnings(settings Settings) Settings {
+	settings.Warnings = []string{}
+	if inSharedSpace(settings.HostGroupSupernet) {
+		settings.Warnings = append(settings.Warnings, WarningSharedAddressSpace)
+	}
+	return settings
 }
 
 // maxSuffix keeps a full name <63-byte name>.<16-byte code>.<suffix>
@@ -96,7 +108,7 @@ func loadSettings(tx *gorm.DB) (Settings, error) {
 		return Settings{}, err
 	}
 	if len(rows) == 0 {
-		return defaultSettings(), nil
+		return withWarnings(defaultSettings()), nil
 	}
 	row := rows[0]
 	settings := Settings{NameSuffix: row.NameSuffix, HostGroupSupernet: row.HostGroupSupernet, HostGroupPrefix: row.HostGroupPrefix, ReservedRanges: []string{}, UpdatedAt: &row.UpdatedAt}
@@ -105,7 +117,7 @@ func loadSettings(tx *gorm.DB) (Settings, error) {
 			settings.ReservedRanges = append(settings.ReservedRanges, raw)
 		}
 	}
-	return settings, nil
+	return withWarnings(settings), nil
 }
 
 // LoadSettings answers the global settings.

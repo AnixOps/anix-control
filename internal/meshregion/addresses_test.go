@@ -90,9 +90,11 @@ func TestDevicePool(t *testing.T) {
 	for _, pool := range summary.Pools {
 		pools[pool.RegionID] = pool
 	}
-	require.Equal(t, RegionPool{RegionID: cn.ID, Size: 127, Used: 2}, pools[cn.ID])
-	require.Equal(t, 127, pools[eu.ID].Size)
-	require.Equal(t, 32767, PoolSize(netip.MustParsePrefix("10.153.0.0/16")), "a /16 pool is .128.0 to .255.254")
+	require.Equal(t, RegionPool{RegionID: cn.ID, Size: 126, Used: 2}, pools[cn.ID])
+	require.Equal(t, 126, pools[eu.ID].Size)
+	require.Equal(t, 32766, PoolSize(netip.MustParsePrefix("10.153.0.0/16")), "a /16 pool is .128.0 to .255.253")
+	require.Equal(t, "10.153.255.254", ResolverAddress(netip.MustParsePrefix("10.153.0.0/16")).String())
+	require.Equal(t, "10.150.0.254", ResolverAddress(netip.MustParsePrefix("10.150.0.0/24")).String())
 }
 
 func TestIdlePoolAddressGoesToTheNextDevice(t *testing.T) {
@@ -106,7 +108,8 @@ func TestIdlePoolAddressGoesToTheNextDevice(t *testing.T) {
 		_, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: fmt.Sprintf("d%d", i)}, now)
 		require.NoError(t, err)
 	}
-	// The pool (.128 to .254) is full: the address unused for 30 days moves.
+	// The pool (.128 to .253; .254 is the resolver address) is full: the
+	// address unused for 30 days moves.
 	next, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
 	require.NoError(t, err)
 	require.Equal(t, *idle.Address, *next.Address)
@@ -450,4 +453,89 @@ func TestRegionChangeToADisabledRegion(t *testing.T) {
 	rejected, err := RejectChange(ctx, db, request.ID, "the region is closed", nil, now)
 	require.NoError(t, err)
 	require.Equal(t, model.MeshChangeRejected, rejected.Status)
+}
+
+func TestResolverAddressIsNeverGiven(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	lab := region(t, db, "lab", "192.168.9.0/24")
+	old := now.Add(-PoolReclaimAfter - 1)
+	for i := 0; i < PoolSize(netip.MustParsePrefix(lab.CIDR)); i++ {
+		device, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: fmt.Sprintf("d%d", i)}, now)
+		require.NoError(t, err)
+		require.NotEqual(t, "192.168.9.254", *device.Address)
+	}
+	_, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "full"}, now)
+	require.ErrorIs(t, err, ErrPoolFull)
+
+	// A device that holds the resolver address from before it was
+	// reserved is marked, never reclaimed, and takes a pool address.
+	reserved := "192.168.9.254"
+	held := model.MeshDevice{RegionID: lab.ID, Hostname: "held", Address: &reserved, AddressUsedAt: &old, CreatedAt: old, UpdatedAt: old}
+	require.NoError(t, db.Create(&held).Error)
+	_, err = CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
+	require.ErrorIs(t, err, ErrPoolFull, "the resolver address is not reclaimed")
+	regions, err := List(ctx, db)
+	require.NoError(t, err)
+	require.Len(t, regions, 1)
+	require.Equal(t, "192.168.9.254", regions[0].ResolverAddress)
+	devices, err := Devices(ctx, db, lab.ID, now)
+	require.NoError(t, err)
+	for _, device := range devices {
+		if device.ID == held.ID {
+			require.Equal(t, []string{WarningReservedAddress}, device.Warnings)
+		} else {
+			require.NotContains(t, device.Warnings, WarningReservedAddress)
+		}
+	}
+	_, err = AssignDeviceAddress(ctx, db, held.ID, now)
+	require.ErrorIs(t, err, ErrPoolFull, "the pool is still full")
+	var freed model.MeshDevice
+	require.NoError(t, db.Where("hostname = ?", "d3").First(&freed).Error)
+	require.NoError(t, DeleteDevice(ctx, db, freed.ID, now))
+	moved, err := AssignDeviceAddress(ctx, db, held.ID, now)
+	require.NoError(t, err)
+	require.Equal(t, *freed.Address, *moved.Address)
+	_, err = AssignDeviceAddress(ctx, db, held.ID, now)
+	require.ErrorIs(t, err, ErrConflict, "a pool address stays")
+}
+
+func TestSharedAddressSpaceWarnings(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	plain := region(t, db, "eu", "10.150.0.0/24")
+	region(t, db, "cn", "100.100.0.0/24")
+	regions, err := List(ctx, db)
+	require.NoError(t, err)
+	byCode := map[string]Region{}
+	for _, region := range regions {
+		byCode[region.Code] = region
+	}
+	require.NotContains(t, byCode["eu"].Warnings, WarningSharedAddressSpace)
+	require.Contains(t, byCode["cn"].Warnings, WarningSharedAddressSpace)
+	require.Equal(t, "100.100.0.254", byCode["cn"].ResolverAddress)
+
+	settings, err := LoadSettings(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{}, settings.Warnings, "the default supernet is outside 100.64.0.0/10")
+	settings, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: "mesh.internal", HostGroupSupernet: "100.127.0.0/16", HostGroupPrefix: 24}, now)
+	require.NoError(t, err)
+	require.Equal(t, []string{WarningSharedAddressSpace}, settings.Warnings)
+
+	_, err = AddNode(ctx, db, plain.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	_, err = CreateHostGroup(ctx, db, HostGroupInput{Name: "office", Gateway: "proxy-1"}, now)
+	require.NoError(t, err)
+	groups, err := HostGroups(ctx, db)
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, "100.127.0.0/24", groups[0].Segment)
+	require.Equal(t, []string{WarningSharedAddressSpace}, groups[0].Warnings)
+
+	require.True(t, inSharedSpace("100.64.0.0/10"))
+	require.True(t, inSharedSpace("100.0.0.0/8"), "a range that covers it overlaps it")
+	require.True(t, inSharedSpace("100.127.255.0/24"))
+	require.False(t, inSharedSpace("100.128.0.0/24"))
+	require.False(t, inSharedSpace("100.63.255.0/24"))
+	require.False(t, inSharedSpace("bad"))
 }

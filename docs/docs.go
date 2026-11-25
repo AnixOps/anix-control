@@ -10629,6 +10629,13 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings: WarningSharedAddressSpace when the segment lies in\n100.64.0.0/10.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -10802,6 +10809,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "resolver_address": {
+                    "description": "ResolverAddress is the region's fixed resolver address, which no\nnode is given (ResolverAddress).",
+                    "type": "string"
+                },
                 "sort": {
                     "type": "integer"
                 },
@@ -10809,7 +10820,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "warnings": {
-                    "description": "Warnings: WarningFewBoundaryNodes when the region is enabled with\nfewer than two boundary nodes (R19).",
+                    "description": "Warnings: WarningFewBoundaryNodes when the region is enabled with\nfewer than two boundary nodes (R19); WarningSharedAddressSpace when\nits range lies in 100.64.0.0/10.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10878,6 +10889,13 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings: WarningSharedAddressSpace when the host group supernet\nlies in 100.64.0.0/10.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boundaryCount, deviceStatus, enrollmentState, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
+import { boundaryCount, deviceStatus, enrollmentState, inSharedAddressSpace, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
 import zhMesh from '@/locales/modules/zh-CN/mesh'
 import enMesh from '@/locales/modules/en/mesh'
 
@@ -95,5 +95,19 @@ describe('mesh model', () => {
     expect(enrollmentState({ used_at: '2026-11-25T07:00:00Z', expires_at: '2026-11-25T07:30:00Z' }, now)).toBe('used')
     expect(enrollmentState({ expires_at: '2026-11-25T07:30:00Z' }, now)).toBe('expired')
     expect(enrollmentState({ expires_at: '2026-11-26T07:30:00Z' }, now)).toBe('valid')
+  })
+})
+
+describe('inSharedAddressSpace', () => {
+  it('marks a range that overlaps 100.64.0.0/10', () => {
+    for (const cidr of ['100.64.0.0/10', '100.100.0.0/16', '100.127.255.0/24', ' 100.64.1.0/24 ', '100.0.0.0/8', '0.0.0.0/0']) {
+      expect(inSharedAddressSpace(cidr), cidr).toBe(true)
+    }
+  })
+
+  it('leaves other ranges and malformed input unmarked', () => {
+    for (const cidr of ['10.150.0.0/16', '10.127.0.0/16', '100.63.255.0/24', '100.128.0.0/16', '100.64.0.0', '300.64.0.0/10', '100.64.0.0/33', '', null]) {
+      expect(inSharedAddressSpace(cidr), String(cidr)).toBe(false)
+    }
   })
 })

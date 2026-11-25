@@ -23,7 +23,9 @@ export default {
       none: 'None',
       region: 'Region',
       address: 'Address',
-      name: 'Name'
+      name: 'Name',
+      sharedAddressSpace: 'In shared address space',
+      sharedAddressSpaceHelp: 'This range lies in 100.64.0.0/10, which other overlay software on the same host may take over entirely. Use another private range.'
     },
     enrollments: {
       title: 'Enrollment credentials',
@@ -100,7 +102,9 @@ export default {
         address_idle: 'Unused for 30 days',
         no_static_key: 'No static key',
         static_key_mismatch: 'Static key mismatch',
-        static_key_taken: 'Static key used by another member'
+        static_key_taken: 'Static key used by another member',
+        reserved_address: 'Holds the reserved resolver address',
+        shared_address_space: 'Advertised subnet in shared address space'
       },
       fullNode: 'Full node',
       subnets: 'Advertised subnets…',

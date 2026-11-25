@@ -74,6 +74,11 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   take the fields too, and the Agents must report their static keys.
   Older devices without an Agent refuse the new fields and never give a
   key.
+  External bridge nodes (R36, kernel 0.4 / client 1.2): a node marked as
+  an external bridge advertises external /32 addresses and subnets (never
+  all of 100.64.0.0/10 nor a default route) to the members or host groups
+  allowed through it; those explicitly marked routes are exempt from the
+  `shared_address_space` warning. Follows the spec's 0.4 section.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

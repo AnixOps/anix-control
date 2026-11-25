@@ -41,6 +41,14 @@ const (
 	// WarningStaticKeyTaken: the device reports a static key a member or
 	// another device has; it is not bound.
 	WarningStaticKeyTaken = "static_key_taken"
+	// WarningReservedAddress: the device holds the region's resolver
+	// address, which no node may have (ResolverAddress), since before it
+	// was reserved; AssignDeviceAddress gives it a pool address instead.
+	WarningReservedAddress = "reserved_address"
+	// WarningSharedAddressSpace: a range lies in the shared address space
+	// 100.64.0.0/10, which other overlay software on the same machine
+	// often takes over whole (SharedAddressSpace).
+	WarningSharedAddressSpace = "shared_address_space"
 )
 
 var deviceKeyPattern = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,128}$`)
@@ -71,17 +79,37 @@ type DeviceView struct {
 }
 
 // pool answers the first and last address of the device pool of prefix:
-// its upper half without the broadcast address.
+// its upper half without the resolver address and the broadcast address.
 func pool(prefix netip.Prefix) (first, last uint32) {
 	half := uint32(1) << (31 - prefix.Bits())
 	base := prefix.Masked().Addr().As4()
 	start := binary.BigEndian.Uint32(base[:])
-	return start + half, start + 2*half - 2
+	return start + half, start + 2*half - 3
 }
 
 // PoolSize is how many addresses the device pool of prefix holds.
 func PoolSize(prefix netip.Prefix) int {
-	return 1<<(31-prefix.Bits()) - 1
+	return 1<<(31-prefix.Bits()) - 2
+}
+
+// ResolverAddress is the region's fixed resolver address: the last usable
+// address of prefix, which the panel gives to no node. Nodes without a
+// DNS module intercept port 53 sent to it on the virtual interface (spec
+// section 15.9.2, item 8).
+func ResolverAddress(prefix netip.Prefix) netip.Addr {
+	_, last := pool(prefix)
+	return addrOf(last + 1)
+}
+
+// SharedAddressSpace is 100.64.0.0/10. Other overlay software on the same
+// machine often routes and filters it whole, so a region, host group or
+// advertised range in it may lose its traffic; the panel warns of one.
+var SharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
+
+// inSharedSpace tells whether raw, a range, overlaps SharedAddressSpace.
+func inSharedSpace(raw string) bool {
+	prefix, err := netip.ParsePrefix(raw)
+	return err == nil && prefix.Overlaps(SharedAddressSpace)
 }
 
 func addrOf(value uint32) netip.Addr {
@@ -151,8 +179,9 @@ func allocate(tx *gorm.DB, region model.MeshRegion, now time.Time) (string, erro
 		if holder.AddressUsedAt != nil && now.Sub(*holder.AddressUsedAt) < PoolReclaimAfter {
 			continue
 		}
-		// A full node's fixed address is never reclaimed.
-		if address, err := netip.ParseAddr(*holder.Address); err != nil || address.Less(addrOf(first)) {
+		// A full node's fixed address is never reclaimed, nor the
+		// resolver address a device held before it was reserved.
+		if address, err := netip.ParseAddr(*holder.Address); err != nil || address.Less(addrOf(first)) || addrOf(last).Less(address) {
 			continue
 		}
 		if idlest == nil || used(holder).Before(used(idlest)) {
@@ -269,6 +298,10 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 	if err != nil {
 		return nil, err
 	}
+	resolvers, err := regionResolvers(db)
+	if err != nil {
+		return nil, err
+	}
 	query := db.Order("region_id ASC, address ASC, id ASC")
 	if regionID != 0 {
 		query = query.Where("region_id = ?", regionID)
@@ -330,8 +363,16 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 		switch {
 		case row.Address == nil:
 			view.Warnings = append(view.Warnings, WarningNoAddress)
+		case resolvers[row.RegionID] == *row.Address:
+			view.Warnings = append(view.Warnings, WarningReservedAddress)
 		case !isFull && (row.AddressUsedAt == nil || now.Sub(*row.AddressUsedAt) >= PoolReclaimAfter):
 			view.Warnings = append(view.Warnings, WarningAddressIdle)
+		}
+		for _, subnet := range view.Subnets {
+			if inSharedSpace(subnet) {
+				view.Warnings = append(view.Warnings, WarningSharedAddressSpace)
+				break
+			}
 		}
 		views = append(views, view)
 	}
@@ -348,6 +389,21 @@ func findDevice(tx *gorm.DB, id uint, row *model.MeshDevice) error {
 	}
 	*row = rows[0]
 	return nil
+}
+
+// regionResolvers answers the resolver address of every region, by id.
+func regionResolvers(tx *gorm.DB) (map[uint]string, error) {
+	var regions []model.MeshRegion
+	if err := tx.Select("id", "cidr").Find(&regions).Error; err != nil {
+		return nil, err
+	}
+	resolvers := make(map[uint]string, len(regions))
+	for _, region := range regions {
+		if prefix, err := netip.ParsePrefix(region.CIDR); err == nil {
+			resolvers[region.ID] = ResolverAddress(prefix).String()
+		}
+	}
+	return resolvers, nil
 }
 
 func regionCodes(tx *gorm.DB) (map[uint]string, error) {
@@ -484,8 +540,8 @@ func touchDevices(db *gorm.DB, payload []byte, observedAt time.Time) error {
 	return nil
 }
 
-// AssignDeviceAddress gives a device that lost its pool address a new one
-// of its region.
+// AssignDeviceAddress gives a device that lost its pool address, or holds
+// the region's resolver address, a new one of its region.
 func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Time) (model.MeshDevice, error) {
 	var row model.MeshDevice
 	err := change(ctx, db, func(tx *gorm.DB) error {
@@ -504,7 +560,13 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 		if row.RegionID != region.ID {
 			return conflict("the device moved to another region; try again")
 		}
-		if row.Address != nil {
+		// A device holding the resolver address, which it got before
+		// the address was reserved, takes a pool address in its place.
+		prefix, err := netip.ParsePrefix(region.CIDR)
+		if err != nil {
+			return err
+		}
+		if row.Address != nil && *row.Address != ResolverAddress(prefix).String() {
 			return conflict("the device has the address %s", *row.Address)
 		}
 		address, err := deviceAddress(tx, region, row.ID, now)

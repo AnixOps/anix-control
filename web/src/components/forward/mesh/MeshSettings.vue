@@ -2,7 +2,7 @@
   <UiSection :title="t('meshAddr.settings.title')" heading-tag="h2" data-testid="mesh-settings">
     <form class="mesh-form" novalidate @submit.prevent="save">
       <UiTextField v-model="form.nameSuffix" size="md" :label="t('meshAddr.settings.nameSuffix')" :help="t('meshAddr.settings.nameSuffixHelp')" data-testid="mesh-settings-suffix" />
-      <UiTextField v-model="form.hostGroupSupernet" size="md" :label="t('meshAddr.settings.hostGroupSupernet')" :help="t('meshAddr.settings.hostGroupHelp')" />
+      <UiTextField v-model="form.hostGroupSupernet" size="md" :label="t('meshAddr.settings.hostGroupSupernet')" :help="supernetHelp" />
       <UiNumberField v-model="form.hostGroupPrefix" size="md" :label="t('meshAddr.settings.hostGroupPrefix')" :min="8" :max="30" />
       <UiTextarea v-model="form.reserved" :rows="3" :label="t('meshAddr.settings.reservedRanges')" :help="t('meshAddr.settings.reservedRangesHelp')" data-testid="mesh-settings-reserved" />
       <p v-if="error" class="mesh-error" role="alert">{{ error }}</p>
@@ -16,11 +16,11 @@
 <script setup>
 // 组网 → 设置: the intranet domain suffix, the host group range and segment
 // length, and the ranges no region or host group may overlap.
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { UiButton, UiNumberField, UiSection, UiTextarea, UiTextField, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { saveKernelMeshSettings } from '@/api/kernel'
-import { meshErrorMessage } from '../meshModel'
+import { inSharedAddressSpace, meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
   settings: { type: Object, default: null }
@@ -32,6 +32,7 @@ const toast = useToast()
 const form = reactive({ nameSuffix: '', hostGroupSupernet: '', hostGroupPrefix: 24, reserved: '' })
 const saving = ref(false)
 const error = ref('')
+const supernetHelp = computed(() => inSharedAddressSpace(form.hostGroupSupernet) ? `${t('meshAddr.settings.hostGroupHelp')} ${t('meshAddr.common.sharedAddressSpaceHelp')}` : t('meshAddr.settings.hostGroupHelp'))
 
 watch(() => props.settings, settings => {
   if (!settings) return

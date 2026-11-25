@@ -36,7 +36,10 @@
           </span>
         </template>
         <template #cell-cidr="{ row }">
-          <span class="fwd-mono">{{ row.cidr }}</span>
+          <span class="fwd-cell-stack">
+            <span class="fwd-mono">{{ row.cidr }}</span>
+            <span v-if="row.resolver_address" class="fwd-muted fwd-mono">{{ t('mesh.page.resolverAddress', { address: row.resolver_address }) }}</span>
+          </span>
         </template>
         <template #cell-members="{ row }">
           <span class="fwd-cell-stack">
@@ -48,6 +51,7 @@
           <span class="mesh-badges">
             <UiBadge :tone="row.enabled ? 'success' : 'neutral'" :label="row.enabled ? t('mesh.page.enabled') : t('mesh.page.disabled')" />
             <UiBadge v-if="row.enabled && boundaryCount(row) < 2" tone="warning" :label="t('mesh.page.fewBoundaries')" />
+            <UiBadge v-if="(row.warnings || []).includes('shared_address_space')" tone="warning" :label="t('mesh.page.sharedAddressSpace')" />
           </span>
         </template>
       </UiDataTable>

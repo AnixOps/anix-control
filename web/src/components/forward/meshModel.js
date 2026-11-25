@@ -55,6 +55,23 @@ export function deviceStatus(device, now = Date.now()) {
   return { state: 'none', alerts: [] }
 }
 
+// inSharedAddressSpace tells whether cidr, an IPv4 range, overlaps
+// 100.64.0.0/10, which other overlay software on the same machine often
+// takes over whole (spec section 8.3.1).
+export function inSharedAddressSpace(cidr) {
+  const match = /^\s*(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})\s*$/.exec(String(cidr || ''))
+  if (!match) return false
+  const octets = match.slice(1, 5).map(Number)
+  const bits = Number(match[5])
+  if (octets.some(octet => octet > 255) || bits > 32) return false
+  const address = octets.reduce((value, octet) => value * 256 + octet, 0)
+  const size = 2 ** (32 - bits)
+  const start = address - (address % size)
+  const sharedStart = 100 * 2 ** 24 + 64 * 2 ** 16
+  const sharedEnd = sharedStart + 2 ** 22
+  return start < sharedEnd && sharedStart < start + size
+}
+
 // boundaryCount is the number of boundary nodes in a region.
 export function boundaryCount(region) {
   return (region.members || []).filter(member => !member.home || member.boundary).length

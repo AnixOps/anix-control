@@ -22,6 +22,9 @@
         <span class="mesh-cell">
           <span>{{ row.name }}</span>
           <span class="mesh-muted mesh-mono">{{ row.segment }}</span>
+          <span v-if="(row.warnings || []).includes('shared_address_space')" class="mesh-badges">
+            <UiBadge tone="warning" :label="t('meshAddr.common.sharedAddressSpace')" />
+          </span>
         </span>
       </template>
       <template #cell-gateway="{ row }">
@@ -95,7 +98,7 @@
 // nodes publish for the hosts behind them (R25, R26).
 import { computed, onMounted, ref } from 'vue'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
-import { UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useToast } from '@/ui'
+import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   deleteKernelMeshDeviceName, deleteKernelMeshHostGroup, listKernelMeshDeviceNames, listKernelMeshHostGroups, saveKernelMeshDeviceName, saveKernelMeshHostGroup
