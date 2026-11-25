@@ -22,6 +22,7 @@ package meshregion
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -435,10 +436,11 @@ func freeServerAddress(prefix netip.Prefix, used []string) (netip.Addr, bool) {
 	}
 	half := uint32(1) << (31 - prefix.Bits())
 	base := prefix.Addr().As4()
-	start := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
+	start := binary.BigEndian.Uint32(base[:])
 	for offset := uint32(1); offset < half; offset++ {
-		n := start + offset
-		address := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
+		var b [4]byte
+		binary.BigEndian.PutUint32(b[:], start+offset)
+		address := netip.AddrFrom4(b)
 		if !taken[address.String()] {
 			return address, true
 		}
