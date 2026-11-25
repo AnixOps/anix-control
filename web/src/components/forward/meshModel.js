@@ -57,7 +57,7 @@ export function deviceStatus(device, now = Date.now()) {
 
 // inSharedAddressSpace tells whether cidr, an IPv4 range, overlaps
 // 100.64.0.0/10, which other overlay software on the same machine often
-// takes over whole (spec section 8.3.1).
+// takes over whole (spec section 15.4).
 export function inSharedAddressSpace(cidr) {
   const match = /^\s*(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})\s*$/.exec(String(cidr || ''))
   if (!match) return false

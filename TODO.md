@@ -79,6 +79,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   all of 100.64.0.0/10 nor a default route) to the members or host groups
   allowed through it; those explicitly marked routes are exempt from the
   `shared_address_space` warning. Follows the spec's 0.4 section.
+  A device holding a region's resolver address (from before #641) is
+  marked and moved only by an administrator ("Assign new address");
+  moving it automatically is to be considered (#641 audit). The resolver
+  address of an IPv6 range is not defined by the spec yet.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

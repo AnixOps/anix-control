@@ -50,7 +50,7 @@
 
     <UiSheet :open="Boolean(sheet)" size="md" :title="sheetTitle" :description="sheetDescription" :dismissible="!saving" @update:open="value => { if (!value) sheet = null }">
       <form v-if="sheet" class="mesh-form" novalidate data-testid="mesh-device-form" @submit.prevent="save">
-        <UiTextarea v-if="sheet.mode === 'subnets'" v-model="sheet.subnets" :rows="6" :label="t('meshAddr.devices.subnetsLabel')" placeholder="192.168.1.0/24" data-testid="mesh-device-subnets" />
+        <UiTextarea v-if="sheet.mode === 'subnets'" v-model="sheet.subnets" :rows="6" :label="t('meshAddr.devices.subnetsLabel')" :help="subnetsHelp" placeholder="192.168.1.0/24" data-testid="mesh-device-subnets" />
         <UiSelect v-else-if="sheet.mode !== 'edit'" v-model="sheet.regionId" size="md" :label="t('meshAddr.common.region')" :options="regionOptions" required :error="sheet.errors.region" />
         <template v-if="sheet.mode === 'add' || sheet.mode === 'edit'">
           <UiTextField v-model="sheet.hostname" size="md" :label="t('meshAddr.devices.hostname')" required :error="sheet.errors.hostname" data-testid="mesh-device-hostname" />
@@ -76,7 +76,7 @@ import { Ban, MapPinPlus, MoveRight, Network, Pencil, Plus, Trash2 } from '@luci
 import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextarea, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, setKernelMeshDeviceSubnets, updateKernelMeshDevice } from '@/api/kernel'
-import { deviceStatus, meshErrorMessage } from '../meshModel'
+import { deviceStatus, inSharedAddressSpace, meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
   regions: { type: Array, default: () => [] },
@@ -110,6 +110,8 @@ const sheetTitle = computed(() => {
   const titles = { move: 'meshAddr.devices.moveTitle', subnets: 'meshAddr.devices.subnetsTitle', edit: 'meshAddr.devices.editTitle' }
   return t(titles[sheet.value.mode], { name })
 })
+// A typed subnet in 100.64.0.0/10 is warned of before saving.
+const subnetsHelp = computed(() => String(sheet.value?.subnets || '').split(/[\s,]+/).some(inSharedAddressSpace) ? t('meshAddr.common.sharedAddressSpaceHelp') : '')
 const sheetDescription = computed(() => {
   const descriptions = { move: 'meshAddr.devices.moveDescription', subnets: 'meshAddr.devices.subnetsDescription' }
   return t(descriptions[sheet.value?.mode] || 'meshAddr.devices.hostnameHelp')
