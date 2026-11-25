@@ -27,7 +27,7 @@ export default {
     },
     enrollments: {
       title: 'Enrollment credentials',
-      description: 'Devices without an Agent join the mesh with a one-time enrollment credential, exchange it for a device token, then read their configuration and report their status periodically.',
+      description: 'Devices without an Agent join the mesh with a one-time enrollment credential, exchange it for a device token, then read their configuration and report their status periodically. Credentials are for this platform\'s clients, installer and router package only. Nodes of other implementations do not join directly; they stay in the old network, bridged by this platform\'s nodes.',
       issue: 'Issue enrollment credential',
       issueTitle: 'Issue enrollment credential',
       issueDescription: 'A credential can be used once. An access device receives an address from the device pool; a full node uses a fixed address of the server segment.',

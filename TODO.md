@@ -25,7 +25,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   admission in the kernel instead of the region key, the `takeover` setting,
   forward nodes in the node picker, and turning the
   feature on once the node kernel runs the mesh. Also: the bridge to the
-  old network during a migration, the 「未启用前向保密」 display and the
+  old network during a migration (nodes of other implementations never
+  join a managed network directly: they stay in the old network, bridged
+  by this platform's nodes; per-member admission in the kernel is what
+  keeps a node holding the region key out), the 「未启用前向保密」 display and the
   migration progress (R30); the result of a node's own region request back
   to the node (a refused `mesh.region_request` is only in the panel); a
   warning when two gateways report the same instance id; IPv6 (fc00::/7)
