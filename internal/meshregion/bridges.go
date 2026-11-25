@@ -712,8 +712,11 @@ func desiredOf(db *gorm.DB, nodeRef string, regionID uint) (map[netip.Prefix]boo
 // without a bridge in that network (an explicit null, or the alert
 // external_bridge_unsupported without externalBridge; a missing
 // externalBridge is unknown and releases nothing). Both times are the
-// panel's: the node's appliedAt, by another clock, is only shown.
-func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) error {
+// panel's: the node's appliedAt, by another clock, is only shown. A late
+// report delivered out of order must not release alone: previous, the
+// node's report before this one, must show the release too (two
+// consecutive reports, both received after the hold).
+func releaseHolds(db *gorm.DB, nodeRef string, previous *model.MeshStatus, payload string, receivedAt time.Time) error {
 	var holds []model.MeshBridgeHold
 	if err := db.Where("node_ref = ?", nodeRef).Find(&holds).Error; err != nil || len(holds) == 0 {
 		return err
@@ -722,7 +725,11 @@ func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) er
 	if err != nil {
 		return err
 	}
+	if previous == nil {
+		return nil
+	}
 	reported := reportedBridges(payload)
+	before := reportedBridges(previous.Payload)
 	type desired struct {
 		set    map[netip.Prefix]bool
 		bridge bool
@@ -743,19 +750,25 @@ func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) er
 			want = desired{set, bridge}
 			byRegion[hold.RegionID] = want
 		}
-		report := reported[codes[hold.RegionID]]
-		switch {
-		case want.bridge && report.Running:
-			if receivedAt.After(hold.CreatedAt) && !want.set[prefix] && report.Applied.AllowDigest == AllowDigest(want.set) {
-				released = append(released, hold.ID)
+		// releases tells whether a report received at shows the
+		// prefix released.
+		releases := func(report reportedBridge, at time.Time) bool {
+			switch {
+			case !at.After(hold.CreatedAt):
+				return false
+			case report.Stopped:
+				// The node runs no bridge in the network: nothing it
+				// held back is reachable through it, whether or not it
+				// is still meant to bridge.
+				return true
+			case want.bridge && report.Running:
+				return !want.set[prefix] && report.Applied.AllowDigest == AllowDigest(want.set)
 			}
-		case report.Stopped:
-			// The node runs no bridge in the network: nothing it held
-			// back is reachable through it, whether or not it is still
-			// meant to bridge.
-			if receivedAt.After(hold.CreatedAt) {
-				released = append(released, hold.ID)
-			}
+			return false
+		}
+		code := codes[hold.RegionID]
+		if releases(reported[code], receivedAt) && releases(before[code], previous.ReceivedAt) {
+			released = append(released, hold.ID)
 		}
 	}
 	if len(released) == 0 {

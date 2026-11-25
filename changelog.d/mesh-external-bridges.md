@@ -19,3 +19,5 @@
   unknown, as the kernel may still bridge with the old allow list. A
   report with the alert `external_bridge_unsupported` and no
   `externalBridge` counts as a node running no bridge.
+  Two consecutive reports received after the removal must both show the
+  release, so a late or out-of-order report cannot release alone.
