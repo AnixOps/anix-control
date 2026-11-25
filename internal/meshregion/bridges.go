@@ -610,7 +610,10 @@ const AlertBridgeUnsupported = "external_bridge_unsupported"
 
 // AlertBridgeLockHeld is the alert of a node where another process on the
 // host holds the bridge lock, so the node does not declare
-// mesh_external_bridge (spec #359): released like AlertBridgeUnsupported.
+// mesh_external_bridge (spec #359). The holder may be an old instance
+// that hangs with its rules still in force, so like
+// AlertBridgeDowngradeResidue it leaves the state unknown: while a network
+// reports it, nothing held for the node there is released.
 const AlertBridgeLockHeld = "external_bridge_lock_held"
 
 // AlertBridgeDowngradeResidue is the alert of a node now on a kernel
@@ -651,7 +654,9 @@ func networkAlert(payload, id, code string) bool {
 // an explicit null externalBridge or, without one, the alert
 // external_bridge_unsupported (the Agent never gives that kernel the
 // section, so the node runs no bridge there), or neither while the alert
-// external_bridge_downgrade_residue is reported (old rules may remain), or
+// external_bridge_downgrade_residue (old rules may remain) or
+// external_bridge_lock_held (another process, perhaps an old instance
+// that hangs, may still bridge) is reported, or
 // neither when the key is missing or unreadable (the state is unknown: the
 // configuration may not have been applied or the kernel not read).
 type reportedBridge struct {
@@ -682,12 +687,13 @@ func reportedBridges(payload string) map[string]reportedBridge {
 		raw := bytes.TrimSpace(network.ExternalBridge)
 		unsupported, residue := false, false
 		for _, alert := range network.Alerts {
-			unsupported = unsupported || alert.Code == AlertBridgeUnsupported || alert.Code == AlertBridgeLockHeld
-			residue = residue || alert.Code == AlertBridgeDowngradeResidue
+			unsupported = unsupported || alert.Code == AlertBridgeUnsupported
+			residue = residue || alert.Code == AlertBridgeDowngradeResidue || alert.Code == AlertBridgeLockHeld
 		}
 		switch {
 		case residue:
-			// Old bridge rules may remain: unknown, never released.
+			// Old bridge rules may remain, or another process may still
+			// bridge: unknown, never released.
 		case len(raw) == 0 && unsupported:
 			answer[network.ID] = reportedBridge{Stopped: true}
 		case len(raw) == 0:
