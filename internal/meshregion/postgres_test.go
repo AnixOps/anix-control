@@ -141,7 +141,7 @@ func TestPostgresConcurrentAddresses(t *testing.T) {
 	}
 	for i := 0; i < 4; i++ {
 		fns = append(fns, func() error {
-			_, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: eu.ID, Hostname: fmt.Sprintf("router-%d", i), Role: RoleFull}, nil, now)
+			_, err := CreateEnrollment(ctx, db, EnrollmentInput{RegionID: eu.ID, Hostname: fmt.Sprintf("router-%d", i), Role: RoleFull, Address: fmt.Sprintf("10.152.0.%d", 121+i)}, nil, now)
 			return err
 		})
 	}
@@ -154,8 +154,9 @@ func TestPostgresConcurrentAddresses(t *testing.T) {
 	for i, err := range together(fns...) {
 		require.NoError(t, err, "change %d", i)
 	}
-	// 12 devices, 4 credentials, 4 nodes and the boundary node's address
-	// in the other region.
+	// 12 devices, 4 credentials keeping the addresses they name (a
+	// credential without one keeps none), 4 nodes and the boundary node's
+	// address in the other region.
 	require.Equal(t, 21, requireDistinctAddresses(t, db))
 }
 
