@@ -452,6 +452,9 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 			if err := findRegion(tx, region.ID, &region); err != nil {
 				return err
 			}
+			if !region.Enabled {
+				return nil
+			}
 			var current model.MeshDevice
 			if err := findDevice(tx, device.ID, &current); err != nil {
 				return err
@@ -468,10 +471,17 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 				return err
 			}
 			device.Address = &address
-			return tx.Model(&device).Updates(map[string]any{"address": address, "address_used_at": now, "updated_at": now}).Error
+			result := tx.Model(&device).Updates(map[string]any{"address": address, "address_used_at": now, "updated_at": now})
+			if result.Error == nil && result.RowsAffected != 1 {
+				return conflict("the device was removed meanwhile")
+			}
+			return result.Error
 		})
 		if err != nil {
 			return nil, err
+		}
+		if !region.Enabled {
+			return map[string]any{"networks": []any{}}, nil
 		}
 	}
 	prefix, err := netip.ParsePrefix(region.CIDR)

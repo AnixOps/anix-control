@@ -271,9 +271,10 @@ func TestPostgresPlanChangesTogether(t *testing.T) {
 	}
 }
 
-// Requests, approvals, direct moves and deletes of the same devices at the
-// same time: each either happens or is refused as a conflict, and every
-// device keeps one address of its region.
+// Requests, approvals, direct moves, deletes and address assignments of
+// the same devices and nodes at the same time: each either happens or is
+// refused, nothing deleted comes back, every device keeps one address of
+// its region, and no change collided (the locks are taken in one order).
 func TestPostgresChangesTogether(t *testing.T) {
 	db := openPostgres(t)
 	ctx := context.Background()
@@ -281,12 +282,10 @@ func TestPostgresChangesTogether(t *testing.T) {
 	require.NoError(t, err)
 	to, err := CreateRegion(ctx, db, RegionInput{Code: "as", Name: "as", CIDR: "10.152.1.0/24", Enabled: true}, now)
 	require.NoError(t, err)
-	tolerated := func(err error) error {
-		if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
-			return nil
-		}
-		return err
+	refused := func(err error) bool {
+		return errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid)
 	}
+	retries := changeRetries.Load()
 	for round := 0; round < 4; round++ {
 		var ids []uint
 		for i := 0; i < 3; i++ {
@@ -294,30 +293,76 @@ func TestPostgresChangesTogether(t *testing.T) {
 			require.NoError(t, err)
 			ids = append(ids, device.ID)
 		}
+		// Device 2 lost its address: a configuration read and an
+		// administrator give it one at the same time.
+		require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", ids[2]).Updates(map[string]any{"address": nil, "address_used_at": nil}).Error)
+		var lost model.MeshDevice
+		require.NoError(t, db.First(&lost, ids[2]).Error)
+		member, err := AddNode(ctx, db, from.ID, proxy(1), false, now)
+		require.NoError(t, err)
 		pending, err := RequestChange(ctx, db, ChangeInput{DeviceID: ids[0], ToRegionID: to.ID}, model.MeshChangeAdmin, nil, now)
 		require.NoError(t, err)
+		var deleteErr, removeErr error
 		errs := together(
 			func() error {
 				_, err := RequestChange(ctx, db, ChangeInput{DeviceID: ids[1], ToRegionID: to.ID}, model.MeshChangeAdmin, nil, now)
-				return tolerated(err)
+				return err
 			},
 			func() error {
 				_, err := MoveDevice(ctx, db, ids[1], to.ID, nil, now)
-				return tolerated(err)
+				return err
 			},
 			func() error {
 				_, err := ApproveChange(ctx, db, pending.ID, "", nil, now)
-				return tolerated(err)
+				return err
 			},
-			func() error { return tolerated(DeleteDevice(ctx, db, ids[0], now)) },
+			func() error {
+				_, err := MoveDevice(ctx, db, ids[0], to.ID, nil, now)
+				return err
+			},
+			func() error {
+				deleteErr = DeleteDevice(ctx, db, ids[0], now)
+				return deleteErr
+			},
 			func() error {
 				_, err := AssignDeviceAddress(ctx, db, ids[2], now)
-				return tolerated(err)
+				return err
+			},
+			func() error {
+				_, err := DeviceConfig(ctx, db, lost, now)
+				return err
+			},
+			func() error {
+				_, err := UpdateMember(ctx, db, member.ID, to.ID, false, nil, now)
+				return err
+			},
+			func() error {
+				removeErr = RemoveNode(ctx, db, member.ID)
+				return removeErr
 			},
 		)
 		for i, err := range errs {
-			require.NoError(t, err, "round %d change %d", round, i)
+			if err != nil {
+				require.True(t, refused(err), "round %d change %d: %v", round, i, err)
+			}
 		}
+		require.NoError(t, deleteErr, "round %d: nothing refuses the delete", round)
+		var count int64
+		require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", ids[0]).Count(&count).Error)
+		require.Zero(t, count, "round %d: the deleted device stays deleted", round)
+		if removeErr == nil {
+			require.NoError(t, db.Model(&model.MeshMember{}).Where("node_ref = ?", proxy(1).String()).Count(&count).Error)
+			require.Zero(t, count, "round %d: the removed node stays removed", round)
+		} else {
+			var homes []model.MeshMember
+			require.NoError(t, db.Where("node_ref = ? AND home = ?", proxy(1).String(), true).Find(&homes).Error)
+			require.Len(t, homes, 1)
+			require.NoError(t, RemoveNode(ctx, db, homes[0].ID))
+		}
+		var assigned model.MeshDevice
+		require.NoError(t, db.First(&assigned, ids[2]).Error)
+		require.NotNil(t, assigned.Address, "round %d: device 2 has an address again", round)
 		requireDistinctAddresses(t, db)
 	}
+	require.Equal(t, retries, changeRetries.Load(), "no change collided")
 }
