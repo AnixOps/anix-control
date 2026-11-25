@@ -203,6 +203,32 @@ func (h *MeshHandler) DeleteRegion(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// RotateRegionSecret godoc
+// @Summary Give a mesh region a new network key
+// @Description After a device token is revoked or a device deleted: the region's network gets a new key, pushed to every member at once and read by the devices with their next configuration, so the device's kept key no longer joins. Audited (module mesh, action mesh_region_rotate_secret).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "region id"
+// @Success 204
+// @Router /api/v4/kernel/mesh/regions/{id}/rotate-secret [post]
+func (h *MeshHandler) RotateRegionSecret(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	if err := meshregion.RotateRegionSecret(c.Request.Context(), db, id, h.now()); err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_region_rotate_secret", id, fmt.Sprintf(`{"region_id":%d}`, id))
+	c.Status(http.StatusNoContent)
+}
+
 // AddMember godoc
 // @Summary Add a node to a mesh region
 // @Description Makes the region the node's home region with the lowest free fixed address of its server segment (the lower half of its range). A boundary node (boundary true) also gets an address in every other region. 409 mesh_conflict when the node is already in a region, segment_full when the segment has no free address. Audited (module mesh, action mesh_member_add).

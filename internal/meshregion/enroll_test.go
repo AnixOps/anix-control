@@ -48,23 +48,44 @@ func TestEnrollmentIsUsedOnce(t *testing.T) {
 	require.Equal(t, "10.150.128.0/16", network["address"], "the first pool address")
 	require.Empty(t, network["listen"])
 	require.Equal(t, []map[string]any{{"server": "a.example.com", "port": Port, "transport": "tcp"}}, network["peers"])
-	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey}, now)
+	// A lost answer: the same credential and key enroll again for a short
+	// while, with a new token; another key or a later retry is refused.
+	retried, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey}, now.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, enrolled.DeviceID, retried.DeviceID)
+	_, err = Authenticate(ctx, db, enrolled.DeviceToken, now)
+	require.ErrorIs(t, err, ErrUnauthorized, "the retry replaced the token")
+	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: strings.Repeat("o", 32)}, now.Add(time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized, "used, by another key")
+	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey}, now.Add(EnrollRetryWindow+time.Minute))
 	require.ErrorIs(t, err, ErrUnauthorized, "used")
 
 	rows, err := Enrollments(ctx, db)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, enrolled.DeviceID, *rows[0].DeviceID)
-	require.NoError(t, DeleteEnrollment(ctx, db, rows[0].ID))
-	require.ErrorIs(t, DeleteEnrollment(ctx, db, rows[0].ID), ErrNotFound)
+	require.ErrorIs(t, DeleteEnrollment(ctx, db, rows[0].ID), ErrConflict, "a used credential stays")
 
-	// The same key enrolled again keeps its device; the earlier token stops.
-	again, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "laptop"}, nil, now)
+	// Claiming a known key with a credential for a new device is refused:
+	// the key proves nothing.
+	other, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "thief"}, nil, now)
 	require.NoError(t, err)
+	_, err = Enroll(ctx, db, EnrollRequest{Token: other.Token, DeviceKey: laptopKey, Latencies: map[string]float64{"cn": 1}}, now)
+	require.ErrorIs(t, err, ErrConflict)
+	require.NoError(t, DeleteEnrollment(ctx, db, other.ID), "an unused credential is withdrawn")
+	require.ErrorIs(t, DeleteEnrollment(ctx, db, other.ID), ErrNotFound)
+
+	// A credential issued for the device enrolls it again with its key: it
+	// keeps its device; another key is refused; the earlier token stops.
+	again, err := CreateEnrollment(ctx, db, EnrollmentInput{DeviceID: enrolled.DeviceID}, nil, now)
+	require.NoError(t, err)
+	require.Equal(t, "laptop", again.Hostname)
+	_, err = Enroll(ctx, db, EnrollRequest{Token: again.Token, DeviceKey: strings.Repeat("o", 32)}, now)
+	require.ErrorIs(t, err, ErrUnauthorized)
 	second, err := Enroll(ctx, db, EnrollRequest{Token: again.Token, DeviceKey: laptopKey}, now)
 	require.NoError(t, err)
 	require.Equal(t, enrolled.DeviceID, second.DeviceID)
-	_, err = Authenticate(ctx, db, enrolled.DeviceToken, now)
+	_, err = Authenticate(ctx, db, retried.DeviceToken, now)
 	require.ErrorIs(t, err, ErrUnauthorized)
 	device, err := Authenticate(ctx, db, second.DeviceToken, now.Add(time.Hour))
 	require.NoError(t, err)
@@ -73,6 +94,10 @@ func TestEnrollmentIsUsedOnce(t *testing.T) {
 	// The report and the token show in the device list; revoking refuses
 	// the token.
 	require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, []byte(`[]`), now), ErrInvalid)
+	for _, bad := range []string{`{"networks":[{"peers":[{"latency_ms":-1}]}]}`, `{"networks":[{"peers":[{"latency_ms":"fast"}]}]}`} {
+		require.ErrorIs(t, RecordDeviceStatus(ctx, db, device, []byte(bad), now), ErrInvalid, bad)
+	}
+	require.NoError(t, RecordDeviceStatus(ctx, db, device, []byte(`{"networks":[{"peers":[{"latency_ms":12.5},{"latency_ms":null}]}]}`), now))
 	require.NoError(t, RecordDeviceStatus(ctx, db, device, []byte(`{"networks":[]}`), now))
 	views, err := Devices(ctx, db, 0, now)
 	require.NoError(t, err)
@@ -127,4 +152,37 @@ func TestEnrolledDeviceChoosesByLatencyAndAsksToMove(t *testing.T) {
 	require.NoError(t, DeleteDevice(ctx, db, device.ID, now))
 	_, err = Authenticate(ctx, db, enrolled.DeviceToken, now)
 	require.ErrorIs(t, err, ErrUnauthorized)
+}
+
+func TestEnrollmentOfAnAdministratorsDevice(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/16")
+	device, err := CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "tablet"}, now)
+	require.NoError(t, err)
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{DeviceID: device.ID}, nil, now)
+	require.NoError(t, err)
+	_, err = Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, Latencies: map[string]float64{"cn": 1, "x": 2, "y": 3}}, now)
+	require.NoError(t, err)
+	var row model.MeshDevice
+	require.NoError(t, db.First(&row, device.ID).Error)
+	require.Equal(t, laptopKey, *row.DeviceKey, "the first enrollment registers the key")
+	require.Equal(t, *device.Address, *row.Address)
+
+	latencies := map[string]float64{}
+	for i := range maxLatencies + 1 {
+		latencies[strings.Repeat("r", i+1)] = 1
+	}
+	next, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "phone"}, nil, now)
+	require.NoError(t, err)
+	_, err = Enroll(ctx, db, EnrollRequest{Token: next.Token, DeviceKey: strings.Repeat("p", 32), Latencies: latencies}, now)
+	require.ErrorIs(t, err, ErrInvalid)
+
+	// A new network key reaches the devices with their next read.
+	before := cn.Secret
+	require.NoError(t, RotateRegionSecret(ctx, db, cn.ID, now))
+	config, err := DeviceConfig(ctx, db, row, now)
+	require.NoError(t, err)
+	require.NotEqual(t, before, config["networks"].([]map[string]any)[0]["secret"])
+	require.ErrorIs(t, RotateRegionSecret(ctx, db, 99, now), ErrNotFound)
 }

@@ -1,6 +1,7 @@
 package meshregion
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -31,6 +32,14 @@ const (
 	MaxEnrollmentTTL     = 7 * 24 * time.Hour
 	enrollmentPrefix     = "mse_"
 	deviceTokenPrefix    = "msd_"
+	// EnrollRetryWindow: a device whose enrollment answer was lost
+	// enrolls again with the same credential and device key for this long.
+	EnrollRetryWindow = 10 * time.Minute
+	// maxLatencies bounds the regions an enrollment reports.
+	maxLatencies = 64
+	// The use of a device token is written at most this often.
+	seenEvery = time.Minute
+	usedEvery = time.Hour
 )
 
 // ErrUnauthorized: the credential or device token is unknown, used,
@@ -45,11 +54,13 @@ func hashToken(token string) string {
 // DeviceRef is a device's status key.
 func DeviceRef(id uint) string { return "device-" + strconv.FormatUint(uint64(id), 10) }
 
-// EnrollmentInput issues a credential.
+// EnrollmentInput issues a credential: for a new device (Hostname, and
+// RegionID or 0 to let the device's latencies choose), or for the device
+// DeviceID to enroll again, which keeps its name, region and address.
 type EnrollmentInput struct {
-	// RegionID 0 lets the device's latencies choose.
 	RegionID uint   `json:"region_id"`
 	Hostname string `json:"hostname"`
+	DeviceID uint   `json:"device_id"`
 	// Hours the credential stays valid: 1 to 168, 24 when 0.
 	Hours int `json:"hours"`
 }
@@ -63,6 +74,16 @@ type IssuedEnrollment struct {
 
 // CreateEnrollment issues a one-time credential.
 func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, createdBy *uint, now time.Time) (IssuedEnrollment, error) {
+	db = db.WithContext(ctx)
+	var target *uint
+	if input.DeviceID != 0 {
+		var device model.MeshDevice
+		if err := findDevice(db, input.DeviceID, &device); err != nil {
+			return IssuedEnrollment{}, err
+		}
+		id := device.ID
+		target, input.Hostname, input.RegionID = &id, device.Hostname, device.RegionID
+	}
 	hostname, err := normalizeLabel("hostname", input.Hostname)
 	if err != nil {
 		return IssuedEnrollment{}, err
@@ -74,14 +95,13 @@ func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, c
 	if ttl < time.Hour || ttl > MaxEnrollmentTTL {
 		return IssuedEnrollment{}, invalid("hours: 1 to 168")
 	}
-	db = db.WithContext(ctx)
 	if input.RegionID != 0 {
 		if err := findRegion(db, input.RegionID, &model.MeshRegion{}); err != nil {
 			return IssuedEnrollment{}, err
 		}
 	}
 	token := enrollmentPrefix + rand.Text()
-	row := model.MeshEnrollment{RegionID: input.RegionID, Hostname: hostname, TokenHash: hashToken(token), ExpiresAt: now.Add(ttl), CreatedBy: createdBy, CreatedAt: now}
+	row := model.MeshEnrollment{RegionID: input.RegionID, Hostname: hostname, TokenHash: hashToken(token), DeviceID: target, ExpiresAt: now.Add(ttl), CreatedBy: createdBy, CreatedAt: now}
 	if err := db.Create(&row).Error; err != nil {
 		return IssuedEnrollment{}, err
 	}
@@ -94,9 +114,17 @@ func Enrollments(ctx context.Context, db *gorm.DB) ([]model.MeshEnrollment, erro
 	return rows, db.WithContext(ctx).Order("id DESC").Limit(200).Find(&rows).Error
 }
 
-// DeleteEnrollment withdraws a credential; a device that used it stays.
+// DeleteEnrollment withdraws an unused credential; a used one stays as the
+// record of the device it enrolled.
 func DeleteEnrollment(ctx context.Context, db *gorm.DB, id uint) error {
-	result := db.WithContext(ctx).Where("id = ?", id).Delete(&model.MeshEnrollment{})
+	var rows []model.MeshEnrollment
+	if err := db.WithContext(ctx).Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
+		return err
+	}
+	if len(rows) > 0 && rows[0].UsedAt != nil {
+		return conflict("a used credential stays as the record of its device")
+	}
+	result := db.WithContext(ctx).Where("id = ? AND used_at IS NULL", id).Delete(&model.MeshEnrollment{})
 	if result.Error == nil && result.RowsAffected == 0 {
 		return fmt.Errorf("%w: enrollment %d", ErrNotFound, id)
 	}
@@ -120,9 +148,13 @@ type Enrolled struct {
 	Config      map[string]any `json:"config"`
 }
 
-// Enroll exchanges a credential for a device token. A device key enrolled
-// before keeps its device, region and address; its earlier token stops
-// working.
+// Enroll exchanges a credential for a device token. A credential for a
+// new device creates one; a device key some device already has is refused
+// (it is no proof of holding it). A credential issued for a device enrolls
+// that device again: its key, if it has one, must match, and its earlier
+// token stops working. A credential is used once; within
+// EnrollRetryWindow the same device key may use it again, for an answer
+// that was lost, and gets a new token.
 func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Time) (Enrolled, error) {
 	_, key, err := normalizeDevice(DeviceInput{Hostname: "x", DeviceKey: request.DeviceKey})
 	if err != nil {
@@ -131,11 +163,14 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 	if key == nil {
 		return Enrolled{}, invalid("device_key: required")
 	}
+	if len(request.Latencies) > maxLatencies {
+		return Enrolled{}, invalid("latencies: at most %d regions", maxLatencies)
+	}
 	token := deviceTokenPrefix + rand.Text()
 	var device model.MeshDevice
 	err = change(ctx, db, func(tx *gorm.DB) error {
 		var enrollments []model.MeshEnrollment
-		if err := tx.Where("token_hash = ? AND used_at IS NULL AND expires_at > ?", hashToken(request.Token), now).Limit(1).Find(&enrollments).Error; err != nil {
+		if err := tx.Where("token_hash = ? AND expires_at > ?", hashToken(request.Token), now).Limit(1).Find(&enrollments).Error; err != nil {
 			return err
 		}
 		if len(enrollments) == 0 {
@@ -146,9 +181,32 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 		if err := tx.Where("device_key = ?", *key).Limit(1).Find(&known).Error; err != nil {
 			return err
 		}
-		if len(known) > 0 {
+		switch {
+		case enrollment.UsedAt != nil:
+			// A retry: the device this credential enrolled, with its key.
+			if now.Sub(*enrollment.UsedAt) > EnrollRetryWindow || enrollment.DeviceID == nil || len(known) == 0 || known[0].ID != *enrollment.DeviceID {
+				return ErrUnauthorized
+			}
 			device = known[0]
-		} else {
+		case enrollment.DeviceID != nil:
+			if err := findDevice(tx, *enrollment.DeviceID, &device); err != nil {
+				return ErrUnauthorized
+			}
+			if device.DeviceKey != nil && *device.DeviceKey != *key {
+				return ErrUnauthorized
+			}
+			if len(known) > 0 && known[0].ID != device.ID {
+				return conflict("another device has this device_key")
+			}
+			if device.DeviceKey == nil {
+				device.DeviceKey = key
+				if err := tx.Model(&device).Updates(map[string]any{"device_key": *key, "updated_at": now}).Error; err != nil {
+					return err
+				}
+			}
+		case len(known) > 0:
+			return conflict("another device has this device_key; enroll it again with a credential issued for it")
+		default:
 			region, err := enrollmentRegion(tx, enrollment.RegionID, request.Latencies)
 			if err != nil {
 				return err
@@ -162,14 +220,22 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 				return err
 			}
 		}
+		if enrollment.UsedAt == nil {
+			// One use: of two requests at once, only the first claims it.
+			claimed := tx.Model(&model.MeshEnrollment{}).Where("id = ? AND used_at IS NULL", enrollment.ID).
+				Updates(map[string]any{"used_at": now, "device_id": device.ID})
+			if claimed.Error != nil {
+				return claimed.Error
+			}
+			if claimed.RowsAffected != 1 {
+				return ErrUnauthorized
+			}
+		}
 		row := model.MeshDeviceToken{DeviceID: device.ID, TokenHash: hashToken(token), LastSeenAt: &now, CreatedAt: now}
-		if err := tx.Clauses(clause.OnConflict{
+		return tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "device_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"token_hash", "last_seen_at", "created_at"}),
-		}).Create(&row).Error; err != nil {
-			return err
-		}
-		return tx.Model(&enrollment).Updates(map[string]any{"used_at": now, "device_id": device.ID}).Error
+		}).Create(&row).Error
 	})
 	if err != nil {
 		return Enrolled{}, err
@@ -215,10 +281,14 @@ func Authenticate(ctx context.Context, db *gorm.DB, token string, now time.Time)
 	if err := findDevice(db, tokens[0].DeviceID, &device); err != nil {
 		return device, err
 	}
-	if err := db.Model(&tokens[0]).Update("last_seen_at", now).Error; err != nil {
-		return device, err
+	// The use is written at most once a minute (last seen) and once an
+	// hour (the address, whose reclaim counts in days).
+	if seen := tokens[0].LastSeenAt; seen == nil || now.Sub(*seen) >= seenEvery {
+		if err := db.Model(&tokens[0]).Update("last_seen_at", now).Error; err != nil {
+			return device, err
+		}
 	}
-	if device.Address != nil {
+	if device.Address != nil && (device.AddressUsedAt == nil || now.Sub(*device.AddressUsedAt) >= usedEvery) {
 		device.AddressUsedAt = &now
 		return device, db.Model(&device).Update("address_used_at", now).Error
 	}
@@ -279,12 +349,17 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 			peers = append(peers, map[string]any{"server": info.host, "port": Port, "transport": "tcp"})
 		}
 	}
+	dns, err := dnsSection(db)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{"networks": []map[string]any{{
 		"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
 		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": "access", "listen": []map[string]any{},
 		"peers":   peers,
 		"subnets": map[string]any{"accept": []string{}, "advertise": []string{}},
 		"routing": map[string]any{"policy": policy, "paths": []any{}},
+		"dns":     dns,
 	}}}, nil
 }
 
@@ -296,6 +371,9 @@ func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevic
 	}
 	if err := json.Unmarshal(payload, &shape); err != nil || shape.Networks == nil {
 		return invalid("payload: a JSON object with a networks array")
+	}
+	if err := checkLatencies(shape.Networks); err != nil {
+		return err
 	}
 	row := model.MeshStatus{NodeRef: DeviceRef(device.ID), Payload: string(payload), ObservedAt: now, ReceivedAt: now}
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
@@ -315,4 +393,36 @@ func RequestDeviceChange(ctx context.Context, db *gorm.DB, device model.MeshDevi
 		return model.MeshRegionChange{}, fmt.Errorf("%w: region %q", ErrNotFound, code)
 	}
 	return RequestChange(ctx, db, ChangeInput{DeviceID: device.ID, ToRegionID: regions[0].ID, Reason: reason}, model.MeshChangeMember, nil, now)
+}
+
+// maxReportPeers bounds the peers of one network in a device's report.
+const maxReportPeers = 1024
+
+// checkLatencies refuses a report whose peers' latency_ms is not a
+// non-negative number or null, or that lists too many peers.
+func checkLatencies(networks []json.RawMessage) error {
+	for _, raw := range networks {
+		var network struct {
+			Peers []struct {
+				LatencyMS *json.Number `json:"latency_ms"`
+			} `json:"peers"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&network); err != nil {
+			return invalid("payload: networks[].peers[].latency_ms is a number of milliseconds")
+		}
+		if len(network.Peers) > maxReportPeers {
+			return invalid("payload: at most %d peers in a network", maxReportPeers)
+		}
+		for _, peer := range network.Peers {
+			if peer.LatencyMS == nil {
+				continue
+			}
+			if value, err := peer.LatencyMS.Float64(); err != nil || value < 0 || value > 600000 {
+				return invalid("payload: latency_ms from 0 to 600000")
+			}
+		}
+	}
+	return nil
 }

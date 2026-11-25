@@ -25,6 +25,9 @@ func TestKernelMeshRoutesAreAdminOnly(t *testing.T) {
 		{http.MethodPost, "/api/v4/kernel/mesh/changes"},
 		{http.MethodPost, "/api/v4/kernel/mesh/changes/1/approve"},
 		{http.MethodGet, "/api/v4/kernel/mesh/names"},
+		{http.MethodPost, "/api/v4/kernel/mesh/enrollments"},
+		{http.MethodPost, "/api/v4/kernel/mesh/regions/1/rotate-secret"},
+		{http.MethodPost, "/api/v4/kernel/mesh/devices/1/revoke"},
 	} {
 		for token, want := range map[string]int{"": http.StatusUnauthorized, user: http.StatusForbidden} {
 			request := httptest.NewRequest(route.method, route.path, strings.NewReader(`{}`))

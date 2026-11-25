@@ -303,6 +303,20 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 	return row, err
 }
 
+// RotateRegionSecret gives a region a new network key, so that a device
+// whose token was revoked or that was deleted no longer joins with the key
+// it kept. Every member gets the new key at once; devices read it with
+// their next configuration.
+func RotateRegionSecret(ctx context.Context, db *gorm.DB, id uint, now time.Time) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
+		var row model.MeshRegion
+		if err := findRegion(tx, id, &row); err != nil {
+			return err
+		}
+		return tx.Model(&row).Updates(map[string]any{"secret": rand.Text(), "updated_at": now}).Error
+	})
+}
+
 // DeleteRegion deletes a region that is no node's home region; the boundary
 // nodes leave it.
 func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {

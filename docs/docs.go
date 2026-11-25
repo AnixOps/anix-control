@@ -6349,7 +6349,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
+                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. With device_id the credential enrolls that existing device again (its name, region and address stay; hostname and region_id are ignored); a device key another device has is refused otherwise. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6388,7 +6388,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes the credential; a device that already used it stays enrolled. Audited (module mesh, action mesh_enrollment_delete).",
+                "description": "Deletes an unused credential; 409 mesh_conflict for a used one, which stays as the record of the device it enrolled. Audited (module mesh, action mesh_enrollment_delete).",
                 "produces": [
                     "application/json"
                 ],
@@ -6880,6 +6880,37 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/model.MeshMember"
                         }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions/{id}/rotate-secret": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "After a device token is revoked or a device deleted: the region's network gets a new key, pushed to every member at once and read by the devices with their next configuration, so the device's kept key no longer joins. Audited (module mesh, action mesh_region_rotate_secret).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Give a mesh region a new network key",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -8988,7 +9019,7 @@ const docTemplate = `{
         },
         "/api/v5/mesh/device/enroll": {
             "post": {
-                "description": "A device without an Agent exchanges a one-time credential (token) for its device token, sent as ` + "`" + `Authorization: Bearer \u003cdevice_token\u003e` + "`" + ` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps: enrolling the same key again keeps the device, its region and its address. latencies (milliseconds by region code) choose the region when the credential names none. 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
+                "description": "A device without an Agent exchanges a one-time credential (token) for its device token, sent as ` + "`" + `Authorization: Bearer \u003cdevice_token\u003e` + "`" + ` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10409,6 +10440,9 @@ const docTemplate = `{
         "meshregion.EnrollmentInput": {
             "type": "object",
             "properties": {
+                "device_id": {
+                    "type": "integer"
+                },
                 "hostname": {
                     "type": "string"
                 },
@@ -10417,7 +10451,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "region_id": {
-                    "description": "RegionID 0 lets the device's latencies choose.",
                     "type": "integer"
                 }
             }

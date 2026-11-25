@@ -24,6 +24,7 @@ export default {
       edit: '编辑…',
       enable: '启用',
       disable: '停用',
+      rotateSecret: '更换网络密钥…',
       delete: '删除…',
       move: '迁移地区…',
       setBoundary: '设为边界节点',
@@ -88,8 +89,14 @@ export default {
       confirm: '删除',
       confirmRemove: '移出'
     },
+    rotate: {
+      title: '更换 {name} 的网络密钥',
+      message: '新密钥立即推送到该地区全部节点，设备在下次读取配置时获得。已吊销或已删除的设备将无法再以原密钥入网。更换期间该地区的连接会短暂中断。',
+      confirm: '更换'
+    },
     toast: {
       saved: '已保存',
+      rotated: '已更换网络密钥',
       deleted: '已删除',
       removed: '已移出'
     },

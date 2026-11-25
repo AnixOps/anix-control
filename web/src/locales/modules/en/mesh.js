@@ -25,6 +25,7 @@ export default {
       edit: 'Edit…',
       enable: 'Enable',
       disable: 'Disable',
+      rotateSecret: 'Change network key…',
       delete: 'Delete…',
       move: 'Move to region…',
       setBoundary: 'Make boundary node',
@@ -89,7 +90,13 @@ export default {
       confirm: 'Delete',
       confirmRemove: 'Remove'
     },
+    rotate: {
+      title: 'Change the network key of {name}',
+      message: 'The new key goes to every node of the region at once and to devices with their next configuration read. Revoked or deleted devices can no longer join with the old key. Connections in the region are interrupted briefly.',
+      confirm: 'Change'
+    },
     toast: {
+      rotated: 'Network key changed',
       saved: 'Saved',
       deleted: 'Deleted',
       removed: 'Removed'

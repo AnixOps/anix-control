@@ -29,6 +29,7 @@
         <span class="mesh-cell">
           <span>{{ row.hostname }}</span>
           <span class="mesh-muted mesh-mono">{{ row.fqdn }}</span>
+          <span v-if="row.last_seen_at" class="mesh-muted">{{ t('meshAddr.devices.lastSeen') }} {{ format.dateTime(row.last_seen_at) }}</span>
         </span>
       </template>
       <template #cell-address="{ row }">
@@ -39,8 +40,8 @@
       </template>
       <template #cell-warnings="{ row }">
         <span class="mesh-badges">
-          <UiBadge v-if="row.enrolled" :tone="STATE_TONES[statusSummary(row).state]" :label="t(`mesh.page.status.${statusSummary(row).state}`)" />
-          <UiBadge v-for="code in row.enrolled ? statusSummary(row).alerts : []" :key="code" tone="danger" :label="alertLabel(code)" />
+          <UiBadge v-if="row.enrolled" :tone="STATE_TONES[deviceStatus(row).state]" :label="t(`mesh.page.status.${deviceStatus(row).state}`)" />
+          <UiBadge v-for="code in row.enrolled ? deviceStatus(row).alerts : []" :key="code" tone="danger" :label="alertLabel(code)" />
           <UiBadge v-for="code in row.warnings" :key="code" tone="warning" :label="t(`meshAddr.devices.warnings.${code}`)" />
         </span>
       </template>
@@ -71,7 +72,7 @@ import { Ban, MapPinPlus, MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
-import { meshErrorMessage, statusSummary } from '../meshModel'
+import { deviceStatus, meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
   regions: { type: Array, default: () => [] },

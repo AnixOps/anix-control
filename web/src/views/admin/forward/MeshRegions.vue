@@ -112,10 +112,10 @@
 // 组网: the mesh regions (internal/meshregion) and the nodes in them, with
 // the status each node's Agent reports. A change reaches the nodes at once.
 import { computed, ref } from 'vue'
-import { MoveRight, Network, Pencil, Plus, Power, Shield, Trash2 } from '@lucide/vue'
+import { KeyRound, MoveRight, Network, Pencil, Plus, Power, Shield, Trash2 } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiEmptyState, UiPageHeader, UiSegmentedControl, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { deleteKernelMeshRegion, getKernelAdminNodes, getKernelMeshSummary, listKernelMeshRegions, removeKernelMeshMember, saveKernelMeshRegion, updateKernelMeshMember } from '@/api/kernel'
+import { deleteKernelMeshRegion, getKernelAdminNodes, rotateKernelMeshRegionSecret, getKernelMeshSummary, listKernelMeshRegions, removeKernelMeshMember, saveKernelMeshRegion, updateKernelMeshMember } from '@/api/kernel'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import MeshMemberSheet from '@/components/forward/MeshMemberSheet.vue'
 import MeshRegionSheet from '@/components/forward/MeshRegionSheet.vue'
@@ -237,6 +237,25 @@ function regionActions(row) {
   return [
     { key: 'edit', label: t('mesh.page.edit'), icon: Pencil, onSelect: () => openRegion(row) },
     { key: 'toggle', label: row.enabled ? t('mesh.page.disable') : t('mesh.page.enable'), icon: Power, onSelect: () => run(() => saveKernelMeshRegion(row.id, { ...row, enabled: !row.enabled })) },
+    {
+      key: 'rotate',
+      label: t('mesh.page.rotateSecret'),
+      icon: KeyRound,
+      onSelect: () => confirm({
+        title: t('mesh.rotate.title', { name: row.name }),
+        message: t('mesh.rotate.message'),
+        confirmLabel: t('mesh.rotate.confirm'),
+        onConfirm: async () => {
+          try {
+            await rotateKernelMeshRegionSecret(row.id)
+          } catch (error) {
+            throw new Error(meshErrorMessage(error))
+          }
+          toast.success(t('mesh.toast.rotated'))
+          await refresh()
+        }
+      })
+    },
     {
       key: 'delete',
       label: t('mesh.page.delete'),

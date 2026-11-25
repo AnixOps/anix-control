@@ -33,3 +33,18 @@
   region change no longer both apply; an administrator's direct move
   records the administrator. Status reports of nodes that are in no region
   are refused.
+
+### Security
+
+- Intranet mesh devices without an Agent: a device key no longer claims an
+  existing device. A credential for a new device refuses a key another
+  device has; re-enrolling a device takes a credential issued for it
+  (`device_id`), and a registered key must match. A credential is claimed
+  atomically, so two requests at once cannot both use it; within 10 minutes
+  of a use the same credential and key may enroll again for a lost answer.
+  The enrollment and region change bodies are limited to 16 KiB and the
+  reported latencies are checked. A used credential stays as the record of
+  its device. A region's network key can be changed
+  (`POST /api/v4/kernel/mesh/regions/{id}/rotate-secret`, 更换网络密钥),
+  which keeps a revoked or deleted device out. Device configurations now
+  carry the intranet names, and token use is written at most once a minute.

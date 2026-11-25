@@ -679,6 +679,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/mesh/regions", mesh.CreateRegion)
 		v4.PUT("/kernel/mesh/regions/:id", mesh.UpdateRegion)
 		v4.DELETE("/kernel/mesh/regions/:id", mesh.DeleteRegion)
+		v4.POST("/kernel/mesh/regions/:id/rotate-secret", mesh.RotateRegionSecret)
 		v4.POST("/kernel/mesh/regions/:id/members", mesh.AddMember)
 		v4.PUT("/kernel/mesh/members/:member_id", mesh.UpdateMember)
 		v4.DELETE("/kernel/mesh/members/:member_id", mesh.RemoveMember)

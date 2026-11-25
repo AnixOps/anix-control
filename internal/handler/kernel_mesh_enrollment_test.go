@@ -69,7 +69,10 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	var enrolled meshregion.Enrolled
 	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &enrolled))
 	assert.Contains(t, response.Body.String(), `"address":"10.152.128.0/16"`)
-	assert.Equal(t, http.StatusUnauthorized, serveJSON(router, http.MethodPost, "/device/enroll", body).Code, "used once")
+	other := `{"token":"` + issued.Token + `","device_key":"` + strings.Repeat("o", 32) + `","latencies":{"eu":20}}`
+	assert.Equal(t, http.StatusUnauthorized, serveJSON(router, http.MethodPost, "/device/enroll", other).Code, "used once")
+	assert.Equal(t, http.StatusRequestEntityTooLarge, serveJSON(router, http.MethodPost, "/device/enroll", `{"token":"`+strings.Repeat("x", 20<<10)+`"}`).Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, device(http.MethodPost, "/device/region-change", enrolled.DeviceToken, `{"reason":"`+strings.Repeat("x", 20<<10)+`"}`).Code)
 
 	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/config", "msd_unknown", "").Code)
 	response = device(http.MethodGet, "/device/config", enrolled.DeviceToken, "")
@@ -91,11 +94,16 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, serveJSON(router, http.MethodPost, devicePath+"/revoke", "").Code)
 	assert.Equal(t, http.StatusNotFound, serveJSON(router, http.MethodPost, devicePath+"/revoke", "").Code)
 	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/config", enrolled.DeviceToken, "").Code)
-	assert.Equal(t, http.StatusNoContent, serveJSON(router, http.MethodDelete, "/mesh/enrollments/"+strconv.FormatUint(uint64(issued.ID), 10), "").Code)
+	assert.Equal(t, "mesh_conflict", errorCode(t, serveJSON(router, http.MethodDelete, "/mesh/enrollments/"+strconv.FormatUint(uint64(issued.ID), 10), "")), "a used credential stays")
+	response = serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"device_id":`+strconv.FormatUint(uint64(enrolled.DeviceID), 10)+`}`)
+	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
+	var again meshregion.IssuedEnrollment
+	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &again))
+	assert.Equal(t, http.StatusNoContent, serveJSON(router, http.MethodDelete, "/mesh/enrollments/"+strconv.FormatUint(uint64(again.ID), 10), "").Code)
 
 	var actions []string
 	require.NoError(t, env.db.Model(&model.OperationLog{}).Where("module = ?", "mesh").Order("id").Pluck("action", &actions).Error)
-	assert.Equal(t, []string{"mesh_region_create", "mesh_region_create", "mesh_enrollment_create", "mesh_change_approve", "mesh_device_revoke", "mesh_enrollment_delete"}, actions)
+	assert.Equal(t, []string{"mesh_region_create", "mesh_region_create", "mesh_enrollment_create", "mesh_change_approve", "mesh_device_revoke", "mesh_enrollment_create", "mesh_enrollment_delete"}, actions)
 
 	features.SetVersion("5.0.13")
 	assert.Equal(t, http.StatusNotFound, serveJSON(router, http.MethodPost, "/device/enroll", body).Code)
