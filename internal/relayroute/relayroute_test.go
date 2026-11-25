@@ -18,7 +18,9 @@ func TestCleanRelays(t *testing.T) {
 	assert.Equal(t, []string{"relay-a.example.cn:50051", "[2001:db8::1]:50051", "203.0.113.7:443"}, clean)
 
 	for _, bad := range []string{"relay.example.cn", "relay.example.cn:0", "relay.example.cn:65536", "http://relay.example.cn:1",
-		"relay example.cn:1", "relay.example.cn:1;rm", "-relay.example.cn:1", "$(id):1", "2001:db8::1:50051"} {
+		"relay example.cn:1", "relay.example.cn:1;rm", "-relay.example.cn:1", "$(id):1", "2001:db8::1:50051",
+		// The installer refuses these (re-audit G5): only plain ports.
+		"relay.example.cn:+443", "relay.example.cn:0443", "relay.example.cn:00001"} {
 		_, err := CleanRelays([]string{bad})
 		assert.ErrorIs(t, err, ErrInvalid, bad)
 	}
@@ -39,7 +41,7 @@ func TestCleanCaches(t *testing.T) {
 	assert.Equal(t, []string{"https://relay-a.example.cn:8443", "https://[2001:db8::1]:8443/cache"}, clean)
 
 	for _, bad := range []string{"http://relay.example.cn", "https://user@relay.example.cn", "https://relay.example.cn/?x=1",
-		"https://relay.example.cn/#f", "https://relay.example.cn:0", "https://relay.example.cn/a%20b", "https://relay.example.cn/a'b", "relay.example.cn"} {
+		"https://relay.example.cn/#f", "https://relay.example.cn:0", "https://relay.example.cn:08443", "https://relay.example.cn/a%20b", "https://relay.example.cn/a'b", "relay.example.cn"} {
 		_, err := CleanCaches([]string{bad})
 		assert.ErrorIs(t, err, ErrInvalid, bad)
 	}

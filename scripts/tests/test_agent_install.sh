@@ -258,7 +258,10 @@ run_installer() {
     # answers the address of the family, unless FAKE_IP is down; with
     # FAKE_H2_CUT the zip download breaks unless asked over HTTP/1.1.
     # Through a relay (--connect-to), the gRPC target answers unless the
-    # relay is in FAKE_RELAYS_DOWN.
+    # relay is in FAKE_RELAYS_DOWN, and Control's https address unless the
+    # relay's host:443 is in FAKE_HTTPS_RELAYS_DOWN. A release cache
+    # (https://relay-a.example.cn:8443) serves the zip by its SHA-256 unless
+    # FAKE_CACHE is down.
     curl() {
       local out="" url="" headers="" family="" http11=0 connect=""
       while (($# > 0)); do
@@ -278,9 +281,18 @@ run_installer() {
         esac
       done
       printf 'curl %s%s\n' "${url}" "${connect:+ via ${connect}}" >>"${STATE}/log"
-      if [[ -n "${connect}" ]]; then
+      if [[ "${connect}" == "ctl.example.com:443:"* ]]; then
+        [[ "${url}" == "${CONTROL}/"* ]] || return 2
+        [[ " ${FAKE_HTTPS_RELAYS_DOWN:-} " != *" ${connect#ctl.example.com:443:} "* ]] || return 7
+      elif [[ -n "${connect}" ]]; then
         [[ "${url}" == "https://ctl.example.com:50051/" && "${connect}" == "ctl.example.com:50051:"* ]] || return 2
         [[ " ${FAKE_RELAYS_DOWN:-} " != *" ${connect#ctl.example.com:50051:} "* ]] || return 7
+        return 0
+      fi
+      if [[ "${url}" == "https://relay-a.example.cn:8443/v1/sha256/"* ]]; then
+        [[ "${FAKE_CACHE:-up}" == "up" ]] || return 22
+        [[ "${url}" == *"/v1/sha256/$(sha256sum "${RELEASE_ZIP}" | awk '{print $1}')?src=https%3A%2F%2Fgithub.com%2F"*"%2Fv4.2.0%2Fanix-agent-linux-64.zip" ]] || return 22
+        cp "${RELEASE_ZIP}" "${out}"
         return 0
       fi
       if [[ "${FAKE_H2_CUT:-0}" == "1" && "${http11}" == "0" && "${url}" == *.zip ]]; then
@@ -738,7 +750,15 @@ FAKE_GRPC_RC=7 FAKE_RELAYS_DOWN="relay-b.example.cn:50051" run_installer -u "${C
 expect_status 0 "join through region relays"
 expect_out "gRPC target ctl.example.com:50051 reachable over TLS through the relay relay-a.example.cn:50051"
 expect_out "cannot reach the gRPC target ctl.example.com:50051 through the relay relay-b.example.cn:50051"
+expect_out "Control ${CONTROL} reachable over https through the relay relay-a.example.cn:443"
+expect_out "from the release cache https://relay-a.example.cn:8443"
 ! grep -qx 'curl https://ctl.example.com:50051/' "${STATE}/log" || fail "the preflight dialed Control around the relays"
+# Nothing reaches Control's https address around the relays (R34), and
+# /install/ip is not asked: Control would see the relay.
+! grep -E "^curl ${CONTROL}/" "${STATE}/log" | grep -v ' via ctl.example.com:443:relay-a.example.cn:443$' | grep -q . ||
+  fail "the installer reached Control directly: $(grep "^curl ${CONTROL}/" "${STATE}/log")"
+! grep -q "^curl ${CONTROL}/install/ip" "${STATE}/log" || fail "asked /install/ip through a relay"
+! grep -q '^curl .*/v4.2.0/anix-agent-linux-64.zip$' "${STATE}/log" || fail "downloaded the Agent around the release cache"
 grep -q '^agent join .*--relay relay-a.example.cn:50051 --relay relay-b.example.cn:50051' "${STATE}/log" ||
   fail "join lacks the relays: $(grep '^agent join' "${STATE}/log")"
 config="${ROOT_DIR}/etc/anixops/agent/config.json"
@@ -751,6 +771,36 @@ expect_status 1 "every relay down"
 expect_out "no region relay reaches the gRPC target ctl.example.com:50051"
 expect_out "nothing on this host was changed"
 ! grep -q '^agent join' "${STATE}/log" || fail "joined although no relay works"
+# A relay that does not forward Control's https port stops the install
+# before anything changes; Control is never asked directly.
+new_root group-relays-no-https
+metadata
+FAKE_HTTPS_RELAYS_DOWN="relay-a.example.cn:443" run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --relay relay-a.example.cn:50051
+expect_status 1 "no relay carries Control's https"
+expect_out "no region relay carries ${CONTROL}"
+! grep -E "^curl ${CONTROL}/" "${STATE}/log" | grep -qv ' via ' || fail "reached Control directly when no relay carried it"
+# The cache down: the Agent comes from the mirror through the relay.
+new_root group-relays-cache-down
+metadata
+FAKE_CACHE=down run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --relay relay-a.example.cn:50051 --release-cache https://relay-a.example.cn:8443
+expect_status 0 "release cache down"
+expect_out "the release cache https://relay-a.example.cn:8443 did not serve anix-agent-linux-64.zip"
+# A node installed directly moves behind the relays by re-running its
+# group's command: the configuration is rewritten with the route, the old
+# one kept.
+new_root group-relays-rerun
+metadata
+run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "direct install before the relays"
+run_installer -u "${CONTROL}" --relay relay-a.example.cn:50051
+expect_status 0 "re-run with the group's relays"
+expect_out "for the node group's region relays"
+config="${ROOT_DIR}/etc/anixops/agent/config.json"
+grep -qF '"GRPCRelays": ["relay-a.example.cn:50051"],' "${config}" || fail "re-run kept a config without the relays: $(cat "${config}")"
+compgen -G "${config}.bak.*" >/dev/null || fail "the direct configuration was not kept"
+run_installer -u "${CONTROL}" --relay relay-a.example.cn:50051
+expect_status 0 "second re-run with the relays"
+expect_out "kept /etc/anixops/agent/config.json"
 for bad in "--relay relay.example.cn" "--relay http://relay.example.cn:50051" "--release-cache http://relay.example.cn:8443" "--release-cache https://relay.example.cn:8443/?x=1"; do
   new_root group-relays-bad
   metadata

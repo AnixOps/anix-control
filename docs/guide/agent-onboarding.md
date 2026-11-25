@@ -234,17 +234,35 @@ curl -fsS -X PUT https://panel.example.com/api/v4/kernel/node-groups/3 \
     "release_caches": ["https://relay-a.example.cn:8443"]}'
 ```
 
-`relays` are `host:port` (at most 8), `release_caches` https URLs (at most
-8). An update that leaves them out keeps them; `[]` removes them. The
-group's command then carries `--relay` and `--release-cache` for each, and
-so does a single node's enrollment command for a node of the group. Nodes
-that already joined get the route in their desired configuration
-(`control_route`); an Agent that reads it switches without a reinstall, an
-older one ignores it and keeps the route it was installed with. A route removed
-from the group is not taken away from them (they would lose Control if they
-cannot reach it directly), so change their configuration or run the
-command of a group without relays again. Control must list the relays in
+`relays` are `host:port` (at most 8, plain port numbers), `release_caches`
+https URLs (at most 8). An update that leaves them out keeps them; `[]`
+removes them. The group's command then carries `--relay` and
+`--release-cache` for each, and so does a single node's enrollment command
+for a node of the group. Control must list the relays in
 `grpc.relay_sources`.
+
+With relays, the host never contacts Control directly (R34). Each relay
+also forwards Control's https port, on the same port number
+(AnixOps-ansible `region_relay_control_https`): the command fetches the
+script through the first relay (`curl --connect-to`), and the script picks
+the first relay that carries Control's https address for every request to
+Control (release metadata, kernel packages); TLS and the certificate check
+stay with Control's name. Without such a relay the install stops before it
+changes anything. The script does not ask `/install/ip` through a relay:
+Control names the node after the address the relay's PROXY header gives
+its gRPC listener. The Agent zip comes from the release caches first, by
+its SHA-256, and from the mirror through the relay otherwise; checksum and
+signature are checked as always.
+
+Nodes that already joined get the route in their desired configuration
+(`control_route`); an Agent that reads it switches without a reinstall, an
+older one ignores it and keeps the route it was installed with. Running
+the group's command again on a node installed directly also moves it: the
+script rewrites a configuration that lacks the group's relays (the old one
+is kept as `config.json.bak.<time>`). A route removed from the group is
+not taken away from installed nodes: an empty or missing relay list never
+means "reach Control directly" (`control_route` contract in
+`internal/relayroute`), so an Agent behind relays keeps them and warns.
 
 ### Rejoining
 
