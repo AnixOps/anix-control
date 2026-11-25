@@ -293,6 +293,12 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 			if err := regionHasDevices(tx, id); err != nil {
 				return err
 			}
+			// A full node credential not yet used takes the lowest free
+			// address of the new range.
+			if err := tx.Model(&model.MeshFullNode{}).Where("device_id IS NULL AND enrollment_id IN (?)", unusedEnrollments(tx, id)).
+				Updates(map[string]any{"address": "", "updated_at": now}).Error; err != nil {
+				return err
+			}
 		}
 		if row.Secret == "" {
 			row.Secret = rand.Text()
@@ -339,6 +345,13 @@ func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 			return err
 		}
 		if err := tx.Where("region_id = ?", id).Delete(&model.MeshMember{}).Error; err != nil {
+			return err
+		}
+		// Unused credentials for the region can no longer be used.
+		if err := tx.Where("device_id IS NULL AND enrollment_id IN (?)", unusedEnrollments(tx, id)).Delete(&model.MeshFullNode{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("region_id = ? AND used_at IS NULL", id).Delete(&model.MeshEnrollment{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&row).Error
@@ -489,7 +502,7 @@ func join(tx *gorm.DB, region model.MeshRegion, nodeRef string, home, boundary b
 	if err != nil {
 		return model.MeshMember{}, fmt.Errorf("region %q: %w", region.Code, err)
 	}
-	used, err := usedServerAddresses(tx, region.ID, 0)
+	used, err := usedServerAddresses(tx, region.ID, 0, now)
 	if err != nil {
 		return model.MeshMember{}, err
 	}

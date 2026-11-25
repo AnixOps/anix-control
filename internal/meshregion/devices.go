@@ -119,6 +119,9 @@ func allocate(tx *gorm.DB, region model.MeshRegion, now time.Time) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("region %q: %w", region.Code, err)
 	}
+	if err := lockRegion(tx, region.ID); err != nil {
+		return "", err
+	}
 	var holders []model.MeshDevice
 	if err := tx.Where("region_id = ? AND address IS NOT NULL", region.ID).Find(&holders).Error; err != nil {
 		return "", err
@@ -486,7 +489,7 @@ func deviceAddress(tx *gorm.DB, region model.MeshRegion, deviceID uint, now time
 	if !full {
 		return allocate(tx, region, now)
 	}
-	address, err := serverAddress(tx, region, "", 0)
+	address, err := serverAddress(tx, region, "", 0, now)
 	if err != nil {
 		return "", err
 	}

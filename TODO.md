@@ -28,7 +28,10 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   old network during a migration, the 「未启用前向保密」 display and the
   migration progress (R30); the result of a node's own region request back
   to the node (a refused `mesh.region_request` is only in the panel); a
-  warning when two gateways report the same instance id.
+  warning when two gateways report the same instance id; IPv6 (fc00::/7)
+  subnets for full nodes and listing the subnets a full node discovers
+  for confirmation; the intranet name lowercase mapping agreed with the
+  kernel (non-ASCII case folding).
 
 ## Plugin Platform
 

@@ -148,7 +148,7 @@ func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, c
 			}
 			if role == RoleFull && target == nil && address != "" {
 				// The address is kept for this credential until it is used.
-				checked, err := serverAddress(tx, region, address, 0)
+				checked, err := serverAddress(tx, region, address, 0, now)
 				if err != nil {
 					return err
 				}
@@ -321,7 +321,7 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 			}
 			var address string
 			if len(nodes) > 0 {
-				address, err = serverAddress(tx, region, nodes[0].Address, enrollment.ID)
+				address, err = serverAddress(tx, region, nodes[0].Address, enrollment.ID, now)
 			} else {
 				address, err = allocate(tx, region, now)
 			}
