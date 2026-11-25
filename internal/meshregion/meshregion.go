@@ -123,6 +123,9 @@ type MemberView struct {
 	Status           json.RawMessage `json:"status" swaggertype:"object"`
 	StatusObservedAt *time.Time      `json:"status_observed_at"`
 	StatusReceivedAt *time.Time      `json:"status_received_at"`
+	// Warnings: WarningStaticKeyTaken when the node's static key in
+	// this region is a device's or another node's.
+	Warnings []string `json:"warnings"`
 }
 
 // List answers every region in order with its members.
@@ -155,6 +158,18 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		}
 		infos[member.NodeRef] = info
 	}
+	payloads := make(map[string]string, len(statuses))
+	for _, status := range statuses {
+		payloads[status.NodeRef] = status.Payload
+	}
+	codes := make(map[uint]string, len(regions))
+	for _, region := range regions {
+		codes[region.ID] = region.Code
+	}
+	keyWarnings, err := memberKeyWarnings(db, members, payloads, codes)
+	if err != nil {
+		return nil, err
+	}
 	answer := make([]Region, len(regions))
 	index := map[uint]int{}
 	for i, region := range regions {
@@ -166,7 +181,10 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		if !ok {
 			continue
 		}
-		view := MemberView{MeshMember: member, NodeName: infos[member.NodeRef].name, NodeHost: infos[member.NodeRef].host}
+		view := MemberView{MeshMember: member, NodeName: infos[member.NodeRef].name, NodeHost: infos[member.NodeRef].host, Warnings: []string{}}
+		if warnings, ok := keyWarnings[member.ID]; ok {
+			view.Warnings = warnings
+		}
 		if status, ok := byNode[member.NodeRef]; ok {
 			view.Status = json.RawMessage(status.Payload)
 			view.StatusObservedAt, view.StatusReceivedAt = &status.ObservedAt, &status.ReceivedAt

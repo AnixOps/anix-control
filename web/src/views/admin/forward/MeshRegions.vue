@@ -86,6 +86,7 @@
           <span class="mesh-badges">
             <UiBadge :tone="STATE_TONES[summary(row).state]" :label="t(`mesh.page.status.${summary(row).state}`)" />
             <UiBadge v-for="code in summary(row).alerts" :key="code" tone="danger" :label="alertLabel(code)" />
+            <UiBadge v-for="code in row.keyWarnings || []" :key="`warning-${code}`" tone="warning" :label="alertLabel(code)" />
           </span>
         </template>
       </UiDataTable>

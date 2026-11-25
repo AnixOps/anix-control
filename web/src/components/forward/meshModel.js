@@ -7,14 +7,18 @@
 export const STATUS_STALE_MS = 3 * 60 * 1000
 
 // memberRows answers one row per node (its home membership) with its home
-// region and, for a boundary node, its addresses in the other regions.
+// region and, for a boundary node, its addresses in the other regions;
+// keyWarnings are the warnings of all its memberships, once each.
 export function memberRows(regions) {
   const byNode = new Map()
   for (const region of regions) {
     for (const member of region.members || []) {
-      const entry = byNode.get(member.node_ref) || { others: [] }
-      if (member.home) Object.assign(entry, member, { region })
+      const entry = byNode.get(member.node_ref) || { others: [], keyWarnings: [] }
+      if (member.home) Object.assign(entry, member, { region, others: entry.others, keyWarnings: entry.keyWarnings })
       else entry.others.push({ region, address: member.address })
+      for (const code of Array.isArray(member.warnings) ? member.warnings : []) {
+        if (!entry.keyWarnings.includes(code)) entry.keyWarnings.push(code)
+      }
       byNode.set(member.node_ref, entry)
     }
   }

@@ -59,7 +59,8 @@ export default {
         peer_not_native: 'Refused a peer not admitted',
         native_keys_pending: 'Waiting for the admission list',
         native_keys_unsupported: 'Kernel without admission list',
-        invalid_kind: 'Invalid network kind'
+        invalid_kind: 'Invalid network kind',
+        static_key_taken: 'Static key used by another member'
       }
     },
     region: {

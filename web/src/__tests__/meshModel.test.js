@@ -28,6 +28,16 @@ describe('mesh model', () => {
     expect(boundaryCount(eu)).toBe(2)
   })
 
+  it('gathers the key warnings of all of a node\'s memberships', () => {
+    const rows = memberRows([
+      { id: 1, members: [{ id: 1, node_ref: 'proxy-1', home: true, boundary: true, warnings: [] }] },
+      { id: 2, members: [{ id: 2, node_ref: 'proxy-1', home: false, warnings: ['static_key_taken'] }] }
+    ])
+    expect(rows[0].keyWarnings).toEqual(['static_key_taken'])
+    expect(enMesh.mesh.page.alerts.static_key_taken).toBeTruthy()
+    expect(zhMesh.mesh.page.alerts.static_key_taken).toBeTruthy()
+  })
+
   it('summarizes the last status', () => {
     const now = Date.parse('2026-11-25T08:00:00Z')
     const fresh = new Date(now - 30_000).toISOString()
