@@ -7,6 +7,7 @@ export default {
       regions: 'Regions and nodes',
       devices: 'Devices',
       hostGroups: 'Host groups',
+      bridges: 'External bridges',
       names: 'Intranet names',
       changes: 'Region changes',
       changesPending: 'Region changes ({n})',
@@ -131,6 +132,42 @@ export default {
       edit: 'Edit…',
       deleteTitle: 'Delete host group {name}',
       deleteMessage: 'The device names of the host group are deleted with it.'
+    },
+    bridges: {
+      title: 'External network bridges',
+      description: 'A bridge node is also on another overlay network. It advertises the listed external addresses in its home region to the allowed sources only.',
+      add: 'Add bridge',
+      empty: 'No external network bridges',
+      loadFailed: 'Could not load the external network bridges',
+      node: 'Bridge node',
+      nodeHelp: 'A Linux node with an Agent. It bridges in its home region.',
+      interface: 'External interface',
+      interfaceHelp: 'The node\'s network interface on the external network.',
+      routes: 'Advertised addresses',
+      routesHelp: 'One per line: a single address, or a subnet inside the private ranges. Inside 100.64.0.0/10 and fd7a:115c:a1e0::/48 only single addresses. At most 64.',
+      allow: 'Allowed sources',
+      allowHelp: 'Only the nodes, devices and host groups of the bridge node\'s region are listed.',
+      allowEmpty: 'No sources in this region',
+      allowCount: '{n} source | {n} sources',
+      state: 'State',
+      externalNetwork: 'External network',
+      confirmed: 'Confirmed',
+      held: 'Awaiting confirmation: {addresses}',
+      warnings: {
+        bridge_unconfirmed: 'Unconfirmed',
+        bridge_unsupported: 'Kernel unsupported',
+        allow_outside_region: 'Sources outside the region'
+      },
+      kinds: {
+        node: 'Node',
+        device: 'Device',
+        host_group: 'Host group'
+      },
+      addTitle: 'Add external network bridge',
+      editTitle: 'Edit the bridge of {name}',
+      edit: 'Edit…',
+      deleteTitle: 'Delete the bridge of {name}',
+      deleteMessage: 'The node no longer bridges the external network. The addresses of its list are not given to other members until the node confirms.'
     },
     deviceNames: {
       title: 'Device names',

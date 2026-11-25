@@ -220,8 +220,43 @@ type MeshFullNode struct {
 
 func (MeshFullNode) TableName() string { return "v5_mesh_full_node" }
 
+// MeshExternalBridge marks the node NodeRef as an external network bridge
+// in its home region (R36, spec section 15.12; 0051_mesh_external_bridges):
+// it advertises Routes, the external addresses and subnets an
+// administrator listed (comma separated), and lets only the sources of
+// Allow reach them through Interface, its network interface on the
+// external network. Allow lists the members by identity, comma separated:
+// node:<node ref>, device:<device id> or host_group:<host group id>;
+// Control expands them to their current addresses for the node.
+type MeshExternalBridge struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	NodeRef   string    `gorm:"size:32;not null;uniqueIndex" json:"node_ref"`
+	Interface string    `gorm:"size:15;not null" json:"interface"`
+	Routes    string    `gorm:"type:text;not null" json:"-"`
+	Allow     string    `gorm:"type:text;not null" json:"-"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshExternalBridge) TableName() string { return "v5_mesh_external_bridge" }
+
+// MeshBridgeHold keeps Prefix (an address /32 or a host group segment) of
+// the region RegionID from being given out again after it left the allow
+// list the bridge node NodeRef was given (spec section 15.12 item 4): until
+// the node reports a list without it applied, observed after CreatedAt
+// (0051_mesh_external_bridges).
+type MeshBridgeHold struct {
+	ID        uint      `gorm:"primaryKey" json:"-"`
+	NodeRef   string    `gorm:"size:32;not null;uniqueIndex:idx_v5_mesh_bridge_hold_entry,priority:1" json:"node_ref"`
+	RegionID  uint      `gorm:"not null;uniqueIndex:idx_v5_mesh_bridge_hold_entry,priority:2" json:"region_id"`
+	Prefix    string    `gorm:"size:43;not null;uniqueIndex:idx_v5_mesh_bridge_hold_entry,priority:3" json:"prefix"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+}
+
+func (MeshBridgeHold) TableName() string { return "v5_mesh_bridge_hold" }
+
 // MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
-// 0047_mesh_enrollment, 0048_mesh_full_nodes).
+// 0047_mesh_enrollment, 0048_mesh_full_nodes, 0051_mesh_external_bridges).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}}
 }

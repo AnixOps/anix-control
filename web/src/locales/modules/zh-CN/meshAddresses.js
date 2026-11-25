@@ -6,6 +6,7 @@ export default {
       regions: '地区与节点',
       devices: '设备',
       hostGroups: '宿主组',
+      bridges: '外部网络桥接',
       names: '内网域名',
       changes: '地区变更',
       changesPending: '地区变更（{n}）',
@@ -130,6 +131,42 @@ export default {
       edit: '编辑…',
       deleteTitle: '删除宿主组 {name}',
       deleteMessage: '该宿主组的设备命名一并删除。'
+    },
+    bridges: {
+      title: '外部网络桥接',
+      description: '桥接节点同时位于其他组网软件的网络中，在所属地区通告指定的外部地址，仅允许名单中的来源访问。',
+      add: '新建桥接',
+      empty: '暂无外部网络桥接',
+      loadFailed: '无法加载外部网络桥接',
+      node: '桥接节点',
+      nodeHelp: '须为安装 Agent 的 Linux 节点，在其所属地区桥接。',
+      interface: '外部网卡',
+      interfaceHelp: '节点在外部网络中的网卡名称。',
+      routes: '通告地址',
+      routesHelp: '每行一项：单个地址，或私有地址范围内的子网。100.64.0.0/10 与 fd7a:115c:a1e0::/48 内仅可填写单个地址。至多 64 项。',
+      allow: '允许访问',
+      allowHelp: '仅列出桥接节点所属地区的节点、设备与宿主组。',
+      allowEmpty: '该地区暂无可选来源',
+      allowCount: '{n} 项',
+      state: '状态',
+      externalNetwork: '外部网络',
+      confirmed: '已确认',
+      held: '待确认地址：{addresses}',
+      warnings: {
+        bridge_unconfirmed: '未确认',
+        bridge_unsupported: '内核不支持',
+        allow_outside_region: '部分来源不在本地区'
+      },
+      kinds: {
+        node: '节点',
+        device: '设备',
+        host_group: '宿主组'
+      },
+      addTitle: '新建外部网络桥接',
+      editTitle: '编辑 {name} 的桥接',
+      edit: '编辑…',
+      deleteTitle: '删除 {name} 的桥接',
+      deleteMessage: '节点不再桥接外部网络。名单中的地址在节点确认前不分配给其他成员。'
     },
     deviceNames: {
       title: '设备命名',

@@ -14,7 +14,10 @@ const api = vi.hoisted(() => ({
   saveKernelMeshSettings: vi.fn(),
   listKernelMeshEnrollments: vi.fn(),
   createKernelMeshEnrollment: vi.fn(),
-  revokeKernelMeshDevice: vi.fn()
+  revokeKernelMeshDevice: vi.fn(),
+  listKernelMeshBridges: vi.fn(),
+  listKernelMeshHostGroups: vi.fn(),
+  saveKernelMeshBridge: vi.fn()
 }))
 
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...api }))
@@ -24,6 +27,7 @@ const MeshEnrollments = (await import('@/components/forward/mesh/MeshEnrollments
 const MeshNames = (await import('@/components/forward/mesh/MeshNames.vue')).default
 const MeshChanges = (await import('@/components/forward/mesh/MeshChanges.vue')).default
 const MeshSettings = (await import('@/components/forward/mesh/MeshSettings.vue')).default
+const MeshBridges = (await import('@/components/forward/mesh/MeshBridges.vue')).default
 
 const REGIONS = [{ id: 1, code: 'cn', name: '中国大陆', cidr: '10.150.0.0/16' }, { id: 2, code: 'eu', name: '欧洲', cidr: '10.152.0.0/16' }]
 
@@ -145,6 +149,52 @@ describe('mesh addresses', () => {
     const [input] = api.saveKernelMeshSettings.mock.calls[0]
     expect(input.nameSuffix).toBe('mesh.internal')
     expect(input.reservedRanges.filter(Boolean)).toEqual(['10.126.0.0/16', '192.168.50.0/24'])
+    expect(wrapper.emitted().changed).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('lists the external network bridges and saves one with its allowed sources', async () => {
+    const members = [
+      { node_ref: 'proxy-1', node_name: 'edge', address: '10.150.0.1', region: REGIONS[0] },
+      { node_ref: 'proxy-2', node_name: 'home', address: '10.150.0.2', region: REGIONS[0] },
+      { node_ref: 'proxy-3', node_name: 'paris', address: '10.152.0.1', region: REGIONS[1] }
+    ]
+    api.listKernelMeshBridges.mockResolvedValue([
+      { id: 1, node_ref: 'proxy-1', node_name: 'edge', region_id: 1, interface: 'ext0', routes: ['100.100.1.2/32'],
+        allow: [{ entry: 'device:4', kind: 'device', name: 'phone', prefixes: [] }], expanded: [], applied_digest: 'x', confirmed: false,
+        held: ['10.150.128.4/32'], warnings: ['bridge_unconfirmed'] }
+    ])
+    api.listKernelMeshDevices.mockResolvedValue([{ id: 4, region_id: 1, hostname: 'phone', address: '10.150.128.4' }, { id: 5, region_id: 2, hostname: 'laptop', address: '10.152.128.0' }])
+    api.listKernelMeshHostGroups.mockResolvedValue([{ id: 6, name: 'vms', segment: '10.127.0.0/24', region_id: 1 }])
+    api.saveKernelMeshBridge.mockResolvedValue({ id: 2 })
+    const wrapper = mount(MeshBridges, { props: { regions: REGIONS, members }, attachTo: document.body })
+    await flushPromises()
+    const text = wrapper.get('[data-testid="mesh-bridge-table"]').text()
+    expect(text).toContain('100.100.1.2/32')
+    expect(text).toContain('外部网络')
+    expect(text).toContain('未确认')
+    expect(text).toContain('待确认地址：10.150.128.4/32')
+
+    await wrapper.get('[data-testid="mesh-bridge-add"]').trigger('click')
+    await flushPromises()
+    const allow = document.querySelector('[data-testid="mesh-bridge-allow"]')
+    expect(allow.textContent).toContain('edge')
+    expect(allow.textContent).toContain('phone')
+    expect(allow.textContent).toContain('vms')
+    expect(allow.textContent).not.toContain('laptop')
+    expect(allow.textContent).not.toContain('paris')
+    const form = document.querySelector('[data-testid="mesh-bridge-form"]')
+    const iface = form.querySelector('input[placeholder="ext0"]')
+    iface.value = 'eth1'
+    iface.dispatchEvent(new Event('input'))
+    const routes = form.querySelector('textarea')
+    routes.value = '192.168.50.0/24'
+    routes.dispatchEvent(new Event('input'))
+    allow.querySelectorAll('[role="checkbox"]')[1].click()
+    await flushPromises()
+    document.querySelector('[data-testid="mesh-bridge-save"]').click()
+    await flushPromises()
+    expect(api.saveKernelMeshBridge).toHaveBeenCalledWith(null, { node: 'proxy-2', iface: 'eth1', routes: ['192.168.50.0/24'], allow: ['device:4'] })
     expect(wrapper.emitted().changed).toBeTruthy()
     wrapper.unmount()
   })

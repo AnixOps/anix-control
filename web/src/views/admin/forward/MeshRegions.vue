@@ -85,7 +85,10 @@
           </span>
         </template>
         <template #cell-role="{ row }">
-          {{ row.boundary ? t('mesh.page.boundary') : t('mesh.page.member') }}
+          <span class="fwd-cell-stack">
+            <span>{{ row.boundary ? t('mesh.page.boundary') : t('mesh.page.member') }}</span>
+            <span v-if="row.external_bridge" class="fwd-muted">{{ t('mesh.page.externalBridge') }}</span>
+          </span>
         </template>
         <template #cell-status="{ row }">
           <span class="mesh-badges">
@@ -104,6 +107,7 @@
         <MeshEnrollments :regions="regions" @changed="refreshAll" />
       </template>
       <MeshHostGroups v-else-if="section === 'hostGroups'" :regions="regions" :members="members" @changed="refreshAll" />
+      <MeshBridges v-else-if="section === 'bridges'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshNames v-else-if="section === 'names'" />
       <MeshChanges v-else-if="section === 'changes'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshSettings v-else-if="section === 'settings'" :settings="meshSummary?.settings || null" @changed="refreshAll" />
@@ -125,6 +129,7 @@ import { deleteKernelMeshRegion, getKernelAdminNodes, rotateKernelMeshRegionSecr
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import MeshMemberSheet from '@/components/forward/MeshMemberSheet.vue'
 import MeshRegionSheet from '@/components/forward/MeshRegionSheet.vue'
+import MeshBridges from '@/components/forward/mesh/MeshBridges.vue'
 import MeshChanges from '@/components/forward/mesh/MeshChanges.vue'
 import MeshDevices from '@/components/forward/mesh/MeshDevices.vue'
 import MeshEnrollments from '@/components/forward/mesh/MeshEnrollments.vue'
@@ -169,9 +174,10 @@ const { loading, secondsAgo, refresh } = usePolling(async () => {
 const members = computed(() => memberRows(regions.value))
 
 // The sections of the page: the regions and nodes, then the devices, host
-// groups, intranet names, region changes and settings, with the summary
-// (settings, device pools, pending changes) they share.
-const SECTIONS = ['regions', 'devices', 'hostGroups', 'names', 'changes', 'settings']
+// groups, external network bridges, intranet names, region changes and
+// settings, with the summary (settings, device pools, pending changes) they
+// share.
+const SECTIONS = ['regions', 'devices', 'hostGroups', 'bridges', 'names', 'changes', 'settings']
 const section = ref('regions')
 const meshSummary = ref(null)
 const sectionOptions = computed(() => SECTIONS.map(value => ({

@@ -167,9 +167,18 @@ func allocate(tx *gorm.DB, region model.MeshRegion, now time.Time) (string, erro
 	if err := tx.Where("region_id = ? AND address IS NOT NULL", region.ID).Find(&holders).Error; err != nil {
 		return "", err
 	}
-	taken := make(map[string]bool, len(holders))
+	// Read after the holders: an address freed and held by one commit is
+	// seen as either (heldPrefixes).
+	held, err := heldAddresses(tx, region.ID)
+	if err != nil {
+		return "", err
+	}
+	taken := make(map[string]bool, len(holders)+len(held))
 	for _, holder := range holders {
 		taken[*holder.Address] = true
+	}
+	for address := range held {
+		taken[address] = true
 	}
 	first, last := pool(prefix)
 	for value := first; value <= last; value++ {
@@ -177,20 +186,44 @@ func allocate(tx *gorm.DB, region model.MeshRegion, now time.Time) (string, erro
 			return address, nil
 		}
 	}
-	var idlest *model.MeshDevice
+	bridged, err := bridgedAddresses(tx, region.ID)
+	if err != nil {
+		return "", err
+	}
+	// idlest is the device unused longest; bridgedIdlest the one among
+	// those whose address an external bridge's allow list holds, which
+	// is released first and given out only after the bridge confirms.
+	var idlest, bridgedIdlest *model.MeshDevice
 	for i := range holders {
 		holder := &holders[i]
 		if holder.AddressUsedAt != nil && now.Sub(*holder.AddressUsedAt) < PoolReclaimAfter {
 			continue
 		}
 		// A full node's fixed address is never reclaimed, nor the
-		// resolver address a device held before it was reserved.
-		if address, err := netip.ParseAddr(*holder.Address); err != nil || address.Less(addrOf(first)) || addrOf(last).Less(address) {
+		// resolver address a device held before it was reserved, nor a
+		// held one.
+		if address, err := netip.ParseAddr(*holder.Address); err != nil || address.Less(addrOf(first)) || addrOf(last).Less(address) || held[*holder.Address] {
+			continue
+		}
+		if bridged[*holder.Address] {
+			if bridgedIdlest == nil || used(holder).Before(used(bridgedIdlest)) {
+				bridgedIdlest = holder
+			}
 			continue
 		}
 		if idlest == nil || used(holder).Before(used(idlest)) {
 			idlest = holder
 		}
+	}
+	if idlest == nil && bridgedIdlest != nil {
+		// One address at a time: while one released earlier waits for
+		// the bridges, a request does not take another device's.
+		for address := range held {
+			if value, err := netip.ParseAddr(address); err == nil && !value.Less(addrOf(first)) && !addrOf(last).Less(value) {
+				return "", fmt.Errorf("%w: %s; the address %s is given out once the external network bridges confirm it", ErrPoolFull, region.Code, address)
+			}
+		}
+		return "", &releaseFirst{region: region.Code, deviceID: bridgedIdlest.ID, address: *bridgedIdlest.Address}
 	}
 	if idlest == nil {
 		return "", fmt.Errorf("%w: %s", ErrPoolFull, region.Code)

@@ -136,7 +136,16 @@ func usedServerAddresses(tx *gorm.DB, regionID, except uint, now time.Time) ([]s
 		Pluck("v5_mesh_full_node.address", &kept).Error; err != nil {
 		return nil, err
 	}
-	return append(append(used, devices...), kept...), nil
+	// Read after the addresses in use (heldPrefixes).
+	held, err := heldAddresses(tx, regionID)
+	if err != nil {
+		return nil, err
+	}
+	used = append(append(used, devices...), kept...)
+	for address := range held {
+		used = append(used, address)
+	}
+	return used, nil
 }
 
 // serverAddress answers a fixed address of region's server segment:
@@ -287,6 +296,14 @@ func SetDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, raw []str
 		}
 		for _, other := range others {
 			blocked = append(blocked, splitSubnets(other.Subnets)...)
+		}
+		// Nor do they overlap an external bridge's routes.
+		var bridges []model.MeshExternalBridge
+		if err := tx.Where("routes <> ''").Find(&bridges).Error; err != nil {
+			return err
+		}
+		for _, bridge := range bridges {
+			blocked = append(blocked, splitSubnets(bridge.Routes)...)
 		}
 		for _, subnet := range subnets {
 			prefix := netip.MustParsePrefix(subnet)

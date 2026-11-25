@@ -199,4 +199,8 @@
 //   - 0050_mesh_native_keys: v5_mesh_member.static_key and
 //     v5_mesh_device.static_key, the static public keys Control lists in
 //     each region network's native_keys (internal/meshregion).
+//   - 0051_mesh_external_bridges: the mesh's external network bridge nodes
+//     and the addresses held back until a bridge node confirms its new
+//     allow list (v5_mesh_external_bridge, v5_mesh_bridge_hold,
+//     internal/meshregion).
 package migrations

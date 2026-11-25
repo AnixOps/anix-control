@@ -5791,6 +5791,146 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/bridges": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every external network bridge: its node and home region, the external interface, the routes it advertises, the allow list with what each entry expands to in the region, the list the node is given (expanded) with its digest (digest), the digest of the list the node last reported in force and since when (applied_digest, applied_at; null before a report) and whether they match (confirmed), and the addresses and segments held back until the node confirms it dropped them (held). Warnings: bridge_unconfirmed (not confirmed, or addresses are held), bridge_unsupported (the node's kernel does not list mesh_external_bridge), allow_outside_region (an entry is not in the bridge's region).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh's external network bridges",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.BridgeView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "node (a node in the mesh, not yet a bridge; it bridges in its home region), interface (its network interface on the external network), routes (1 to 64 external addresses, IPv4 /32 or IPv6 /128, which may lie in 100.64.0.0/10 or fd7a:115c:a1e0::/48, and subnets inside the private ranges outside those two; never ranges of the mesh) and allow (at most 256 sources in the node's home region: node:\u003cnode\u003e, device:\u003cid\u003e or host_group:\u003cid\u003e). 409 mesh_conflict when a route overlaps a region, the host group supernet or a full node's subnets. Audited (module mesh, action mesh_bridge_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Make a node an external network bridge",
+                "parameters": [
+                    {
+                        "description": "node, interface, routes, allow",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.BridgeInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshExternalBridge"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/bridges/{bridge_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the interface, routes and allow list; the node never changes. An address or segment that leaves the list is not given to another member until the node reports the new list in force (its digest, applied after the change). Audited (module mesh, action mesh_bridge_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change an external network bridge",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "bridge id",
+                        "name": "bridge_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "interface, routes, allow",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.BridgeInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshExternalBridge"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node becomes an ordinary member. The addresses of its allow list stay held until it reports the bridge gone. Audited (module mesh, action mesh_bridge_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Remove an external network bridge",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "bridge id",
+                        "name": "bridge_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/changes": {
             "get": {
                 "security": [
@@ -10310,6 +10450,129 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.BridgeAllowView": {
+            "type": "object",
+            "properties": {
+                "entry": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "prefixes": {
+                    "description": "Prefixes are the entry's addresses in the bridge's region: empty\nwhile it has none there.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.BridgeInput": {
+            "type": "object",
+            "properties": {
+                "allow": {
+                    "description": "Allow are the sources that may reach them: node:\u003cnode ref\u003e,\ndevice:\u003cdevice id\u003e or host_group:\u003chost group id\u003e; at most 256.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "interface": {
+                    "description": "Interface is the node's network interface on the external network.",
+                    "type": "string"
+                },
+                "node": {
+                    "description": "Node is the bridge node (proxy-\u003cid\u003e, forward-\u003cid\u003e) in the mesh; it\nnever changes on an update.",
+                    "type": "string"
+                },
+                "routes": {
+                    "description": "Routes are the external addresses (IPv4 /32, IPv6 /128, also inside\n100.64.0.0/10 and fd7a:115c:a1e0::/48) and subnets (inside the\nprivate ranges, outside those two) the node advertises; at most 64.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.BridgeView": {
+            "type": "object",
+            "properties": {
+                "allow": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.BridgeAllowView"
+                    }
+                },
+                "applied_at": {
+                    "type": "string"
+                },
+                "applied_digest": {
+                    "description": "AppliedDigest and AppliedAt are the digest of the allow list the\nnode last reported in force and since when (its status's\nexternalBridge), nil before it reported one; Confirmed: it equals\nDigest.",
+                    "type": "string"
+                },
+                "confirmed": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "digest": {
+                    "type": "string"
+                },
+                "expanded": {
+                    "description": "Expanded is the allow list the node is given, and Digest its\ndigest (AllowDigest).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "held": {
+                    "description": "Held are the addresses and segments that left the node's list and\nare not given out until it reports a list without them.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "node_name": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "type": "string"
+                },
+                "region_code": {
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "routes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings: WarningBridgeUnconfirmed, WarningBridgeUnsupported,\nWarningAllowOutsideRegion.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "meshregion.ChangeInput": {
             "type": "object",
             "properties": {
@@ -10705,6 +10968,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "external_bridge": {
+                    "description": "ExternalBridge: the node is an external network bridge of its home\nregion (R36).",
+                    "type": "boolean"
+                },
                 "home": {
                     "type": "boolean"
                 },
@@ -11031,6 +11298,26 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.MeshExternalBridge": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "node_ref": {
                     "type": "string"
                 },
                 "updated_at": {

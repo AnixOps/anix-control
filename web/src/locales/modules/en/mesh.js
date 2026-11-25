@@ -35,6 +35,7 @@ export default {
       unsetBoundary: 'Remove boundary role',
       remove: 'Remove from mesh…',
       boundary: 'Boundary node',
+      externalBridge: 'External bridge',
       member: 'Node',
       columns: {
         region: 'Region',

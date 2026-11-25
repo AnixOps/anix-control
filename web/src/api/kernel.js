@@ -898,6 +898,27 @@ export async function deleteKernelMeshHostGroup(id) {
   return unwrap(await v4({ url: meshPath('host-groups', id), method: 'delete' }))
 }
 
+// External network bridges (R36): a node advertises chosen addresses of
+// another overlay network in its home region to the sources it allows
+// (node:<node>, device:<id>, host_group:<id>).
+export async function listKernelMeshBridges() {
+  return unwrap(await v4({ url: meshPath('bridges'), method: 'get' }))
+}
+
+export async function saveKernelMeshBridge(id, { node, iface, routes, allow }) {
+  const data = {
+    node: node || '',
+    interface: String(iface || '').trim(),
+    routes: (routes || []).map(route => String(route).trim()).filter(Boolean),
+    allow: allow || []
+  }
+  return unwrap(await v4(id ? { url: meshPath('bridges', id), method: 'put', data } : { url: meshPath('bridges'), method: 'post', data }))
+}
+
+export async function deleteKernelMeshBridge(id) {
+  return unwrap(await v4({ url: meshPath('bridges', id), method: 'delete' }))
+}
+
 export async function listKernelMeshDeviceNames() {
   return unwrap(await v4({ url: meshPath('device-names'), method: 'get' }))
 }
