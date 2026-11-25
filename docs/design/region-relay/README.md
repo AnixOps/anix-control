@@ -23,6 +23,8 @@
 - **端到端。** Agent 拨中继地址，但 TLS 的 SNI 和证书校验名仍是面板的 gRPC 名（Agent 已有的 `GRPCHost` 与 `GRPCServerName` 分离）。面板验证 Agent 的客户端证书，Agent 验证面板证书。中继不持有任何一方的私钥，看到的只是 TLS 密文；它能做的最坏的事是断开或拖慢连接。
 - **来源地址。** 中继在每条连接前写一个 PROXY v2 头，内容是节点的地址。Control 只对 `grpc.relay_sources` 里的来源读这个头，其他来源一律不读（别人伪造的头会被当成 TLS 握手的开头而失败）。这样入网记录的公网地址、按地址的规则仍然针对节点，而不是中继。
 - **先等节点开口。** 节点总是先发（TLS ClientHello）。中继收到节点的第一批字节（最多等 10 秒）后才拨面板，再依次写 PROXY 头、这批字节，然后双向转发。只连一下就关的连接（Agent 测中继的连接耗时）不会在面板上留下空连接。
+- **抗资源耗尽。** Control 读完 PROXY 头后恢复 gRPC 自己的握手超时，发一个字节就挂起的连接会被关掉；中继转发节点首包后，面板须在 `handshake_timeout`（30 秒）内应答，每个节点地址最多 `max_connections_per_source` 条连接。缓存记住每个来源地址实际的 SHA-256，同一来源换别的哈希来请求直接返回 404，不再下载；每个地址的并发请求有上限，可以只对 `allowed_sources` 服务。
+- **与边界节点同机。** Control 按来源 IP 信任 PROXY 头，同机的其他进程也能用这个 IP 连 Control。同机部署时，出口规则只放行 `anix-relay` 用户访问 Control 的 gRPC 端口；`grpc.relay_sources` 只写中继自己的地址，宽于 /24（IPv6 /64）会被拒绝。
 - **与边缘模式的区别。** 边缘代理（`grpc.edge_proxies`，[edge-grpc](../edge-grpc/README.md)）终止 TLS，用请求头替节点担保证书，攻破代理等于能冒充节点。中继不终止 TLS，攻破中继不能冒充节点，也不能读控制内容。两者不能同时用（`grpc.relay_sources` 与 `grpc.edge_proxies` 互斥）。
 - **发布文件缓存。** 只提供按 SHA-256 取文件。节点在请求里带上原始发布地址（`src`），中继只从配置的 `origins` 前缀下载，下载后校验哈希，不一致就丢弃并返回 502。哈希来自面板经端到端控制通道下发的升级请求（`UpgradeArtifact.sha256`、`UpgradeKernel.sha256`），签名由 Agent 用内置的发布公钥校验，所以缓存的完整性不依赖中继，也不依赖缓存的 TLS。缓存仍走 HTTPS（中继自己的证书，节点照常校验），以免明文暴露下载的内容。
 - **无 API。** 中继只有两类监听：转发端口（TCP 透传）和缓存端口（只接受 `GET`/`HEAD /v1/sha256/<64 位小写十六进制>`）。没有列表、上传、管理、指标接口。运行状态看 systemd 与日志（JSON，写 stderr）。
@@ -39,7 +41,9 @@ forwards:
     upstreams: ["panel.example.com:50051"]
     proxy_protocol: true        # Control 必须把本机列入 grpc.relay_sources
     # max_connections: 20000    # 超出的连接直接关闭
-    # dial_timeout: 10s
+    # dial_timeout: 2s           # 远小于 Agent 等面板应答的 5 秒
+    # handshake_timeout: 30s     # 转发节点首包后，面板须在此时间内应答
+    # max_connections_per_source: 256
     # keep_alive: 30s           # 两侧 TCP keepalive；不设空闲超时，控制流是长连接
 cache:
   listen: ":8443"
@@ -49,9 +53,12 @@ cache:
   origins:                                   # 只从这些 https 前缀下载，防止成为开放代理
     - https://github.com/AnixOps/
     - https://panel.example.com/
-  # upstream_proxy: http://10.8.0.1:3128     # 经骨干的 HTTP 代理下载
-  # allow_private_origins: false             # 默认拒绝连到内网、回环、链路本地地址
-  # max_bytes: 21474836480                   # 20 GiB，按最近使用淘汰
+  # redirect_hosts: [objects.githubusercontent.com, release-assets.githubusercontent.com]  # 重定向只能去 origins 的主机和这些主机
+  # upstream_proxy: http://10.8.0.1:3128     # 经骨干的 HTTP 代理下载；此时由代理解析和连接，内网限制要在代理上做
+  # allow_private_origins: false             # 默认拒绝连到内网、回环、链路本地及其他保留地址（含 NAT64、6to4）
+  # allowed_sources: [10.0.0.0/8]            # 只服务这些节点地址；防火墙也只对本地区节点开放缓存端口
+  # max_requests_per_source: 16              # 每个地址同时打开的请求数
+  # max_bytes: 21474836480                   # 20 GiB，按最近使用淘汰；下载中的文件不计入，磁盘另需 max_fetches × max_object_bytes
   # max_object_bytes: 2147483648             # 单个文件 2 GiB
   # max_fetches: 4
   # fetch_timeout: 30m

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -39,10 +40,12 @@ cache:
 		t.Fatal(err)
 	}
 	forward := config.Forwards[0]
-	if forward.Name != "forward-1" || forward.MaxConnections != DefaultMaxConnections || forward.DialTimeout != DefaultDialTimeout || forward.KeepAlive != DefaultKeepAlive || !forward.ProxyProtocol {
+	if forward.Name != "forward-1" || forward.MaxConnections != DefaultMaxConnections || forward.DialTimeout != DefaultDialTimeout || forward.KeepAlive != DefaultKeepAlive || !forward.ProxyProtocol ||
+		forward.MaxConnectionsPerSource != DefaultMaxPerSource || forward.HandshakeTimeout != DefaultHandshakeTimeout {
 		t.Fatalf("forward = %+v", forward)
 	}
-	if config.Cache.MaxBytes != DefaultCacheMaxBytes || config.Cache.MaxFetches != DefaultCacheFetches {
+	if config.Cache.MaxBytes != DefaultCacheMaxBytes || config.Cache.MaxFetches != DefaultCacheFetches ||
+		config.Cache.MaxRequestsPerSource != DefaultCacheRequestsPerSource || len(config.Cache.RedirectHosts) != len(DefaultRedirectHosts) {
 		t.Fatalf("cache = %+v", config.Cache)
 	}
 }
@@ -221,18 +224,104 @@ func TestForwardRefusesOverMaxConnections(t *testing.T) {
 	if _, err := first.Write([]byte("x")); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for up.accepted.Load() < 1 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitAccepted(t, up, 1)
 	second, err := net.Dial("tcp", forward.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = second.Close() }()
-	_ = second.SetReadDeadline(time.Now().Add(2 * time.Second))
-	if _, err := second.Read(make([]byte, 1)); err == nil {
-		t.Fatal("the connection over max_connections was served")
+	// The second connection speaks too, so only the cap can stop it.
+	_, _ = second.Write([]byte("x"))
+	requireClosedByPeer(t, second)
+	time.Sleep(100 * time.Millisecond)
+	if got := up.accepted.Load(); got != 1 {
+		t.Fatalf("the upstream accepted %d connections with max_connections 1", got)
+	}
+}
+
+func TestForwardRefusesOverMaxConnectionsPerSource(t *testing.T) {
+	up := newUpstream(t, func(conn net.Conn) {
+		defer func() { _ = conn.Close() }()
+		_, _ = io.Copy(io.Discard, conn)
+	})
+	forward := startForward(t, ForwardConfig{Upstreams: []string{up.listener.Addr().String()}, MaxConnections: 10, MaxConnectionsPerSource: 1})
+	first, err := net.Dial("tcp", forward.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = first.Close() }()
+	if _, err := first.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	waitAccepted(t, up, 1)
+	second, err := net.Dial("tcp", forward.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = second.Close() }()
+	_, _ = second.Write([]byte("x"))
+	requireClosedByPeer(t, second)
+	if got := up.accepted.Load(); got != 1 {
+		t.Fatalf("the upstream accepted %d connections from one address with max_connections_per_source 1", got)
+	}
+	// The slot comes back when the first connection ends.
+	_ = first.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		third, err := net.Dial("tcp", forward.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = third.Write([]byte("x"))
+		time.Sleep(50 * time.Millisecond)
+		_ = third.Close()
+		if up.accepted.Load() == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the address's slot was not released")
+		}
+	}
+}
+
+// An upstream that never answers is not held open past handshake_timeout,
+// even while the node keeps quiet too (audit C1).
+func TestForwardClosesAnUnansweredHandshake(t *testing.T) {
+	up := newUpstream(t, func(conn net.Conn) {
+		defer func() { _ = conn.Close() }()
+		_, _ = io.Copy(io.Discard, conn)
+	})
+	forward := startForward(t, ForwardConfig{Upstreams: []string{up.listener.Addr().String()}, HandshakeTimeout: 200 * time.Millisecond})
+	node, err := net.Dial("tcp", forward.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = node.Close() }()
+	if _, err := node.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	requireClosedByPeer(t, node)
+}
+
+func waitAccepted(t *testing.T, up *upstream, n int32) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for up.accepted.Load() < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("the upstream accepted %d connections, want %d", up.accepted.Load(), n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// requireClosedByPeer reads conn until the relay closes it, and fails when
+// it stays open (a read deadline is not a close).
+func requireClosedByPeer(t *testing.T, conn net.Conn) {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, err := io.Copy(io.Discard, conn)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("the connection stayed open")
 	}
 }
 
@@ -296,10 +385,7 @@ func TestForwardCloseEndsOpenConnections(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Close did not return")
 	}
-	_ = node.SetReadDeadline(time.Now().Add(2 * time.Second))
-	if _, err := node.Read(make([]byte, 1)); err == nil {
-		t.Fatal("the node connection stayed open")
-	}
+	requireClosedByPeer(t, node)
 }
 
 // testCache returns a cache that downloads from origin's test server.
@@ -464,7 +550,8 @@ func TestCacheEvictsTheLeastRecentlyUsed(t *testing.T) {
 }
 
 func TestRefusePrivate(t *testing.T) {
-	for _, address := range []string{"127.0.0.1:443", "10.0.0.1:443", "192.168.1.1:443", "169.254.169.254:80", "[::1]:443", "[fc00::1]:443", "100.64.0.1:443", "0.0.0.0:443"} {
+	for _, address := range []string{"127.0.0.1:443", "10.0.0.1:443", "192.168.1.1:443", "169.254.169.254:80", "[::1]:443", "[fc00::1]:443", "100.64.0.1:443", "0.0.0.0:443",
+		"198.18.0.1:443", "192.0.0.8:443", "240.0.0.1:443", "[64:ff9b::a00:1]:443", "[2002:a00:1::1]:443"} {
 		if err := refusePrivate(address); err == nil {
 			t.Fatalf("%s allowed", address)
 		}
@@ -473,5 +560,128 @@ func TestRefusePrivate(t *testing.T) {
 		if err := refusePrivate(address); err != nil {
 			t.Fatalf("%s refused: %v", address, err)
 		}
+	}
+}
+
+// A source whose SHA-256 the relay has learned is not downloaded again for
+// another hash: random hashes with a large allowed source cost one download,
+// not one each (audit C2).
+func TestCacheRefusesAKnownSourceWithAnotherHash(t *testing.T) {
+	var hits atomic.Int32
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, "release-bytes")
+	}))
+	defer origin.Close()
+	cache := testCache(t, origin, 1<<20)
+	source := origin.URL + "/releases/big.zip"
+	if recorder := cacheGet(cache, sumOf("one"), source); recorder.Code != http.StatusBadGateway {
+		t.Fatalf("first wrong hash: %d", recorder.Code)
+	}
+	for _, other := range []string{"two", "three", "four"} {
+		if recorder := cacheGet(cache, sumOf(other), source); recorder.Code != http.StatusNotFound {
+			t.Fatalf("hash of %q: %d, want 404 without a download", other, recorder.Code)
+		}
+	}
+	if recorder := cacheGet(cache, sumOf("release-bytes"), source); recorder.Code != http.StatusOK {
+		t.Fatalf("the right hash: %d", recorder.Code)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("origin downloaded %d times, want 2", got)
+	}
+}
+
+// Concurrent requests for one file share one download.
+func TestCacheDedupesConcurrentDownloads(t *testing.T) {
+	var hits atomic.Int32
+	release := make(chan struct{})
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		<-release
+		_, _ = io.WriteString(w, "release-bytes")
+	}))
+	defer origin.Close()
+	cache := testCache(t, origin, 1<<20)
+	sum, source := sumOf("release-bytes"), origin.URL+"/releases/a.zip"
+	codes := make(chan int, 5)
+	for i := 0; i < 5; i++ {
+		go func() { codes <- cacheGet(cache, sum, source).Code }()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for hits.Load() < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	for i := 0; i < 5; i++ {
+		if code := <-codes; code != http.StatusOK {
+			t.Fatalf("request answered %d", code)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("origin downloaded %d times for concurrent requests", got)
+	}
+}
+
+func TestCacheServesOnlyAllowedSources(t *testing.T) {
+	config := CacheConfig{Dir: t.TempDir(), Origins: []string{"https://github.com/AnixOps/"}, AllowedSources: []string{"10.0.0.0/8", "203.0.113.7"},
+		MaxBytes: 1 << 20, MaxObjectBytes: 1 << 20, MaxFetches: 1, FetchTimeout: time.Second}
+	cache, err := NewCache(config, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for remote, want := range map[string]int{"192.0.2.1:1234": http.StatusForbidden, "10.1.2.3:1234": http.StatusNotFound, "203.0.113.7:1": http.StatusNotFound} {
+		request := httptest.NewRequest(http.MethodGet, CachePathPrefix+sumOf("x"), nil)
+		request.RemoteAddr = remote
+		recorder := httptest.NewRecorder()
+		cache.ServeHTTP(recorder, request)
+		if recorder.Code != want {
+			t.Fatalf("%s: %d, want %d", remote, recorder.Code, want)
+		}
+	}
+}
+
+func TestCacheBoundsRequestsPerSource(t *testing.T) {
+	config := CacheConfig{Dir: t.TempDir(), Origins: []string{"https://github.com/AnixOps/"}, MaxRequestsPerSource: 2,
+		MaxBytes: 1 << 20, MaxObjectBytes: 1 << 20, MaxFetches: 1, FetchTimeout: time.Second}
+	cache, err := NewCache(config, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ip := remoteIP("192.0.2.1:1234")
+	if !cache.claimRequest(ip) || !cache.claimRequest(ip) {
+		t.Fatal("refused within the limit")
+	}
+	if cache.claimRequest(ip) {
+		t.Fatal("a third request from one address was admitted")
+	}
+	if !cache.claimRequest(remoteIP("192.0.2.2:1")) {
+		t.Fatal("another address was refused")
+	}
+	cache.releaseRequest(ip)
+	if !cache.claimRequest(ip) {
+		t.Fatal("the released slot did not come back")
+	}
+}
+
+// Redirects stay https and on the origins' hosts or redirect_hosts.
+func TestRedirectPolicy(t *testing.T) {
+	policy := redirectPolicy(CacheConfig{Origins: []string{"https://github.com/AnixOps/"}, RedirectHosts: DefaultRedirectHosts})
+	for target, ok := range map[string]bool{
+		"https://github.com/AnixOps/x":                   true,
+		"https://objects.githubusercontent.com/a":        true,
+		"https://release-assets.githubusercontent.com/b": true,
+		"http://objects.githubusercontent.com/a":         false,
+		"https://evil.example/a":                         false,
+		"https://user@objects.githubusercontent.com/a":   false,
+	} {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		if err := policy(request, nil); (err == nil) != ok {
+			t.Fatalf("%s: err = %v, want allowed %v", target, err, ok)
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "https://github.com/AnixOps/x", nil)
+	if err := policy(request, make([]*http.Request, 5)); err == nil {
+		t.Fatal("a sixth redirect was allowed")
 	}
 }

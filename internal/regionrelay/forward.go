@@ -26,10 +26,12 @@ type Forward struct {
 	preferred atomic.Int32
 	slots     chan struct{}
 
-	mu     sync.Mutex
-	conns  map[net.Conn]struct{}
-	closed bool
-	wg     sync.WaitGroup
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
+	// perSource counts the open connections of each node address.
+	perSource map[string]int
+	closed    bool
+	wg        sync.WaitGroup
 }
 
 // ListenForward binds the forward's listen address.
@@ -45,14 +47,21 @@ func newForward(config ForwardConfig, listener net.Listener, logger *slog.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if config.MaxConnectionsPerSource <= 0 {
+		config.MaxConnectionsPerSource = DefaultMaxPerSource
+	}
+	if config.HandshakeTimeout <= 0 {
+		config.HandshakeTimeout = DefaultHandshakeTimeout
+	}
 	dialer := &net.Dialer{Timeout: config.DialTimeout, KeepAlive: config.KeepAlive}
 	return &Forward{
-		config:   config,
-		listener: listener,
-		logger:   logger.With("forward", config.Name),
-		dialer:   dialer.DialContext,
-		slots:    make(chan struct{}, config.MaxConnections),
-		conns:    map[net.Conn]struct{}{},
+		config:    config,
+		listener:  listener,
+		logger:    logger.With("forward", config.Name),
+		dialer:    dialer.DialContext,
+		slots:     make(chan struct{}, config.MaxConnections),
+		conns:     map[net.Conn]struct{}{},
+		perSource: map[string]int{},
 	}
 }
 
@@ -86,7 +95,15 @@ func (f *Forward) Serve() error {
 			_ = conn.Close()
 			continue
 		}
+		source := sourceKey(conn.RemoteAddr())
+		if !f.claimSource(source) {
+			<-f.slots
+			f.logger.Warn("refused a node connection: max_connections_per_source reached", "remote", conn.RemoteAddr().String(), "max_connections_per_source", f.config.MaxConnectionsPerSource)
+			_ = conn.Close()
+			continue
+		}
 		if !f.track(conn) {
+			f.releaseSource(source)
 			<-f.slots
 			_ = conn.Close()
 			return nil
@@ -95,6 +112,7 @@ func (f *Forward) Serve() error {
 		go func() {
 			defer f.wg.Done()
 			defer func() { <-f.slots }()
+			defer f.releaseSource(source)
 			defer f.untrack(conn)
 			f.relay(conn)
 		}()
@@ -116,6 +134,38 @@ func (f *Forward) Close() error {
 	}
 	f.wg.Wait()
 	return err
+}
+
+// sourceKey is the node address a connection counts against.
+func sourceKey(addr net.Addr) string {
+	if tcp, ok := addr.(*net.TCPAddr); ok {
+		return tcp.IP.String()
+	}
+	host, _, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return addr.String()
+	}
+	return host
+}
+
+func (f *Forward) claimSource(source string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.perSource[source] >= f.config.MaxConnectionsPerSource {
+		return false
+	}
+	f.perSource[source]++
+	return true
+}
+
+func (f *Forward) releaseSource(source string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.perSource[source] <= 1 {
+		delete(f.perSource, source)
+		return
+	}
+	f.perSource[source]--
 }
 
 func (f *Forward) isClosed() bool {
@@ -189,7 +239,10 @@ func (f *Forward) relay(node net.Conn) {
 		f.logger.Warn("upstream refused the node's first bytes", "upstream", address, "error", err)
 		return
 	}
-	pipe(node, upstream)
+	// Control answers a handshake at once; a connection it does not answer
+	// within handshake_timeout is not held open.
+	_ = upstream.SetReadDeadline(time.Now().Add(f.config.HandshakeTimeout))
+	pipe(node, &answeredConn{Conn: upstream})
 }
 
 // dialUpstream dials the preferred upstream first, then the others in
@@ -251,6 +304,29 @@ func setKeepAlive(conn net.Conn, period time.Duration) {
 	}
 }
 
+// answeredConn clears the upstream's handshake deadline on its first bytes.
+type answeredConn struct {
+	net.Conn
+	answered bool
+}
+
+func (c *answeredConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	if n > 0 && !c.answered {
+		c.answered = true
+		_ = c.Conn.SetReadDeadline(time.Time{})
+	}
+	return n, err
+}
+
+// CloseWrite half-closes the upstream, as pipe does for a *net.TCPConn.
+func (c *answeredConn) CloseWrite() error {
+	if tcp, ok := c.Conn.(*net.TCPConn); ok {
+		return tcp.CloseWrite()
+	}
+	return c.Conn.Close()
+}
+
 // pipe copies both ways. When one side ends its stream, the other side's
 // write half is closed so the end reaches it; when both are done, or either
 // fails, both connections close.
@@ -259,8 +335,8 @@ func pipe(a, b net.Conn) {
 	copyHalf := func(dst, src net.Conn) {
 		_, err := io.Copy(dst, src)
 		if err == nil {
-			if tcp, ok := dst.(*net.TCPConn); ok {
-				_ = tcp.CloseWrite()
+			if half, ok := dst.(interface{ CloseWrite() error }); ok {
+				_ = half.CloseWrite()
 			} else {
 				_ = dst.Close()
 			}

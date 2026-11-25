@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
 	"testing"
 	"time"
 )
@@ -195,5 +196,56 @@ func TestListenerLeavesOtherPeersAlone(t *testing.T) {
 	buffer := make([]byte, len(header))
 	if _, err := io.ReadFull(server, buffer); err != nil || !bytes.Equal(buffer, header) {
 		t.Fatal("the untrusted peer's bytes were consumed")
+	}
+}
+
+// The deadline the connection's user set before the first read (gRPC's
+// handshake timeout) still holds after the header: a relay that sends a
+// header and one byte and then stays silent does not hold the connection
+// open forever (audit C1).
+func TestListenerKeepsTheUsersDeadlineAfterTheHeader(t *testing.T) {
+	client, server := listenerPair(t, true, time.Minute)
+	header, err := Encode(&net.TCPAddr{IP: net.ParseIP("203.0.113.9"), Port: 40000}, &net.TCPAddr{IP: net.ParseIP("198.51.100.1"), Port: 50051})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Write(append(header, 0x16)); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.SetDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]byte, 16)
+	n, err := server.Read(buffer)
+	if err != nil || n != 1 {
+		t.Fatalf("first read = %d, %v; want the byte after the header", n, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := server.Read(buffer)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("second read = %v, want the user's deadline", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the header read cleared the user's deadline: the silent peer was never timed out")
+	}
+}
+
+// The header read never waits past a shorter user deadline.
+func TestListenerHeaderWaitIsBoundedByTheUsersDeadline(t *testing.T) {
+	_, server := listenerPair(t, true, time.Minute)
+	if err := server.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := server.Read(make([]byte, 1)); err == nil {
+		t.Fatal("read succeeded without a header")
+	}
+	if waited := time.Since(start); waited > 5*time.Second {
+		t.Fatalf("the header wait took %s, past the user's deadline", waited)
 	}
 }

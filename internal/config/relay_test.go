@@ -40,6 +40,14 @@ func TestRelaySourcesValidation(t *testing.T) {
 			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [relay.example.com]\n",
 			want: "grpc.relay_sources",
 		},
+		"too wide v4": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [0.0.0.0/0]\n",
+			want: "wider than /24",
+		},
+		"too wide v6": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"2001:db8::/32\"]\n",
+			want: "wider than /64",
+		},
 		"excludes edge proxies": {
 			text: "domain: panel.example.com\ntls:\n  mode: external\ngrpc:\n  edge_proxies: [10.0.0.2]\n  relay_sources: [203.0.113.10]\n",
 			want: "grpc.relay_sources excludes grpc.edge_proxies",

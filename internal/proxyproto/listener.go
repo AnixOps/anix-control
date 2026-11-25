@@ -74,6 +74,37 @@ type Conn struct {
 	remote  net.Addr
 	relayed bool
 	err     error
+
+	// deadlineMu guards readDeadline, the read deadline the connection's
+	// user (gRPC's handshake timeout) set. The header read must not clear
+	// it, or a peer that sends one byte and then stays silent would hold
+	// the connection open forever.
+	deadlineMu   sync.Mutex
+	readDeadline time.Time
+}
+
+// SetDeadline records the read deadline, then sets both.
+func (c *Conn) SetDeadline(t time.Time) error {
+	c.recordReadDeadline(t)
+	return c.Conn.SetDeadline(t)
+}
+
+// SetReadDeadline records the read deadline, then sets it.
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	c.recordReadDeadline(t)
+	return c.Conn.SetReadDeadline(t)
+}
+
+func (c *Conn) recordReadDeadline(t time.Time) {
+	c.deadlineMu.Lock()
+	c.readDeadline = t
+	c.deadlineMu.Unlock()
+}
+
+func (c *Conn) userReadDeadline() time.Time {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	return c.readDeadline
 }
 
 // Relayed tells whether the connection's remote address came from a relay's
@@ -84,9 +115,15 @@ func (c *Conn) Relayed() bool {
 }
 
 func (c *Conn) readHeader() {
-	_ = c.SetReadDeadline(time.Now().Add(c.timeout))
+	// The header gets at most its own timeout, and never more than the
+	// user's deadline; afterwards the user's deadline is back in force.
+	deadline := time.Now().Add(c.timeout)
+	if user := c.userReadDeadline(); !user.IsZero() && user.Before(deadline) {
+		deadline = user
+	}
+	_ = c.Conn.SetReadDeadline(deadline)
 	header, err := Read(c.reader)
-	_ = c.SetReadDeadline(time.Time{})
+	_ = c.Conn.SetReadDeadline(c.userReadDeadline())
 	if err != nil {
 		c.err = err
 		c.remote = c.Conn.RemoteAddr()
