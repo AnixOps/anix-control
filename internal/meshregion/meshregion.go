@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -852,8 +853,10 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	// Reading the node's report before this one, writing this one and
 	// releasing holds happen under a lock on the node's row (PostgreSQL):
 	// a hold is released by two consecutive reports, and a report observed
-	// before the stored one (late, or out of order between two
-	// connections) is dropped.
+	// before the stored one and received within reorderWindow of it (late,
+	// or out of order between two connections) is dropped. Later than
+	// that, an earlier observedAt is the node's clock set back, and the
+	// report is taken.
 	dropped := false
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var previous []model.MeshStatus
@@ -863,7 +866,10 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 		var last *model.MeshStatus
 		if len(previous) > 0 {
 			last = &previous[0]
-			if observedAt.Before(last.ObservedAt) {
+			if observedAt.Before(last.ObservedAt) && receivedAt.Sub(last.ReceivedAt) < reorderWindow {
+				droppedReports.Add(1)
+				slog.Warn("mesh: dropped a status report observed before the stored one", "node", node.String(),
+					"stored_observed_at", last.ObservedAt, "observed_at", observedAt, "dropped_total", droppedReports.Load())
 				dropped = true
 				return nil
 			}
@@ -1025,6 +1031,14 @@ func notify(nodes []agentcontrol.AgentNode) {
 		listener(nodes)
 	}
 }
+
+// reorderWindow is how long after the stored report, by the panel's
+// receive time, a report observed earlier counts as out of order.
+const reorderWindow = 2 * time.Minute
+
+// droppedReports counts the out-of-order status reports RecordStatus
+// dropped.
+var droppedReports atomic.Int64
 
 // changeRetries counts the transactions change ran again, which the
 // PostgreSQL tests read: with the regions locked in one order, changes at

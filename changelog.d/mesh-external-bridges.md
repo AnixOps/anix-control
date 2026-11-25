@@ -24,3 +24,6 @@
   A node's report observed before the stored one is dropped, and reading
   the previous report, storing the new one and releasing holds happen
   under one lock.
+  Only a report received within two minutes of the stored one counts as
+  out of order (logged and counted); later, an earlier observed time is
+  taken as the node's clock set back and the report is accepted.

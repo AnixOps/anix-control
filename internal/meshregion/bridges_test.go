@@ -417,3 +417,44 @@ func TestBridgeHoldNeedsTwoConsecutiveReports(t *testing.T) {
 	report(released)
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }
+
+// A node whose clock is set back keeps reporting: an earlier observedAt
+// counts as out of order only within reorderWindow of the stored report
+// by receive time, and its reports release holds again.
+func TestStatusAfterClockSetBack(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	bridge, err := CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	_, err = UpdateBridge(ctx, db, bridge.ID, BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	require.NoError(t, err)
+	released := bridgeStatus("cn", now)
+	stored := func() model.MeshStatus {
+		t.Helper()
+		var row model.MeshStatus
+		require.NoError(t, db.Where("node_ref = ?", "proxy-1").First(&row).Error)
+		return row
+	}
+
+	received := time.Now().UTC().Add(time.Minute)
+	observed := received
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now, "10.150.0.9/32"), observed, received))
+	dropped := droppedReports.Load()
+	back := observed.Add(-2 * time.Hour)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), released, back, received.Add(time.Minute)))
+	require.True(t, stored().ObservedAt.Equal(observed), "out of order within the window")
+	require.Equal(t, dropped+1, droppedReports.Load())
+
+	// Set back by two hours: taken once the window has passed.
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), released, back, received.Add(3*time.Minute)))
+	require.True(t, stored().ObservedAt.Equal(back))
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), released, back.Add(time.Minute), received.Add(4*time.Minute)))
+	require.Empty(t, bridgeView(t, db, "proxy-1").Held, "the set-back node still releases")
+	require.Equal(t, dropped+1, droppedReports.Load())
+}
