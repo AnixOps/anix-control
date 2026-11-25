@@ -57,6 +57,20 @@ func TestRelaySourcesValidation(t *testing.T) {
 			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"::ffff:203.0.113.10/128\"]\n",
 			want: "IPv4-mapped",
 		},
+		// net.ParseCIDR reads /08 as /8; netip.ParsePrefix refuses it
+		// (re-audit M2).
+		"leading zero v4": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [10.0.0.0/08]\n",
+			want: "not a plain CIDR",
+		},
+		"leading zero any": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [0.0.0.0/00]\n",
+			want: "not a plain CIDR",
+		},
+		"leading zero v6": {
+			text: "domain: panel.example.com\ngrpc:\n  relay_sources: [\"::/00\"]\n",
+			want: "not a plain CIDR",
+		},
 		"excludes edge proxies": {
 			text: "domain: panel.example.com\ntls:\n  mode: external\ngrpc:\n  edge_proxies: [10.0.0.2]\n  relay_sources: [203.0.113.10]\n",
 			want: "grpc.relay_sources excludes grpc.edge_proxies",

@@ -52,6 +52,8 @@ type Cache struct {
 	// requestsMu guards requests, the open requests of each address.
 	requestsMu sync.Mutex
 	requests   map[string]int
+	// misses are the downloads each address started (requestsMu).
+	misses map[string]*missCount
 	// sumsMu guards sums: the SHA-256 each source was found to have, so a
 	// request that names another hash for a known source is refused without
 	// downloading it again.
@@ -98,6 +100,9 @@ func NewCache(config CacheConfig, logger *slog.Logger) (*Cache, error) {
 	if config.MaxRequestsPerSource <= 0 {
 		config.MaxRequestsPerSource = DefaultCacheRequestsPerSource
 	}
+	if config.MaxMissesPerSource <= 0 {
+		config.MaxMissesPerSource = DefaultCacheMissesPerSource
+	}
 	return &Cache{
 		config:         config,
 		logger:         logger.With("component", "cache"),
@@ -106,6 +111,7 @@ func NewCache(config CacheConfig, logger *slog.Logger) (*Cache, error) {
 		now:            time.Now,
 		allowedSources: allowed,
 		requests:       map[string]int{},
+		misses:         map[string]*missCount{},
 		sums:           map[string]knownSum{},
 	}, nil
 }
@@ -291,11 +297,22 @@ func (c *Cache) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the source does not have this SHA-256", http.StatusNotFound)
 		return
 	}
-	// Keyed by both: a request with a wrong source does not fail the
-	// others for the same hash.
-	_, err, _ := c.fetches.Do(sum+"\n"+source, func() (any, error) {
-		return nil, c.fetch(r.Context(), sum, source)
+	// A miss may start a download: bounded per address, so one host of
+	// the region cannot keep the download slots busy (re-audit M1).
+	remote := remoteIP(r.RemoteAddr)
+	if !c.claimMiss(remote, source) {
+		http.Error(w, "too many downloads from this address", http.StatusTooManyRequests)
+		return
+	}
+	defer c.releaseMiss(remote, source)
+	// Keyed by the source alone: requests for it with any hashes share one
+	// download, which answers the source's real SHA-256.
+	got, err, _ := c.fetches.Do(source, func() (any, error) {
+		return c.fetch(r.Context(), source)
 	})
+	if err == nil && got.(string) != sum {
+		err = fmt.Errorf("%w: got %s", errHashMismatch, got)
+	}
 	if err != nil {
 		c.logger.Warn("download failed", "sha256", sum, "src", redact(source), "error", err)
 		status := http.StatusBadGateway
@@ -379,41 +396,46 @@ func cleanURLPath(path string) string {
 	return cleaned
 }
 
-// fetch downloads source, checks its SHA-256 against sum and keeps it.
-func (c *Cache) fetch(ctx context.Context, sum, source string) error {
+// fetch downloads source and keeps it under its SHA-256, which it
+// answers; every request for the source compares that with its own.
+func (c *Cache) fetch(ctx context.Context, source string) (string, error) {
 	// The download outlives the first asker: others may be waiting on it.
 	ctx = context.WithoutCancel(ctx)
 	select {
 	case c.slots <- struct{}{}:
 	case <-time.After(time.Minute):
-		return fmt.Errorf("%w: %d downloads already running", context.Canceled, cap(c.slots))
+		return "", fmt.Errorf("%w: %d downloads already running", context.Canceled, cap(c.slots))
 	}
 	defer func() { <-c.slots }()
 	ctx, cancel := context.WithTimeout(ctx, c.config.FetchTimeout)
 	defer cancel()
 
-	if _, err := os.Stat(c.path(sum)); err == nil {
-		return nil
+	// A download of the source may have finished while this one waited
+	// for a slot (re-audit M1).
+	if known, ok := c.knownSum(source); ok {
+		if _, err := os.Stat(c.path(known)); err == nil {
+			return known, nil
+		}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil) // #nosec G704 -- ServeHTTP admits only sources under the configured https origins (allowed), and downloadClient refuses non-https redirects and private addresses.
 	if err != nil {
-		return err
+		return "", err
 	}
 	request.Header.Set("User-Agent", "anix-relay")
 	response, err := c.client.Do(request) // #nosec G704 -- source is under a configured origin; downloadClient refuses non-https redirects and private addresses.
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("origin answered %s", response.Status)
+		return "", fmt.Errorf("origin answered %s", response.Status)
 	}
 	if response.ContentLength > c.config.MaxObjectBytes {
-		return fmt.Errorf("%w: %d bytes", errOverLimit, response.ContentLength)
+		return "", fmt.Errorf("%w: %d bytes", errOverLimit, response.ContentLength)
 	}
 	temp, err := c.tempFile()
 	if err != nil {
-		return err
+		return "", err
 	}
 	keep := false
 	defer func() {
@@ -427,29 +449,29 @@ func (c *Cache) fetch(ctx context.Context, sum, source string) error {
 		err = closeErr
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 	if written > c.config.MaxObjectBytes {
-		return fmt.Errorf("%w: over %d bytes", errOverLimit, c.config.MaxObjectBytes)
+		return "", fmt.Errorf("%w: over %d bytes", errOverLimit, c.config.MaxObjectBytes)
 	}
-	got := hex.EncodeToString(hash.Sum(nil))
-	c.rememberSum(source, got)
-	if got != sum {
-		return fmt.Errorf("%w: got %s", errHashMismatch, got)
-	}
+	sum := hex.EncodeToString(hash.Sum(nil))
+	c.rememberSum(source, sum)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if _, err := os.Stat(c.path(sum)); err == nil {
+		return sum, nil
+	}
 	if err := c.evict(written); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.Rename(temp.Name(), c.path(sum)); err != nil {
-		return err
+		return "", err
 	}
 	keep = true
 	stored := c.now()
 	_ = os.Chtimes(c.path(sum), stored, stored)
 	c.logger.Info("cached", "sha256", sum, "bytes", written, "src", redact(source))
-	return nil
+	return sum, nil
 }
 
 // knownSum answers the SHA-256 source was last found to have, for
@@ -514,6 +536,79 @@ func sourceGroup(ip netip.Addr) string {
 		return ip.String()
 	}
 	return prefix.String()
+}
+
+// missWindow is the period max_misses_per_source counts over.
+const missWindow = time.Hour
+
+// maxMissAddresses is when claimMiss drops the finished windows.
+const maxMissAddresses = 4096
+
+// missCount is an address's downloads: the sources it waits on now (with
+// how many of its requests wait on each), and how many it started in the
+// window.
+type missCount struct {
+	open    map[string]int
+	started int
+	since   time.Time
+}
+
+// claimMiss admits ip's miss of source: at most max_misses_per_source
+// sources started in a missWindow, and never as many sources at once as
+// there are download slots, so other addresses always get one. More
+// requests of ip for a source it already waits on share that download.
+func (c *Cache) claimMiss(ip netip.Addr, source string) bool {
+	key := sourceGroup(ip)
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	now := c.now()
+	if len(c.misses) >= maxMissAddresses {
+		for other, count := range c.misses {
+			if len(count.open) == 0 && now.Sub(count.since) >= missWindow {
+				delete(c.misses, other)
+			}
+		}
+	}
+	m := c.misses[key]
+	if m == nil {
+		m = &missCount{open: map[string]int{}, since: now}
+		c.misses[key] = m
+	}
+	if now.Sub(m.since) >= missWindow {
+		m.started, m.since = 0, now
+	}
+	if m.open[source] > 0 {
+		m.open[source]++
+		return true
+	}
+	openLimit := cap(c.slots) - 1
+	if openLimit < 1 {
+		openLimit = 1
+	}
+	if m.started >= c.config.MaxMissesPerSource || len(m.open) >= openLimit {
+		return false
+	}
+	m.started++
+	m.open[source] = 1
+	return true
+}
+
+func (c *Cache) releaseMiss(ip netip.Addr, source string) {
+	key := sourceGroup(ip)
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	m := c.misses[key]
+	if m == nil {
+		return
+	}
+	if m.open[source] <= 1 {
+		delete(m.open, source)
+	} else {
+		m.open[source]--
+	}
+	if len(m.open) == 0 && c.now().Sub(m.since) >= missWindow {
+		delete(c.misses, key)
+	}
 }
 
 func (c *Cache) claimRequest(ip netip.Addr) bool {
