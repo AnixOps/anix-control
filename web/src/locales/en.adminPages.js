@@ -16,8 +16,8 @@ import egressRoutes from './modules/en/egressRoutes'
 import standby from './modules/en/standby'
 import topology from './modules/en/topology'
 import lines from './modules/en/lines'
-import mesh from './modules/en/mesh'
 import reverseProxies from './modules/en/reverseProxies'
+import mesh from './modules/en/mesh'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
 import nodeEntries from './modules/en/nodeEntries'
@@ -37,9 +37,9 @@ export default {
   ...egressRoutes,
   ...topology,
   ...lines,
-  ...mesh,
   ...standby,
   ...reverseProxies,
+  ...mesh,
   ...nodeDiagnostics,
   ...realityTargets,
   ...nodeEntries,

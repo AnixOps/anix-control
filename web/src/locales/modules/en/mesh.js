@@ -1,192 +1,99 @@
-// Network → Mesh (views/admin/Mesh.vue, views/admin/mesh). Same keys as
+// The node area's Mesh page: regions, the nodes' fixed addresses and
+// boundary nodes, and the mesh status each node reports. Same keys as
 // zh-CN/mesh.js.
 export default {
   mesh: {
-    title: 'Mesh',
-    description: 'Regions, member addresses, host groups, intranet names and region changes.',
-    refresh: 'Refresh',
-    loading: 'Loading the mesh',
-    loadFailed: 'Could not load the mesh',
-    save: 'Save',
-    cancel: 'Cancel',
-    edit: 'Edit',
-    delete: 'Delete',
-    note: 'Note',
-    saved: 'Saved',
-    deleted: 'Deleted',
-    saveFailed: 'Could not save',
-    tabs: {
+    nav: 'Mesh',
+    page: {
+      title: 'Mesh',
+      description: 'The intranet is divided into regions, each a network of its own. Nodes have fixed addresses; boundary nodes connect the regions.',
+      unavailable: 'This version does not provide the mesh.',
+      loadFailed: 'Could not load the mesh configuration',
+      addRegion: 'New region',
+      addMember: 'Add node',
       regions: 'Regions',
-      members: 'Members',
-      hostGroups: 'Host groups',
-      names: 'Intranet names',
-      changes: 'Region changes',
-      changesPending: 'Region changes ({n})',
-      settings: 'Settings'
-    },
-    roles: {
-      border: 'Border node',
-      gateway: 'Gateway',
-      server: 'Server',
-      device: 'Device'
-    },
-    addressModes: {
-      fixed: 'Fixed address',
-      pool: 'Assigned automatically'
-    },
-    regions: {
-      title: 'Regions',
-      description: 'Each region is an independent network with forward secrecy and a virtual subnet no other region overlaps.',
-      create: 'Add region',
-      createTitle: 'Add region',
-      editTitle: 'Edit region',
-      empty: 'No regions',
-      code: 'Region code',
-      codeHelp: 'Used in intranet names. It cannot be changed after creation.',
-      name: 'Name',
-      subnet: 'Virtual subnet',
-      subnetHelp: 'A private IPv4 range with a prefix length of 8 to 24.',
-      serverRange: 'Server range',
-      devicePool: 'Device pool',
-      sortOrder: 'Order',
-      ranges: 'Servers {server} · Devices {pool}',
-      borderNodes: 'Border nodes',
-      members: 'Members',
-      pool: 'Device pool',
-      poolUsage: '{used} / {size}',
-      status: 'Status',
-      forwardSecrecy: 'Forward secrecy',
-      warnings: {
-        few_border_nodes: 'Fewer than two border nodes',
-        border_without_probe_address: 'Border node without probe address',
-        device_pool_low: 'Device pool nearly full'
+      members: 'Nodes',
+      emptyRegions: 'No regions',
+      emptyMembers: 'No mesh nodes',
+      emptyMembersDescription: 'An added node gets a fixed address from the server segment of its region.',
+      disabled: 'Disabled',
+      enabled: 'Enabled',
+      fewBoundaries: 'Fewer than two boundary nodes',
+      memberCount: '{n} node | {n} nodes',
+      boundaryCount: '{n} boundary node | {n} boundary nodes',
+      note: 'Region networks always use forward secrecy. The nodes of a disabled region stop its network.',
+      edit: 'Edit…',
+      enable: 'Enable',
+      disable: 'Disable',
+      delete: 'Delete…',
+      move: 'Move to region…',
+      setBoundary: 'Make boundary node',
+      unsetBoundary: 'Remove boundary role',
+      remove: 'Remove from mesh…',
+      boundary: 'Boundary node',
+      member: 'Node',
+      columns: {
+        region: 'Region',
+        cidr: 'Range',
+        members: 'Nodes',
+        state: 'State',
+        node: 'Node',
+        address: 'Address',
+        role: 'Role',
+        status: 'Mesh status'
       },
-      deleteTitle: 'Delete region {name}?',
-      deleteMessage: 'Only a region without members and without pending changes to it can be deleted.'
-    },
-    members: {
-      title: 'Members',
-      description: 'Infrastructure nodes use fixed addresses. Devices keep an address from the pool, which is reclaimed after 30 days without use.',
-      create: 'Add member',
-      createTitle: 'Add member',
-      editTitle: 'Edit member',
-      empty: 'No members',
-      loadFailed: 'Could not load the members',
-      region: 'Region',
-      allRegions: 'All regions',
-      role: 'Role',
-      hostname: 'Hostname',
-      hostnameHelp: 'Letters, digits and hyphens, unique in the region.',
-      addressMode: 'Address mode',
-      address: 'Virtual address',
-      addressHelp: 'Leave empty to assign automatically.',
-      noAddress: 'Not assigned',
-      nodeRef: 'Agent node',
-      nodeRefHelp: 'proxy-<id> or forward-<id>. Leave empty without an Agent.',
-      noAgent: 'No Agent',
-      node: 'Node',
-      probeAddress: 'Probe address',
-      probeAddressHelp: 'Public host and port of the border node.',
-      status: 'Status',
-      warnings: {
-        no_address: 'No address',
-        pool_address_idle: 'Address unused for 30 days'
+      status: {
+        none: 'Not reported',
+        running: 'Running',
+        stopped: 'Not running',
+        lost: 'Control link lost'
       },
-      move: 'Move region',
-      moveTitle: 'Move {name}',
-      moveDescription: 'The member gets a new virtual address. Connections to the old address end.',
-      targetRegion: 'Target region',
-      moved: 'Moved. New address {address}',
-      deleteTitle: 'Delete member {name}?',
-      deleteMessage: 'The device names it publishes and its region changes are deleted as well.'
-    },
-    hostGroups: {
-      title: 'Host groups',
-      description: 'Virtual machines of one physical host join through a gateway, with a group segment outside the region subnets.',
-      create: 'Add host group',
-      createTitle: 'Add host group',
-      editTitle: 'Edit host group',
-      empty: 'No host groups',
-      loadFailed: 'Could not load the host groups',
-      noGateway: 'Add a member with the gateway role first.',
-      name: 'Name',
-      segment: 'Group segment',
-      segmentHelp: 'Leave empty to assign automatically. It cannot be changed after creation.',
-      gateway: 'Gateway',
-      standby: 'Standby gateway',
-      noStandby: 'None',
-      standbyOf: 'Standby: {name}',
-      names: 'Device names',
-      deleteTitle: 'Delete host group {name}?',
-      deleteMessage: 'The names of its virtual machines are deleted as well.'
-    },
-    deviceNames: {
-      title: 'Device names',
-      description: 'Names of host group virtual machines and of devices in a gateway’s local network, published by the gateway.',
-      create: 'Add name',
-      createTitle: 'Add device name',
-      editTitle: 'Edit device name',
-      empty: 'No device names',
-      name: 'Name',
-      address: 'Address',
-      place: 'Location',
-      inGroup: 'Host group {name} ({segment})',
-      behindGateway: 'Local network of {name}',
-      manualOnly: 'Device names are set manually only.',
-      deleteTitle: 'Delete name {name}?'
-    },
-    names: {
-      title: 'Intranet names',
-      description: 'Format: name.region-code.{suffix}.',
-      empty: 'No intranet names',
-      loadFailed: 'Could not load the intranet names',
-      fqdn: 'Name',
-      address: 'Address',
-      source: 'Source',
-      duplicate: 'Duplicate',
-      sources: {
-        member: 'Member',
-        host_group: 'Host group virtual machine',
-        device: 'Local device'
+      alerts: {
+        address_conflict: 'Address conflict',
+        address_unmanaged: 'Unmanaged address',
+        unsupported: 'Kernel without mesh',
+        start_refused: 'Start refused',
+        takeover_pending: 'Waiting to take over the existing mesh program'
       }
     },
-    changes: {
-      title: 'Region changes',
-      description: 'A member moves to another region only after an administrator approves. The member then gets a new virtual address.',
-      empty: 'No region changes',
-      loadFailed: 'Could not load the region changes',
-      member: 'Member',
-      move: 'Move',
-      reason: 'Reason',
-      status: 'Status',
-      statuses: {
-        pending: 'Pending',
-        approved: 'Approved',
-        rejected: 'Rejected',
-        all: 'All'
-      },
-      sources: {
-        member: 'Member request',
-        admin: 'Administrator move'
-      },
-      approve: 'Approve',
-      reject: 'Reject',
-      approveTitle: 'Approve the region change of {name}',
-      rejectTitle: 'Reject the region change of {name}',
-      approveDescription: 'Connections to the old address end.',
-      addressHelp: 'A fixed-address member may get a specific address. Leave empty to assign automatically.',
-      approved: 'Approved',
-      rejected: 'Rejected'
+    region: {
+      createTitle: 'New region',
+      editTitle: 'Edit {name}',
+      description: 'The first half of the range is the server segment, the second half the device pool. Region ranges must not overlap.',
+      code: 'Code',
+      codeHelp: '2 to 16 lowercase letters, digits or dashes, starting with a letter.',
+      name: 'Name',
+      cidr: 'Range',
+      cidrHelp: 'A private IPv4 range with a prefix length of 8 to 24. The range of a region with nodes cannot change.',
+      sort: 'Order',
+      enabled: 'Enabled',
+      create: 'Create',
+      save: 'Save'
     },
-    settings: {
-      title: 'Settings',
-      nameSuffix: 'Intranet name suffix',
-      nameSuffixHelp: 'mesh.internal by default.',
-      hostGroupSupernet: 'Host group range',
-      hostGroupPrefix: 'Group segment prefix length',
-      hostGroupHelp: 'The host group range and prefix length cannot be changed while a host group exists.',
-      reservedSubnets: 'Reserved ranges',
-      reservedSubnetsHelp: 'Ranges no region or host group may use, one per line.'
-    }
+    member: {
+      addTitle: 'Add node',
+      moveTitle: 'Move {name}',
+      description: 'The node gets the lowest free address of its region\'s server segment. Moving changes the node\'s address.',
+      node: 'Node',
+      region: 'Region',
+      boundary: 'Boundary node',
+      boundaryHelp: 'A boundary node joins every region and advertises the other regions\' ranges in each. Each region needs at least two.',
+      add: 'Add',
+      save: 'Save'
+    },
+    delete: {
+      regionTitle: 'Delete region {name}',
+      regionMessage: 'Boundary nodes leave the region. A region that is still a node\'s home region cannot be deleted.',
+      memberTitle: 'Remove {name} from the mesh',
+      memberMessage: 'The node stops every mesh network and releases its addresses.',
+      confirm: 'Delete',
+      confirmRemove: 'Remove'
+    },
+    toast: {
+      saved: 'Saved',
+      deleted: 'Deleted',
+      removed: 'Removed'
+    },
+    required: 'Required'
   }
 }

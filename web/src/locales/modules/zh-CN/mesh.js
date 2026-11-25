@@ -1,192 +1,98 @@
-// 网络 → 组网 (views/admin/Mesh.vue, views/admin/mesh). Same keys as
-// en/mesh.js.
+// 节点区域的「组网」页：地区、节点固定地址与边界节点，以及各节点上报的组网状态。
+// 与 en/mesh.js 键相同。
 export default {
   mesh: {
-    title: '组网',
-    description: '地区、成员地址、宿主组、内网域名与地区变更。',
-    refresh: '刷新',
-    loading: '正在加载组网',
-    loadFailed: '无法加载组网',
-    save: '保存',
-    cancel: '取消',
-    edit: '编辑',
-    delete: '删除',
-    note: '备注',
-    saved: '已保存',
-    deleted: '已删除',
-    saveFailed: '保存失败',
-    tabs: {
+    nav: '组网',
+    page: {
+      title: '组网',
+      description: '按地区划分内网，每个地区为独立网络。节点使用固定地址，边界节点连通各地区。',
+      unavailable: '当前版本未提供组网功能。',
+      loadFailed: '无法加载组网配置',
+      addRegion: '新建地区',
+      addMember: '添加节点',
       regions: '地区',
-      members: '成员',
-      hostGroups: '宿主组',
-      names: '内网域名',
-      changes: '变更申请',
-      changesPending: '变更申请（{n}）',
-      settings: '设置'
-    },
-    roles: {
-      border: '边界节点',
-      gateway: '网关',
-      server: '服务器',
-      device: '设备'
-    },
-    addressModes: {
-      fixed: '固定地址',
-      pool: '自动分配'
-    },
-    regions: {
-      title: '地区',
-      description: '每个地区为独立网络，启用前向保密，虚拟网段互不重叠。',
-      create: '添加地区',
-      createTitle: '添加地区',
-      editTitle: '编辑地区',
-      empty: '暂无地区',
-      code: '地区代码',
-      codeHelp: '用于内网域名，创建后不可修改。',
-      name: '名称',
-      subnet: '虚拟网段',
-      subnetHelp: '私有 IPv4 网段，前缀长度 8 至 24。',
-      serverRange: '服务器段',
-      devicePool: '设备地址池',
-      sortOrder: '排序',
-      ranges: '服务器段 {server} · 设备池 {pool}',
-      borderNodes: '边界节点',
-      members: '成员',
-      pool: '设备地址池',
-      poolUsage: '{used} / {size}',
-      status: '状态',
-      forwardSecrecy: '前向保密',
-      warnings: {
-        few_border_nodes: '边界节点少于两台',
-        border_without_probe_address: '边界节点缺少探测地址',
-        device_pool_low: '设备地址池余量不足'
+      members: '节点',
+      emptyRegions: '暂无地区',
+      emptyMembers: '暂无组网节点',
+      emptyMembersDescription: '添加节点后，节点获得所在地区服务器段的固定地址。',
+      disabled: '未启用',
+      enabled: '已启用',
+      fewBoundaries: '边界节点少于两台',
+      memberCount: '{n} 个节点',
+      boundaryCount: '{n} 台边界节点',
+      note: '地区网络强制启用前向保密。地区停用后，其节点停止该网络。',
+      edit: '编辑…',
+      enable: '启用',
+      disable: '停用',
+      delete: '删除…',
+      move: '迁移地区…',
+      setBoundary: '设为边界节点',
+      unsetBoundary: '取消边界节点',
+      remove: '移出组网…',
+      boundary: '边界节点',
+      member: '节点',
+      columns: {
+        region: '地区',
+        cidr: '网段',
+        members: '节点',
+        state: '状态',
+        node: '节点',
+        address: '地址',
+        role: '角色',
+        status: '组网状态'
       },
-      deleteTitle: '删除地区 {name}？',
-      deleteMessage: '仅可删除无成员且无待审批迁入申请的地区。'
-    },
-    members: {
-      title: '成员',
-      description: '基础节点使用固定地址；设备从地址池自动分配并保持不变，连续 30 天未使用后回收。',
-      create: '添加成员',
-      createTitle: '添加成员',
-      editTitle: '编辑成员',
-      empty: '暂无成员',
-      loadFailed: '无法加载成员',
-      region: '地区',
-      allRegions: '全部地区',
-      role: '角色',
-      hostname: '主机名',
-      hostnameHelp: '字母、数字与连字符，在地区内唯一。',
-      addressMode: '地址方式',
-      address: '虚拟地址',
-      addressHelp: '留空时自动分配。',
-      noAddress: '未分配',
-      nodeRef: 'Agent 节点',
-      nodeRefHelp: '格式为 proxy-<id> 或 forward-<id>；未接入 Agent 时留空。',
-      noAgent: '未接入 Agent',
-      node: '节点',
-      probeAddress: '探测地址',
-      probeAddressHelp: '边界节点的公网地址与端口。',
-      status: '状态',
-      warnings: {
-        no_address: '未分配地址',
-        pool_address_idle: '地址已闲置 30 天'
+      status: {
+        none: '未上报',
+        running: '运行中',
+        stopped: '未运行',
+        lost: '控制面失联'
       },
-      move: '迁移地区',
-      moveTitle: '迁移 {name}',
-      moveDescription: '迁移后成员获得新的虚拟地址，使用旧地址的连接将中断。',
-      targetRegion: '目标地区',
-      moved: '已迁移，新地址 {address}',
-      deleteTitle: '删除成员 {name}？',
-      deleteMessage: '同时删除该成员发布的设备名称与变更记录。'
-    },
-    hostGroups: {
-      title: '宿主组',
-      description: '同一物理机上的虚拟机由网关代表入网，使用地区网段之外的组地址段。',
-      create: '添加宿主组',
-      createTitle: '添加宿主组',
-      editTitle: '编辑宿主组',
-      empty: '暂无宿主组',
-      loadFailed: '无法加载宿主组',
-      noGateway: '请先添加角色为网关的成员。',
-      name: '名称',
-      segment: '组地址段',
-      segmentHelp: '留空时自动分配，创建后不可修改。',
-      gateway: '网关',
-      standby: '备用网关',
-      noStandby: '无',
-      standbyOf: '备用：{name}',
-      names: '设备名称',
-      deleteTitle: '删除宿主组 {name}？',
-      deleteMessage: '同时删除组内虚拟机的名称。'
-    },
-    deviceNames: {
-      title: '设备名称',
-      description: '宿主组虚拟机与网关局域网设备的名称，由网关发布。',
-      create: '添加名称',
-      createTitle: '添加设备名称',
-      editTitle: '编辑设备名称',
-      empty: '暂无设备名称',
-      name: '名称',
-      address: '地址',
-      place: '位置',
-      inGroup: '宿主组 {name}（{segment}）',
-      behindGateway: '网关 {name} 的局域网',
-      manualOnly: '设备名称仅支持手动设置。',
-      deleteTitle: '删除名称 {name}？'
-    },
-    names: {
-      title: '内网域名',
-      description: '格式为 名称.地区代码.{suffix}。',
-      empty: '暂无内网域名',
-      loadFailed: '无法加载内网域名',
-      fqdn: '域名',
-      address: '地址',
-      source: '来源',
-      duplicate: '重名',
-      sources: {
-        member: '成员',
-        host_group: '宿主组虚拟机',
-        device: '局域网设备'
+      alerts: {
+        address_conflict: '地址冲突',
+        address_unmanaged: '地址未受管',
+        unsupported: '内核不支持组网',
+        start_refused: '拒绝启动',
+        takeover_pending: '等待接管现有组网程序'
       }
     },
-    changes: {
-      title: '变更申请',
-      description: '成员迁移地区须经管理员批准，批准后成员获得新的虚拟地址。',
-      empty: '暂无变更申请',
-      loadFailed: '无法加载变更申请',
-      member: '成员',
-      move: '迁移',
-      reason: '理由',
-      status: '状态',
-      statuses: {
-        pending: '待审批',
-        approved: '已批准',
-        rejected: '已拒绝',
-        all: '全部'
-      },
-      sources: {
-        member: '成员申请',
-        admin: '管理员迁移'
-      },
-      approve: '批准',
-      reject: '拒绝',
-      approveTitle: '批准 {name} 的地区变更',
-      rejectTitle: '拒绝 {name} 的地区变更',
-      approveDescription: '使用旧地址的连接将中断。',
-      addressHelp: '固定地址成员可指定新地址；留空时自动分配。',
-      approved: '已批准',
-      rejected: '已拒绝'
+    region: {
+      createTitle: '新建地区',
+      editTitle: '编辑 {name}',
+      description: '网段前半为服务器段，后半为设备地址池。各地区网段不得重叠。',
+      code: '代码',
+      codeHelp: '2 至 16 位小写字母、数字或连字符，以字母开头。',
+      name: '名称',
+      cidr: '网段',
+      cidrHelp: '私有 IPv4 网段，前缀长度 8 至 24。已有节点的地区不可更改网段。',
+      sort: '排序',
+      enabled: '启用',
+      create: '创建',
+      save: '保存'
     },
-    settings: {
-      title: '设置',
-      nameSuffix: '内网域名后缀',
-      nameSuffixHelp: '默认为 mesh.internal。',
-      hostGroupSupernet: '宿主组网段',
-      hostGroupPrefix: '组地址段前缀长度',
-      hostGroupHelp: '存在宿主组时不可修改宿主组网段与前缀长度。',
-      reservedSubnets: '保留网段',
-      reservedSubnetsHelp: '地区与宿主组不得使用的网段，每行一个。'
-    }
+    member: {
+      addTitle: '添加节点',
+      moveTitle: '迁移 {name}',
+      description: '节点获得所在地区服务器段的最小空闲地址。迁移会改变节点地址。',
+      node: '节点',
+      region: '地区',
+      boundary: '边界节点',
+      boundaryHelp: '边界节点加入全部地区，并向各地区通告其他地区网段。每个地区至少两台。',
+      add: '添加',
+      save: '保存'
+    },
+    delete: {
+      regionTitle: '删除地区 {name}',
+      regionMessage: '边界节点将退出该地区。仍为节点所属地区时无法删除。',
+      memberTitle: '将 {name} 移出组网',
+      memberMessage: '节点将停止全部组网网络并释放地址。',
+      confirm: '删除',
+      confirmRemove: '移出'
+    },
+    toast: {
+      saved: '已保存',
+      deleted: '已删除',
+      removed: '已移出'
+    },
+    required: '必填'
   }
 }

@@ -44,7 +44,6 @@ const AdminSystem = () => import('@/views/admin/System.vue')
 // forward package's v4 API (meta.capability, checked in the guard).
 const AdminTopology = () => import('@/views/admin/Topology.vue')
 const AdminLines = () => import('@/views/admin/Lines.vue')
-const AdminMesh = () => import('@/views/admin/Mesh.vue')
 const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
 const ForwardRoutes = () => import('@/views/admin/forward/Routes.vue')
 const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
@@ -54,6 +53,7 @@ const ForwardDnsProviders = () => import('@/views/admin/forward/DnsProviders.vue
 const ForwardEgressRoutes = () => import('@/views/admin/forward/EgressRoutes.vue')
 const ForwardStandby = () => import('@/views/admin/forward/CrossBorderStandby.vue')
 const ForwardReverseProxies = () => import('@/views/admin/forward/ReverseProxies.vue')
+const ForwardMesh = () => import('@/views/admin/forward/MeshRegions.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
 
@@ -203,12 +203,6 @@ const routes = [
         meta: { ...WIDE, titleKey: 'pageTitles.admin.topology' }
       },
       {
-        // 组网: the intranet mesh's regions, addresses and names.
-        path: 'mesh',
-        component: AdminMesh,
-        meta: { ...WIDE, titleKey: 'pageTitles.admin.mesh' }
-      },
-      {
         // A node's page (UI U7); ?section= picks the section.
         path: 'nodes/:id(\\d+)',
         component: AdminNodeDetail,
@@ -316,6 +310,14 @@ const routes = [
         path: 'forward/reverse-proxies',
         component: ForwardReverseProxies,
         meta: { layout: 'wide', titleKey: 'pageTitles.admin.reverseProxies' }
+      },
+      {
+        // 组网: the intranet mesh regions, a kernel API of its own, only in
+        // builds that run the gated feature "mesh" (the page says so
+        // otherwise).
+        path: 'forward/mesh',
+        component: ForwardMesh,
+        meta: { layout: 'wide', titleKey: 'pageTitles.admin.mesh' }
       },
       {
         // The removed flux-clone pages (转发（旧版）, 转发节点（旧版）, the

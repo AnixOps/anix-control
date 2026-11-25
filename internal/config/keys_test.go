@@ -15,7 +15,8 @@ import (
 
 // The operator keys are exactly the table of the design's section 5, plus
 // grpc.edge_proxies (docs/design/edge-grpc), which is read only in the edge
-// mode, and the database section (PostgreSQL by default).
+// mode, grpc.relay_sources (docs/design/region-relay), set only with region
+// relays, and the database section (PostgreSQL by default).
 func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 	var paths []string
 	for _, key := range OperatorKeys() {
@@ -23,7 +24,7 @@ func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 		assert.NotEmpty(t, key.Description, key.Path)
 		assert.Equal(t, key.Path == "database.password" || key.Path == "database.dsn", key.Secret, "only the PostgreSQL credentials are secret: %s", key.Path)
 	}
-	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "source_url", "data_dir",
+	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "grpc.relay_sources", "subscribe_path", "source_url", "data_dir",
 		"database.driver", "database.host", "database.port", "database.username", "database.password", "database.database", "database.dsn",
 		"database.sslmode", "database.timezone", "database.log_level", "database.max_idle_conns", "database.max_open_conns", "database.conn_max_lifetime"}, paths)
 }

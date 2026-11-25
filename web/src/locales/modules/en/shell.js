@@ -53,7 +53,6 @@ export default {
         nodes: 'Nodes',
         lines: 'Lines',
         topology: 'Topology',
-        mesh: 'Mesh',
         forward: 'Forwarding',
         settings: 'Settings',
         security: 'Security',

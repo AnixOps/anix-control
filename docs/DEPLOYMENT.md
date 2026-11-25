@@ -17,8 +17,8 @@
 
 部署前先记住三条规则：
 
-- 配置只有 10 个操作员键（`domain`、`tls.mode`、`tls.cert_file`、`tls.key_file`、`listen`、
-  `grpc.port`、`grpc.public_name`、`grpc.edge_proxies`（只在边缘模式读取）、`subscribe_path`、`data_dir`），一般安装的配置文件只有
+- 配置只有 11 个操作员键（`domain`、`tls.mode`、`tls.cert_file`、`tls.key_file`、`listen`、
+  `grpc.port`、`grpc.public_name`、`grpc.edge_proxies`（只在边缘模式读取）、`grpc.relay_sources`（只在使用地区中继时设置）、`subscribe_path`、`data_dir`），一般安装的配置文件只有
   `domain: panel.example.com` 一行。先取内置值，再由配置文件逐键覆盖，最后是
   `ANIX_CONTROL_*` 环境变量。4.x 的其他键都在废弃列表里：仍被读取的键照常生效并在启动时
   警告一次，其余键被忽略并警告；列表之外的未知键会让 Control 拒绝启动，并提示最接近的键

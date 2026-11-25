@@ -1,0 +1,402 @@
+package regionrelay
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"golang.org/x/sync/singleflight"
+)
+
+// CachePathPrefix is the only path the cache serves: CachePathPrefix +
+// the lower-case hex SHA-256 of the file.
+const CachePathPrefix = "/v1/sha256/"
+
+// CacheSourceParam is the query parameter that names where the relay may
+// download a file it does not have yet.
+const CacheSourceParam = "src"
+
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// Cache is the release file cache's HTTP handler.
+type Cache struct {
+	config CacheConfig
+	logger *slog.Logger
+	client *http.Client
+
+	fetches singleflight.Group
+	slots   chan struct{}
+	// mu serialises eviction against new files.
+	mu sync.Mutex
+	// now is time.Now, replaced in tests.
+	now func() time.Time
+}
+
+// errOverLimit is a download larger than max_object_bytes.
+var errOverLimit = errors.New("the file is larger than max_object_bytes")
+
+// errHashMismatch is a download whose SHA-256 is not the one asked for.
+var errHashMismatch = errors.New("the downloaded file's SHA-256 does not match")
+
+// NewCache prepares the cache directory and the download client.
+func NewCache(config CacheConfig, logger *slog.Logger) (*Cache, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	for _, dir := range []string{filepath.Join(config.Dir, "sha256"), filepath.Join(config.Dir, "tmp")} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return nil, err
+		}
+	}
+	// Partial downloads of a previous run are worthless.
+	if entries, err := os.ReadDir(filepath.Join(config.Dir, "tmp")); err == nil {
+		for _, entry := range entries {
+			_ = os.Remove(filepath.Join(config.Dir, "tmp", entry.Name()))
+		}
+	}
+	client, err := downloadClient(config)
+	if err != nil {
+		return nil, err
+	}
+	return &Cache{
+		config: config,
+		logger: logger.With("component", "cache"),
+		client: client,
+		slots:  make(chan struct{}, config.MaxFetches),
+		now:    time.Now,
+	}, nil
+}
+
+// downloadClient is the client of the origin downloads: https only, at
+// most five redirects, every one https, and, unless allow_private_origins,
+// no connection to a private, loopback or link-local address (an origin or
+// a redirect could otherwise reach the relay's own network).
+func downloadClient(config CacheConfig) (*http.Client, error) {
+	var proxy func(*http.Request) (*url.URL, error)
+	proxyAddress := ""
+	if config.UpstreamProxy != "" {
+		proxyURL, err := url.Parse(config.UpstreamProxy)
+		if err != nil {
+			return nil, err
+		}
+		proxy = http.ProxyURL(proxyURL)
+		port := proxyURL.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[proxyURL.Scheme]
+		}
+		proxyAddress = net.JoinHostPort(proxyURL.Hostname(), port)
+	}
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	if !config.AllowPrivateOrigins {
+		dialer.Control = func(_, address string, _ syscall.RawConn) error {
+			return refusePrivate(address)
+		}
+	}
+	dial := dialer.DialContext
+	transport := &http.Transport{
+		Proxy: proxy,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			// The operator's own proxy may sit on the backbone's private
+			// network; it is the one private address the relay dials.
+			if proxyAddress != "" && address == proxyAddress {
+				plain := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+				return plain.DialContext(ctx, network, address)
+			}
+			return dial(ctx, network, address)
+		},
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       90 * time.Second,
+	}
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("more than five redirects")
+			}
+			if request.URL.Scheme != "https" {
+				return fmt.Errorf("redirect to %s is not https", request.URL.Redacted())
+			}
+			return nil
+		},
+	}, nil
+}
+
+// refusePrivate refuses a dial to an address the relay must not reach for
+// a node's request.
+func refusePrivate(address string) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return fmt.Errorf("dial address %q is not an IP", host)
+	}
+	ip = ip.Unmap()
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
+		netip.MustParsePrefix("100.64.0.0/10").Contains(ip) {
+		return fmt.Errorf("origin address %s is not public (cache.allow_private_origins is off)", ip)
+	}
+	return nil
+}
+
+// ServeHTTP serves GET and HEAD of CachePathPrefix<hex> and nothing else.
+func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sum, ok := strings.CutPrefix(r.URL.Path, CachePathPrefix)
+	if !ok || !sha256Hex.MatchString(sum) {
+		http.NotFound(w, r)
+		return
+	}
+	path := c.path(sum)
+	if file, err := os.Open(path); err == nil { // #nosec G304 -- path joins the cache directory and a validated SHA-256 hex name.
+		c.serve(w, r, file, sum, "hit")
+		return
+	}
+	source := r.URL.Query().Get(CacheSourceParam)
+	if source == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if !c.allowed(source) {
+		c.logger.Warn("refused a source outside the origins", "sha256", sum, "src", redact(source), "remote", r.RemoteAddr)
+		http.Error(w, "source is not an allowed origin", http.StatusForbidden)
+		return
+	}
+	_, err, _ := c.fetches.Do(sum, func() (any, error) {
+		return nil, c.fetch(r.Context(), sum, source)
+	})
+	if err != nil {
+		c.logger.Warn("download failed", "sha256", sum, "src", redact(source), "error", err)
+		status := http.StatusBadGateway
+		switch {
+		case errors.Is(err, errOverLimit):
+			status = http.StatusRequestEntityTooLarge
+		case errors.Is(err, context.Canceled):
+			status = http.StatusServiceUnavailable
+		}
+		http.Error(w, "the file could not be downloaded", status)
+		return
+	}
+	file, err := os.Open(path) // #nosec G304 -- path joins the cache directory and a validated SHA-256 hex name.
+	if err != nil {
+		// Evicted between the download and now: only when the cache is far
+		// too small for the files in flight.
+		http.Error(w, "the file could not be kept", http.StatusServiceUnavailable)
+		return
+	}
+	c.serve(w, r, file, sum, "miss")
+}
+
+func (c *Cache) serve(w http.ResponseWriter, r *http.Request, file *os.File, sum, result string) {
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		http.Error(w, "the file could not be read", http.StatusInternalServerError)
+		return
+	}
+	// The access time of a hit decides the eviction order.
+	now := c.now()
+	_ = os.Chtimes(file.Name(), now, now)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("ETag", `"sha256:`+sum+`"`)
+	c.logger.Info("served", "sha256", sum, "result", result, "bytes", info.Size(), "remote", r.RemoteAddr)
+	http.ServeContent(w, r, "", time.Time{}, file)
+}
+
+func (c *Cache) path(sum string) string {
+	return filepath.Join(c.config.Dir, "sha256", sum)
+}
+
+// allowed tells whether source starts with one of the origins.
+func (c *Cache) allowed(source string) bool {
+	parsed, err := url.Parse(source)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Host == "" {
+		return false
+	}
+	// Compare the parsed form, so dot segments or a changed host spelling
+	// cannot step outside a prefix.
+	if parsed.Path != "" && parsed.Path != cleanURLPath(parsed.Path) {
+		return false
+	}
+	normalised := parsed.Scheme + "://" + strings.ToLower(parsed.Host) + parsed.EscapedPath()
+	for _, origin := range c.config.Origins {
+		prefix, err := url.Parse(origin)
+		if err != nil {
+			continue
+		}
+		want := prefix.Scheme + "://" + strings.ToLower(prefix.Host) + prefix.EscapedPath()
+		if strings.HasPrefix(normalised, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// cleanURLPath is path cleaning that keeps a trailing slash.
+func cleanURLPath(path string) string {
+	cleaned := filepath.ToSlash(filepath.Clean("/" + path))
+	if strings.HasSuffix(path, "/") && !strings.HasSuffix(cleaned, "/") {
+		cleaned += "/"
+	}
+	return cleaned
+}
+
+// fetch downloads source, checks its SHA-256 against sum and keeps it.
+func (c *Cache) fetch(ctx context.Context, sum, source string) error {
+	// The download outlives the first asker: others may be waiting on it.
+	ctx = context.WithoutCancel(ctx)
+	select {
+	case c.slots <- struct{}{}:
+	case <-time.After(time.Minute):
+		return fmt.Errorf("%w: %d downloads already running", context.Canceled, cap(c.slots))
+	}
+	defer func() { <-c.slots }()
+	ctx, cancel := context.WithTimeout(ctx, c.config.FetchTimeout)
+	defer cancel()
+
+	if _, err := os.Stat(c.path(sum)); err == nil {
+		return nil
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil) // #nosec G704 -- ServeHTTP admits only sources under the configured https origins (allowed), and downloadClient refuses non-https redirects and private addresses.
+	if err != nil {
+		return err
+	}
+	request.Header.Set("User-Agent", "anix-relay")
+	response, err := c.client.Do(request) // #nosec G704 -- source is under a configured origin; downloadClient refuses non-https redirects and private addresses.
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("origin answered %s", response.Status)
+	}
+	if response.ContentLength > c.config.MaxObjectBytes {
+		return fmt.Errorf("%w: %d bytes", errOverLimit, response.ContentLength)
+	}
+	temp, err := c.tempFile()
+	if err != nil {
+		return err
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.Remove(temp.Name())
+		}
+	}()
+	hash := sha256.New()
+	written, err := io.Copy(io.MultiWriter(temp, hash), io.LimitReader(response.Body, c.config.MaxObjectBytes+1))
+	if closeErr := temp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if written > c.config.MaxObjectBytes {
+		return fmt.Errorf("%w: over %d bytes", errOverLimit, c.config.MaxObjectBytes)
+	}
+	if got := hex.EncodeToString(hash.Sum(nil)); got != sum {
+		return fmt.Errorf("%w: got %s", errHashMismatch, got)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.evict(written); err != nil {
+		return err
+	}
+	if err := os.Rename(temp.Name(), c.path(sum)); err != nil {
+		return err
+	}
+	keep = true
+	stored := c.now()
+	_ = os.Chtimes(c.path(sum), stored, stored)
+	c.logger.Info("cached", "sha256", sum, "bytes", written, "src", redact(source))
+	return nil
+}
+
+func (c *Cache) tempFile() (*os.File, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(filepath.Join(c.config.Dir, "tmp", hex.EncodeToString(suffix[:])), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) // #nosec G304 -- a random hex name in the cache's own tmp directory.
+}
+
+// evict removes the least recently used files until incoming more bytes
+// fit under max_bytes. Called with mu held.
+func (c *Cache) evict(incoming int64) error {
+	type entry struct {
+		path string
+		size int64
+		used time.Time
+	}
+	var entries []entry
+	var total int64
+	err := filepath.WalkDir(filepath.Join(c.config.Dir, "sha256"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		entries = append(entries, entry{path: path, size: info.Size(), used: info.ModTime()})
+		total += info.Size()
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if total+incoming <= c.config.MaxBytes {
+		return nil
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].used.Before(entries[j].used) })
+	for _, e := range entries {
+		if total+incoming <= c.config.MaxBytes {
+			break
+		}
+		if err := os.Remove(e.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		total -= e.size
+		c.logger.Info("evicted", "sha256", filepath.Base(e.path), "bytes", e.size)
+	}
+	return nil
+}
+
+// redact drops the query of a source URL from the logs: release URLs carry
+// none, but a signed URL would carry a token.
+func redact(source string) string {
+	parsed, err := url.Parse(source)
+	if err != nil {
+		return "(unparsable)"
+	}
+	parsed.RawQuery = ""
+	parsed.User = nil
+	return parsed.String()
+}

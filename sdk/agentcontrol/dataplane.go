@@ -64,6 +64,13 @@ const (
 	// Agent's Hello lists it with the device's DeviceCapabilities in an
 	// attribute.
 	CapabilityNetwork = "network"
+	// CapabilityMesh: the node runs the intranet mesh
+	// (docs/design/mesh-regions/agent-contract.md). Control carries the
+	// node's mesh networks as the member "mesh" of the nodeconfig document
+	// whether or not it is negotiated (an Agent without it ignores the
+	// member), and accepts the node's mesh status as a PackageReport of
+	// kind "mesh.status" (with package-reports.v1) only when it is.
+	CapabilityMesh = "mesh"
 )
 
 // DataPlaneCapabilities are the capabilities of the data plane, the ones
@@ -72,7 +79,7 @@ const (
 // adds no payload but is offered by the same rule.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
-	CapabilityAlive, CapabilityArtifacts, CapabilityReleases, CapabilityUpgrade, CapabilityDestinations, CapabilityNetwork,
+	CapabilityAlive, CapabilityArtifacts, CapabilityReleases, CapabilityUpgrade, CapabilityDestinations, CapabilityNetwork, CapabilityMesh,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

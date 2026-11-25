@@ -58,9 +58,7 @@ export const ADMIN_MENU = Object.freeze([
     items: [
       { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/'] },
       { id: 'lines', to: '/admin/lines', icon: 'lines', labelKey: 'shell.admin.items.lines' },
-      { id: 'topology', to: '/admin/topology', icon: 'forward-nodes', labelKey: 'shell.admin.items.topology' },
-      // 组网: the intranet mesh's regions, addresses and names.
-      { id: 'mesh', to: '/admin/mesh', icon: 'mesh', labelKey: 'shell.admin.items.mesh' }
+      { id: 'topology', to: '/admin/topology', icon: 'forward-nodes', labelKey: 'shell.admin.items.topology' }
     ]
   },
   {

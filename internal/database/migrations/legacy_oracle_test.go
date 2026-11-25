@@ -234,12 +234,9 @@ func laterModels() []any {
 		&model.ReachVantage{},              // 0039_reach_probes
 		&model.ReachProbe{},                // 0039_reach_probes
 		&model.NodeTemporaryProxy{},        // 0044_node_temporary_proxies
-		&model.MeshSettings{},              // 0045_mesh_regions
 		&model.MeshRegion{},                // 0045_mesh_regions
 		&model.MeshMember{},                // 0045_mesh_regions
-		&model.MeshHostGroup{},             // 0045_mesh_regions
-		&model.MeshDeviceName{},            // 0045_mesh_regions
-		&model.MeshRegionChange{},          // 0045_mesh_regions
+		&model.MeshStatus{},                // 0045_mesh_regions
 	}
 }
 

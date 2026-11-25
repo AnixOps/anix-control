@@ -33,8 +33,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
       ['lines', '/admin/lines'],
-      ['topology', '/admin/topology'],
-      ['mesh', '/admin/mesh']
+      ['topology', '/admin/topology']
     ])
     expect(ids(groups)).not.toContain('plugins')
   })
@@ -227,8 +226,7 @@ describe('forwarding area capability', () => {
       expect(network(groups).map(item => [item.id, item.label])).toEqual([
         ['nodes', 'shell.admin.items.nodes'],
         ['lines', 'shell.admin.items.lines'],
-        ['topology', 'shell.admin.items.topology'],
-        ['mesh', 'shell.admin.items.mesh']
+        ['topology', 'shell.admin.items.topology']
       ])
     }
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/egress', '/admin/forward/inventory/forward-41']) {

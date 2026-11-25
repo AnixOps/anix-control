@@ -51,6 +51,10 @@ type ServerConfig struct {
 	// front of this listener (grpc.edge_proxies): the listener is then plain
 	// and admits these addresses only. Empty: the listener is TLS.
 	EdgeProxies []string
+	// RelaySources are the region relays (grpc.relay_sources): their
+	// connections open with a PROXY v2 header whose address stands for the
+	// node's (relay.go). Empty: no header is read from anyone.
+	RelaySources []string
 }
 
 // DefaultServerConfig 默认配置
@@ -130,6 +134,18 @@ func (s *Server) Start() error {
 	}
 	if edge != nil {
 		lis = edgeListener{Listener: lis, proxies: edge}
+	}
+	if len(s.config.RelaySources) > 0 {
+		if edge != nil {
+			_ = lis.Close()
+			return fmt.Errorf("gRPC relay sources cannot be combined with edge proxies")
+		}
+		relayed, err := relayListener(lis, s.config.RelaySources)
+		if err != nil {
+			_ = lis.Close()
+			return err
+		}
+		lis = relayed
 	}
 	s.listener = lis
 

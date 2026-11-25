@@ -5791,6 +5791,267 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/members/{member_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "On the node's home membership: boundary makes it a boundary node (an address in every other region) or an ordinary member; region_id, when not 0, moves the node to that region, where it gets a new fixed address. Answers the node's home membership. 404 when member_id is not a home membership. Audited (module mesh, action mesh_member_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a node's mesh membership",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "home membership id",
+                        "name": "member_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "boundary and region_id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshMember"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes all memberships of the node of the home membership member_id; its configuration loses the member mesh at once. Audited (module mesh, action mesh_member_remove).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Take a node out of the mesh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "home membership id",
+                        "name": "member_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every region in order (code, name, cidr, enabled, sort) with its members: node, fixed address, whether it is the node's home region and whether the node is a boundary node, the node's name and host, and the node's last mesh status as its Agent reported it. Network keys are never answered. 404 feature_disabled while the mesh is not available in this build.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The intranet mesh regions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.Region"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A region is a network of its own: code (2 to 16 lowercase letters, digits or dashes, the network id the nodes see), name, cidr (an IPv4 network of /8 to /24 inside 10/8, 172.16/12, 192.168/16 or 100.64/10 that overlaps no other region; its lower half holds the fixed addresses, its upper half is the device pool), enabled and sort. Control generates its network key. Every boundary node gets an address in it. 409 mesh_conflict for a code or range another region has. Audited (module mesh, action mesh_region_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create a mesh region",
+                "parameters": [
+                    {
+                        "description": "code, name, cidr, enabled, sort",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.RegionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegion"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes code, name, cidr, enabled and sort. The range of a region with members cannot change (409 mesh_conflict). The nodes of an enabled region get its network in their configuration at once; disabling it takes the network away. Audited (module mesh, action mesh_region_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "code, name, cidr, enabled, sort",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.RegionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshRegion"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a region that is no node's home region (409 mesh_conflict otherwise); the boundary nodes leave it. Audited (module mesh, action mesh_region_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/regions/{id}/members": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Makes the region the node's home region with the lowest free fixed address of its server segment (the lower half of its range). A boundary node (boundary true) also gets an address in every other region. 409 mesh_conflict when the node is already in a region, segment_full when the segment has no free address. Audited (module mesh, action mesh_member_add).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a node to a mesh region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "region id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "node and boundary",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshMember"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/network": {
             "get": {
                 "security": [
@@ -7804,824 +8065,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v5/mesh": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The settings (name_suffix, host_group_supernet, host_group_prefix, reserved_subnets), every region with its counts and warnings (few_border_nodes, border_without_probe_address, device_pool_low), every host group, and how many region changes await a decision. The first call creates the four default regions: cn 中国大陆, ap 亚太, eu 欧洲, na 北美.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The intranet mesh at a glance",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshOverview"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/device-names": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The names administrators gave to machines that are not members: virtual machines of a host group and devices in a gateway's local network, by name.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The device names",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/model.MeshDeviceName"
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "With host_group_id, a virtual machine of the group: address in the group's segment; the group's gateway publishes it. Without, a device in the local network of the gateway member_id: a private address outside every region's subnet and the host group supernet. name is one DNS label, unique among the region's names. Devices are named by hand only; there is no network scan. 400 invalid_request, 409 conflict.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Name a virtual machine or a local device",
-                "parameters": [
-                    {
-                        "description": "device name",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshDeviceNameRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshDeviceName"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/device-names/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Same fields and checks as creating one. 400 invalid_request, 404 not_found, 409 conflict.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Change a device name",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "device name id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "device name",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshDeviceNameRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshDeviceName"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Delete a device name",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "device name id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/host-groups": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Every host group by name, with its region (its gateway's), gateway and standby hostnames and how many names it has.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The host groups",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/meshregion.HostGroupView"
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The virtual machines of one physical host, represented by gateway_member_id (a gateway member) and an optional standby_member_id (another gateway of the same region). segment is the group's range in the host group supernet, of the host group prefix length; empty takes the first free one. 400 invalid_request, 409 conflict or address_exhausted.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Add a host group",
-                "parameters": [
-                    {
-                        "description": "host group",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshHostGroupRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshHostGroup"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/host-groups/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Changes the name and the gateways (in the group's region); the segment stays. The group's names follow the new gateway. 400 invalid_request, 404 not_found.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Change a host group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "host group id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "host group",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshHostGroupRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshHostGroup"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Deletes the group and the names of its virtual machines. 404 not_found.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Delete a host group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "host group id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/members": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Every member, or those of region_id, by region and hostname, with region_code, fqdn (hostname.region.suffix) and warnings (no_address, pool_address_idle: unused for 30 days, so the next device that needs an address may take it).",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The mesh members",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "region id",
-                        "name": "region_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/meshregion.MemberView"
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "role is border, gateway, server or device. Border nodes, gateways and servers use a fixed address (address_mode fixed): the address given, inside the region's subnet and outside its device pool, or the lowest free address of the server range. A device uses the device pool by default (address_mode pool) and keeps its address until it has gone unused for 30 days. hostname is one DNS label, unique among the region's names. node_ref names the Agent node (proxy-\u003cid\u003e or forward-\u003cid\u003e); probe_address is a border node's public host:port. 400 invalid_request, 409 conflict or address_exhausted.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Add a member to a region",
-                "parameters": [
-                    {
-                        "description": "member",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshMemberRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshMember"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/members/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Changes hostname, role, address_mode, node_ref, probe_address and a fixed address within the member's region (region_id is ignored; a region change is a move). Changing the mode gives a new address. 400 invalid_request, 404 not_found, 409 conflict.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Change a member",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "member id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "member",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshMemberRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshMember"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Removes the member, the names it publishes and its region changes. A host group's gateway is refused (409 conflict) until the group has another gateway.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Remove a member",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "member id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/members/{id}/move": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "An administrator's own move, recorded as an approved region change. The member gets a new address in the region (the fixed address given, or the lowest free one; a device's from the device pool): connections to its old address end. A host group's gateway moves only after the group's other gateway. A pending request of the member for the same region is approved by the move; other pending requests are rejected. 400 invalid_request, 404 not_found, 409 conflict or address_exhausted.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Move a member to another region",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "member id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "target region",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshMoveRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshRegionChange"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/names": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The names the panel publishes: every member with an address and every device name, as fqdn (name.region.suffix) with its address, source (member, host_group or device) and the member that publishes it, by full name. duplicate marks a name used twice in a region.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The intranet names",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/meshregion.NameList"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/region-changes": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The latest 500 region changes, newest first, or those of status (pending, approved or rejected), with the member's hostname and the region codes.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "The region changes",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "pending, approved or rejected",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/meshregion.ChangeView"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/region-changes/{id}/approve": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Moves the member to the region it asked for, with a new address (the fixed address given, or the lowest free one; a device's from the device pool), and records old_address and new_address. 404 not_found, 409 conflict (already decided, the member moved meanwhile, a host group's other gateway) or address_exhausted.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Approve a region change",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "region change id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "address and note",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshDecisionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshRegionChange"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/region-changes/{id}/reject": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The member stays in its region. 404 not_found, 409 conflict (already decided).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Reject a region change",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "region change id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "note",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshDecisionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshRegionChange"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/regions": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "A region is an independent mesh network with forward secrecy. code is its DNS label (1 to 16 lowercase letters, digits and inner hyphens); subnet a private IPv4 range of /8 to /24 no other region, the host group supernet or a reserved range overlaps; server_range (fixed addresses) and device_pool (addresses kept per device) two ranges inside it that do not overlap. The network name is generated. 400 invalid_request, 409 conflict (code taken, subnet overlaps a region).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Add a region",
-                "parameters": [
-                    {
-                        "description": "region",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshRegionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshRegion"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/regions/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Changes name, sort_order, subnet, server_range and device_pool; the code stays. The subnet changes only while the region has no member, and the device pool only while every pool member's address stays inside it. 404 not_found, 409 conflict.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Change a region",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "region id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "region",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshRegionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshRegion"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Only a region without members and without pending changes to it. 404 not_found, 409 conflict.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Delete a region",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "region id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v5/mesh/settings": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "name_suffix is the intranet domain suffix (mesh.internal when empty). host_group_supernet is the private IPv4 range host group segments come from, host_group_prefix their prefix length; both change only while no host group exists. reserved_subnets are IPv4 ranges no region or host group may overlap, such as the existing network's subnet during the migration. 400 invalid_request, 409 conflict.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Mesh"
-                ],
-                "summary": "Change the mesh settings",
-                "parameters": [
-                    {
-                        "description": "settings",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.meshSettingsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.MeshSettings"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v5/net/lines": {
             "post": {
                 "security": [
@@ -9413,157 +8856,19 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.meshDecisionRequest": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "description": "Address is the new fixed address on approval; empty picks one.",
-                    "type": "string"
-                },
-                "note": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.meshDeviceNameRequest": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "host_group_id": {
-                    "type": "integer"
-                },
-                "member_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.meshHostGroupRequest": {
-            "type": "object",
-            "properties": {
-                "gateway_member_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "segment": {
-                    "type": "string"
-                },
-                "standby_member_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "handler.meshMemberRequest": {
             "type": "object",
             "properties": {
-                "address": {
-                    "type": "string"
+                "boundary": {
+                    "type": "boolean"
                 },
-                "address_mode": {
-                    "type": "string"
-                },
-                "hostname": {
-                    "type": "string"
-                },
-                "node_ref": {
-                    "type": "string"
-                },
-                "probe_address": {
+                "node": {
+                    "description": "Node is proxy-\u003cid\u003e or forward-\u003cid\u003e; only when adding a node.",
                     "type": "string"
                 },
                 "region_id": {
+                    "description": "RegionID moves the node to another region; 0 keeps it.",
                     "type": "integer"
-                },
-                "role": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.meshMoveRequest": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "description": "Address is the new fixed address; empty picks one.",
-                    "type": "string"
-                },
-                "note": {
-                    "type": "string"
-                },
-                "region_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "handler.meshOverview": {
-            "type": "object",
-            "properties": {
-                "host_groups": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meshregion.HostGroupView"
-                    }
-                },
-                "pending_changes": {
-                    "description": "PendingChanges counts the region changes awaiting a decision.",
-                    "type": "integer"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meshregion.RegionView"
-                    }
-                },
-                "settings": {
-                    "$ref": "#/definitions/model.MeshSettings"
-                }
-            }
-        },
-        "handler.meshRegionRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "device_pool": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "server_range": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "subnet": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.meshSettingsRequest": {
-            "type": "object",
-            "properties": {
-                "host_group_prefix": {
-                    "type": "integer"
-                },
-                "host_group_supernet": {
-                    "type": "string"
-                },
-                "name_suffix": {
-                    "type": "string"
-                },
-                "reserved_subnets": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 }
             }
         },
@@ -9851,271 +9156,103 @@ const docTemplate = `{
                 }
             }
         },
-        "meshregion.ChangeView": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "decided_at": {
-                    "type": "string"
-                },
-                "decided_by": {
-                    "type": "integer"
-                },
-                "from_code": {
-                    "type": "string"
-                },
-                "from_region_id": {
-                    "type": "integer"
-                },
-                "hostname": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "member_id": {
-                    "type": "integer"
-                },
-                "new_address": {
-                    "type": "string"
-                },
-                "note": {
-                    "description": "Note is the administrator's note on the decision.",
-                    "type": "string"
-                },
-                "old_address": {
-                    "description": "OldAddress and NewAddress are the member's addresses before and\nafter an approved move.",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "Reason is the request's text, such as the measured latencies.",
-                    "type": "string"
-                },
-                "requested_by": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "to_code": {
-                    "type": "string"
-                },
-                "to_region_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "meshregion.HostGroupView": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "gateway_hostname": {
-                    "type": "string"
-                },
-                "gateway_member_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "names": {
-                    "type": "integer"
-                },
-                "region_code": {
-                    "type": "string"
-                },
-                "region_id": {
-                    "type": "integer"
-                },
-                "segment": {
-                    "description": "Segment is the group's IPv4 segment, taken from the host group\nsupernet, outside every region's subnet.",
-                    "type": "string"
-                },
-                "standby_hostname": {
-                    "type": "string"
-                },
-                "standby_member_id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "meshregion.MemberView": {
             "type": "object",
             "properties": {
                 "address": {
-                    "description": "Address is the virtual IPv4 address in the region; nil while none is\nassigned.",
                     "type": "string"
                 },
-                "address_mode": {
-                    "type": "string"
-                },
-                "address_used_at": {
-                    "description": "AddressUsedAt is when the member last used its address; a pool\naddress unused for 30 days goes to the next device that needs one.",
-                    "type": "string"
-                },
-                "agentless": {
-                    "description": "Agentless is a machine set up with the installer and a join\ncredential: it only reports its state.",
+                "boundary": {
                     "type": "boolean"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "device_key": {
-                    "description": "DeviceKey is the member's device public key once it joined; nil\nbefore.",
-                    "type": "string"
-                },
-                "fqdn": {
-                    "type": "string"
-                },
-                "hostname": {
-                    "type": "string"
+                "home": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"
                 },
+                "node_host": {
+                    "type": "string"
+                },
+                "node_name": {
+                    "type": "string"
+                },
                 "node_ref": {
-                    "description": "NodeRef is the Agent node, proxy-\u003cid\u003e or forward-\u003cid\u003e; nil for a\nmachine without an Agent.",
-                    "type": "string"
-                },
-                "probe_address": {
-                    "description": "ProbeAddress is a border node's public host:port that members probe\nand connect to.",
-                    "type": "string"
-                },
-                "region_code": {
+                    "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
                     "type": "string"
                 },
                 "region_id": {
-                    "description": "RegionID is nil until the member is admitted to a region.",
                     "type": "integer"
                 },
-                "role": {
+                "status": {
+                    "description": "Status is the node's last report as the Agent sent it, nil before\nthe first.",
+                    "type": "object"
+                },
+                "status_observed_at": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
-                },
-                "warnings": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "meshregion.NameEntry": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "duplicate": {
-                    "description": "Duplicate marks a name used twice in its region; the panel refuses\nduplicates, so it shows data written outside it.",
-                    "type": "boolean"
-                },
-                "fqdn": {
-                    "description": "FQDN is \u003cname\u003e.\u003cregion code\u003e.\u003csuffix\u003e.",
-                    "type": "string"
-                },
-                "member_id": {
-                    "description": "MemberID is the member itself, or the gateway that publishes the\nname.",
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "region_code": {
-                    "type": "string"
-                },
-                "source": {
+                "status_received_at": {
                     "type": "string"
                 }
             }
         },
-        "meshregion.NameList": {
+        "meshregion.Region": {
             "type": "object",
             "properties": {
-                "entries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meshregion.NameEntry"
-                    }
-                },
-                "suffix": {
+                "cidr": {
+                    "description": "CIDR is the region's virtual range, such as 10.150.0.0/16.",
                     "type": "string"
-                }
-            }
-        },
-        "meshregion.RegionView": {
-            "type": "object",
-            "properties": {
-                "border_nodes": {
-                    "type": "integer"
                 },
                 "code": {
-                    "description": "Code is the region's DNS label in intranet names, such as \"cn\".",
+                    "description": "Code is the network id the nodes see, such as \"cn\" or \"eu\".",
                     "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "device_pool": {
-                    "type": "string"
+                "enabled": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"
                 },
                 "members": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.MemberView"
+                    }
                 },
                 "name": {
                     "type": "string"
                 },
-                "network_name": {
-                    "description": "NetworkName is generated when the region is created.",
-                    "type": "string"
-                },
-                "pool_size": {
+                "sort": {
                     "type": "integer"
-                },
-                "pool_used": {
-                    "description": "PoolUsed and PoolSize count the device pool's addresses.",
-                    "type": "integer"
-                },
-                "security": {
-                    "description": "Security is always \"forward_secrecy\" (R30).",
-                    "type": "string"
-                },
-                "server_range": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "subnet": {
-                    "description": "Subnet is the region's virtual IPv4 subnet; every member uses its\nprefix length.",
-                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "meshregion.RegionInput": {
+            "type": "object",
+            "properties": {
+                "cidr": {
+                    "type": "string"
                 },
-                "warnings": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "code": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "integer"
                 }
             }
         },
@@ -10133,124 +9270,49 @@ const docTemplate = `{
                 }
             }
         },
-        "model.MeshDeviceName": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "host_group_id": {
-                    "description": "HostGroupID is the host group of a virtual machine; nil for a device\nin the gateway's local network.",
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "member_id": {
-                    "description": "MemberID is the gateway that publishes the name.",
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.MeshHostGroup": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "gateway_member_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "segment": {
-                    "description": "Segment is the group's IPv4 segment, taken from the host group\nsupernet, outside every region's subnet.",
-                    "type": "string"
-                },
-                "standby_member_id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "model.MeshMember": {
             "type": "object",
             "properties": {
                 "address": {
-                    "description": "Address is the virtual IPv4 address in the region; nil while none is\nassigned.",
                     "type": "string"
                 },
-                "address_mode": {
-                    "type": "string"
-                },
-                "address_used_at": {
-                    "description": "AddressUsedAt is when the member last used its address; a pool\naddress unused for 30 days goes to the next device that needs one.",
-                    "type": "string"
-                },
-                "agentless": {
-                    "description": "Agentless is a machine set up with the installer and a join\ncredential: it only reports its state.",
+                "boundary": {
                     "type": "boolean"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "device_key": {
-                    "description": "DeviceKey is the member's device public key once it joined; nil\nbefore.",
-                    "type": "string"
-                },
-                "hostname": {
-                    "type": "string"
+                "home": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"
                 },
                 "node_ref": {
-                    "description": "NodeRef is the Agent node, proxy-\u003cid\u003e or forward-\u003cid\u003e; nil for a\nmachine without an Agent.",
-                    "type": "string"
-                },
-                "probe_address": {
-                    "description": "ProbeAddress is a border node's public host:port that members probe\nand connect to.",
+                    "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
                     "type": "string"
                 },
                 "region_id": {
-                    "description": "RegionID is nil until the member is admitted to a region.",
                     "type": "integer"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },
         "model.MeshRegion": {
             "type": "object",
             "properties": {
+                "cidr": {
+                    "description": "CIDR is the region's virtual range, such as 10.150.0.0/16.",
+                    "type": "string"
+                },
                 "code": {
-                    "description": "Code is the region's DNS label in intranet names, such as \"cn\".",
+                    "description": "Code is the network id the nodes see, such as \"cn\" or \"eu\".",
                     "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "device_pool": {
-                    "type": "string"
+                "enabled": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"
@@ -10258,93 +9320,8 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "network_name": {
-                    "description": "NetworkName is generated when the region is created.",
-                    "type": "string"
-                },
-                "server_range": {
-                    "type": "string"
-                },
-                "sort_order": {
+                "sort": {
                     "type": "integer"
-                },
-                "subnet": {
-                    "description": "Subnet is the region's virtual IPv4 subnet; every member uses its\nprefix length.",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.MeshRegionChange": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "decided_at": {
-                    "type": "string"
-                },
-                "decided_by": {
-                    "type": "integer"
-                },
-                "from_region_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "member_id": {
-                    "type": "integer"
-                },
-                "new_address": {
-                    "type": "string"
-                },
-                "note": {
-                    "description": "Note is the administrator's note on the decision.",
-                    "type": "string"
-                },
-                "old_address": {
-                    "description": "OldAddress and NewAddress are the member's addresses before and\nafter an approved move.",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "Reason is the request's text, such as the measured latencies.",
-                    "type": "string"
-                },
-                "requested_by": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "to_region_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "model.MeshSettings": {
-            "type": "object",
-            "properties": {
-                "host_group_prefix": {
-                    "description": "HostGroupPrefix is the prefix length of a host group's segment.",
-                    "type": "integer"
-                },
-                "host_group_supernet": {
-                    "description": "HostGroupSupernet is the IPv4 range the host groups' segments are\ntaken from; it lies outside every region's subnet.",
-                    "type": "string"
-                },
-                "name_suffix": {
-                    "description": "NameSuffix is the intranet domain suffix, \"mesh.internal\" by default:\na member is \u003chostname\u003e.\u003cregion code\u003e.\u003csuffix\u003e.",
-                    "type": "string"
-                },
-                "reserved_subnets": {
-                    "description": "ReservedSubnets are IPv4 ranges no region or host group may overlap,\ncomma-separated: the existing network's virtual subnet during the\nmigration, for example.",
-                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"

@@ -382,7 +382,9 @@ check_release_workflow() {
     SHA256SUMS.txt.sig \
     anix-control-frontend.tar.gz \
     anix-control-linux-amd64.tar.gz \
-    anix-control-linux-arm64.tar.gz; do
+    anix-control-linux-arm64.tar.gz \
+    anix-relay-linux-amd64.tar.gz \
+    anix-relay-linux-arm64.tar.gz; do
     require_job_text release "--require ${asset}" "release asset ${asset}" || failed=1
   done
   # The packages are inside the binaries: no package asset is published.

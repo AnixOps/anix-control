@@ -111,6 +111,9 @@ grpc:
   # A reverse proxy on another machine that terminates the nodes' TLS; empty:
   # the listener is TLS itself (docs/design/edge-grpc).
   edge_proxies: []
+  # Region relays that forward nodes' connections with a PROXY v2 header;
+  # empty: none (docs/design/region-relay).
+  relay_sources: []
 agent_control:
   # Client certificates on the AnixOps Agent channels: off, optional,
   # preferred or required. Empty means required, the default from 4.2: the

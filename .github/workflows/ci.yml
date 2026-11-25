@@ -2108,6 +2108,13 @@ jobs:
           mkdir -p dist
           tar -czf "dist/${PRIMARY_BIN_NAME}.tar.gz" "${PRIMARY_BIN_NAME}"
 
+          # The region relay (docs/design/region-relay), a binary of its own.
+          RELAY_BIN_NAME="anix-relay-${{ matrix.goos }}-${{ matrix.goarch }}"
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+            -o "${RELAY_BIN_NAME}" ./cmd/anix-relay
+          tar -czf "dist/${RELAY_BIN_NAME}.tar.gz" "${RELAY_BIN_NAME}"
+
       - name: Upload release binary artifact
         uses: actions/upload-artifact@v7
         with:
@@ -2480,7 +2487,9 @@ jobs:
             --require anix-control-source.sbom.spdx.json \
             --require anix-control-frontend.tar.gz \
             --require anix-control-linux-amd64.tar.gz \
-            --require anix-control-linux-arm64.tar.gz
+            --require anix-control-linux-arm64.tar.gz \
+            --require anix-relay-linux-amd64.tar.gz \
+            --require anix-relay-linux-arm64.tar.gz
           # Nothing else is published: the packages are inside the binaries.
           unexpected="$(find release -maxdepth 1 -type f \( -name '*.anxp' -o -name '*.manifest.json' -o -name '*.public-key.pem' -o -name '*.sbom.spdx.json' \
             -o -name 'anix-control-packages-*' -o -name 'anix-control-frontend.zip' -o -name '*.zip' \) \

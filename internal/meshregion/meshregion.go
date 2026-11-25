@@ -1,76 +1,71 @@
-// Package meshregion is the panel side of the intranet mesh
-// (docs/design/mesh-regions): the regions an administrator defines and
-// their border nodes, the members' virtual addresses, the host groups and
-// the names their gateways publish, and the region changes members ask
-// for.
+// Package meshregion keeps the regions of the intranet mesh (组网;
+// docs/design/mesh-regions): each region is a network of its own with a
+// virtual IPv4 range that no other region overlaps. Its lower half is the
+// server segment, from which Control gives servers and boundary nodes a
+// fixed address; the upper half is the device pool (allocated to devices
+// by a later step).
 //
-// The mesh itself runs in the node kernels. A region is an independent
-// mesh network with its own network name and key and a virtual IPv4 subnet
-// no other region, host group or reserved range overlaps. The subnet is
-// split into the server range, where infrastructure nodes (border nodes,
-// gateways, servers) get fixed addresses, and the device pool, where a
-// personal device gets an address it keeps: the address stays the device's
-// until it has gone unused for 30 days, and only then goes to the next
-// device that needs one. Host groups take their segments from a separate
-// supernet. Every member's name is <hostname>.<region code>.<suffix>.
+// A node has one home region. A boundary node joins every region: it has a
+// fixed address in each, the other boundary nodes of a region are the
+// region's initial peers, and in each region it advertises the ranges of the
+// other regions, so traffic between regions goes through it.
 //
-// A member enters its first region automatically; moving to another
-// region changes its address, so a member only asks, and an administrator
-// approves or rejects (or moves the member directly). Every write runs in
-// one transaction, so the address checks and the unique index on (region,
-// address) agree.
+// The mesh runs in the node's kernel; Control only plans it. The member
+// "mesh" of a node's desired configuration (NodeMember) lists the networks
+// of the node's enabled regions, and the node's Agent reports their status
+// as the package report "mesh.status" (RecordStatus). The contract with the
+// Agent is docs/design/mesh-regions/agent-contract.md. The whole feature
+// is the gated feature "mesh" (internal/features): off in releases until the
+// kernel runs the mesh.
 package meshregion
 
 import (
+	"context"
 	"crypto/rand"
-	"encoding/hex"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"net/netip"
+	"regexp"
+	"sort"
+	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v5/internal/features"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// Defaults of a new mesh.
+// Feature is the gated feature of the mesh.
+const Feature = "mesh"
+
+// The desired configuration member and the status report.
 const (
-	DefaultNameSuffix        = "mesh.internal"
-	DefaultHostGroupSupernet = "10.127.0.0/16"
-	DefaultHostGroupPrefix   = 24
-	// PoolReclaimAfter is how long a pool address stays its device's
-	// without use (R29).
-	PoolReclaimAfter = 30 * 24 * time.Hour
-	// MinBorderNodes is how many border nodes a region needs for redundancy.
-	MinBorderNodes = 2
-	settingsID     = 1
+	Member         = "mesh"
+	StatusPluginID = "mesh"
+	StatusKind     = "mesh.status"
+	StatusVersion  = "v1"
 )
 
-// DefaultRegion is one of the regions a new mesh starts with.
-type DefaultRegion struct {
-	Code, Name, Subnet, ServerRange, DevicePool string
-}
-
-// DefaultRegions are the four regions of a new mesh (R27): mainland China,
-// Asia-Pacific (Japan, Hong Kong, Taiwan and the rest, not split), Europe
-// and North America. Administrators add and delete regions.
-var DefaultRegions = []DefaultRegion{
-	{Code: "cn", Name: "中国大陆", Subnet: "10.121.0.0/16", ServerRange: "10.121.0.0/20", DevicePool: "10.121.64.0/18"},
-	{Code: "ap", Name: "亚太", Subnet: "10.122.0.0/16", ServerRange: "10.122.0.0/20", DevicePool: "10.122.64.0/18"},
-	{Code: "eu", Name: "欧洲", Subnet: "10.123.0.0/16", ServerRange: "10.123.0.0/20", DevicePool: "10.123.64.0/18"},
-	{Code: "na", Name: "北美", Subnet: "10.124.0.0/16", ServerRange: "10.124.0.0/20", DevicePool: "10.124.64.0/18"},
-}
+// Network settings Control fixes for every region network.
+const (
+	// Port is the TCP and UDP port the nodes listen on.
+	Port   = 11010
+	cipher = "aes-gcm"
+	policy = "latency"
+)
 
 var (
-	// ErrInvalid: a field is invalid; the error says which.
-	ErrInvalid = errors.New("invalid mesh request")
-	// ErrNotFound: no such region, member, host group, name or change.
 	ErrNotFound = errors.New("not found")
-	// ErrConflict: the change conflicts with the stored state; the error
-	// says how.
+	ErrInvalid  = errors.New("invalid mesh request")
+	// ErrConflict: the change collides with another region or member.
 	ErrConflict = errors.New("mesh conflict")
-	// ErrExhausted: no free address is left in the range.
-	ErrExhausted = errors.New("no free address left")
+	// ErrFull: the region's server segment has no free address.
+	ErrFull = errors.New("the region's server segment is full")
 )
 
 func invalid(format string, args ...any) error {
@@ -81,184 +76,577 @@ func conflict(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrConflict, fmt.Sprintf(format, args...))
 }
 
-func notFound(what string) error {
-	return fmt.Errorf("%w: %s", ErrNotFound, what)
+var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,15}$`)
+
+// privateRanges are the ranges a region's range must fall in.
+var privateRanges = []netip.Prefix{
+	netip.MustParsePrefix("10.0.0.0/8"),
+	netip.MustParsePrefix("172.16.0.0/12"),
+	netip.MustParsePrefix("192.168.0.0/16"),
+	netip.MustParsePrefix("100.64.0.0/10"),
 }
 
-// Service is the mesh on one database.
-type Service struct {
-	DB *gorm.DB
-	// Now defaults to time.Now.
-	Now func() time.Time
+// RegionInput creates or changes a region.
+type RegionInput struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	CIDR    string `json:"cidr"`
+	Enabled bool   `json:"enabled"`
+	Sort    int    `json:"sort"`
 }
 
-func (s *Service) now() time.Time {
-	if s.Now != nil {
-		return s.Now().UTC()
+// Region is a region with its members, for the administrator.
+type Region struct {
+	model.MeshRegion
+	Members []MemberView `json:"members"`
+}
+
+// MemberView is a membership with its node and the node's last status.
+type MemberView struct {
+	model.MeshMember
+	NodeName string `json:"node_name"`
+	NodeHost string `json:"node_host"`
+	// Status is the node's last report as the Agent sent it, nil before
+	// the first.
+	Status           json.RawMessage `json:"status" swaggertype:"object"`
+	StatusObservedAt *time.Time      `json:"status_observed_at"`
+	StatusReceivedAt *time.Time      `json:"status_received_at"`
+}
+
+// List answers every region in order with its members.
+func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
+	db = db.WithContext(ctx)
+	var regions []model.MeshRegion
+	if err := db.Order("sort ASC, id ASC").Find(&regions).Error; err != nil {
+		return nil, err
 	}
-	return time.Now().UTC()
+	var members []model.MeshMember
+	if err := db.Order("home DESC, address ASC").Find(&members).Error; err != nil {
+		return nil, err
+	}
+	var statuses []model.MeshStatus
+	if err := db.Find(&statuses).Error; err != nil {
+		return nil, err
+	}
+	byNode := map[string]model.MeshStatus{}
+	for _, status := range statuses {
+		byNode[status.NodeRef] = status
+	}
+	infos := map[string]nodeInfo{}
+	for _, member := range members {
+		if _, done := infos[member.NodeRef]; done {
+			continue
+		}
+		info, err := lookupNode(db, member.NodeRef)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		infos[member.NodeRef] = info
+	}
+	answer := make([]Region, len(regions))
+	index := map[uint]int{}
+	for i, region := range regions {
+		answer[i] = Region{MeshRegion: region, Members: []MemberView{}}
+		index[region.ID] = i
+	}
+	for _, member := range members {
+		i, ok := index[member.RegionID]
+		if !ok {
+			continue
+		}
+		view := MemberView{MeshMember: member, NodeName: infos[member.NodeRef].name, NodeHost: infos[member.NodeRef].host}
+		if status, ok := byNode[member.NodeRef]; ok {
+			view.Status = json.RawMessage(status.Payload)
+			view.StatusObservedAt, view.StatusReceivedAt = &status.ObservedAt, &status.ReceivedAt
+		}
+		answer[i].Members = append(answer[i].Members, view)
+	}
+	return answer, nil
 }
 
-// transaction runs fn in a transaction after the defaults are in place.
-func (s *Service) transaction(fn func(tx *gorm.DB) error) error {
-	return s.DB.Transaction(func(tx *gorm.DB) error {
-		if err := ensureDefaults(tx, s.now()); err != nil {
+// normalize checks input and answers its canonical range.
+func normalize(input *RegionInput) (netip.Prefix, error) {
+	if !codePattern.MatchString(input.Code) {
+		return netip.Prefix{}, invalid("code: 2 to 16 lowercase letters, digits or dashes, starting with a letter")
+	}
+	if n := utf8.RuneCountInString(input.Name); n == 0 || n > 32 {
+		return netip.Prefix{}, invalid("name: 1 to 32 characters")
+	}
+	prefix, err := netip.ParsePrefix(input.CIDR)
+	if err != nil || !prefix.Addr().Is4() || prefix.Masked() != prefix {
+		return netip.Prefix{}, invalid("cidr: an IPv4 network such as 10.150.0.0/16")
+	}
+	if prefix.Bits() < 8 || prefix.Bits() > 24 {
+		return netip.Prefix{}, invalid("cidr: a prefix length of 8 to 24")
+	}
+	inside := false
+	for _, private := range privateRanges {
+		inside = inside || (private.Bits() <= prefix.Bits() && private.Contains(prefix.Addr()))
+	}
+	if !inside {
+		return netip.Prefix{}, invalid("cidr: inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 or 100.64.0.0/10")
+	}
+	input.CIDR = prefix.String()
+	return prefix, nil
+}
+
+// checkRegion refuses a code or range another region (not id) has.
+func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) error {
+	var others []model.MeshRegion
+	if err := tx.Where("id <> ?", id).Find(&others).Error; err != nil {
+		return err
+	}
+	for _, other := range others {
+		if other.Code == input.Code {
+			return conflict("another region has the code %q", input.Code)
+		}
+		if otherPrefix, err := netip.ParsePrefix(other.CIDR); err == nil && otherPrefix.Overlaps(prefix) {
+			return conflict("the range overlaps region %q (%s)", other.Code, other.CIDR)
+		}
+	}
+	return nil
+}
+
+// CreateRegion creates a region; every boundary node gets an address in it.
+func CreateRegion(ctx context.Context, db *gorm.DB, input RegionInput, now time.Time) (model.MeshRegion, error) {
+	prefix, err := normalize(&input)
+	if err != nil {
+		return model.MeshRegion{}, err
+	}
+	row := model.MeshRegion{Code: input.Code, Name: input.Name, CIDR: input.CIDR, Enabled: input.Enabled, Sort: input.Sort, CreatedAt: now, UpdatedAt: now}
+	err = change(ctx, db, func(tx *gorm.DB) error {
+		if err := checkRegion(tx, 0, input, prefix); err != nil {
 			return err
 		}
-		return fn(tx)
+		row.Secret = rand.Text()
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		var boundaries []model.MeshMember
+		if err := tx.Where("home = ? AND boundary = ?", true, true).Order("id ASC").Find(&boundaries).Error; err != nil {
+			return err
+		}
+		for _, boundary := range boundaries {
+			if _, err := join(tx, row, boundary.NodeRef, false, false, now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return row, err
+}
+
+// UpdateRegion changes a region. Its range changes only while it has no
+// members; enabling it gives it a network key when it has none.
+func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, now time.Time) (model.MeshRegion, error) {
+	prefix, err := normalize(&input)
+	if err != nil {
+		return model.MeshRegion{}, err
+	}
+	var row model.MeshRegion
+	err = change(ctx, db, func(tx *gorm.DB) error {
+		if err := findRegion(tx, id, &row); err != nil {
+			return err
+		}
+		if err := checkRegion(tx, id, input, prefix); err != nil {
+			return err
+		}
+		if input.CIDR != row.CIDR {
+			var count int64
+			if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return conflict("the range of a region with members cannot change")
+			}
+		}
+		if row.Secret == "" {
+			row.Secret = rand.Text()
+		}
+		row.Code, row.Name, row.CIDR, row.Enabled, row.Sort, row.UpdatedAt = input.Code, input.Name, input.CIDR, input.Enabled, input.Sort, now
+		return tx.Save(&row).Error
+	})
+	return row, err
+}
+
+// DeleteRegion deletes a region that is no node's home region; the boundary
+// nodes leave it.
+func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
+		var row model.MeshRegion
+		if err := findRegion(tx, id, &row); err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.MeshMember{}).Where("region_id = ? AND home = ?", id, true).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return conflict("the region is the home region of %d nodes; move or remove them first", count)
+		}
+		if err := tx.Where("region_id = ?", id).Delete(&model.MeshMember{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&row).Error
 	})
 }
 
-// ensureDefaults creates the settings row and the default regions the
-// first time the mesh is used.
-func ensureDefaults(tx *gorm.DB, now time.Time) error {
-	var count int64
-	if err := tx.Model(&model.MeshSettings{}).Where("id = ?", settingsID).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
+// AddNode makes regionID the home region of node, with a fixed address
+// from its server segment; a boundary node joins every other region too.
+func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.AgentNode, boundary bool, now time.Time) (model.MeshMember, error) {
+	var row model.MeshMember
+	err := change(ctx, db, func(tx *gorm.DB) error {
+		if _, err := lookupNode(tx, node.String()); err != nil {
+			return err
+		}
+		var region model.MeshRegion
+		if err := findRegion(tx, regionID, &region); err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.MeshMember{}).Where("node_ref = ?", node.String()).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return conflict("the node is already in a region")
+		}
+		var err error
+		if row, err = join(tx, region, node.String(), true, boundary, now); err != nil {
+			return err
+		}
+		if boundary {
+			return joinOthers(tx, node.String(), regionID, now)
+		}
 		return nil
-	}
-	settings := model.MeshSettings{
-		ID: settingsID, NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet,
-		HostGroupPrefix: DefaultHostGroupPrefix, UpdatedAt: now,
-	}
-	if err := tx.Create(&settings).Error; err != nil {
-		return err
-	}
-	for i, region := range DefaultRegions {
-		name, err := networkName(region.Code)
+	})
+	return row, err
+}
+
+// UpdateMember changes the node of the home membership memberID: it moves
+// to the region regionID (0 keeps its region), where it gets a new fixed
+// address, and becomes a boundary node (an address in every other region)
+// or an ordinary member. It answers the node's home membership.
+func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, boundary bool, now time.Time) (model.MeshMember, error) {
+	var row model.MeshMember
+	err := change(ctx, db, func(tx *gorm.DB) error {
+		home, err := findHome(tx, memberID)
 		if err != nil {
 			return err
 		}
-		row := model.MeshRegion{
-			Code: region.Code, Name: region.Name, SortOrder: i + 1, Subnet: region.Subnet,
-			ServerRange: region.ServerRange, DevicePool: region.DevicePool, NetworkName: name,
-			CreatedAt: now, UpdatedAt: now,
+		row = home
+		if regionID != 0 && regionID != home.RegionID {
+			var region model.MeshRegion
+			if err := findRegion(tx, regionID, &region); err != nil {
+				return err
+			}
+			if err := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{}).Error; err != nil {
+				return err
+			}
+			if row, err = join(tx, region, home.NodeRef, true, boundary, now); err != nil {
+				return err
+			}
+		} else if home.Boundary != boundary {
+			if err := tx.Model(&row).Update("boundary", boundary).Error; err != nil {
+				return err
+			}
 		}
-		if err := tx.Create(&row).Error; err != nil {
+		if boundary {
+			return joinOthers(tx, home.NodeRef, row.RegionID, now)
+		}
+		return tx.Where("node_ref = ? AND home = ?", home.NodeRef, false).Delete(&model.MeshMember{}).Error
+	})
+	return row, err
+}
+
+// RemoveNode takes the node of the home membership memberID out of the
+// mesh.
+func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
+		home, err := findHome(tx, memberID)
+		if err != nil {
+			return err
+		}
+		return tx.Where("node_ref = ?", home.NodeRef).Delete(&model.MeshMember{}).Error
+	})
+}
+
+func findRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
+	var rows []model.MeshRegion
+	if err := tx.Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("%w: region %d", ErrNotFound, id)
+	}
+	*row = rows[0]
+	return nil
+}
+
+func findHome(tx *gorm.DB, memberID uint) (model.MeshMember, error) {
+	var rows []model.MeshMember
+	if err := tx.Where("id = ? AND home = ?", memberID, true).Limit(1).Find(&rows).Error; err != nil {
+		return model.MeshMember{}, err
+	}
+	if len(rows) == 0 {
+		return model.MeshMember{}, fmt.Errorf("%w: member %d", ErrNotFound, memberID)
+	}
+	return rows[0], nil
+}
+
+// joinOthers gives a boundary node an address in every region but home
+// where it has none.
+func joinOthers(tx *gorm.DB, nodeRef string, home uint, now time.Time) error {
+	var regions []model.MeshRegion
+	if err := tx.Where("id <> ? AND id NOT IN (?)", home,
+		tx.Model(&model.MeshMember{}).Select("region_id").Where("node_ref = ?", nodeRef)).Order("id ASC").Find(&regions).Error; err != nil {
+		return err
+	}
+	for _, region := range regions {
+		if _, err := join(tx, region, nodeRef, false, false, now); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// networkName generates a region's network name: the code and 12 random
-// hexadecimal digits, so that two panels never share a name.
-func networkName(code string) (string, error) {
-	random := make([]byte, 6)
-	if _, err := rand.Read(random); err != nil {
-		return "", err
-	}
-	return "mesh-" + code + "-" + hex.EncodeToString(random), nil
-}
-
-func loadSettings(tx *gorm.DB) (model.MeshSettings, error) {
-	var settings model.MeshSettings
-	err := tx.First(&settings, settingsID).Error
-	return settings, err
-}
-
-// Settings answers the global settings.
-func (s *Service) Settings() (model.MeshSettings, error) {
-	var settings model.MeshSettings
-	err := s.transaction(func(tx *gorm.DB) error {
-		var err error
-		settings, err = loadSettings(tx)
-		return err
-	})
-	return settings, err
-}
-
-// SettingsUpdate changes the global settings.
-type SettingsUpdate struct {
-	NameSuffix        string
-	HostGroupSupernet string
-	HostGroupPrefix   int
-	ReservedSubnets   []string
-}
-
-// UpdateSettings changes the global settings. The host group supernet and
-// prefix change only while no host group exists; the reserved ranges may
-// not overlap a region.
-func (s *Service) UpdateSettings(update SettingsUpdate) (model.MeshSettings, error) {
-	suffix, err := normalizeSuffix(update.NameSuffix)
+// join gives nodeRef the lowest free address of region's server segment.
+func join(tx *gorm.DB, region model.MeshRegion, nodeRef string, home, boundary bool, now time.Time) (model.MeshMember, error) {
+	prefix, err := netip.ParsePrefix(region.CIDR)
 	if err != nil {
-		return model.MeshSettings{}, err
+		return model.MeshMember{}, fmt.Errorf("region %q: %w", region.Code, err)
 	}
-	supernet, err := parsePrivatePrefix("host_group_supernet", update.HostGroupSupernet)
+	var used []string
+	if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", region.ID).Pluck("address", &used).Error; err != nil {
+		return model.MeshMember{}, err
+	}
+	address, ok := freeServerAddress(prefix, used)
+	if !ok {
+		return model.MeshMember{}, fmt.Errorf("%w: %s", ErrFull, region.Code)
+	}
+	row := model.MeshMember{RegionID: region.ID, NodeRef: nodeRef, Address: address.String(), Home: home, Boundary: boundary, CreatedAt: now}
+	return row, tx.Create(&row).Error
+}
+
+// freeServerAddress is the lowest address of the lower half of prefix, after
+// the network address, that used does not hold.
+func freeServerAddress(prefix netip.Prefix, used []string) (netip.Addr, bool) {
+	taken := make(map[string]bool, len(used))
+	for _, address := range used {
+		taken[address] = true
+	}
+	half := uint32(1) << (31 - prefix.Bits())
+	base := prefix.Addr().As4()
+	start := binary.BigEndian.Uint32(base[:])
+	for offset := uint32(1); offset < half; offset++ {
+		var b [4]byte
+		binary.BigEndian.PutUint32(b[:], start+offset)
+		address := netip.AddrFrom4(b)
+		if !taken[address.String()] {
+			return address, true
+		}
+	}
+	return netip.Addr{}, false
+}
+
+type nodeInfo struct{ name, host string }
+
+// lookupNode answers a node's name and host; ErrNotFound when it does not
+// exist.
+func lookupNode(tx *gorm.DB, ref string) (nodeInfo, error) {
+	node, err := agentcontrol.ParseAgentNode(ref)
 	if err != nil {
-		return model.MeshSettings{}, err
+		return nodeInfo{}, invalid("node: proxy-<id> or forward-<id>")
 	}
-	if update.HostGroupPrefix < supernet.Bits() || update.HostGroupPrefix > 30 {
-		return model.MeshSettings{}, invalid("host_group_prefix: %d to 30", supernet.Bits())
+	var table any = &model.Node{}
+	if node.Kind == agentcontrol.NodeKindForward {
+		table = &model.ForwardNode{}
 	}
-	if update.HostGroupPrefix-supernet.Bits() > 16 {
-		return model.MeshSettings{}, invalid("host_group_prefix: at most 16 bits longer than the supernet's")
+	var rows []struct{ Name, Host string }
+	if err := tx.Model(table).Select("name", "host").Where("id = ?", node.ID).Limit(1).Find(&rows).Error; err != nil {
+		return nodeInfo{}, err
 	}
-	reserved := make([]string, 0, len(update.ReservedSubnets))
-	for _, raw := range update.ReservedSubnets {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
+	if len(rows) == 0 {
+		return nodeInfo{}, fmt.Errorf("%w: node %s", ErrNotFound, ref)
+	}
+	return nodeInfo{name: rows[0].Name, host: rows[0].Host}, nil
+}
+
+// NodeMember is the member "mesh" of node's desired configuration: the
+// networks of its enabled regions (agent-contract.md section 2), nil when
+// it is in none, when the feature is off, or before the tables exist.
+func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error) {
+	if !features.Enabled(Feature) || !db.Migrator().HasTable(&model.MeshMember{}) {
+		return nil, nil
+	}
+	var own []model.MeshMember
+	if err := db.Where("node_ref = ?", node.String()).Find(&own).Error; err != nil || len(own) == 0 {
+		return nil, err
+	}
+	boundary := false
+	ids := make([]uint, 0, len(own))
+	for _, member := range own {
+		boundary = boundary || (member.Home && member.Boundary)
+		ids = append(ids, member.RegionID)
+	}
+	var regions []model.MeshRegion
+	if err := db.Where("enabled = ?", true).Order("sort ASC, id ASC").Find(&regions).Error; err != nil {
+		return nil, err
+	}
+	mine := map[uint]model.MeshMember{}
+	for _, member := range own {
+		mine[member.RegionID] = member
+	}
+	// The boundary nodes of each region: a home row with the flag, or a
+	// row that is not a home row.
+	var boundaries []model.MeshMember
+	if err := db.Where("region_id IN ? AND node_ref <> ? AND (home = ? OR boundary = ?)", ids, node.String(), false, true).
+		Order("id ASC").Find(&boundaries).Error; err != nil {
+		return nil, err
+	}
+	peers := map[uint][]map[string]any{}
+	hosts := map[string]string{}
+	for _, peer := range boundaries {
+		host, done := hosts[peer.NodeRef]
+		if !done {
+			info, err := lookupNode(db, peer.NodeRef)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return nil, err
+			}
+			host, hosts[peer.NodeRef] = info.host, info.host
+		}
+		if host != "" {
+			peers[peer.RegionID] = append(peers[peer.RegionID], map[string]any{"server": host, "port": Port, "transport": "tcp"})
+		}
+	}
+	networks := []map[string]any{}
+	for _, region := range regions {
+		member, ok := mine[region.ID]
+		if !ok {
 			continue
 		}
-		prefix, err := parsePrefix("reserved_subnets", raw)
+		prefix, err := netip.ParsePrefix(region.CIDR)
 		if err != nil {
-			return model.MeshSettings{}, err
+			return nil, fmt.Errorf("region %q: %w", region.Code, err)
 		}
-		if prefix.Overlaps(supernet) {
-			return model.MeshSettings{}, invalid("reserved_subnets: %s overlaps the host group supernet", prefix)
-		}
-		reserved = append(reserved, prefix.String())
-	}
-	var settings model.MeshSettings
-	err = s.transaction(func(tx *gorm.DB) error {
-		var err error
-		settings, err = loadSettings(tx)
-		if err != nil {
-			return err
-		}
-		if supernet.String() != settings.HostGroupSupernet || update.HostGroupPrefix != settings.HostGroupPrefix {
-			var groups int64
-			if err := tx.Model(&model.MeshHostGroup{}).Count(&groups).Error; err != nil {
-				return err
-			}
-			if groups > 0 {
-				return conflict("the host group supernet and prefix change only while no host group exists")
-			}
-		}
-		var regions []model.MeshRegion
-		if err := tx.Find(&regions).Error; err != nil {
-			return err
-		}
-		for _, region := range regions {
-			subnet := mustPrefix(region.Subnet)
-			if subnet.Overlaps(supernet) {
-				return invalid("host_group_supernet: overlaps region %s (%s)", region.Code, region.Subnet)
-			}
-			for _, raw := range reserved {
-				if subnet.Overlaps(mustPrefix(raw)) {
-					return invalid("reserved_subnets: %s overlaps region %s (%s)", raw, region.Code, region.Subnet)
+		advertise := []string{}
+		if boundary {
+			for _, other := range regions {
+				if other.ID != region.ID {
+					advertise = append(advertise, other.CIDR)
 				}
 			}
 		}
-		settings.NameSuffix = suffix
-		settings.HostGroupSupernet = supernet.String()
-		settings.HostGroupPrefix = update.HostGroupPrefix
-		settings.ReservedSubnets = strings.Join(reserved, ",")
-		settings.UpdatedAt = s.now()
-		return tx.Save(&settings).Error
-	})
-	return settings, err
+		regionPeers := peers[region.ID]
+		if regionPeers == nil {
+			regionPeers = []map[string]any{}
+		}
+		networks = append(networks, map[string]any{
+			"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
+			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
+			"listen":  []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
+			"peers":   regionPeers,
+			"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
+			"routing": map[string]any{"policy": policy, "paths": []any{}},
+		})
+	}
+	if len(networks) == 0 {
+		return nil, nil
+	}
+	return map[string]any{"networks": networks}, nil
 }
 
-// reservedOf answers the settings' reserved ranges.
-func reservedOf(settings model.MeshSettings) []string {
-	var out []string
-	for _, raw := range strings.Split(settings.ReservedSubnets, ",") {
-		if raw = strings.TrimSpace(raw); raw != "" {
-			out = append(out, raw)
+// RecordStatus keeps payload, a "mesh.status" report of node, as the
+// node's latest status. payload must be a JSON object with a "networks"
+// array.
+func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, payload []byte, observedAt, receivedAt time.Time) error {
+	var shape struct {
+		Networks []json.RawMessage `json:"networks"`
+	}
+	if err := json.Unmarshal(payload, &shape); err != nil || shape.Networks == nil {
+		return invalid("payload: a JSON object with a networks array")
+	}
+	row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
+	return db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "node_ref"}},
+		DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),
+	}).Create(&row).Error
+}
+
+// change runs write in a transaction and then tells the listeners every
+// node that was or is a member, whose configurations may have changed.
+func change(ctx context.Context, db *gorm.DB, write func(tx *gorm.DB) error) error {
+	db = db.WithContext(ctx)
+	before, err := memberNodes(db)
+	if err != nil {
+		return err
+	}
+	if err := db.Transaction(write); err != nil {
+		return err
+	}
+	after, err := memberNodes(db)
+	if err != nil {
+		return err
+	}
+	for ref := range before {
+		after[ref] = true
+	}
+	nodes := make([]agentcontrol.AgentNode, 0, len(after))
+	for ref := range after {
+		if node, err := agentcontrol.ParseAgentNode(ref); err == nil {
+			nodes = append(nodes, node)
 		}
 	}
-	return out
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].String() < nodes[j].String() })
+	notify(nodes)
+	return nil
+}
+
+func memberNodes(db *gorm.DB) (map[string]bool, error) {
+	var refs []string
+	if err := db.Model(&model.MeshMember{}).Distinct("node_ref").Pluck("node_ref", &refs).Error; err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		set[ref] = true
+	}
+	return set, nil
+}
+
+// Listener is told the nodes whose mesh configuration may have changed.
+type Listener func(nodes []agentcontrol.AgentNode)
+
+var (
+	listenersMu sync.Mutex
+	listeners   = map[int]Listener{}
+	nextID      int
+)
+
+// OnChange registers listener for every change; cancel removes it.
+func OnChange(listener Listener) (cancel func()) {
+	listenersMu.Lock()
+	defer listenersMu.Unlock()
+	nextID++
+	id := nextID
+	listeners[id] = listener
+	return func() {
+		listenersMu.Lock()
+		delete(listeners, id)
+		listenersMu.Unlock()
+	}
+}
+
+func notify(nodes []agentcontrol.AgentNode) {
+	if len(nodes) == 0 {
+		return
+	}
+	listenersMu.Lock()
+	called := make([]Listener, 0, len(listeners))
+	for _, listener := range listeners {
+		called = append(called, listener)
+	}
+	listenersMu.Unlock()
+	for _, listener := range called {
+		listener(nodes)
+	}
 }

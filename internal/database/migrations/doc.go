@@ -178,7 +178,8 @@
 //   - 0044_node_temporary_proxies: the SOCKS5 proxies a proxy node serves
 //     for a limited time on an internal address (v5_node_temporary_proxy,
 //     internal/tempproxy).
-//   - 0045_mesh_regions: the intranet mesh's panel side: settings,
-//     regions, members and their virtual addresses, host groups, the names
-//     gateways publish and region changes (v5_mesh_*, internal/meshregion).
+//   - 0045_mesh_regions: the intranet mesh regions with the four default
+//     regions, the nodes' fixed addresses and the latest status of each
+//     node (v5_mesh_region, v5_mesh_member, v5_mesh_status,
+//     internal/meshregion).
 package migrations
