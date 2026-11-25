@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -50,22 +49,22 @@ func parseNameTable(text string) (nameTable, error) {
 		if len(fields) != 3 {
 			return nameTable{}, fmt.Errorf("name table line %d: %q", number+1, line)
 		}
-		from, err := strconv.ParseUint(fields[1], 16, 32)
+		from, err := parseCodePoint(fields[1])
 		if err != nil {
 			return nameTable{}, fmt.Errorf("name table line %d: %w", number+1, err)
 		}
-		to, err := strconv.ParseUint(fields[2], 16, 32)
+		to, err := parseCodePoint(fields[2])
 		if err != nil {
 			return nameTable{}, fmt.Errorf("name table line %d: %w", number+1, err)
 		}
 		switch fields[0] {
 		case "keep":
-			if to < from || len(table.keep) > 0 && rune(from) <= table.keep[len(table.keep)-1][1] {
+			if to < from || len(table.keep) > 0 && from <= table.keep[len(table.keep)-1][1] {
 				return nameTable{}, fmt.Errorf("name table line %d: range out of order", number+1)
 			}
-			table.keep = append(table.keep, [2]rune{rune(from), rune(to)})
+			table.keep = append(table.keep, [2]rune{from, to})
 		case "lower":
-			table.lower[rune(from)] = rune(to)
+			table.lower[from] = to
 		default:
 			return nameTable{}, fmt.Errorf("name table line %d: %q", number+1, fields[0])
 		}
@@ -74,6 +73,30 @@ func parseNameTable(text string) (nameTable, error) {
 		return nameTable{}, fmt.Errorf("name table is empty")
 	}
 	return table, nil
+}
+
+// parseCodePoint reads a code point written in 4 to 6 hexadecimal digits.
+func parseCodePoint(text string) (rune, error) {
+	if len(text) < 4 || len(text) > 6 {
+		return 0, fmt.Errorf("code point %q", text)
+	}
+	var r rune
+	for _, c := range text {
+		var digit rune
+		switch {
+		case c >= '0' && c <= '9':
+			digit = c - '0'
+		case c >= 'A' && c <= 'F':
+			digit = c - 'A' + 10
+		default:
+			return 0, fmt.Errorf("code point %q", text)
+		}
+		r = r*16 + digit
+	}
+	if r > unicode.MaxRune {
+		return 0, fmt.Errorf("code point %q", text)
+	}
+	return r, nil
 }
 
 func (t nameTable) kept(r rune) bool {

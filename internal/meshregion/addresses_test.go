@@ -377,8 +377,10 @@ func TestNameTable(t *testing.T) {
 	require.False(t, table.kept(0x105C0), "unassigned in Unicode 15.1.0")
 	require.Equal(t, rune('i'), table.lower[0x0130])
 	require.Equal(t, rune(0x03C3), table.lower[0x03A3], "final sigma is not context dependent")
-	_, err := parseNameTable("keep 20 10\n")
-	require.Error(t, err)
+	for _, bad := range []string{"keep 0100 00FF\n", "keep 0100 1100000\n", "lower 01g0 0069\n", "lower 110000 0069\n", "keep 0100\n"} {
+		_, err := parseNameTable(bad)
+		require.Error(t, err, bad)
+	}
 }
 
 func TestUsedPoolAddressStays(t *testing.T) {
