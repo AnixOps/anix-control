@@ -682,6 +682,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/mesh/regions/:id/members", mesh.AddMember)
 		v4.PUT("/kernel/mesh/members/:member_id", mesh.UpdateMember)
 		v4.DELETE("/kernel/mesh/members/:member_id", mesh.RemoveMember)
+		// Devices without an Agent: one-time enrollment credentials, the
+		// enrolled devices and their region change requests.
+		v4.GET("/kernel/mesh/enrollments", mesh.ListEnrollments)
+		v4.POST("/kernel/mesh/enrollments", mesh.CreateEnrollment)
+		v4.DELETE("/kernel/mesh/enrollments/:id", mesh.DeleteEnrollment)
+		v4.PUT("/kernel/mesh/devices/:id", mesh.MoveDevice)
+		v4.DELETE("/kernel/mesh/devices/:id", mesh.RevokeDevice)
+		v4.GET("/kernel/mesh/region-changes", mesh.ListRegionChanges)
+		v4.POST("/kernel/mesh/region-changes/:id/approve", mesh.ApproveRegionChange)
+		v4.POST("/kernel/mesh/region-changes/:id/reject", mesh.RejectRegionChange)
 		// Feature licensing (internal/entitlement): the ANX
 		// licensing settings, the devices that asked for a license, revoke
 		// and restore. Off by default.
@@ -733,6 +743,20 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	{
 		claim.GET("/status", claimHandler.Status)
 		claim.POST("", claimHandler.Claim)
+	}
+
+	// Mesh devices without an Agent (internal/meshregion): enroll with a
+	// one-time credential, then read the networks, report the status and
+	// ask for another region with the device token. Rate limited like the
+	// other public routes; 404 while the gated feature "mesh" is off.
+	meshDevices := handler.NewMeshHandler()
+	meshDevice := r.Group("/api/v5/mesh/device")
+	meshDevice.Use(publicLimiter.Middleware())
+	{
+		meshDevice.POST("/enroll", meshDevices.EnrollDevice)
+		meshDevice.GET("/config", meshDevices.DeviceConfig)
+		meshDevice.POST("/report", meshDevices.DeviceReport)
+		meshDevice.POST("/region-change", meshDevices.DeviceRegionChange)
 	}
 
 	// API v5: the panel's own state, with v4's admission model. The

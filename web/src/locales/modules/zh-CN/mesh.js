@@ -10,6 +10,18 @@ export default {
       loadFailed: '无法加载组网配置',
       addRegion: '新建地区',
       addMember: '添加节点',
+      issueEnrollment: '签发接入凭证',
+      devices: '设备',
+      emptyDevices: '暂无接入设备',
+      emptyDevicesDescription: '未安装 Agent 的设备凭一次性接入凭证加入组网。',
+      regionChanges: '待审批的地区变更',
+      enrollments: '接入凭证',
+      noAddress: '无地址',
+      moveTo: '迁移至 {name}',
+      revoke: '吊销…',
+      approve: '批准',
+      reject: '拒绝',
+      withdraw: '撤回',
       regions: '地区',
       members: '节点',
       emptyRegions: '暂无地区',
@@ -39,7 +51,11 @@ export default {
         node: '节点',
         address: '地址',
         role: '角色',
-        status: '组网状态'
+        status: '组网状态',
+        device: '设备',
+        move: '变更',
+        reason: '原因',
+        name: '名称'
       },
       status: {
         none: '未上报',
@@ -80,18 +96,51 @@ export default {
       add: '添加',
       save: '保存'
     },
+    device: {
+      kinds: {
+        node: '节点设备',
+        personal: '个人设备'
+      }
+    },
+    enrollment: {
+      title: '签发接入凭证',
+      description: '凭证仅可使用一次。设备凭证换取设备令牌后，定期读取组网配置并上报状态。',
+      name: '设备名称',
+      kind: '类型',
+      kindHelp: {
+        node: '节点设备使用服务器段固定地址，作为完整节点运行。',
+        personal: '个人设备使用设备地址池地址，以接入方式运行；连续 30 天未使用时释放地址。'
+      },
+      region: '地区',
+      anyRegion: '按延迟自动选择',
+      hours: '有效期（小时）',
+      hoursHelp: '1 至 168 小时。',
+      issue: '签发',
+      token: '接入凭证',
+      tokenHelp: '凭证仅显示一次，请立即复制并交给设备使用者。',
+      done: '完成',
+      states: {
+        valid: '未使用',
+        used: '已使用',
+        expired: '已过期'
+      }
+    },
     delete: {
       regionTitle: '删除地区 {name}',
       regionMessage: '边界节点将退出该地区。仍为节点所属地区时无法删除。',
       memberTitle: '将 {name} 移出组网',
       memberMessage: '节点将停止全部组网网络并释放地址。',
       confirm: '删除',
-      confirmRemove: '移出'
+      confirmRemove: '移出',
+      deviceTitle: '吊销设备 {name}',
+      deviceMessage: '设备令牌立即失效，地址随之释放。重新接入需签发新凭证。',
+      confirmRevoke: '吊销'
     },
     toast: {
       saved: '已保存',
       deleted: '已删除',
-      removed: '已移出'
+      removed: '已移出',
+      revoked: '已吊销'
     },
     required: '必填'
   }

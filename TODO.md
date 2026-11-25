@@ -17,12 +17,11 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   5.0.2; server keys are still derived.
 
 - [ ] Intranet mesh (组网, `docs/design/mesh-regions`), after the first
-  step (regions, fixed addresses, boundary nodes, configuration and status;
-  gated feature `mesh`): the device pool and per-device addresses (R29),
-  region change requests and approval (R27), one-time enrollment
-  credentials and the read-only report of nodes without an Agent (R31), the
-  `takeover` setting, forward nodes in the node picker, and turning the
-  feature on once the node kernel runs the mesh.
+  two steps (regions, fixed addresses, boundary nodes, configuration and
+  status; the device pool, enrollment credentials, devices without an Agent
+  and region change approval; gated feature `mesh`): the `takeover`
+  setting, forward nodes in the node picker, and turning the feature on
+  once the node kernel runs the mesh.
 
 ## Plugin Platform
 

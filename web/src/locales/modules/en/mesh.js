@@ -11,6 +11,18 @@ export default {
       loadFailed: 'Could not load the mesh configuration',
       addRegion: 'New region',
       addMember: 'Add node',
+      issueEnrollment: 'Issue enrollment credential',
+      devices: 'Devices',
+      emptyDevices: 'No enrolled devices',
+      emptyDevicesDescription: 'Devices without an Agent join the mesh with a one-time enrollment credential.',
+      regionChanges: 'Pending region changes',
+      enrollments: 'Enrollment credentials',
+      noAddress: 'No address',
+      moveTo: 'Move to {name}',
+      revoke: 'Revoke…',
+      approve: 'Approve',
+      reject: 'Reject',
+      withdraw: 'Withdraw',
       regions: 'Regions',
       members: 'Nodes',
       emptyRegions: 'No regions',
@@ -40,7 +52,11 @@ export default {
         node: 'Node',
         address: 'Address',
         role: 'Role',
-        status: 'Mesh status'
+        status: 'Mesh status',
+        device: 'Device',
+        move: 'Change',
+        reason: 'Reason',
+        name: 'Name'
       },
       status: {
         none: 'Not reported',
@@ -81,18 +97,51 @@ export default {
       add: 'Add',
       save: 'Save'
     },
+    device: {
+      kinds: {
+        node: 'Node device',
+        personal: 'Personal device'
+      }
+    },
+    enrollment: {
+      title: 'Issue enrollment credential',
+      description: 'A credential can be used once. The device exchanges it for a device token, then reads its mesh configuration and reports its status periodically.',
+      name: 'Device name',
+      kind: 'Type',
+      kindHelp: {
+        node: 'A node device has a fixed address from the server segment and runs as a full node.',
+        personal: 'A personal device has an address from the device pool and runs in access mode; the address is released after 30 days without use.'
+      },
+      region: 'Region',
+      anyRegion: 'Chosen by latency',
+      hours: 'Validity (hours)',
+      hoursHelp: '1 to 168 hours.',
+      issue: 'Issue',
+      token: 'Enrollment credential',
+      tokenHelp: 'The credential is shown only once. Copy it now and give it to the device user.',
+      done: 'Done',
+      states: {
+        valid: 'Unused',
+        used: 'Used',
+        expired: 'Expired'
+      }
+    },
     delete: {
       regionTitle: 'Delete region {name}',
       regionMessage: 'Boundary nodes leave the region. A region that is still a node\'s home region cannot be deleted.',
       memberTitle: 'Remove {name} from the mesh',
       memberMessage: 'The node stops every mesh network and releases its addresses.',
       confirm: 'Delete',
-      confirmRemove: 'Remove'
+      confirmRemove: 'Remove',
+      deviceTitle: 'Revoke device {name}',
+      deviceMessage: 'The device token stops working at once and its address is released. Enrolling again needs a new credential.',
+      confirmRevoke: 'Revoke'
     },
     toast: {
       saved: 'Saved',
       deleted: 'Deleted',
-      removed: 'Removed'
+      removed: 'Removed',
+      revoked: 'Revoked'
     },
     required: 'Required'
   }

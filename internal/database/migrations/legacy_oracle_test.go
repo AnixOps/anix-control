@@ -237,6 +237,9 @@ func laterModels() []any {
 		&model.MeshRegion{},                // 0045_mesh_regions
 		&model.MeshMember{},                // 0045_mesh_regions
 		&model.MeshStatus{},                // 0045_mesh_regions
+		&model.MeshEnrollment{},            // 0046_mesh_devices
+		&model.MeshDevice{},                // 0046_mesh_devices
+		&model.MeshRegionChange{},          // 0046_mesh_devices
 	}
 }
 

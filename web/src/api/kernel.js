@@ -808,3 +808,34 @@ export async function updateKernelMeshMember(id, { regionId, boundary }) {
 export async function removeKernelMeshMember(id) {
   return unwrap(await v4({ url: `/kernel/mesh/members/${encodeURIComponent(id)}`, method: 'delete' }))
 }
+
+// Mesh devices without an Agent: one-time enrollment credentials (the token
+// is answered only when issued), device moves and revocation, and the
+// devices' region change requests.
+export async function listKernelMeshEnrollments() {
+  return unwrap(await v4({ url: '/kernel/mesh/enrollments', method: 'get' }))
+}
+
+export async function createKernelMeshEnrollment({ regionId, kind, name, hours }) {
+  return unwrap(await v4({ url: '/kernel/mesh/enrollments', method: 'post', data: { region_id: Number(regionId) || 0, kind, name, hours: Number(hours) || 0 } }))
+}
+
+export async function deleteKernelMeshEnrollment(id) {
+  return unwrap(await v4({ url: `/kernel/mesh/enrollments/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
+export async function moveKernelMeshDevice(id, regionId) {
+  return unwrap(await v4({ url: `/kernel/mesh/devices/${encodeURIComponent(id)}`, method: 'put', data: { region_id: Number(regionId) } }))
+}
+
+export async function revokeKernelMeshDevice(id) {
+  return unwrap(await v4({ url: `/kernel/mesh/devices/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
+export async function listKernelMeshRegionChanges() {
+  return unwrap(await v4({ url: '/kernel/mesh/region-changes', method: 'get' }))
+}
+
+export async function decideKernelMeshRegionChange(id, approve) {
+  return unwrap(await v4({ url: `/kernel/mesh/region-changes/${encodeURIComponent(id)}/${approve ? 'approve' : 'reject'}`, method: 'post' }))
+}

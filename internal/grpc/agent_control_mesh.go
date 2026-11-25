@@ -69,7 +69,7 @@ func handleMeshStatus(connection *AgentControlConnection, node agentcontrol.Agen
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), forwardHelloTimeout)
 	defer cancel()
-	if err := meshregion.RecordStatus(ctx, databaseForAgentChecks(), node, report.GetPayloadJson(), observedAt, receivedAt); err != nil {
+	if err := meshregion.RecordStatus(ctx, databaseForAgentChecks(), node.String(), report.GetPayloadJson(), observedAt, receivedAt); err != nil {
 		if errors.Is(err, meshregion.ErrInvalid) {
 			refuse(service.PackageReportRefusedBadPayload, err)
 			return

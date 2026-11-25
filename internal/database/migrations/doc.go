@@ -182,4 +182,8 @@
 //     regions, the nodes' fixed addresses and the latest status of each
 //     node (v5_mesh_region, v5_mesh_member, v5_mesh_status,
 //     internal/meshregion).
+//   - 0046_mesh_devices: the mesh's one-time enrollment credentials, its
+//     devices without an Agent and their region change requests
+//     (v5_mesh_enrollment, v5_mesh_device, v5_mesh_region_change,
+//     internal/meshregion).
 package migrations

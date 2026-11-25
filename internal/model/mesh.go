@@ -52,3 +52,62 @@ type MeshStatus struct {
 }
 
 func (MeshStatus) TableName() string { return "v5_mesh_status" }
+
+// MeshEnrollment is a one-time enrollment credential for a mesh device: a
+// node without an Agent (its install command uses it) or a personal device.
+// Only the SHA-256 of the token is kept; enrolling sets UsedAt and DeviceID.
+type MeshEnrollment struct {
+	ID uint `gorm:"primaryKey" json:"id"`
+	// RegionID is the device's region; 0 picks the region of lowest latency
+	// the device reports when it enrolls.
+	RegionID uint `gorm:"not null" json:"region_id"`
+	// Kind is "node" (a full node with a server segment address) or
+	// "personal" (an access device with a device pool address).
+	Kind      string     `gorm:"size:16;not null" json:"kind"`
+	Name      string     `gorm:"size:64;not null" json:"name"`
+	TokenHash string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null" json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	DeviceID  *uint      `json:"device_id"`
+	CreatedBy *uint      `json:"created_by"`
+	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshEnrollment) TableName() string { return "v5_mesh_enrollment" }
+
+// MeshDevice is an enrolled mesh device without an Agent. DeviceKey is the
+// identity the device chose; its address stays while it keeps the key. A
+// personal device unused for 30 days gives up its address, and a revoked
+// device (RevokedAt) is refused. Only the SHA-256 of its token is kept.
+type MeshDevice struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	RegionID  uint   `gorm:"not null;index" json:"region_id"`
+	Kind      string `gorm:"size:16;not null" json:"kind"`
+	Name      string `gorm:"size:64;not null" json:"name"`
+	DeviceKey string `gorm:"size:128;not null;uniqueIndex" json:"device_key"`
+	TokenHash string `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	// Address is "" while the device has none (reclaimed or revoked).
+	Address    string     `gorm:"size:15;not null" json:"address"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
+	RevokedAt  *time.Time `json:"revoked_at"`
+	CreatedAt  time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshDevice) TableName() string { return "v5_mesh_device" }
+
+// MeshRegionChange is a device's request to move to another region, which
+// an administrator approves (the device moves and gets a new address) or
+// rejects. State is "pending", "approved" or "rejected".
+type MeshRegionChange struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	DeviceID     uint       `gorm:"not null;index" json:"device_id"`
+	FromRegionID uint       `gorm:"not null" json:"from_region_id"`
+	ToRegionID   uint       `gorm:"not null" json:"to_region_id"`
+	Reason       string     `gorm:"size:200;not null" json:"reason"`
+	State        string     `gorm:"size:16;not null" json:"state"`
+	DecidedBy    *uint      `json:"decided_by"`
+	DecidedAt    *time.Time `json:"decided_at"`
+	CreatedAt    time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshRegionChange) TableName() string { return "v5_mesh_region_change" }

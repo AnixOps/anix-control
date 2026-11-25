@@ -95,10 +95,18 @@ type RegionInput struct {
 	Sort    int    `json:"sort"`
 }
 
-// Region is a region with its members, for the administrator.
+// Region is a region with its members and devices, for the administrator.
 type Region struct {
 	model.MeshRegion
 	Members []MemberView `json:"members"`
+	Devices []DeviceView `json:"devices"`
+}
+
+// DeviceView is a device without an Agent with its last status.
+type DeviceView struct {
+	model.MeshDevice
+	Status           json.RawMessage `json:"status" swaggertype:"object"`
+	StatusReceivedAt *time.Time      `json:"status_received_at"`
 }
 
 // MemberView is a membership with its node and the node's last status.
@@ -146,7 +154,7 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 	answer := make([]Region, len(regions))
 	index := map[uint]int{}
 	for i, region := range regions {
-		answer[i] = Region{MeshRegion: region, Members: []MemberView{}}
+		answer[i] = Region{MeshRegion: region, Members: []MemberView{}, Devices: []DeviceView{}}
 		index[region.ID] = i
 	}
 	for _, member := range members {
@@ -160,6 +168,21 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 			view.StatusObservedAt, view.StatusReceivedAt = &status.ObservedAt, &status.ReceivedAt
 		}
 		answer[i].Members = append(answer[i].Members, view)
+	}
+	var devices []model.MeshDevice
+	if err := db.Where("revoked_at IS NULL").Order("kind ASC, id ASC").Find(&devices).Error; err != nil {
+		return nil, err
+	}
+	for _, device := range devices {
+		i, ok := index[device.RegionID]
+		if !ok {
+			continue
+		}
+		view := DeviceView{MeshDevice: device}
+		if status, ok := byNode[DeviceRef(device.ID)]; ok {
+			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
+		}
+		answer[i].Devices = append(answer[i].Devices, view)
 	}
 	return answer, nil
 }
@@ -252,11 +275,11 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 			return err
 		}
 		if input.CIDR != row.CIDR {
-			var count int64
-			if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", id).Count(&count).Error; err != nil {
+			used, err := usedAddresses(tx, id)
+			if err != nil {
 				return err
 			}
-			if count > 0 {
+			if len(used) > 0 {
 				return conflict("the range of a region with members cannot change")
 			}
 		}
@@ -283,6 +306,12 @@ func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 		}
 		if count > 0 {
 			return conflict("the region is the home region of %d nodes; move or remove them first", count)
+		}
+		if err := tx.Model(&model.MeshDevice{}).Where("region_id = ? AND revoked_at IS NULL", id).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return conflict("the region has %d devices; move or revoke them first", count)
 		}
 		if err := tx.Where("region_id = ?", id).Delete(&model.MeshMember{}).Error; err != nil {
 			return err
@@ -415,11 +444,11 @@ func join(tx *gorm.DB, region model.MeshRegion, nodeRef string, home, boundary b
 	if err != nil {
 		return model.MeshMember{}, fmt.Errorf("region %q: %w", region.Code, err)
 	}
-	var used []string
-	if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", region.ID).Pluck("address", &used).Error; err != nil {
+	used, err := usedAddresses(tx, region.ID)
+	if err != nil {
 		return model.MeshMember{}, err
 	}
-	address, ok := freeServerAddress(prefix, used)
+	address, ok := freeAddress(prefix, used, false)
 	if !ok {
 		return model.MeshMember{}, fmt.Errorf("%w: %s", ErrFull, region.Code)
 	}
@@ -427,9 +456,23 @@ func join(tx *gorm.DB, region model.MeshRegion, nodeRef string, home, boundary b
 	return row, tx.Create(&row).Error
 }
 
-// freeServerAddress is the lowest address of the lower half of prefix, after
-// the network address, that used does not hold.
-func freeServerAddress(prefix netip.Prefix, used []string) (netip.Addr, bool) {
+// usedAddresses are the addresses held in the region by members and by
+// devices.
+func usedAddresses(tx *gorm.DB, regionID uint) ([]string, error) {
+	var used, devices []string
+	if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", regionID).Pluck("address", &used).Error; err != nil {
+		return nil, err
+	}
+	if err := tx.Model(&model.MeshDevice{}).Where("region_id = ? AND address <> ?", regionID, "").Pluck("address", &devices).Error; err != nil {
+		return nil, err
+	}
+	return append(used, devices...), nil
+}
+
+// freeAddress is the lowest address that used does not hold in the lower
+// half of prefix after the network address (the server segment) or, with
+// pool, in the upper half before the broadcast address (the device pool).
+func freeAddress(prefix netip.Prefix, used []string, pool bool) (netip.Addr, bool) {
 	taken := make(map[string]bool, len(used))
 	for _, address := range used {
 		taken[address] = true
@@ -437,7 +480,11 @@ func freeServerAddress(prefix netip.Prefix, used []string) (netip.Addr, bool) {
 	half := uint32(1) << (31 - prefix.Bits())
 	base := prefix.Addr().As4()
 	start := binary.BigEndian.Uint32(base[:])
-	for offset := uint32(1); offset < half; offset++ {
+	first, end := uint32(1), half
+	if pool {
+		first, end = half, 2*half-1
+	}
+	for offset := first; offset < end; offset++ {
 		var b [4]byte
 		binary.BigEndian.PutUint32(b[:], start+offset)
 		address := netip.AddrFrom4(b)
@@ -496,27 +543,9 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	for _, member := range own {
 		mine[member.RegionID] = member
 	}
-	// The boundary nodes of each region: a home row with the flag, or a
-	// row that is not a home row.
-	var boundaries []model.MeshMember
-	if err := db.Where("region_id IN ? AND node_ref <> ? AND (home = ? OR boundary = ?)", ids, node.String(), false, true).
-		Order("id ASC").Find(&boundaries).Error; err != nil {
+	peers, err := boundaryPeers(db, ids, node.String())
+	if err != nil {
 		return nil, err
-	}
-	peers := map[uint][]map[string]any{}
-	hosts := map[string]string{}
-	for _, peer := range boundaries {
-		host, done := hosts[peer.NodeRef]
-		if !done {
-			info, err := lookupNode(db, peer.NodeRef)
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				return nil, err
-			}
-			host, hosts[peer.NodeRef] = info.host, info.host
-		}
-		if host != "" {
-			peers[peer.RegionID] = append(peers[peer.RegionID], map[string]any{"server": host, "port": Port, "transport": "tcp"})
-		}
 	}
 	networks := []map[string]any{}
 	for _, region := range regions {
@@ -536,18 +565,7 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 				}
 			}
 		}
-		regionPeers := peers[region.ID]
-		if regionPeers == nil {
-			regionPeers = []map[string]any{}
-		}
-		networks = append(networks, map[string]any{
-			"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
-			"address": fmt.Sprintf("%s/%d", member.Address, prefix.Bits()), "role": "full",
-			"listen":  []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}},
-			"peers":   regionPeers,
-			"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
-			"routing": map[string]any{"policy": policy, "paths": []any{}},
-		})
+		networks = append(networks, network(region, prefix, member.Address, true, peers[region.ID], advertise))
 	}
 	if len(networks) == 0 {
 		return nil, nil
@@ -555,17 +573,64 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	return map[string]any{"networks": networks}, nil
 }
 
-// RecordStatus keeps payload, a "mesh.status" report of node, as the
-// node's latest status. payload must be a JSON object with a "networks"
-// array.
-func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, payload []byte, observedAt, receivedAt time.Time) error {
+// boundaryPeers are the initial peers of each region in regionIDs: its
+// boundary nodes but except (a home row with the flag, or a row that is not
+// a home row), by host.
+func boundaryPeers(db *gorm.DB, regionIDs []uint, except string) (map[uint][]map[string]any, error) {
+	var boundaries []model.MeshMember
+	if err := db.Where("region_id IN ? AND node_ref <> ? AND (home = ? OR boundary = ?)", regionIDs, except, false, true).
+		Order("id ASC").Find(&boundaries).Error; err != nil {
+		return nil, err
+	}
+	peers := map[uint][]map[string]any{}
+	hosts := map[string]string{}
+	for _, peer := range boundaries {
+		host, done := hosts[peer.NodeRef]
+		if !done {
+			info, err := lookupNode(db, peer.NodeRef)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return nil, err
+			}
+			host, hosts[peer.NodeRef] = info.host, info.host
+		}
+		if host != "" {
+			peers[peer.RegionID] = append(peers[peer.RegionID], map[string]any{"server": host, "port": Port, "transport": "tcp"})
+		}
+	}
+	return peers, nil
+}
+
+// network is one entry of "networks" (agent-contract.md section 2): a full
+// node listens and relays; an access device (a phone) does neither.
+func network(region model.MeshRegion, prefix netip.Prefix, address string, full bool, peers []map[string]any, advertise []string) map[string]any {
+	if peers == nil {
+		peers = []map[string]any{}
+	}
+	entry := map[string]any{
+		"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
+		"address": fmt.Sprintf("%s/%d", address, prefix.Bits()), "role": "access", "listen": []map[string]any{},
+		"peers":   peers,
+		"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
+		"routing": map[string]any{"policy": policy, "paths": []any{}},
+	}
+	if full {
+		entry["role"] = "full"
+		entry["listen"] = []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}}
+	}
+	return entry
+}
+
+// RecordStatus keeps payload, a "mesh.status" report of ref (a node or
+// "device-<id>"), as its latest status. payload must be a JSON object with
+// a "networks" array.
+func RecordStatus(ctx context.Context, db *gorm.DB, ref string, payload []byte, observedAt, receivedAt time.Time) error {
 	var shape struct {
 		Networks []json.RawMessage `json:"networks"`
 	}
 	if err := json.Unmarshal(payload, &shape); err != nil || shape.Networks == nil {
 		return invalid("payload: a JSON object with a networks array")
 	}
-	row := model.MeshStatus{NodeRef: node.String(), Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
+	row := model.MeshStatus{NodeRef: ref, Payload: string(payload), ObservedAt: observedAt, ReceivedAt: receivedAt}
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "node_ref"}},
 		DoUpdates: clause.AssignmentColumns([]string{"payload", "observed_at", "received_at"}),

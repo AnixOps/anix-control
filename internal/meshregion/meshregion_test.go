@@ -26,7 +26,7 @@ func openDB(t *testing.T) *gorm.DB {
 	t.Cleanup(func() { features.SetVersion("") })
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "mesh.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}, &model.Node{}, &model.ForwardNode{}))
+	require.NoError(t, db.AutoMigrate(&model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}, &model.MeshEnrollment{}, &model.MeshDevice{}, &model.MeshRegionChange{}, &model.Node{}, &model.ForwardNode{}))
 	for i, host := range []string{"a.example.com", "b.example.com", "c.example.com", "d.example.com"} {
 		require.NoError(t, db.Create(&model.Node{ID: uint(i + 1), Name: host[:1], Host: host}).Error)
 	}
@@ -68,7 +68,7 @@ func TestRegionValidation(t *testing.T) {
 }
 
 func TestAddressesComeFromTheServerSegment(t *testing.T) {
-	address, ok := freeServerAddress(netip.MustParsePrefix("10.150.0.0/16"), []string{"10.150.0.1", "10.150.0.3"})
+	address, ok := freeAddress(netip.MustParsePrefix("10.150.0.0/16"), []string{"10.150.0.1", "10.150.0.3"}, false)
 	require.True(t, ok)
 	require.Equal(t, "10.150.0.2", address.String())
 	// A /24's server segment is .1 to .127.
@@ -76,8 +76,16 @@ func TestAddressesComeFromTheServerSegment(t *testing.T) {
 	for i := 1; i < 128; i++ {
 		used = append(used, netip.AddrFrom4([4]byte{192, 168, 9, byte(i)}).String())
 	}
-	_, ok = freeServerAddress(netip.MustParsePrefix("192.168.9.0/24"), used)
+	_, ok = freeAddress(netip.MustParsePrefix("192.168.9.0/24"), used, false)
 	require.False(t, ok, "the upper half is the device pool")
+	address, ok = freeAddress(netip.MustParsePrefix("192.168.9.0/24"), nil, true)
+	require.True(t, ok)
+	require.Equal(t, "192.168.9.128", address.String())
+	for i := 128; i < 255; i++ {
+		used = append(used, netip.AddrFrom4([4]byte{192, 168, 9, byte(i)}).String())
+	}
+	_, ok = freeAddress(netip.MustParsePrefix("192.168.9.0/24"), used, true)
+	require.False(t, ok, "never the broadcast address")
 }
 
 func TestBoundaryNodesJoinEveryRegion(t *testing.T) {
@@ -198,11 +206,11 @@ func TestRecordStatusAndList(t *testing.T) {
 	_, err := AddNode(ctx, db, cn.ID, proxy(1), false, now)
 	require.NoError(t, err)
 
-	require.ErrorIs(t, RecordStatus(ctx, db, proxy(1), []byte(`{"x":1}`), now, now), ErrInvalid)
-	require.True(t, errors.Is(RecordStatus(ctx, db, proxy(1), []byte(`[`), now, now), ErrInvalid))
+	require.ErrorIs(t, RecordStatus(ctx, db, "proxy-1", []byte(`{"x":1}`), now, now), ErrInvalid)
+	require.True(t, errors.Is(RecordStatus(ctx, db, "proxy-1", []byte(`[`), now, now), ErrInvalid))
 	payload := `{"networks":[{"id":"cn","running":true,"alerts":[{"code":"address_unmanaged","address":"10.150.0.9"}]}]}`
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[]}`), now, now))
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(payload), now.Add(time.Minute), now.Add(time.Minute)))
+	require.NoError(t, RecordStatus(ctx, db, "proxy-1", []byte(`{"networks":[]}`), now, now))
+	require.NoError(t, RecordStatus(ctx, db, "proxy-1", []byte(payload), now.Add(time.Minute), now.Add(time.Minute)))
 
 	regions, err := List(ctx, db)
 	require.NoError(t, err)
