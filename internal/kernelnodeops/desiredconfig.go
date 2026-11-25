@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/relayroute"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tempproxy"
 	"github.com/AnixOps/anix-control/v5/internal/trafficqos"
@@ -100,6 +101,15 @@ func BuildDesiredConfig(db *gorm.DB, node agentcontrol.AgentNode) (*DesiredConfi
 	}
 	if mesh != nil {
 		document[meshregion.Member] = mesh
+	}
+	// The region relays the node reaches Control through, from its group
+	// (internal/relayroute), only when the group has a route.
+	route, err := relayroute.DesiredMember(db, node)
+	if err != nil {
+		return nil, err
+	}
+	if route != nil {
+		document[relayroute.Member] = route
 	}
 	return newDesiredConfig(node, format, document)
 }

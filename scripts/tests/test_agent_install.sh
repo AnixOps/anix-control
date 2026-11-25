@@ -257,8 +257,10 @@ run_installer() {
     # clock; the gRPC target answers curl with FAKE_GRPC_RC; /install/ip
     # answers the address of the family, unless FAKE_IP is down; with
     # FAKE_H2_CUT the zip download breaks unless asked over HTTP/1.1.
+    # Through a relay (--connect-to), the gRPC target answers unless the
+    # relay is in FAKE_RELAYS_DOWN.
     curl() {
-      local out="" url="" headers="" family="" http11=0
+      local out="" url="" headers="" family="" http11=0 connect=""
       while (($# > 0)); do
         case "$1" in
           -V)
@@ -269,12 +271,18 @@ run_installer() {
           -D) headers="$2"; shift 2 ;;
           -4 | -6) family="${1#-}"; shift ;;
           --http1.1) http11=1; shift ;;
+          --connect-to) connect="$2"; shift 2 ;;
           --proto | --retry | --connect-timeout | -m) shift 2 ;;
           -*) shift ;;
           *) url="$1"; shift ;;
         esac
       done
-      printf 'curl %s\n' "${url}" >>"${STATE}/log"
+      printf 'curl %s%s\n' "${url}" "${connect:+ via ${connect}}" >>"${STATE}/log"
+      if [[ -n "${connect}" ]]; then
+        [[ "${url}" == "https://ctl.example.com:50051/" && "${connect}" == "ctl.example.com:50051:"* ]] || return 2
+        [[ " ${FAKE_RELAYS_DOWN:-} " != *" ${connect#ctl.example.com:50051:} "* ]] || return 7
+        return 0
+      fi
       if [[ "${FAKE_H2_CUT:-0}" == "1" && "${http11}" == "0" && "${url}" == *.zip ]]; then
         return 18
       fi
@@ -719,6 +727,38 @@ FAKE_IP=down run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
 expect_status 0 "join without /install/ip"
 ! grep -q '^agent join .*--address' "${STATE}/log" || fail "addresses passed although /install/ip did not answer"
 ok "joining a node group"
+
+# 8a. A node group behind region relays: the preflight checks the gRPC
+# target through the relays (one working is enough, none fails), the join
+# gets every --relay, and the config carries GRPCRelays and ReleaseCaches.
+new_root group-relays
+metadata
+FAKE_GRPC_RC=7 FAKE_RELAYS_DOWN="relay-b.example.cn:50051" run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" \
+  --relay relay-a.example.cn:50051 --relay relay-b.example.cn:50051 --release-cache https://relay-a.example.cn:8443/
+expect_status 0 "join through region relays"
+expect_out "gRPC target ctl.example.com:50051 reachable over TLS through the relay relay-a.example.cn:50051"
+expect_out "cannot reach the gRPC target ctl.example.com:50051 through the relay relay-b.example.cn:50051"
+! grep -qx 'curl https://ctl.example.com:50051/' "${STATE}/log" || fail "the preflight dialed Control around the relays"
+grep -q '^agent join .*--relay relay-a.example.cn:50051 --relay relay-b.example.cn:50051' "${STATE}/log" ||
+  fail "join lacks the relays: $(grep '^agent join' "${STATE}/log")"
+config="${ROOT_DIR}/etc/anixops/agent/config.json"
+grep -qF '"GRPCRelays": ["relay-a.example.cn:50051", "relay-b.example.cn:50051"],' "${config}" || fail "config lacks GRPCRelays: $(cat "${config}")"
+grep -qF '"ReleaseCaches": ["https://relay-a.example.cn:8443"],' "${config}" || fail "config lacks ReleaseCaches: $(cat "${config}")"
+new_root group-relays-down
+metadata
+FAKE_RELAYS_DOWN="relay-a.example.cn:50051" run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --relay relay-a.example.cn:50051
+expect_status 1 "every relay down"
+expect_out "no region relay reaches the gRPC target ctl.example.com:50051"
+expect_out "nothing on this host was changed"
+! grep -q '^agent join' "${STATE}/log" || fail "joined although no relay works"
+for bad in "--relay relay.example.cn" "--relay http://relay.example.cn:50051" "--release-cache http://relay.example.cn:8443" "--release-cache https://relay.example.cn:8443/?x=1"; do
+  new_root group-relays-bad
+  metadata
+  # shellcheck disable=SC2086
+  run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" ${bad}
+  expect_status 2 "refuses ${bad}"
+done
+ok "joining through region relays"
 
 # 8b. A forward group: the host turns out a forward node after the join, so
 # the forward checks run then, and a failure stops before the Agent starts;

@@ -179,6 +179,8 @@ The console uses the same routes
    | `--reset` | discard this machine's identity and join as a new node |
    | `--forward` | turn IP forwarding on for a proxy node too; a forward group's node always gets it |
    | `--timeout 180` | how long the join may take, in seconds |
+   | `--relay relay-a.example.cn:50051` | a region relay of the group (repeat for each; in the copied command when the group has relays): the preflight checks Control through the relays, the join and every later connection go through them and never to Control directly ([region relays](#region-relays)) |
+   | `--release-cache https://relay-a.example.cn:8443` | a relay's release file cache (repeat for each): the Agent downloads upgrades there first, signatures and SHA-256 still checked |
 
    The script prints the node it joined, for example
    `已接入：hk-01 (proxy-12)`, and reminds you that the command, token
@@ -218,6 +220,31 @@ subscriber, until an administrator approves them
 (`POST /api/v4/kernel/nodes/<node>/approve`). Rejecting one
 (`.../reject`) disables it and revokes its certificates. The script says
 so when it joined a pending node.
+
+### Region Relays
+
+A group whose nodes cannot reach Control directly, mainland China first,
+lists its region relays (`anix-relay`,
+[design](../design/region-relay/README.md)) and their release caches:
+
+```sh
+curl -fsS -X PUT https://panel.example.com/api/v4/kernel/node-groups/3 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{
+    "name": "CN", "relays": ["relay-a.example.cn:50051", "relay-b.example.cn:50051"],
+    "release_caches": ["https://relay-a.example.cn:8443"]}'
+```
+
+`relays` are `host:port` (at most 8), `release_caches` https URLs (at most
+8). An update that leaves them out keeps them; `[]` removes them. The
+group's command then carries `--relay` and `--release-cache` for each, and
+so does a single node's enrollment command for a node of the group. Nodes
+that already joined get the route in their desired configuration
+(`control_route`); an Agent that reads it switches without a reinstall, an
+older one ignores it and keeps the route it was installed with. A route removed
+from the group is not taken away from them (they would lose Control if they
+cannot reach it directly), so change their configuration or run the
+command of a group without relays again. Control must list the relays in
+`grpc.relay_sources`.
 
 ### Rejoining
 

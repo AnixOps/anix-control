@@ -131,6 +131,16 @@ func TestRenderCommand(t *testing.T) {
 	})
 	assert.Equal(t, "curl -fsSLg 'https://[2001:db8::1]:8443/install.sh' | sudo bash -s -- -u 'https://[2001:db8::1]:8443' -t anixjoin_TOKEN --mirror cn", ipv6)
 	assert.NotContains(t, ipv6, "--node")
+
+	// A node group behind region relays: every relay and cache is a word.
+	routed := RenderCommand(CommandInput{
+		ControlURL: "https://ctl.example.com", ScriptURL: "https://ctl.example.com/install.sh",
+		Token: "anixjoin_TOKEN", Mirror: MirrorControl,
+		Relays:        []string{"relay-a.example.cn:50051", "[2001:db8::1]:50051"},
+		ReleaseCaches: []string{"https://relay-a.example.cn:8443"},
+	})
+	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN"+
+		" --relay relay-a.example.cn:50051 --relay '[2001:db8::1]:50051' --release-cache https://relay-a.example.cn:8443", routed)
 }
 
 func TestSettingsCommands(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/panelcert"
+	"github.com/AnixOps/anix-control/v5/internal/relayroute"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
@@ -189,11 +190,18 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	if row.ExpiresAt != nil {
 		expires = *row.ExpiresAt
 	}
+	// The node's group's region relays (internal/relayroute): a node that
+	// reaches Control only through them is installed again the same way.
+	route, err := relayroute.ForNode(database.GetDB().WithContext(c.Request.Context()), node)
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
 	_, signatureErr := agentinstall.LoadSignature(cfg.AgentInstall.SignatureFile, cfg.Plugins.OfficialPublicKey)
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusCreated, installTokenResponse{
 		Enrollment: row, Credential: credential, Node: node.String(), ExpiresAt: expires,
-		AgentVersion: settings.AgentVersion, Commands: settings.Commands(credential),
+		AgentVersion: settings.AgentVersion, Commands: settings.RoutedCommands(credential, route.Relays, route.ReleaseCaches),
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,
 		},

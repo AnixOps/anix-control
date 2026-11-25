@@ -697,6 +697,8 @@ POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊�
 - `rate`（默认 1）、`tags`、`monthly_limit_bytes`（`0` 不限）、`reset_day`（1-28，默认 1）、`sort`：复制给组新建的
   每个节点。之后改组不会改已有节点。
 - `token_expires_at`：可选，必须是未来时间，之后令牌不再接入任何机器。
+- `relays`（`host:port`，最多 8 个）、`release_caches`（https 地址，最多 8 个）：组的地区中继与其发布缓存。
+  组的接入命令带 `--relay`、`--release-cache`，已接入的节点经期望配置成员 `control_route` 收到；更新时不带则保持不变，`[]` 清空。
 - 组不再有协议模板和订阅分组：接入的节点是干净节点，没有任何协议，协议在节点页添加。请求体里的 `kind`、`protocol_template`、`subscription_group_ids` 已被移除。
 
 应答（不含令牌）：`id`、上述字段、`token_reset_at`、`token_expires_at`、`token_expired`、

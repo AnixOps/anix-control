@@ -12353,6 +12353,20 @@ const docTemplate = `{
                     "description": "Rate is the billing rate of the group's proxy nodes; 1 when absent.",
                     "type": "number"
                 },
+                "relays": {
+                    "description": "Relays are the region relays (host:port, at most 8) the group's nodes\nreach Control through, never directly (docs/design/region-relay). The\ninstall command carries them and the nodes get them in their desired\nconfiguration (control_route). Absent: unchanged on an update, none on\na create; [] removes them.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "release_caches": {
+                    "description": "ReleaseCaches are the relays' release file caches (https URLs, at most\n8) the nodes download releases through. Absent: unchanged on an update.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "require_approval": {
                     "type": "boolean"
                 },

@@ -97,6 +97,47 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 	})
 }
 
+// A group's region relay route (internal/relayroute): set on create, kept
+// by an update that leaves it out, removed by an empty list, refused when
+// malformed.
+func TestGroupRegionRelays(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, f *fixture) {
+		ctx := t.Context()
+		relays := []string{" relay-a.example.cn:50051 ", "relay-b.example.cn:50051", "relay-a.example.cn:50051"}
+		caches := []string{"https://relay-a.example.cn:8443/"}
+		created, err := f.svc.Create(ctx, GroupInput{Name: "CN", Relays: &relays, ReleaseCaches: &caches}, f.admin)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"relay-a.example.cn:50051", "relay-b.example.cn:50051"}, created.Relays)
+		assert.Equal(t, []string{"https://relay-a.example.cn:8443"}, created.ReleaseCaches)
+
+		updated, err := f.svc.Update(ctx, created.ID, GroupInput{Name: "CN 2"}, f.admin)
+		require.NoError(t, err)
+		assert.Equal(t, created.Relays, updated.Relays, "an update without relays keeps them")
+		assert.Equal(t, created.ReleaseCaches, updated.ReleaseCaches)
+
+		none := []string{}
+		updated, err = f.svc.Update(ctx, created.ID, GroupInput{Name: "CN 2", Relays: &none}, f.admin)
+		require.NoError(t, err)
+		assert.Equal(t, []string{}, updated.Relays)
+		assert.Equal(t, created.ReleaseCaches, updated.ReleaseCaches)
+		var stored model.NodeGroup
+		require.NoError(t, f.db.First(&stored, created.ID).Error)
+		assert.Equal(t, "", stored.Relays)
+
+		plain, err := f.svc.Create(ctx, GroupInput{Name: "HK"}, f.admin)
+		require.NoError(t, err)
+		assert.Equal(t, []string{}, plain.Relays)
+		assert.Equal(t, []string{}, plain.ReleaseCaches)
+
+		bad := []string{"relay.example.cn"}
+		_, err = f.svc.Update(ctx, created.ID, GroupInput{Name: "CN 2", Relays: &bad}, f.admin)
+		assert.ErrorIs(t, err, ErrInvalid)
+		badCache := []string{"http://relay.example.cn"}
+		_, err = f.svc.Create(ctx, GroupInput{Name: "x", ReleaseCaches: &badCache}, f.admin)
+		assert.ErrorIs(t, err, ErrInvalid)
+	})
+}
+
 func TestGroupValidation(t *testing.T) {
 	f := newFixture(t, openSQLite(t))
 	ctx := t.Context()

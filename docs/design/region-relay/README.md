@@ -103,6 +103,6 @@ cache:
 |---|---|---|
 | 1 | 中继程序（透传、PROXY v2、缓存）；Control `grpc.relay_sources`；本文档 | anix-control |
 | 2 | Agent 中继列表、选择与切换；升级先走中继缓存；需求文档 | anix-agent |
-| 3 | 地区设置：大陆节点的中继列表由面板维护，安装脚本写入，已装节点经控制流下发（契约只增不删） | anix-control、anix-agent |
+| 3 | 中继列表按节点组维护（`relays`、`release_caches`，迁移 0048）：组的安装命令带 `--relay`、`--release-cache`，安装脚本经中继预检、加入并写入配置；已装节点经期望配置成员 `control_route` 下发（只增不删：组里删掉中继不会从已装节点撤走，避免断联）。见 [agent-onboarding.md](../../guide/agent-onboarding.md#region-relays) | anix-control、anix-agent |
 | 4 | 部署角色：中继 systemd 服务、证书、防火墙；Control 加 `grpc.relay_sources` | AnixOps-ansible |
 | 5 | 无 Agent 机器的只读上报（R31）走同一中继 | 随组网模块 |

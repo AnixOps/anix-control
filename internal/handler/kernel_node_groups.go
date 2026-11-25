@@ -284,7 +284,8 @@ func (h *NodeGroupsHandler) Command(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusOK, nodeGroupCommandResponse{
 		Group: revealed.Group, Token: revealed.Token, TokenExpiresAt: revealed.Group.TokenExpiresAt,
-		AgentVersion: settings.AgentVersion, Commands: settings.Commands(revealed.Token),
+		AgentVersion:     settings.AgentVersion,
+		Commands:         settings.RoutedCommands(revealed.Token, revealed.Group.Relays, revealed.Group.ReleaseCaches),
 		UninstallCommand: agentinstall.UninstallCommand,
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,

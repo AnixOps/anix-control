@@ -5,7 +5,8 @@
 #     -u https://<control> -t anixjoin_... \
 #     [--name hk-01] [--host 203.0.113.5] [--mirror control|cn|github] \
 #     [--reset] [--forward] [--timeout 180] [--offline bundle.tar.gz] \
-#     [--port-range 20000-30000] [--no-accept-ra] [--skip-preflight]
+#     [--port-range 20000-30000] [--no-accept-ra] [--skip-preflight] \
+#     [--relay relay.example.cn:50051 ...] [--release-cache https://relay.example.cn:8443 ...]
 #   sudo bash install.sh uninstall [--purge]
 #
 # Copy the command from Control (节点 › 接入节点). Its token says what the
@@ -150,6 +151,12 @@ ACCEPT_RA=1
 PORT_RANGE=""
 PREFLIGHT_FAILS=0
 FORWARD_CHECKED=0
+# RELAYS are the node group's region relays (host:port): the Agent then
+# reaches Control only through them, never directly (anix-control
+# docs/design/region-relay). CACHES are their release file caches.
+RELAYS=()
+CACHES=()
+readonly MAX_RELAYS=8
 
 META_VERSION=""
 META_GRPC=""
@@ -236,6 +243,10 @@ Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
   --port-range FROM-TO  the node's forward port range: preflight lists ports in use there
   --skip-preflight      install although a preflight check fails (not recommended)
   --timeout SECONDS     how long the join may take (default 180)
+  --relay HOST:PORT     a region relay of the node group (repeat for each): the join and
+                        every later connection to Control go through the relays only
+  --release-cache URL   a region relay's release file cache (https, repeat for each): the
+                        Agent's upgrades are fetched there, signatures still checked
   -h, --help            show this help
 
 Running the same command again upgrades the Agent in place and keeps its
@@ -281,7 +292,7 @@ parse_args() {
         flag="${flag%%=*}"
         shift
         ;;
-      -u | -t | --control | --token | --name | --install-name | --host | --mirror | --timeout | --offline | --port-range | --node | --group)
+      -u | -t | --control | --token | --name | --install-name | --host | --mirror | --timeout | --offline | --port-range | --relay | --release-cache | --node | --group)
         (($# >= 2)) || die 2 "${flag} needs a value"
         value="$2"
         shift 2
@@ -303,6 +314,8 @@ parse_args() {
       --timeout) TIMEOUT="${value}" ;;
       --offline) OFFLINE="${value}" ;;
       --port-range) PORT_RANGE="${value}" ;;
+      --relay) RELAYS+=("${value}") ;;
+      --release-cache) CACHES+=("${value%/}") ;;
       --node | --group) die 2 "${flag} is gone: the token names its node or its node group. Copy the current command from Control (install.sh -u <control> -t <token>)" ;;
       *) die 2 "unknown argument: ${flag} (see --help)" ;;
     esac
@@ -389,6 +402,17 @@ validate_args() {
   if [[ -n "${OFFLINE}" && ! -f "${OFFLINE}" ]]; then
     die 2 "--offline ${OFFLINE}: no such file (copy the bundle to this host first)"
   fi
+  local relay cache
+  ((${#RELAYS[@]} <= MAX_RELAYS)) || die 2 "at most ${MAX_RELAYS} --relay"
+  ((${#CACHES[@]} <= MAX_RELAYS)) || die 2 "at most ${MAX_RELAYS} --release-cache"
+  for relay in ${RELAYS[@]+"${RELAYS[@]}"}; do
+    [[ "${relay}" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\]):[1-9][0-9]{0,4}$ ]] && ((${relay##*:} <= 65535)) ||
+      die 2 "--relay must be host:port ([v6]:port for an IPv6 address), not ${relay}"
+  done
+  for cache in ${CACHES[@]+"${CACHES[@]}"}; do
+    [[ "${cache}" =~ ^https://[][A-Za-z0-9.:-]+(/[A-Za-z0-9._~/-]*)?$ ]] ||
+      die 2 "--release-cache must be an https URL without a query, not ${cache}"
+  done
   if [[ -n "${PORT_RANGE}" ]]; then
     if [[ ! "${PORT_RANGE}" =~ ^[1-9][0-9]{0,4}-[1-9][0-9]{0,4}$ ]] || ((${PORT_RANGE%-*} > ${PORT_RANGE#*-} || ${PORT_RANGE#*-} > 65535)); then
       die 2 "--port-range must be FROM-TO with 1 <= FROM <= TO <= 65535"
@@ -676,6 +700,10 @@ check_control() {
     args+=(--http2)
     http2=1
   fi
+  if ((${#RELAYS[@]} > 0)); then
+    check_relays "${args[@]}"
+    return 0
+  fi
   curl "${args[@]}" "https://${META_GRPC}/" 2>/dev/null || rc=$?
   case "${rc}" in
     0 | 16 | 52 | 56 | 92)
@@ -705,6 +733,33 @@ check_control() {
       pf_warn "the gRPC target ${META_GRPC} check was inconclusive (curl exit ${rc})"
       ;;
   esac
+}
+
+# check_relays checks the gRPC target through each region relay: the TCP
+# connection goes to the relay, TLS and the certificate check stay with
+# Control's name, as the Agent does. One working relay is enough.
+check_relays() {
+  local relay rc working=0
+  for relay in "${RELAYS[@]}"; do
+    rc=0
+    curl "$@" --connect-to "${META_GRPC}:${relay}" "https://${META_GRPC}/" 2>/dev/null || rc=$?
+    case "${rc}" in
+      0 | 16 | 52 | 56 | 92)
+        pf_ok "gRPC target ${META_GRPC} reachable over TLS through the relay ${relay} (certificate verified)"
+        working=1
+        ;;
+      51 | 58 | 60 | 77 | 83 | 90 | 91)
+        pf_warn "through the relay ${relay}, the certificate of ${META_GRPC} does not verify: is the relay forwarding to Control?"
+        ;;
+      *)
+        pf_warn "cannot reach the gRPC target ${META_GRPC} through the relay ${relay} (curl exit ${rc})"
+        ;;
+    esac
+  done
+  if ((working == 0)); then
+    pf_fail "no region relay reaches the gRPC target ${META_GRPC}: this node group's nodes connect through its relays only" \
+      "check that the relays run and let this host in (region_relay_allow_from), and that Control lists them in grpc.relay_sources"
+  fi
 }
 
 # check_clock compares this host's clock with the Date header of Control's
@@ -1155,7 +1210,15 @@ install_kernel() {
 # (--forward) gets the forward component on its own stream ("Forward"); a
 # forward node's Agent runs it without a core.
 render_config() {
-  local node_id="${NODE#*-}" forward=""
+  local node_id="${NODE#*-}" forward="" route=""
+  if ((${#RELAYS[@]} > 0)); then
+    route='
+      "GRPCRelays": '"$(json_strings "${RELAYS[@]}")"','
+  fi
+  if ((${#CACHES[@]} > 0)); then
+    route+='
+      "ReleaseCaches": '"$(json_strings "${CACHES[@]}")"','
+  fi
   if [[ "${NODE}" == proxy-* ]] && ((FORWARD)); then
     forward='
   "Forward": {"Enable": true, "NodeKind": "proxy", "ProxyNodeID": '"${node_id}"'},'
@@ -1169,7 +1232,7 @@ render_config() {
       "ApiHost": "${CONTROL_URL}",
       "Transport": "grpc",
       "GRPCHost": "${META_GRPC}",
-      "GRPCUseTLS": true,
+      "GRPCUseTLS": true,${route}
       "AgentControlEnabled": true,
       "AgentControlAllowInsecure": false,
       "AgentNode": "${NODE}",
@@ -1183,6 +1246,17 @@ render_config() {
   ]
 }
 EOF
+}
+
+# json_strings prints its arguments as a JSON array of strings; they were
+# validated to hold no quote or backslash.
+json_strings() {
+  local out="[" item sep=""
+  for item in "$@"; do
+    out+="${sep}\"${item}\""
+    sep=", "
+  done
+  printf '%s]' "${out}"
 }
 
 # write_config writes the configuration for NODE, keeping an existing one
@@ -1264,7 +1338,7 @@ json_string() {
 # the identity store and prints the node it joined as one JSON object. A
 # host that already has a valid identity skips it and keeps its node.
 join_control() {
-  local bin token_file output status=0 args=() address join_command=() created
+  local bin token_file output status=0 args=() address relay join_command=() created
   rm -f "$(path "${LEGACY_CREDENTIAL_FILE}")"
   if ((RESET)); then
     find "$(path "${PKI_DIR}")" -mindepth 1 -delete
@@ -1288,12 +1362,15 @@ join_control() {
     args+=(--address "${address}")
   done
   ((RESET == 0)) || args+=(--reset)
+  for relay in ${RELAYS[@]+"${RELAYS[@]}"}; do
+    args+=(--relay "${relay}")
+  done
   join_command=("${bin}")
   if have timeout; then
     join_command=(timeout "${TIMEOUT}" "${bin}")
   fi
   if [[ "${TOKEN}" == anixjoin_* ]]; then
-    info "Joining the node group at ${CONTROL_URL} (gRPC ${META_GRPC})"
+    info "Joining the node group at ${CONTROL_URL} (gRPC ${META_GRPC}${RELAYS[0]:+, through ${#RELAYS[@]} region relay(s)})"
   else
     info "Enrolling the node of the token at ${CONTROL_URL} (gRPC ${META_GRPC})"
   fi
