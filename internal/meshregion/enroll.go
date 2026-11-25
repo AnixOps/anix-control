@@ -564,15 +564,59 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"networks": []map[string]any{{
-		"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
+	features, err := deviceFeatures(db, device.ID)
+	if err != nil {
+		return nil, err
+	}
+	network := map[string]any{
+		"id": region.Code, "name": "mesh-" + region.Code,
 		"secret": region.Secret, "secure_mode": true, "cipher": cipher,
 		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": role, "listen": listen,
 		"peers":   peers,
 		"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
 		"routing": map[string]any{"policy": policy, "paths": []any{}},
-		"dns":     regionDNS(dns, resolvers[region.ID]),
-	}}}, nil
+		"dns":     dns,
+	}
+	// A field the device's kernel does not take is left out: it refuses
+	// a configuration with unknown fields (agent-contract.md section 4).
+	if features[FeatureNativeKeys] {
+		network["kind"], network["native_keys"] = KindManaged, regionKeys(keys, region.ID)
+	}
+	if features[FeatureResolverAddress] {
+		network["dns"] = regionDNS(dns, resolvers[region.ID])
+	}
+	return map[string]any{"networks": []map[string]any{network}}, nil
+}
+
+// The kernel capabilities a device names in its report's features that
+// add fields to its configuration (spec mesh-status.md).
+const (
+	FeatureNativeKeys      = "mesh_native_keys"
+	FeatureResolverAddress = "mesh_resolver_address"
+)
+
+// deviceFeatures answers the capabilities the device's latest report
+// names in "features": none before its first report, or from a report
+// without them.
+func deviceFeatures(db *gorm.DB, deviceID uint) (map[string]bool, error) {
+	var rows []model.MeshStatus
+	if err := db.Where("node_ref = ?", DeviceRef(deviceID)).Limit(1).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	features := map[string]bool{}
+	if len(rows) == 0 {
+		return features, nil
+	}
+	var shape struct {
+		Features []string `json:"features"`
+	}
+	if json.Unmarshal([]byte(rows[0].Payload), &shape) != nil {
+		return features, nil
+	}
+	for _, feature := range shape.Features {
+		features[feature] = true
+	}
+	return features, nil
 }
 
 // RecordDeviceStatus keeps payload, the device's "mesh.status" report sent

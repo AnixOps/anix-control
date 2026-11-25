@@ -20,7 +20,7 @@ func testStaticKey(b byte) string {
 }
 
 func statusWithKey(code, key string) []byte {
-	return fmt.Appendf(nil, `{"networks":[{"id":%q,"running":true,"static_key":%q,"peers":[]}]}`, code, key)
+	return fmt.Appendf(nil, `{"features":["mesh","mesh_native_keys"],"networks":[{"id":%q,"running":true,"static_key":%q,"peers":[]}]}`, code, key)
 }
 
 func nodeNetwork(t *testing.T, db *gorm.DB, node agentcontrol.AgentNode, code string) map[string]any {
@@ -260,4 +260,47 @@ func TestNativeKeysOfDevices(t *testing.T) {
 	config, err = DeviceConfig(ctx, db, row, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{}, config["networks"].([]map[string]any)[0]["native_keys"])
+}
+
+func TestDeviceConfigFollowsTheDeviceFeatures(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "laptop", RegionID: cn.ID}, nil, now)
+	require.NoError(t, err)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Token: issued.Token, DeviceKey: laptopKey, StaticKey: testStaticKey(3)}, now)
+	require.NoError(t, err)
+	device, err := Authenticate(ctx, db, enrolled.DeviceToken, now)
+	require.NoError(t, err)
+	network := func() map[string]any {
+		config, err := DeviceConfig(ctx, db, device, now)
+		require.NoError(t, err)
+		return config["networks"].([]map[string]any)[0]
+	}
+
+	// Before a report names its kernel's capabilities, the fields its
+	// kernel may not take are left out; the dns section stays.
+	first := enrolled.Config["networks"].([]map[string]any)[0]
+	for _, current := range []map[string]any{first, network()} {
+		require.NotContains(t, current, "kind")
+		require.NotContains(t, current, "native_keys")
+		require.NotContains(t, current["dns"], "resolver_address")
+		require.Equal(t, true, current["dns"].(map[string]any)["enabled"])
+	}
+
+	report := func(features string) {
+		payload := fmt.Appendf(nil, `{"features":%s,"networks":[{"id":"cn","running":true,"static_key":%q,"peers":[]}]}`, features, testStaticKey(3))
+		require.NoError(t, RecordDeviceStatus(ctx, db, device, enrolled.DeviceToken, payload, now))
+	}
+	report(`["mesh","mesh_native_keys"]`)
+	current := network()
+	require.Equal(t, KindManaged, current["kind"])
+	require.Equal(t, []string{testStaticKey(3)}, current["native_keys"])
+	require.NotContains(t, current["dns"], "resolver_address")
+
+	report(`["mesh","mesh_native_keys","mesh_resolver_address"]`)
+	require.Equal(t, "10.150.0.254", network()["dns"].(map[string]any)["resolver_address"])
+
+	report(`"not a list"`)
+	require.NotContains(t, network(), "kind", "a malformed list names nothing")
 }
