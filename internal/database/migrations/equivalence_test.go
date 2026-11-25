@@ -135,6 +135,10 @@ func TestUpgradedSchemaEqualsFresh(t *testing.T) {
 			_, err = migrations.Migrate(ctx, db, migrateOptions())
 			require.NoError(t, err)
 			requireSameSchema(t, want, inspect(t, db), "fresh (-) and upgraded from "+history[applied-1].ID()+" (+)")
+			// One connection per migration at a time.
+			sqlDB, err := db.DB()
+			require.NoError(t, err)
+			require.NoError(t, sqlDB.Close())
 		}
 	})
 }

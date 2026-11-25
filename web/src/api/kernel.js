@@ -859,14 +859,22 @@ export async function assignKernelMeshDeviceAddress(id) {
   return unwrap(await v4({ url: meshPath('devices', id, 'address'), method: 'post' }))
 }
 
+// The local subnets a full node without an Agent advertises, as confirmed
+// by an administrator.
+export async function setKernelMeshDeviceSubnets(id, subnets) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'subnets'), method: 'put', data: { subnets: (subnets || []).map(subnet => String(subnet).trim()).filter(Boolean) } }))
+}
+
 // Devices without an Agent: one-time enrollment credentials (the token is
 // answered only when issued) and revoking an enrolled device's token.
 export async function listKernelMeshEnrollments() {
   return unwrap(await v4({ url: meshPath('enrollments'), method: 'get' }))
 }
 
-export async function createKernelMeshEnrollment({ regionId, hostname, hours, deviceId }) {
-  return unwrap(await v4({ url: meshPath('enrollments'), method: 'post', data: { region_id: Number(regionId) || 0, hostname: String(hostname || '').trim(), hours: Number(hours) || 0, device_id: Number(deviceId) || 0 } }))
+export async function createKernelMeshEnrollment({ regionId, hostname, hours, deviceId, role, address }) {
+  const data = { region_id: Number(regionId) || 0, hostname: String(hostname || '').trim(), hours: Number(hours) || 0, device_id: Number(deviceId) || 0 }
+  if (!data.device_id && role === 'full') Object.assign(data, { role: 'full', address: String(address || '').trim() })
+  return unwrap(await v4({ url: meshPath('enrollments'), method: 'post', data }))
 }
 
 export async function deleteKernelMeshEnrollment(id) {

@@ -108,3 +108,60 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	features.SetVersion("5.0.13")
 	assert.Equal(t, http.StatusNotFound, serveJSON(router, http.MethodPost, "/device/enroll", body).Code)
 }
+
+func TestMeshFullNodeAPI(t *testing.T) {
+	env := newDiagnosticsEnv(t)
+	require.NoError(t, env.db.AutoMigrate(model.MeshModels()...))
+	features.SetVersion("5.0.13.dev.1")
+	t.Cleanup(func() { features.SetVersion("") })
+	now := time.Date(2026, 11, 25, 8, 0, 0, 0, time.UTC)
+	handler := &MeshHandler{db: func() *gorm.DB { return env.db }, now: func() time.Time { return now }}
+	router := gin.New()
+	router.POST("/mesh/regions", handler.CreateRegion)
+	router.GET("/mesh/enrollments", handler.ListMeshEnrollments)
+	router.POST("/mesh/enrollments", handler.CreateMeshEnrollment)
+	router.PUT("/mesh/devices/:device_id/subnets", handler.SetMeshDeviceSubnets)
+	router.POST("/device/enroll", handler.EnrollMeshDevice)
+	router.GET("/device/config", handler.MeshDeviceConfig)
+
+	response := serveJSON(router, http.MethodPost, "/mesh/regions", `{"code":"cn","name":"cn","cidr":"10.150.0.0/16","enabled":true}`)
+	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
+	var region model.MeshRegion
+	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &region))
+	regionID := strconv.FormatUint(uint64(region.ID), 10)
+
+	assert.Equal(t, "invalid_request", errorCode(t, serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"hostname":"router","role":"full"}`)), "a full node needs a region")
+	assert.Equal(t, "invalid_request", errorCode(t, serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"hostname":"router","region_id":`+regionID+`,"role":"full","address":"10.150.200.1"}`)))
+	response = serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"hostname":"router","region_id":`+regionID+`,"role":"full","address":"10.150.0.7"}`)
+	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
+	var issued meshregion.IssuedEnrollment
+	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &issued))
+	assert.Equal(t, "full", issued.Role)
+	assert.Equal(t, "mesh_conflict", errorCode(t, serveJSON(router, http.MethodPost, "/mesh/enrollments", `{"hostname":"nas","region_id":`+regionID+`,"role":"full","address":"10.150.0.7"}`)))
+	assert.Contains(t, serveJSON(router, http.MethodGet, "/mesh/enrollments", "").Body.String(), `"role":"full","address":"10.150.0.7"`)
+
+	response = serveJSON(router, http.MethodPost, "/device/enroll", `{"token":"`+issued.Token+`","device_key":"`+strings.Repeat("r", 32)+`"}`)
+	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
+	var enrolled meshregion.Enrolled
+	require.NoError(t, json.Unmarshal(dataOf(t, response.Body.Bytes()), &enrolled))
+	assert.Contains(t, response.Body.String(), `"address":"10.150.0.7/16"`)
+	assert.Contains(t, response.Body.String(), `"role":"full"`)
+
+	path := "/mesh/devices/" + strconv.FormatUint(uint64(enrolled.DeviceID), 10) + "/subnets"
+	assert.Equal(t, "invalid_request", errorCode(t, serveJSON(router, http.MethodPut, path, `{"subnets":"192.168.1.0/24"}`)))
+	assert.Equal(t, "invalid_request", errorCode(t, serveJSON(router, http.MethodPut, path, `{"subnets":["8.8.8.0/24"]}`)))
+	assert.Equal(t, "mesh_conflict", errorCode(t, serveJSON(router, http.MethodPut, path, `{"subnets":["10.150.9.0/24"]}`)))
+	response = serveJSON(router, http.MethodPut, path, `{"subnets":["192.168.1.0/24"]}`)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	assert.JSONEq(t, `["192.168.1.0/24"]`, string(dataOf(t, response.Body.Bytes())))
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/device/config", nil)
+	request.Header.Set("Authorization", "Bearer "+enrolled.DeviceToken)
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"advertise":["192.168.1.0/24"]`)
+
+	var actions []string
+	require.NoError(t, env.db.Model(&model.OperationLog{}).Where("module = ?", "mesh").Order("id").Pluck("action", &actions).Error)
+	assert.Equal(t, []string{"mesh_region_create", "mesh_enrollment_create", "mesh_device_subnets"}, actions)
+}

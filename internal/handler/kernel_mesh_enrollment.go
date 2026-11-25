@@ -21,11 +21,11 @@ import (
 
 // ListMeshEnrollments godoc
 // @Summary The mesh enrollment credentials
-// @Description The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.
+// @Description The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, role (access or full), a full node's fixed address (empty: the lowest free one when it enrolls), expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} model.MeshEnrollment
+// @Success 200 {array} meshregion.EnrollmentView
 // @Router /api/v4/kernel/mesh/enrollments [get]
 func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
 	db, ok := h.database(c)
@@ -42,12 +42,12 @@ func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
 
 // CreateMeshEnrollment godoc
 // @Summary Issue a mesh enrollment credential
-// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. With device_id the credential enrolls that existing device again (its name, region and address stay; hostname and region_id are ignored); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
+// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body meshregion.EnrollmentInput true "region_id, hostname, hours"
+// @Param request body meshregion.EnrollmentInput true "region_id, hostname, hours, role, address"
 // @Success 201 {object} meshregion.IssuedEnrollment
 // @Router /api/v4/kernel/mesh/enrollments [post]
 func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
@@ -57,7 +57,7 @@ func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
 	}
 	var input meshregion.EnrollmentInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		kernelError(c, http.StatusBadRequest, "invalid_request", "region_id, hostname and hours are expected")
+		kernelError(c, http.StatusBadRequest, "invalid_request", "region_id, hostname, hours, role and address are expected")
 		return
 	}
 	row, err := meshregion.CreateEnrollment(c.Request.Context(), db, input, h.actor(c), h.now())
@@ -65,7 +65,7 @@ func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
 		meshError(c, err)
 		return
 	}
-	h.audit(c, db, "mesh_enrollment_create", row.ID, fmt.Sprintf(`{"region_id":%d,"hostname":%q}`, row.RegionID, row.Hostname))
+	h.audit(c, db, "mesh_enrollment_create", row.ID, fmt.Sprintf(`{"region_id":%d,"hostname":%q,"role":%q,"address":%q}`, row.RegionID, row.Hostname, row.Role, row.Address))
 	kernelData(c, http.StatusCreated, row)
 }
 

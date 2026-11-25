@@ -6212,7 +6212,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool. Audited (module mesh, action mesh_device_address).",
+                "description": "For a device whose address went to another device after 30 days unused: the lowest free address of its region's device pool; for a full node, the lowest free address of the server segment. Audited (module mesh, action mesh_device_address).",
                 "produces": [
                     "application/json"
                 ],
@@ -6316,6 +6316,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/devices/{device_id}/subnets": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the local subnets a full node without an Agent advertises in its network (subnets.advertise of its configuration): private IPv4 networks, at most 32, that overlap no region, the host group supernet, a reserved range or another full node's subnets; an empty list advertises none. The node reads them with its next configuration. 400 invalid_request for an access device. Audited (module mesh, action mesh_device_subnets).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Confirm the subnets a full node advertises",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "subnets",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshSubnetsInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/enrollments": {
             "get": {
                 "security": [
@@ -6323,7 +6372,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.",
+                "description": "The newest 200 one-time credentials: region_id (0 = the device's lowest latency chooses), hostname, role (access or full), a full node's fixed address (empty: the lowest free one when it enrolls), expires_at, used_at and the device_id that used it. Tokens are never answered. 404 feature_disabled while the mesh is not available in this build.",
                 "produces": [
                     "application/json"
                 ],
@@ -6337,7 +6386,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/model.MeshEnrollment"
+                                "$ref": "#/definitions/meshregion.EnrollmentView"
                             }
                         }
                     }
@@ -6349,7 +6398,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. With device_id the credential enrolls that existing device again (its name, region and address stay; hostname and region_id are ignored); a device key another device has is refused otherwise. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
+                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6362,7 +6411,7 @@ const docTemplate = `{
                 "summary": "Issue a mesh enrollment credential",
                 "parameters": [
                     {
-                        "description": "region_id, hostname, hours",
+                        "description": "region_id, hostname, hours, role, address",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9958,6 +10007,17 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshSubnetsInput": {
+            "type": "object",
+            "properties": {
+                "subnets": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "handler.networkModelRequest": {
             "type": "object",
             "properties": {
@@ -10386,11 +10446,21 @@ const docTemplate = `{
                 "region_id": {
                     "type": "integer"
                 },
+                "role": {
+                    "description": "Role is access (a pool address) or full (a fixed address of the\nserver segment, R32); Subnets are a full node's confirmed subnets.",
+                    "type": "string"
+                },
                 "status": {
                     "type": "object"
                 },
                 "status_received_at": {
                     "type": "string"
+                },
+                "subnets": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "updated_at": {
                     "type": "string"
@@ -10440,6 +10510,10 @@ const docTemplate = `{
         "meshregion.EnrollmentInput": {
             "type": "object",
             "properties": {
+                "address": {
+                    "description": "Address is a full node's fixed address of the region's server\nsegment; empty: the lowest free one when the device enrolls.",
+                    "type": "string"
+                },
                 "device_id": {
                     "type": "integer"
                 },
@@ -10452,6 +10526,50 @@ const docTemplate = `{
                 },
                 "region_id": {
                     "type": "integer"
+                },
+                "role": {
+                    "description": "Role is access (default) or full (a full node without an Agent,\nwhich needs a region).",
+                    "type": "string",
+                    "enum": [
+                        "access",
+                        "full"
+                    ]
+                }
+            }
+        },
+        "meshregion.EnrollmentView": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "hostname": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_id": {
+                    "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "used_at": {
+                    "type": "string"
                 }
             }
         },
@@ -10509,6 +10627,9 @@ const docTemplate = `{
         "meshregion.IssuedEnrollment": {
             "type": "object",
             "properties": {
+                "address": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -10530,6 +10651,9 @@ const docTemplate = `{
                 "region_id": {
                     "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
                     "type": "integer"
+                },
+                "role": {
+                    "type": "string"
                 },
                 "token": {
                     "type": "string"
@@ -10727,7 +10851,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reserved_ranges": {
-                    "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces.",
+                    "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces. They have the regions'\nprefix length: during a migration the old network and the regions\ncarry traffic for each other (spec section 15.7, item 2).",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10854,36 +10978,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.MeshEnrollment": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer"
-                },
-                "device_id": {
-                    "type": "integer"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "hostname": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "region_id": {
-                    "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
-                    "type": "integer"
-                },
-                "used_at": {
                     "type": "string"
                 }
             }

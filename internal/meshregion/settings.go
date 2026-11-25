@@ -29,7 +29,9 @@ type Settings struct {
 	HostGroupSupernet string `json:"host_group_supernet"`
 	HostGroupPrefix   int    `json:"host_group_prefix"`
 	// ReservedRanges: ranges no region or host group may overlap, such as
-	// the range of a network the mesh replaces.
+	// the range of a network the mesh replaces. They have the regions'
+	// prefix length: during a migration the old network and the regions
+	// carry traffic for each other (spec section 15.7, item 2).
 	ReservedRanges []string   `json:"reserved_ranges"`
 	UpdatedAt      *time.Time `json:"updated_at"`
 }
@@ -188,6 +190,9 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 				if prefix.Overlaps(netip.MustParsePrefix(raw)) {
 					return conflict("reserved_ranges: %s overlaps region %q (%s)", raw, region.Code, region.CIDR)
 				}
+				if bits := netip.MustParsePrefix(raw).Bits(); bits != prefix.Bits() {
+					return conflict("reserved_ranges: %s has /%d; the regions have /%d", raw, bits, prefix.Bits())
+				}
 			}
 		}
 		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), UpdatedAt: now}
@@ -204,7 +209,8 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 }
 
 // checkOutsideSettings refuses a region range that overlaps the host group
-// supernet or a reserved range.
+// supernet or a reserved range, or whose prefix length is not the reserved
+// ranges'.
 func checkOutsideSettings(tx *gorm.DB, prefix netip.Prefix) error {
 	settings, err := loadSettings(tx)
 	if err != nil {
@@ -214,8 +220,15 @@ func checkOutsideSettings(tx *gorm.DB, prefix netip.Prefix) error {
 		return conflict("the range overlaps the host group supernet %s", settings.HostGroupSupernet)
 	}
 	for _, raw := range settings.ReservedRanges {
-		if reserved, err := netip.ParsePrefix(raw); err == nil && reserved.Overlaps(prefix) {
+		reserved, err := netip.ParsePrefix(raw)
+		if err != nil {
+			continue
+		}
+		if reserved.Overlaps(prefix) {
 			return conflict("the range overlaps the reserved range %s", raw)
+		}
+		if reserved.Bits() != prefix.Bits() {
+			return conflict("every region has the prefix length of the reserved ranges: /%d like %s", reserved.Bits(), raw)
 		}
 	}
 	return nil

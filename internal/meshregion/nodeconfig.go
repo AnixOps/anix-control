@@ -14,6 +14,8 @@ import (
 
 // instanceIDPattern is the node instance id a status may carry: the
 // kernel's id of the node, kept across restarts and upgrades.
+// 1 to 64 letters, digits or hyphens, the first a letter or digit, as the
+// kernel and the Agent check it.
 var instanceIDPattern = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z-]{0,63}$`)
 
 // statusInstanceID answers the instance id of a "mesh.status" payload, ""
@@ -47,8 +49,9 @@ func instanceIDs(db *gorm.DB, refs []string) (map[string]string, error) {
 }
 
 // dnsSection is the section "dns": the suffix and every intranet name as
-// <name>.<region code> with its address. Names that more than one entry
-// has are left out: the kernel refuses them, and the panel marks them.
+// <name>.<region code> with its address. A name more than one entry has
+// goes with each of its addresses (R28): the kernel answers them all and
+// marks the name, as the panel does.
 func dnsSection(db *gorm.DB) (map[string]any, error) {
 	list, err := Names(db.Statement.Context, db)
 	if err != nil {
@@ -56,7 +59,7 @@ func dnsSection(db *gorm.DB) (map[string]any, error) {
 	}
 	names := []map[string]any{}
 	for _, entry := range list.Entries {
-		if entry.Duplicate || entry.RegionCode == "" {
+		if entry.RegionCode == "" {
 			continue
 		}
 		names = append(names, map[string]any{"name": entry.Name + "." + entry.RegionCode, "address": entry.Address})

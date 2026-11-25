@@ -35,6 +35,8 @@ func TestSettings(t *testing.T) {
 	region(t, db, "cn", "10.150.0.0/16")
 	_, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: "mesh.internal", HostGroupSupernet: "10.150.0.0/16", HostGroupPrefix: 24}, now)
 	require.ErrorIs(t, err, ErrConflict, "the supernet may not overlap a region")
+	_, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24, ReservedRanges: []string{"10.126.0.0/24"}}, now)
+	require.ErrorIs(t, err, ErrConflict, "an old network has the regions' prefix length")
 	saved, err := SaveSettings(ctx, db, SettingsInput{NameSuffix: ".Corp.Internal.", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 26, ReservedRanges: []string{"10.126.0.0/16", " "}}, now)
 	require.NoError(t, err)
 	require.Equal(t, "corp.internal", saved.NameSuffix)
@@ -45,6 +47,16 @@ func TestSettings(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflict, "a region may not overlap a reserved range")
 	_, err = CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "eu", CIDR: "10.127.0.0/16"}, now)
 	require.ErrorIs(t, err, ErrConflict, "a region may not overlap the host group supernet")
+	require.NoError(t, DeleteRegion(ctx, db, firstRegion(t, db).ID))
+	_, err = CreateRegion(ctx, db, RegionInput{Code: "eu", Name: "eu", CIDR: "10.152.0.0/24"}, now)
+	require.ErrorIs(t, err, ErrConflict, "a region has the reserved ranges' prefix length")
+}
+
+func firstRegion(t *testing.T, db *gorm.DB) model.MeshRegion {
+	t.Helper()
+	var row model.MeshRegion
+	require.NoError(t, db.Order("id ASC").First(&row).Error)
+	return row
 }
 
 func TestDevicePool(t *testing.T) {
@@ -289,14 +301,20 @@ func TestNodeConfigNamesAndHostGroups(t *testing.T) {
 		require.Len(t, networks, 1)
 		return networks[0]
 	}
-	// Every name but the duplicate "a.cn" (node a and the device a), as
-	// <name>.<region code>; no host group before its gateway reports.
+	// Every name as <name>.<region code>, the duplicate "a.cn" (node a and
+	// the device a) with both addresses (R28: the kernel answers both and
+	// marks the duplicate); no host group before its gateway reports.
 	cnNet := network(1)
-	require.Equal(t, map[string]any{"enabled": true, "suffix": "mesh.internal", "names": []map[string]any{
+	dns := cnNet["dns"].(map[string]any)
+	require.Equal(t, true, dns["enabled"])
+	require.Equal(t, "mesh.internal", dns["suffix"])
+	require.ElementsMatch(t, []map[string]any{
+		{"name": "a.cn", "address": "10.150.0.1"},
+		{"name": "a.cn", "address": "10.150.128.1"},
 		{"name": "b.cn", "address": "10.150.0.2"},
 		{"name": "c.eu", "address": "10.152.0.1"},
 		{"name": "phone.cn", "address": "10.150.128.0"},
-	}}, cnNet["dns"])
+	}, dns["names"])
 	require.Equal(t, []map[string]any{}, cnNet["host_groups"])
 
 	var pushed int
@@ -322,20 +340,24 @@ func TestNodeConfigNamesAndHostGroups(t *testing.T) {
 
 func TestNormalizeName(t *testing.T) {
 	for raw, want := range map[string]string{
-		"DB-01":    "db-01",
-		" web_1 ":  "web-1",
-		"--edge--": "edge",
-		"中国":       "xn--fiqs8s",
-		"Bücher":   "xn--bcher-kva",
-		"香港 01":    "xn---01-by5gj66p",
-		"!!!":      "",
-		"":         "",
+		"DB-01":      "db-01",
+		" web_1 ":    "web-1",
+		"--edge--":   "edge",
+		"中国":         "xn--fiqs8s",
+		"Bücher":     "xn--bcher-kva",
+		"香港 01":      "xn---01-by5gj66p",
+		"cafe\u0301": "cafe",
+		"!!!":        "",
+		"":           "",
 	} {
 		require.Equal(t, want, normalizeName(raw), raw)
 	}
 	long := normalizeName(strings.Repeat("a", 70) + "-b")
 	require.Len(t, long, 63)
 	require.NotRegexp(t, `-$`, normalizeName(strings.Repeat("a", 62)+"-bc"), "no hyphen at the end after the cut")
+	// A long name is encoded whole, then cut.
+	wide := strings.Repeat("中", 85)
+	require.Equal(t, strings.TrimRight(("xn--" + punycode(wide))[:63], "-"), normalizeName(wide))
 }
 
 func TestUsedPoolAddressStays(t *testing.T) {
@@ -372,4 +394,28 @@ func TestUsedPoolAddressStays(t *testing.T) {
 	require.Equal(t, *next.Address, *again.Address)
 	_, err = AssignDeviceAddress(ctx, db, lost.ID, later)
 	require.ErrorIs(t, err, ErrConflict, "a device with an address keeps it")
+}
+
+func TestRegionChangeToADisabledRegion(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/16")
+	eu := region(t, db, "eu", "10.152.0.0/16")
+	na, err := CreateRegion(ctx, db, RegionInput{Code: "na", Name: "na", CIDR: "10.153.0.0/16"}, now)
+	require.NoError(t, err)
+	device, err := CreateDevice(ctx, db, cn.ID, DeviceInput{Hostname: "phone"}, now)
+	require.NoError(t, err)
+	_, err = RequestChange(ctx, db, ChangeInput{DeviceID: device.ID, ToRegionID: na.ID}, model.MeshChangeMember, nil, now)
+	require.ErrorIs(t, err, ErrInvalid, "a disabled region takes no request")
+
+	// A region disabled after the request: the approval is refused.
+	request, err := RequestChange(ctx, db, ChangeInput{DeviceID: device.ID, ToRegionID: eu.ID}, model.MeshChangeMember, nil, now)
+	require.NoError(t, err)
+	_, err = UpdateRegion(ctx, db, eu.ID, RegionInput{Code: "eu", Name: "eu", CIDR: eu.CIDR}, now)
+	require.NoError(t, err)
+	_, err = ApproveChange(ctx, db, request.ID, "", nil, now)
+	require.ErrorIs(t, err, ErrConflict)
+	rejected, err := RejectChange(ctx, db, request.ID, "the region is closed", nil, now)
+	require.NoError(t, err)
+	require.Equal(t, model.MeshChangeRejected, rejected.Status)
 }

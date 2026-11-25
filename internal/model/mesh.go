@@ -193,8 +193,27 @@ type MeshDeviceToken struct {
 
 func (MeshDeviceToken) TableName() string { return "v5_mesh_device_token" }
 
+// MeshFullNode marks the credential EnrollmentID, and the device DeviceID
+// it enrolled, as a full node without an Agent (R32: an OpenWrt router or a
+// server that relays and advertises its local networks) instead of an
+// access member: its fixed Address comes from the region's server segment
+// (empty on the credential: the lowest free one), and it advertises the
+// Subnets an administrator confirmed (R17), comma separated
+// (0048_mesh_full_nodes).
+type MeshFullNode struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	EnrollmentID uint      `gorm:"not null;uniqueIndex" json:"enrollment_id"`
+	DeviceID     *uint     `gorm:"uniqueIndex" json:"device_id"`
+	Address      string    `gorm:"size:15;not null" json:"address"`
+	Subnets      string    `gorm:"type:text;not null" json:"-"`
+	CreatedAt    time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshFullNode) TableName() string { return "v5_mesh_full_node" }
+
 // MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
-// 0047_mesh_enrollment).
+// 0047_mesh_enrollment, 0048_mesh_full_nodes).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}}
 }

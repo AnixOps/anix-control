@@ -489,8 +489,8 @@ func join(tx *gorm.DB, region model.MeshRegion, nodeRef string, home, boundary b
 	if err != nil {
 		return model.MeshMember{}, fmt.Errorf("region %q: %w", region.Code, err)
 	}
-	var used []string
-	if err := tx.Model(&model.MeshMember{}).Where("region_id = ?", region.ID).Pluck("address", &used).Error; err != nil {
+	used, err := usedServerAddresses(tx, region.ID, 0)
+	if err != nil {
 		return model.MeshMember{}, err
 	}
 	address, ok := freeServerAddress(prefix, used)

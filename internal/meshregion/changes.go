@@ -11,6 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ChangeInput asks to move a node (Node, proxy-<id> or forward-<id>) or a
@@ -80,6 +81,9 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		return model.MeshRegionChange{}, invalid("node or device_id: one of them")
 	}
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockSubject(tx, row.NodeRef, row.DeviceID); err != nil {
+			return err
+		}
 		from, address, err := subject(tx, row.NodeRef, row.DeviceID)
 		if err != nil {
 			return err
@@ -90,6 +94,9 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		}
 		if from == region.ID {
 			return invalid("to_region_id: already the region")
+		}
+		if !region.Enabled {
+			return invalid("to_region_id: the region is disabled")
 		}
 		var pending int64
 		if err := pendingOf(tx, row.NodeRef, row.DeviceID).Count(&pending).Error; err != nil {
@@ -102,6 +109,20 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		return tx.Create(&row).Error
 	})
 	return row, err
+}
+
+// lockSubject locks the node's home membership or the device while a
+// request is recorded, so that of two requests at once only one finds no
+// pending change (PostgreSQL; SQLite writes one transaction at a time).
+func lockSubject(tx *gorm.DB, nodeRef *string, deviceID *uint) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	locked := tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	if nodeRef != nil {
+		return locked.Where("node_ref = ? AND home = ?", *nodeRef, true).Find(&[]model.MeshMember{}).Error
+	}
+	return locked.Where("id = ?", *deviceID).Find(&[]model.MeshDevice{}).Error
 }
 
 func pendingOf(tx *gorm.DB, nodeRef *string, deviceID *uint) *gorm.DB {
@@ -159,6 +180,13 @@ func ApproveChange(ctx context.Context, db *gorm.DB, id uint, note string, decid
 		if from != row.FromRegionID {
 			return conflict("the member is no longer in the region it asked to leave; reject the change")
 		}
+		var target model.MeshRegion
+		if err := findRegion(tx, row.ToRegionID, &target); err != nil {
+			return err
+		}
+		if !target.Enabled {
+			return conflict("the region %q is disabled; enable it or reject the change", target.Code)
+		}
 		address, err := move(tx, row, now)
 		if err != nil {
 			return err
@@ -210,7 +238,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 	if err := findRegion(tx, row.ToRegionID, &region); err != nil {
 		return "", err
 	}
-	address, err := allocate(tx, region, now)
+	address, err := deviceAddress(tx, region, device.ID, now)
 	if err != nil {
 		return "", err
 	}
@@ -292,7 +320,7 @@ func settlePending(tx *gorm.DB, nodeRef *string, deviceID *uint, to uint, actor 
 		if row.ToRegionID == to {
 			status, note = model.MeshChangeApproved, "an administrator moved the member"
 		}
-		if err := tx.Model(&model.MeshRegionChange{}).Where("id = ?", row.ID).
+		if err := tx.Model(&model.MeshRegionChange{}).Where("id = ? AND status = ?", row.ID, model.MeshChangePending).
 			Updates(map[string]any{"status": status, "note": note, "decided_by": actor, "decided_at": now}).Error; err != nil {
 			return err
 		}
@@ -332,7 +360,7 @@ func findPending(tx *gorm.DB, id uint, row *model.MeshRegionChange) error {
 }
 
 // The node's own region change request: the package report
-// "mesh.region_request" (agent-contract.md section 4), which the node's
+// "mesh.region_request" (agent-contract.md section 5), which the node's
 // kernel sends when its owner asks for another region.
 const (
 	RegionRequestKind    = "mesh.region_request"

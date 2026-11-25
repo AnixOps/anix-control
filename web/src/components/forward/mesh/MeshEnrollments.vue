@@ -18,7 +18,12 @@
       data-testid="mesh-enrollment-table"
       @retry="load"
     >
-      <template #cell-hostname="{ row }">{{ row.hostname }}</template>
+      <template #cell-hostname="{ row }">
+        <span class="mesh-cell">
+          <span>{{ row.hostname }}</span>
+          <span v-if="row.role === 'full'" class="mesh-muted mesh-mono">{{ t('meshAddr.enrollments.roles.full') }} · {{ row.address || '—' }}</span>
+        </span>
+      </template>
       <template #cell-region="{ row }">{{ row.region_id ? regionName(row.region_id) : t('meshAddr.enrollments.anyRegion') }}</template>
       <template #cell-state="{ row }">
         <span class="mesh-cell">
@@ -36,7 +41,9 @@
         <UiSelect v-model="sheet.deviceId" size="md" :label="t('meshAddr.enrollments.device')" :options="deviceOptions" :help="sheet.deviceId !== '0' ? t('meshAddr.enrollments.deviceHelp') : ''" data-testid="mesh-enrollment-device" />
         <template v-if="sheet.deviceId === '0'">
           <UiTextField v-model="sheet.hostname" size="md" :label="t('meshAddr.devices.hostname')" :help="t('meshAddr.devices.hostnameHelp')" required :error="sheet.errors.hostname" data-testid="mesh-enrollment-hostname" />
-          <UiSelect v-model="sheet.regionId" size="md" :label="t('meshAddr.common.region')" :options="regionOptions" :help="sheet.regionId === '0' ? t('meshAddr.enrollments.anyRegionHelp') : ''" />
+          <UiSelect v-model="sheet.role" size="md" :label="t('meshAddr.enrollments.role')" :options="roleOptions" :help="sheet.role === 'full' ? t('meshAddr.enrollments.roleHelp') : ''" data-testid="mesh-enrollment-role" />
+          <UiSelect v-model="sheet.regionId" size="md" :label="t('meshAddr.common.region')" :options="sheet.role === 'full' ? regionOptions.slice(1) : regionOptions" :required="sheet.role === 'full'" :error="sheet.errors.region" :help="sheet.regionId === '0' && sheet.role !== 'full' ? t('meshAddr.enrollments.anyRegionHelp') : ''" />
+          <UiTextField v-if="sheet.role === 'full'" v-model="sheet.address" size="md" :label="t('meshAddr.enrollments.address')" :help="t('meshAddr.enrollments.addressHelp')" placeholder="10.150.0.10" data-testid="mesh-enrollment-address" />
         </template>
         <UiNumberField v-model="sheet.hours" size="md" :label="t('meshAddr.enrollments.hours')" :min="1" :max="168" :help="t('meshAddr.enrollments.hoursHelp')" />
         <p v-if="saveError" class="mesh-error" role="alert">{{ saveError }}</p>
@@ -54,8 +61,9 @@
 
 <script setup>
 // 组网 → 设备 → 接入凭证: one-time credentials devices without an Agent
-// enroll with (R31); a credential's token is shown once.
-import { computed, onMounted, ref } from 'vue'
+// enroll with (R31), as an access device or a full node with a fixed
+// address (R32); a credential's token is shown once.
+import { computed, onMounted, ref, watch } from 'vue'
 import { KeyRound, Trash2 } from '@lucide/vue'
 import { UiBadge, UiButton, UiCopyField, UiDataTable, UiNumberField, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -84,6 +92,7 @@ const regionOptions = computed(() => [
   { value: '0', label: t('meshAddr.enrollments.anyRegion') },
   ...props.regions.map(region => ({ value: String(region.id), label: `${region.name} (${region.code})` }))
 ])
+const roleOptions = computed(() => ['access', 'full'].map(value => ({ value, label: t(`meshAddr.enrollments.roles.${value}`) })))
 const deviceOptions = computed(() => [
   { value: '0', label: t('meshAddr.enrollments.newDevice') },
   ...devices.value.map(device => ({ value: String(device.id), label: device.hostname }))
@@ -93,6 +102,11 @@ const columns = computed(() => [
   { key: 'region', label: t('meshAddr.common.region'), secondary: true },
   { key: 'state', label: t('meshAddr.enrollments.state') }
 ])
+
+// A full node needs a region: choosing the role picks the first one.
+watch(() => sheet.value?.role, role => {
+  if (role === 'full' && sheet.value.regionId === '0') sheet.value.regionId = String(props.regions[0]?.id || '0')
+})
 
 async function load() {
   loadError.value = null
@@ -105,7 +119,7 @@ async function load() {
 
 async function open() {
   saveError.value = ''
-  sheet.value = { deviceId: '0', hostname: '', regionId: '0', hours: 24, errors: {}, issued: null }
+  sheet.value = { deviceId: '0', hostname: '', regionId: '0', role: 'access', address: '', hours: 24, errors: {}, issued: null }
   try {
     devices.value = (await listKernelMeshDevices()) || []
   } catch {
@@ -118,6 +132,7 @@ async function save() {
   if (!form || saving.value) return
   form.errors = {}
   if (form.deviceId === '0' && !form.hostname.trim()) form.errors.hostname = t('meshAddr.common.required')
+  if (form.deviceId === '0' && form.role === 'full' && form.regionId === '0') form.errors.region = t('meshAddr.enrollments.regionRequired')
   if (Object.keys(form.errors).length) return
   saving.value = true
   saveError.value = ''
