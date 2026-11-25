@@ -1,6 +1,7 @@
 package meshregion
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -484,7 +485,12 @@ func withBridgeHolds(tx *gorm.DB, write func(tx *gorm.DB) error) error {
 	if len(holds) == 0 {
 		return nil
 	}
-	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&holds).Error
+	// A prefix removed again starts its wait again: a report received
+	// before this removal confirms nothing about it.
+	return tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "node_ref"}, {Name: "region_id"}, {Name: "prefix"}},
+		DoUpdates: clause.AssignmentColumns([]string{"created_at"}),
+	}).Create(&holds).Error
 }
 
 // heldPrefixes answers the prefixes held back in region regionID, or in
@@ -597,24 +603,76 @@ type appliedBridge struct {
 	AppliedAt   time.Time `json:"appliedAt"`
 }
 
-// reportedBridges answers, by network id (region code), the bridge
-// configuration a "mesh.status" payload reports in force: the network's
-// externalBridge as the kernel status has it (the Agent passes it on as
-// it is). A network whose externalBridge is null or missing runs no bridge.
-func reportedBridges(payload string) map[string]appliedBridge {
+// AlertBridgeUnsupported is the alert the Agent reports in a network whose
+// external_bridge section it withholds from a kernel without
+// mesh_external_bridge.
+const AlertBridgeUnsupported = "external_bridge_unsupported"
+
+// networkAlert tells whether a "mesh.status" payload reports the alert
+// code in the network id.
+func networkAlert(payload, id, code string) bool {
 	var shape struct {
 		Networks []struct {
-			ID             string         `json:"id"`
-			ExternalBridge *appliedBridge `json:"externalBridge"`
+			ID     string `json:"id"`
+			Alerts []struct {
+				Code string `json:"code"`
+			} `json:"alerts"`
 		} `json:"networks"`
 	}
-	answer := map[string]appliedBridge{}
+	if json.Unmarshal([]byte(payload), &shape) != nil {
+		return false
+	}
+	for _, network := range shape.Networks {
+		if network.ID != id {
+			continue
+		}
+		for _, alert := range network.Alerts {
+			if alert.Code == code {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// reportedBridge is what a "mesh.status" payload says of the bridge in one
+// network: Running with the configuration in force (Applied), Stopped for
+// an explicit null externalBridge (the node runs no bridge there), or
+// neither when the key is missing or unreadable (the state is unknown: the
+// configuration may not have been applied or the kernel not read).
+type reportedBridge struct {
+	Running bool
+	Stopped bool
+	Applied appliedBridge
+}
+
+// reportedBridges answers, by network id (region code), the bridge state a
+// "mesh.status" payload reports: the network's externalBridge as the
+// kernel status has it (the Agent passes it on as it is, and null only
+// when it knows the kernel runs no bridge there).
+func reportedBridges(payload string) map[string]reportedBridge {
+	var shape struct {
+		Networks []struct {
+			ID             string          `json:"id"`
+			ExternalBridge json.RawMessage `json:"externalBridge"`
+		} `json:"networks"`
+	}
+	answer := map[string]reportedBridge{}
 	if json.Unmarshal([]byte(payload), &shape) != nil {
 		return answer
 	}
 	for _, network := range shape.Networks {
-		if network.ExternalBridge != nil && network.ExternalBridge.AllowDigest != "" && !network.ExternalBridge.AppliedAt.IsZero() {
-			answer[network.ID] = *network.ExternalBridge
+		raw := bytes.TrimSpace(network.ExternalBridge)
+		switch {
+		case len(raw) == 0:
+			// Missing: unknown.
+		case bytes.Equal(raw, []byte("null")):
+			answer[network.ID] = reportedBridge{Stopped: true}
+		default:
+			var applied appliedBridge
+			if json.Unmarshal(raw, &applied) == nil && applied.AllowDigest != "" && !applied.AppliedAt.IsZero() {
+				answer[network.ID] = reportedBridge{Running: true, Applied: applied}
+			}
 		}
 	}
 	return answer
@@ -635,13 +693,15 @@ func desiredOf(db *gorm.DB, nodeRef string, regionID uint) (map[netip.Prefix]boo
 	return set, err == nil, err
 }
 
-// releaseHolds deletes the holds of nodeRef its report shows released
-// (spec section 15.12 item 4): where the node bridges, the digest of the
-// list it reports in force, applied after the hold, equals the digest of
-// the list it is given now, which no longer has the prefix; where it no
-// longer bridges, a report observed after the hold without a bridge in
-// that network.
-func releaseHolds(db *gorm.DB, nodeRef, payload string, observedAt time.Time) error {
+// releaseHolds deletes the holds of nodeRef its report, received at
+// receivedAt, shows released (spec section 15.12 item 4): where the node
+// bridges, a report received after the hold whose digest of the list in
+// force equals the digest of the list it is given now, which no longer has
+// the prefix; where it no longer bridges, a report received after the hold
+// without a bridge in that network (an explicit null; a missing
+// externalBridge is unknown and releases nothing). Both times are the
+// panel's: the node's appliedAt, by another clock, is only shown.
+func releaseHolds(db *gorm.DB, nodeRef, payload string, receivedAt time.Time) error {
 	var holds []model.MeshBridgeHold
 	if err := db.Where("node_ref = ?", nodeRef).Find(&holds).Error; err != nil || len(holds) == 0 {
 		return err
@@ -671,14 +731,14 @@ func releaseHolds(db *gorm.DB, nodeRef, payload string, observedAt time.Time) er
 			want = desired{set, bridge}
 			byRegion[hold.RegionID] = want
 		}
-		applied, running := reported[codes[hold.RegionID]]
+		report := reported[codes[hold.RegionID]]
 		switch {
-		case want.bridge && running:
-			if applied.AppliedAt.After(hold.CreatedAt) && !want.set[prefix] && applied.AllowDigest == AllowDigest(want.set) {
+		case want.bridge && report.Running:
+			if receivedAt.After(hold.CreatedAt) && !want.set[prefix] && report.Applied.AllowDigest == AllowDigest(want.set) {
 				released = append(released, hold.ID)
 			}
-		case !want.bridge && !running:
-			if observedAt.After(hold.CreatedAt) {
+		case !want.bridge && report.Stopped:
+			if receivedAt.After(hold.CreatedAt) {
 				released = append(released, hold.ID)
 			}
 		}
@@ -924,11 +984,15 @@ func Bridges(ctx context.Context, db *gorm.DB) ([]BridgeView, error) {
 		}
 		view.Digest = AllowDigest(set)
 		if len(statuses) > 0 {
-			if applied, ok := reportedBridges(statuses[0].Payload)[view.RegionCode]; ok {
+			if report := reportedBridges(statuses[0].Payload)[view.RegionCode]; report.Running {
+				applied := report.Applied
 				view.AppliedDigest, view.AppliedAt = &applied.AllowDigest, &applied.AppliedAt
 				view.Confirmed = applied.AllowDigest == view.Digest
 			}
-			if features := reportedFeatures(statuses[0].Payload); len(features) > 0 && !features[FeatureExternalBridge] {
+			// The Agent withholds the section from a kernel without the
+			// capability and reports the alert; a report's features say
+			// so too.
+			if features := reportedFeatures(statuses[0].Payload); (len(features) > 0 && !features[FeatureExternalBridge]) || networkAlert(statuses[0].Payload, view.RegionCode, AlertBridgeUnsupported) {
 				view.Warnings = append(view.Warnings, WarningBridgeUnsupported)
 			}
 		}

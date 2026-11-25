@@ -861,7 +861,7 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	}
 	// The allow list the node reports applied releases the addresses
 	// held for it (spec section 15.12 item 4).
-	if err := releaseHolds(db, node.String(), row.Payload, observedAt); err != nil {
+	if err := releaseHolds(db, node.String(), row.Payload, receivedAt); err != nil {
 		return err
 	}
 	// A new or changed static key of the node changes its regions'

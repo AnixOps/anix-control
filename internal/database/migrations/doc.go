@@ -203,4 +203,8 @@
 //     and the addresses held back until a bridge node confirms its new
 //     allow list (v5_mesh_external_bridge, v5_mesh_bridge_hold,
 //     internal/meshregion).
+//   - 0052_mesh_subnet_requests: the subnets a mesh full node without an
+//     Agent asks to advertise, pending an administrator's approval
+//     (v5_mesh_full_node.requested_subnets, requested_at,
+//     internal/meshregion).
 package migrations

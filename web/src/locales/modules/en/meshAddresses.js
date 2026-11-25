@@ -114,7 +114,19 @@ export default {
       subnetsDescription: 'A full node advertises only the local subnets confirmed here. One private IPv4 network per line, at most 32, not overlapping a region, the host group supernet, a reserved range or another full node\'s subnets. Leave empty to advertise none.',
       subnetsLabel: 'Subnets',
       subnetsSaved: 'Saved. The node applies it on its next configuration read.',
-      advertised: 'Advertises {subnets}'
+      advertised: 'Advertises {subnets}',
+      requested: 'Requests {subnets}',
+      requestPending: 'Subnet request pending',
+      approveRequest: 'Approve subnet request',
+      approveTitle: 'Approve the subnet request of {name}',
+      approveMessage: 'These subnets replace the advertised subnets: {subnets}',
+      approveConfirm: 'Approve',
+      approved: 'Approved. The node applies it on its next configuration read.',
+      rejectRequest: 'Reject subnet request',
+      rejectTitle: 'Reject the subnet request of {name}',
+      rejectMessage: 'The advertised subnets stay unchanged.',
+      rejectConfirm: 'Reject',
+      rejected: 'Rejected'
     },
     hostGroups: {
       title: 'Host groups',
@@ -135,7 +147,7 @@ export default {
     },
     bridges: {
       title: 'External network bridges',
-      description: 'A bridge node is also on another overlay network. It advertises the listed external addresses in its home region to the allowed sources only.',
+      description: 'A bridge node is also on an external network. It advertises the listed external addresses in its home region to the allowed sources only.',
       add: 'Add bridge',
       empty: 'No external network bridges',
       loadFailed: 'Could not load the external network bridges',

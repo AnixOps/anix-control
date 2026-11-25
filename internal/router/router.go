@@ -718,6 +718,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/mesh/devices/:device_id/move", mesh.MoveMeshDevice)
 		v4.POST("/kernel/mesh/devices/:device_id/address", mesh.AssignMeshDeviceAddress)
 		v4.PUT("/kernel/mesh/devices/:device_id/subnets", mesh.SetMeshDeviceSubnets)
+		v4.POST("/kernel/mesh/devices/:device_id/subnet-request/approve", mesh.ApproveMeshDeviceSubnets)
+		v4.DELETE("/kernel/mesh/devices/:device_id/subnet-request", mesh.RejectMeshDeviceSubnets)
 		v4.POST("/kernel/mesh/devices/:device_id/revoke", mesh.RevokeMeshDevice)
 		v4.GET("/kernel/mesh/enrollments", mesh.ListMeshEnrollments)
 		v4.POST("/kernel/mesh/enrollments", mesh.CreateMeshEnrollment)
@@ -793,8 +795,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	}
 
 	// Mesh devices without an Agent (internal/meshregion/enroll.go): enroll
-	// with a one-time credential, then read the networks, report the status
-	// and ask for another region with the device token. Rate limited like
+	// with a one-time credential, then read the networks, report the status,
+	// ask for another region and ask to advertise subnets with the device
+	// token. Rate limited like
 	// the other public routes; 404 while the gated feature "mesh" is off.
 	meshDevices := handler.NewMeshHandler()
 	meshDevice := r.Group("/api/v5/mesh/device")
@@ -804,6 +807,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		meshDevice.GET("/config", meshDevices.MeshDeviceConfig)
 		meshDevice.POST("/report", meshDevices.MeshDeviceReport)
 		meshDevice.POST("/region-change", meshDevices.MeshDeviceChange)
+		meshDevice.POST("/subnet-request", meshDevices.MeshDeviceSubnetRequest)
 	}
 
 	// API v5: the panel's own state, with v4's admission model. The

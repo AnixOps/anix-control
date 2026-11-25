@@ -128,6 +128,10 @@ func TestMeshFullNodeAPI(t *testing.T) {
 	router.PUT("/mesh/devices/:device_id/subnets", handler.SetMeshDeviceSubnets)
 	router.POST("/device/enroll", handler.EnrollMeshDevice)
 	router.GET("/device/config", handler.MeshDeviceConfig)
+	router.POST("/device/subnet-request", handler.MeshDeviceSubnetRequest)
+	router.GET("/mesh/devices", handler.ListMeshDevices)
+	router.POST("/mesh/devices/:device_id/subnet-request/approve", handler.ApproveMeshDeviceSubnets)
+	router.DELETE("/mesh/devices/:device_id/subnet-request", handler.RejectMeshDeviceSubnets)
 
 	response := serveJSON(router, http.MethodPost, "/mesh/regions", `{"code":"cn","name":"cn","cidr":"10.150.0.0/16","enabled":true}`)
 	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
@@ -169,7 +173,34 @@ func TestMeshFullNodeAPI(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), `"advertise":["192.168.1.0/24"]`)
 
+	// The node asks for other subnets; an administrator decides.
+	ask := func(body, token string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/device/subnet-request", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+token)
+		router.ServeHTTP(recorder, request)
+		return recorder
+	}
+	assert.Equal(t, http.StatusUnauthorized, ask(`{"cidrs":[]}`, "msd_unknown").Code)
+	assert.Equal(t, "invalid_request", errorCode(t, ask(`{"cidrs":["192.168.5.1/24"]}`, enrolled.DeviceToken)))
+	assert.Equal(t, "invalid_request", errorCode(t, ask(`{}`, enrolled.DeviceToken)))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, ask(`{"cidrs":["`+strings.Repeat("x", 20<<10)+`"]}`, enrolled.DeviceToken).Code)
+	accepted := ask(`{"cidrs":["192.168.5.0/24"]}`, enrolled.DeviceToken)
+	require.Equal(t, http.StatusAccepted, accepted.Code, accepted.Body.String())
+	assert.Empty(t, accepted.Body.String())
+	assert.Contains(t, serveJSON(router, http.MethodGet, "/mesh/devices", "").Body.String(), `"subnet_request":{"subnets":["192.168.5.0/24"]`)
+	requestPath := "/mesh/devices/" + strconv.FormatUint(uint64(enrolled.DeviceID), 10) + "/subnet-request"
+	assert.Equal(t, "mesh_conflict", errorCode(t, serveJSON(router, http.MethodPost, requestPath+"/approve", `{"subnets":["192.168.6.0/24"]}`)))
+	response = serveJSON(router, http.MethodPost, requestPath+"/approve", `{"subnets":["192.168.5.0/24"]}`)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	assert.JSONEq(t, `["192.168.5.0/24"]`, string(dataOf(t, response.Body.Bytes())))
+	assert.Equal(t, "not_found", errorCode(t, serveJSON(router, http.MethodDelete, requestPath, "")))
+	require.Equal(t, http.StatusAccepted, ask(`{"cidrs":["192.168.7.0/24"]}`, enrolled.DeviceToken).Code)
+	assert.Equal(t, http.StatusNoContent, serveJSON(router, http.MethodDelete, requestPath, "").Code)
+	assert.NotContains(t, serveJSON(router, http.MethodGet, "/mesh/devices", "").Body.String(), `"subnet_request"`)
+
 	var actions []string
 	require.NoError(t, env.db.Model(&model.OperationLog{}).Where("module = ?", "mesh").Order("id").Pluck("action", &actions).Error)
-	assert.Equal(t, []string{"mesh_region_create", "mesh_enrollment_create", "mesh_device_subnets"}, actions)
+	assert.Equal(t, []string{"mesh_region_create", "mesh_enrollment_create", "mesh_device_subnets", "mesh_device_subnets_approve", "mesh_device_subnets_reject"}, actions)
 }

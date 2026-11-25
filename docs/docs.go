@@ -6456,6 +6456,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/devices/{device_id}/subnet-request": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the pending subnet request of a full node without an Agent; its confirmed subnets stay. 404 not_found when nothing is pending. Audited (module mesh, action mesh_device_subnets_reject).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Reject a full node's subnet request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/devices/{device_id}/subnet-request/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Confirms the subnets a full node without an Agent asked to advertise (its subnet_request on the devices) as its subnets, with the checks of the subnets route (409 mesh_conflict on an overlap). subnets repeats the requested list as the administrator saw it; 409 mesh_conflict when the node has changed its request since. 404 not_found when nothing is pending. Audited (module mesh, action mesh_device_subnets_approve).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Approve a full node's subnet request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "device id",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "subnets",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshSubnetsInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/devices/{device_id}/subnets": {
             "put": {
                 "security": [
@@ -9320,6 +9400,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/mesh/device/subnet-request": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records the subnets a full node without an Agent asks to advertise (cidrs: private IPv4 networks with no host bits, at most 16) for an administrator to approve or reject on the device. A new request replaces the pending one; an empty cidrs withdraws it. Approval makes them the node's confirmed subnets, which it reads with its next configuration; rejection keeps the confirmed subnets. 202 with no body. 400 invalid_request for an invalid list, 409 mesh_conflict for an access device, 401 for an unknown or revoked device token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "Ask to advertise subnets from a mesh full node",
+                "parameters": [
+                    {
+                        "description": "cidrs",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshDeviceSubnetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    }
+                }
+            }
+        },
         "/api/v5/net/lines": {
             "post": {
                 "security": [
@@ -10139,6 +10252,18 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshDeviceSubnetRequest": {
+            "type": "object",
+            "properties": {
+                "cidrs": {
+                    "description": "CIDRs are the subnets to advertise; empty withdraws the request.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "handler.meshMemberRequest": {
             "type": "object",
             "properties": {
@@ -10731,6 +10856,14 @@ const docTemplate = `{
                 "status_received_at": {
                     "type": "string"
                 },
+                "subnet_request": {
+                    "description": "SubnetRequest is a full node's pending request for other subnets\n(R35), absent when none is pending.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meshregion.SubnetRequest"
+                        }
+                    ]
+                },
                 "subnets": {
                     "type": "array",
                     "items": {
@@ -11194,6 +11327,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reserved_ranges": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.SubnetRequest": {
+            "type": "object",
+            "properties": {
+                "requested_at": {
+                    "type": "string"
+                },
+                "subnets": {
                     "type": "array",
                     "items": {
                         "type": "string"
