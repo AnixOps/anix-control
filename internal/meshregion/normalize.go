@@ -18,7 +18,7 @@ func normalizeName(raw string) string {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
 			builder.WriteRune(r)
-		case r < utf8.RuneSelf || !(unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r)):
+		case r < utf8.RuneSelf || !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsMark(r):
 			builder.WriteByte('-')
 		default:
 			ascii = false
