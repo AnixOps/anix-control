@@ -161,6 +161,18 @@ run_installer() {
       [[ " ${FAKE_MISSING:-} " != *" $1 "* ]] || return 1
       command -v "$1" >/dev/null 2>&1
     }
+    # With FAKE_OPENSSL_VERIFIES=1 OpenSSL claims Ed25519 support and every
+    # signature verifies (hosts whose OpenSSL cannot check the test key).
+    if [[ "${FAKE_OPENSSL_VERIFIES:-0}" == "1" ]]; then
+      openssl() {
+        if [[ "${1:-}" == "pkeyutl" && "${2:-}" == "-help" ]]; then
+          printf '  -rawin  Indicate the input data is in raw form\n'
+          return 0
+        fi
+        [[ "${1:-}" == "pkeyutl" ]] && return 0
+        command openssl "$@"
+      }
+    fi
     # The anx release signature verifies unless FAKE_SSHSIG=bad.
     ssh-keygen() {
       printf 'ssh-keygen %s\n' "$*" >>"${STATE}/log"
@@ -750,20 +762,22 @@ ok "joining a node group"
 # 8a. A node group behind region relays: the preflight checks the gRPC
 # target through the relays (one working is enough, none fails), the join
 # gets every --relay, and the config carries GRPCRelays and ReleaseCaches.
-# A zip from a release cache is installed only with its signature: signed
-# with the test key where OpenSSL can check it (section 6), otherwise any
-# file (the signature then goes unchecked, as the output says).
+# A zip from a release cache is installed only with its signature, checked
+# strictly: signed with the test key where OpenSSL can check it (section
+# 6), otherwise with an OpenSSL stand-in that accepts it.
 if [[ -f "${WORK}/zip.sig" ]]; then
   CACHE_SIG="${WORK}/zip.sig"
   CACHE_KEY="${public}"
+  CACHE_OPENSSL=0
 else
-  printf 'unchecked\n' >"${WORK}/cache.sig"
+  printf 'dW5jaGVja2Vk\n' >"${WORK}/cache.sig"
   CACHE_SIG="${WORK}/cache.sig"
   CACHE_KEY=""
+  CACHE_OPENSSL=1
 fi
 new_root group-relays
 metadata
-ANIX_INSTALL_PUBLIC_KEY="${CACHE_KEY}" FAKE_SIG="${CACHE_SIG}" \
+ANIX_INSTALL_PUBLIC_KEY="${CACHE_KEY}" FAKE_SIG="${CACHE_SIG}" FAKE_OPENSSL_VERIFIES="${CACHE_OPENSSL}" \
   FAKE_GRPC_RC=7 FAKE_RELAYS_DOWN="relay-b.example.cn:50051" run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" \
   --relay relay-a.example.cn:50051 --relay relay-b.example.cn:50051 --release-cache https://relay-a.example.cn:8443/
 expect_status 0 "join through region relays"
@@ -813,6 +827,14 @@ run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --relay relay-a.example.cn:5005
 expect_status 1 "cached zip without a signature"
 expect_out "a zip from a release cache is not installed without it"
 [[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent" ]] || fail "installed a cached zip without its signature"
+# Without OpenSSL a cached zip is not installed, even with its signature.
+new_root group-relays-cache-noopenssl
+metadata
+ANIX_INSTALL_PUBLIC_KEY="${CACHE_KEY}" FAKE_SIG="${CACHE_SIG}" FAKE_MISSING="openssl" \
+  run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --relay relay-a.example.cn:50051 --release-cache https://relay-a.example.cn:8443
+expect_status 1 "cached zip without OpenSSL"
+expect_out "missing tools: openssl"
+[[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent" ]] || fail "installed a cached zip whose signature was not checked"
 # The cache down: the Agent comes from the mirror through the relay.
 new_root group-relays-cache-down
 metadata
@@ -836,12 +858,18 @@ grep -qF '"GRPCRelays": ["relay-a.example.cn:50051"],' "${config}" || fail "re-r
 grep -qF '"Level": "debug"' "${config}" || fail "the route change dropped a manual edit: $(cat "${config}")"
 compgen -G "${config}.bak.*" >/dev/null || fail "the direct configuration was not kept"
 python3 -m json.tool "${config}" >/dev/null || fail "the merged configuration is not JSON: $(cat "${config}")"
+# A route Control pushed and the Agent stored gives way to the group's
+# command run again.
+stream="${ROOT_DIR}/var/lib/anixops-agent/stream"
+mkdir -p "${stream}"
+printf '{"relays":["relay-old.example.cn:50051"]}\n' >"${stream}/control-route-proxy-7.json"
 run_installer -u "${CONTROL}" --relay relay-a.example.cn:50051
 expect_status 0 "second re-run with the relays"
 expect_out "kept /etc/anixops/agent/config.json"
+[[ ! -e "${stream}/control-route-proxy-7.json" ]] || fail "the re-run kept the Agent's stored route"
 # The group gains a second relay and a cache: the route lines are replaced,
 # not added beside the old ones.
-ANIX_INSTALL_PUBLIC_KEY="${CACHE_KEY}" FAKE_SIG="${CACHE_SIG}" \
+ANIX_INSTALL_PUBLIC_KEY="${CACHE_KEY}" FAKE_SIG="${CACHE_SIG}" FAKE_OPENSSL_VERIFIES="${CACHE_OPENSSL}" \
   run_installer -u "${CONTROL}" --relay relay-a.example.cn:50051 --relay relay-b.example.cn:50051 --release-cache https://relay-a.example.cn:8443
 expect_status 0 "re-run with a changed route"
 [[ "$(grep -c '"GRPCRelays"' "${config}")" == 1 ]] || fail "GRPCRelays twice: $(cat "${config}")"
@@ -849,6 +877,28 @@ grep -qF '"GRPCRelays": ["relay-a.example.cn:50051", "relay-b.example.cn:50051"]
 grep -qF '"ReleaseCaches": ["https://relay-a.example.cn:8443"],' "${config}" || fail "the cache was not set: $(cat "${config}")"
 grep -qF '"Level": "debug"' "${config}" || fail "the second route change dropped a manual edit"
 python3 -m json.tool "${config}" >/dev/null || fail "the configuration is not JSON after the route changed: $(cat "${config}")"
+# A configuration the route cannot be set in line by line (GRPCRelays on
+# several lines) is rewritten, and its one-line Forward section carried.
+new_root group-relays-rewrite
+metadata
+run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "direct install before the rewrite"
+config="${ROOT_DIR}/etc/anixops/agent/config.json"
+python3 - "${config}" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+text = text.replace('"Cores": [],', '"Forward": {"Enable": true, "NodeKind": "proxy", "ProxyNodeID": 7},\n  "Cores": [],', 1)
+text = text.replace('"GRPCUseTLS": true,', '"GRPCUseTLS": true,\n      "GRPCRelays": [\n        "relay-old.example.cn:50051"\n      ],', 1)
+open(path, "w").write(text)
+PY
+run_installer -u "${CONTROL}" --relay relay-a.example.cn:50051
+expect_status 0 "re-run that rewrites the configuration"
+expect_out "rewrote /etc/anixops/agent/config.json for the node group's region relays"
+grep -qF '"Forward": {"Enable": true, "NodeKind": "proxy", "ProxyNodeID": 7},' "${config}" || fail "the rewrite dropped the Forward section: $(cat "${config}")"
+grep -qF '"GRPCRelays": ["relay-a.example.cn:50051"],' "${config}" || fail "the rewrite lacks the relays: $(cat "${config}")"
+! grep -q 'relay-old' "${config}" || fail "the rewrite kept the old relays"
+python3 -m json.tool "${config}" >/dev/null || fail "the rewritten configuration is not JSON: $(cat "${config}")"
 for bad in "--relay relay.example.cn" "--relay http://relay.example.cn:50051" "--release-cache http://relay.example.cn:8443" "--release-cache https://relay.example.cn:8443/?x=1"; do
   new_root group-relays-bad
   metadata

@@ -465,6 +465,9 @@ require_tools() {
     # An offline bundle is trusted only through its signatures.
     have tar || missing+=("tar")
     have openssl || missing+=("openssl")
+  elif ((${#CACHES[@]} > 0)); then
+    # So is a zip from a release cache.
+    have openssl || missing+=("openssl")
   fi
   ((${#missing[@]} == 0)) || die "missing tools: ${missing[*]} (Debian/Ubuntu: apt-get install -y ${missing[*]}; RHEL: dnf install -y ${missing[*]})"
 }
@@ -980,12 +983,12 @@ load_offline() {
 verify_signature() {
   local file="$1" signature="$2" label="${3:-${ASSET}}" strict="${4:-0}" key="${ANIX_INSTALL_PUBLIC_KEY:-${OFFICIAL_PUBLIC_KEY}}"
   if ! have openssl; then
-    ((strict == 0)) || die "openssl is required to verify the offline bundle (apt-get install -y openssl)"
+    ((strict == 0)) || die "openssl is required to verify ${label} from an offline bundle or a release cache (apt-get install -y openssl); nothing was installed"
     note "openssl is missing: the release signature of ${label} is not checked (the SHA-256 is)"
     return 0
   fi
   if ! openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
-    ((strict == 0)) || die "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed), which the offline bundle requires; install from the network instead"
+    ((strict == 0)) || die "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed), which ${label} from an offline bundle or a release cache requires; nothing was installed. Install OpenSSL 3, or install without --offline / --release-cache"
     note "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed): the SHA-256 of ${label} is checked, its signature is not"
     return 0
   fi
@@ -1066,7 +1069,9 @@ download_agent() {
   [[ "${actual}" == "${EXPECTED_DIGEST}" ]] || die "checksum mismatch for ${ASSET}: expected ${EXPECTED_DIGEST}, got ${actual}; nothing was installed"
   info "Checksum verified (sha256 ${actual})"
   if fetch_agent_signature "${zip}.sig"; then
-    verify_signature "${zip}" "${zip}.sig"
+    # A zip from a release cache is checked strictly: without OpenSSL 3 to
+    # verify its signature it is not installed.
+    verify_signature "${zip}" "${zip}.sig" "${ASSET}" "${cached}"
   elif ((cached == 1)); then
     # A release cache is a third party's copy: its zip is installed only
     # with the release signature (R34).
@@ -1404,6 +1409,23 @@ merge_route() {
   ' "${config}" >"${out}"
 }
 
+# carry_forward brings the Forward section of the previous configuration
+# $1 into the rewritten one $2 when it has none (a re-run does not repeat
+# --forward). Only a one-line section, as the installer writes it, is
+# carried; another is left in the backup, with a note.
+carry_forward() {
+  local previous="$1" next="$2" line
+  grep -q '"Forward":' "${next}" && return 0
+  grep -q '"Forward":' "${previous}" || return 0
+  line="$(grep -E '^[[:space:]]*"Forward": \{[^{}]*\},[[:space:]]*$' "${previous}" | head -n 1 || true)"
+  if [[ -z "${line}" || "$(grep -c '"Forward":' "${previous}" || true)" != 1 ]]; then
+    note "the Forward section of ${previous#"${ROOT}"} spans several lines and was not carried into the new configuration; copy it back by hand"
+    return 0
+  fi
+  awk -v forward="${line}" '{ print } /^[[:space:]]*"Log":/ && !done { print forward; done = 1 }' "${next}" >"${next}.forward"
+  mv -f "${next}.forward" "${next}"
+}
+
 # write_config writes the configuration for NODE, keeping an existing one
 # for the same node unless --reset was given or it lacks this command's
 # region route (route_kept). A configuration that lacks the route gets it
@@ -1413,15 +1435,22 @@ merge_route() {
 write_config() {
   local config
   config="$(path "${CONFIG_FILE}")"
+  # The group's command is the node's route now: a route Control pushed
+  # earlier, stored by the Agent, gives way to it (the Agent gets Control's
+  # current route again over the stream).
+  if ((${#RELAYS[@]} > 0)); then
+    rm -f "$(path "${STREAM_DIR}")"/control-route-*.json
+  fi
   if [[ -f "${config}" ]] && ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}" && route_kept "${config}"; then
     CONFIG_STATE="kept ${CONFIG_FILE}"
     return 0
   fi
-  local backup="" state="wrote ${CONFIG_FILE}" merged=0
+  local backup="" state="wrote ${CONFIG_FILE}" merged=0 same=0
   if [[ -f "${config}" ]]; then
     backup="${config}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
     cp -p "${config}" "${backup}"
     if ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
+      same=1
       if merge_route "${config}" "${config}.new"; then
         merged=1
         state="set the node group's region relays in ${CONFIG_FILE}, the rest kept (the previous one is ${backup#"${ROOT}"})"
@@ -1430,7 +1459,11 @@ write_config() {
       fi
     fi
   fi
-  ((merged == 1)) || render_config >"${config}.new"
+  if ((merged == 0)); then
+    render_config >"${config}.new"
+    # The same node's Forward section survives the rewrite.
+    ((same == 0)) || carry_forward "${backup}" "${config}.new"
+  fi
   chmod 0640 "${config}.new"
   chown "root:${AGENT_USER}" "${config}.new"
   mv -f "${config}.new" "${config}"

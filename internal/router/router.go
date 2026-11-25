@@ -31,7 +31,6 @@ func registeredPackageWebSocketRoute(gateway gin.HandlerFunc, packageID, routeID
 	}
 }
 
-// Setup 设置路由
 // relaySourcePolicy returns the region relays of grpc.relay_sources, or nil
 // when there are none (config validation already refused bad entries).
 func relaySourcePolicy(cfg *config.Config) *requestorigin.Policy {
@@ -45,6 +44,7 @@ func relaySourcePolicy(cfg *config.Config) *requestorigin.Policy {
 	return policy
 }
 
+// Setup 设置路由
 func Setup(r *gin.Engine, cfg *config.Config) {
 	subscribePath := config.PrepareSubscribePath(cfg)
 
