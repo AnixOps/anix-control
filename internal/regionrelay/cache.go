@@ -284,12 +284,12 @@ func (c *Cache) fetch(ctx context.Context, sum, source string) error {
 	if _, err := os.Stat(c.path(sum)); err == nil {
 		return nil
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil) // #nosec G704 -- ServeHTTP admits only sources under the configured https origins (allowed), and downloadClient refuses non-https redirects and private addresses.
 	if err != nil {
 		return err
 	}
 	request.Header.Set("User-Agent", "anix-relay")
-	response, err := c.client.Do(request)
+	response, err := c.client.Do(request) // #nosec G704 -- source is under a configured origin; downloadClient refuses non-https redirects and private addresses.
 	if err != nil {
 		return err
 	}
