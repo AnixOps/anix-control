@@ -16,4 +16,6 @@
 - Mesh: a bridge node's report without `externalBridge` no longer releases
   the addresses held for it. Only an explicit `null` observed after the
   bridge was removed shows the node no longer bridges; a missing value is
-  unknown, as the kernel may still bridge with the old allow list.
+  unknown, as the kernel may still bridge with the old allow list. A
+  report with the alert `external_bridge_unsupported` and no
+  `externalBridge` counts as a node running no bridge.

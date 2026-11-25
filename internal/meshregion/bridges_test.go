@@ -347,18 +347,32 @@ func TestBridgeHoldWaitsAgainWhenRemovedAgain(t *testing.T) {
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }
 
-// The Agent's alert shows a kernel without external network bridges.
+// The Agent's alert shows a kernel without external network bridges, and
+// counts as a node running no bridge: what was held for it is released.
 func TestBridgeUnsupportedAlert(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	cn := region(t, db, "cn", "10.150.0.0/24")
-	_, err := AddNode(ctx, db, cn.ID, proxy(1), false, now)
-	require.NoError(t, err)
-	_, err = CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	bridge, err := CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}, now)
 	require.NoError(t, err)
 	require.NotContains(t, bridgeView(t, db, "proxy-1").Warnings, WarningBridgeUnsupported)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_unsupported"}]}]}`), now, now))
+	unsupported := []byte(`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_unsupported"}]}]}`)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, now, now))
 	view := bridgeView(t, db, "proxy-1")
 	require.Contains(t, view.Warnings, WarningBridgeUnsupported)
 	require.False(t, view.Confirmed)
+
+	_, err = UpdateBridge(ctx, db, bridge.ID, BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	require.NoError(t, err)
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1)
+	before := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, before, before))
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "received before the removal")
+	later := time.Now().UTC().Add(time.Minute)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), unsupported, later, later))
+	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
 }
