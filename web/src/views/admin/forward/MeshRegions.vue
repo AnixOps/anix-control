@@ -10,7 +10,8 @@
     </UiPageHeader>
 
     <UiEmptyState v-if="unavailable" :icon="Network" heading-tag="h2" :title="t('mesh.page.unavailable')" />
-    <template v-else>
+    <UiSegmentedControl v-if="!unavailable" v-model="section" :options="sectionOptions" :aria-label="t('meshAddr.sections.label')" data-testid="mesh-sections" />
+    <template v-if="!unavailable && section === 'regions'">
       <h2 class="mesh-heading">{{ t('mesh.page.regions') }}</h2>
       <UiDataTable
         :columns="regionColumns"
@@ -91,6 +92,13 @@
 
       <p class="list-page__note">{{ t('mesh.page.note') }}</p>
     </template>
+    <template v-if="!unavailable && loaded">
+      <MeshDevices v-if="section === 'devices'" :regions="regions" :pools="meshSummary?.pools || []" @changed="refreshAll" />
+      <MeshHostGroups v-else-if="section === 'hostGroups'" :regions="regions" :members="members" @changed="refreshAll" />
+      <MeshNames v-else-if="section === 'names'" />
+      <MeshChanges v-else-if="section === 'changes'" :regions="regions" :members="members" @changed="refreshAll" />
+      <MeshSettings v-else-if="section === 'settings'" :settings="meshSummary?.settings || null" @changed="refreshAll" />
+    </template>
 
     <MeshRegionSheet v-model:open="regionSheetOpen" :region="editingRegion" @saved="refresh" />
     <MeshMemberSheet v-model:open="memberSheetOpen" :member="editingMember" :regions="regions" :nodes="freeNodes" @saved="refresh" />
@@ -102,12 +110,17 @@
 // the status each node's Agent reports. A change reaches the nodes at once.
 import { computed, ref } from 'vue'
 import { MoveRight, Network, Pencil, Plus, Power, Shield, Trash2 } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiEmptyState, UiPageHeader, useConfirm, useToast } from '@/ui'
+import { UiBadge, UiButton, UiDataTable, UiEmptyState, UiPageHeader, UiSegmentedControl, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { deleteKernelMeshRegion, getKernelAdminNodes, listKernelMeshRegions, removeKernelMeshMember, saveKernelMeshRegion, updateKernelMeshMember } from '@/api/kernel'
+import { deleteKernelMeshRegion, getKernelAdminNodes, getKernelMeshSummary, listKernelMeshRegions, removeKernelMeshMember, saveKernelMeshRegion, updateKernelMeshMember } from '@/api/kernel'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import MeshMemberSheet from '@/components/forward/MeshMemberSheet.vue'
 import MeshRegionSheet from '@/components/forward/MeshRegionSheet.vue'
+import MeshChanges from '@/components/forward/mesh/MeshChanges.vue'
+import MeshDevices from '@/components/forward/mesh/MeshDevices.vue'
+import MeshHostGroups from '@/components/forward/mesh/MeshHostGroups.vue'
+import MeshNames from '@/components/forward/mesh/MeshNames.vue'
+import MeshSettings from '@/components/forward/mesh/MeshSettings.vue'
 import { boundaryCount, isFeatureDisabled, memberRows, meshErrorMessage, statusSummary } from '@/components/forward/meshModel'
 import { usePolling } from '@/components/forward/usePolling'
 import { readNodePage } from '@/views/admin/nodes/nodeData'
@@ -144,6 +157,33 @@ const { loading, secondsAgo, refresh } = usePolling(async () => {
 }, { interval: 15000 })
 
 const members = computed(() => memberRows(regions.value))
+
+// The sections of the page: the regions and nodes, then the devices, host
+// groups, intranet names, region changes and settings, with the summary
+// (settings, device pools, pending changes) they share.
+const SECTIONS = ['regions', 'devices', 'hostGroups', 'names', 'changes', 'settings']
+const section = ref('regions')
+const meshSummary = ref(null)
+const sectionOptions = computed(() => SECTIONS.map(value => ({
+  value,
+  label: value === 'changes' && meshSummary.value?.pending_changes
+    ? t('meshAddr.sections.changesPending', { n: meshSummary.value.pending_changes })
+    : t(`meshAddr.sections.${value}`)
+})))
+
+async function loadSummary() {
+  try {
+    meshSummary.value = await getKernelMeshSummary()
+  } catch {
+    meshSummary.value = null
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([refresh(), loadSummary()])
+}
+
+loadSummary()
 const freeNodes = computed(() => {
   const taken = new Set(members.value.map(member => member.node_ref))
   return nodes.value.filter(node => !taken.has(node.ref))

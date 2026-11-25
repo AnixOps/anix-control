@@ -237,6 +237,11 @@ func laterModels() []any {
 		&model.MeshRegion{},                // 0045_mesh_regions
 		&model.MeshMember{},                // 0045_mesh_regions
 		&model.MeshStatus{},                // 0045_mesh_regions
+		&model.MeshSettings{},              // 0046_mesh_addresses
+		&model.MeshDevice{},                // 0046_mesh_addresses
+		&model.MeshHostGroup{},             // 0046_mesh_addresses
+		&model.MeshDeviceName{},            // 0046_mesh_addresses
+		&model.MeshRegionChange{},          // 0046_mesh_addresses
 	}
 }
 

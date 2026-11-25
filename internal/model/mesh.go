@@ -52,3 +52,116 @@ type MeshStatus struct {
 }
 
 func (MeshStatus) TableName() string { return "v5_mesh_status" }
+
+// MeshSettings is the one row (ID 1) of the mesh's global settings
+// (0046_mesh_addresses). Before an administrator first saves them the
+// defaults of internal/meshregion apply.
+type MeshSettings struct {
+	ID uint `gorm:"primaryKey" json:"-"`
+	// NameSuffix is the intranet domain suffix: a name is
+	// <name>.<region code>.<suffix>.
+	NameSuffix string `gorm:"size:200;not null" json:"name_suffix"`
+	// HostGroupSupernet is the IPv4 range the host groups' segments come
+	// from, outside every region's range.
+	HostGroupSupernet string `gorm:"size:43;not null" json:"host_group_supernet"`
+	// HostGroupPrefix is the prefix length of a host group's segment.
+	HostGroupPrefix int `gorm:"not null" json:"host_group_prefix"`
+	// ReservedRanges are IPv4 ranges no region or host group may overlap,
+	// comma-separated.
+	ReservedRanges string    `gorm:"type:text;not null" json:"-"`
+	UpdatedAt      time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshSettings) TableName() string { return "v5_mesh_settings" }
+
+// MeshDevice is a personal device (phone, computer) with an address from
+// its region's device pool, the upper half of the region's range. The
+// address stays the device's while it is used; one unused for 30 days goes
+// to the next device that needs one when the pool has no free address.
+type MeshDevice struct {
+	ID       uint `gorm:"primaryKey" json:"id"`
+	RegionID uint `gorm:"not null;uniqueIndex:idx_v5_mesh_device_region_address,priority:1" json:"region_id"`
+	// DeviceKey is the device's identity key once it enrolled; nil for a
+	// device an administrator added.
+	DeviceKey *string `gorm:"size:128;uniqueIndex" json:"device_key"`
+	// Hostname is the device's DNS label in the intranet names.
+	Hostname string `gorm:"size:63;not null" json:"hostname"`
+	// Address is nil after the address went to another device.
+	Address       *string    `gorm:"size:15;uniqueIndex:idx_v5_mesh_device_region_address,priority:2" json:"address"`
+	AddressUsedAt *time.Time `json:"address_used_at"`
+	CreatedAt     time.Time  `gorm:"not null" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshDevice) TableName() string { return "v5_mesh_device" }
+
+// MeshHostGroup is a host group: the virtual machines or containers behind
+// a gateway node, on a segment of the host group supernet outside every
+// region's range. A standby gateway takes over when the gateway fails; it
+// has the gateway's home region.
+type MeshHostGroup struct {
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	Name    string `gorm:"size:63;not null" json:"name"`
+	Segment string `gorm:"size:43;not null;uniqueIndex" json:"segment"`
+	// GatewayRef and StandbyRef are nodes ("proxy-<id>", "forward-<id>").
+	GatewayRef string    `gorm:"size:32;not null;index" json:"gateway_ref"`
+	StandbyRef *string   `gorm:"size:32;index" json:"standby_ref"`
+	CreatedAt  time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshHostGroup) TableName() string { return "v5_mesh_host_group" }
+
+// MeshDeviceName is a name a gateway node publishes for a host behind it:
+// a host of one of its host groups, or a device of its local network.
+type MeshDeviceName struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	GatewayRef  string    `gorm:"size:32;not null;index" json:"gateway_ref"`
+	HostGroupID *uint     `gorm:"index" json:"host_group_id"`
+	Name        string    `gorm:"size:63;not null" json:"name"`
+	Address     string    `gorm:"size:15;not null" json:"address"`
+	CreatedAt   time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshDeviceName) TableName() string { return "v5_mesh_device_name" }
+
+// MeshRegionChange is a request to move a node (NodeRef) or a device
+// (DeviceID) to another region, which changes its address: the member
+// asks, an administrator approves or rejects. A move an administrator
+// makes directly is recorded approved.
+type MeshRegionChange struct {
+	ID           uint    `gorm:"primaryKey" json:"id"`
+	NodeRef      *string `gorm:"size:32;index" json:"node_ref"`
+	DeviceID     *uint   `gorm:"index" json:"device_id"`
+	FromRegionID uint    `gorm:"not null" json:"from_region_id"`
+	ToRegionID   uint    `gorm:"not null" json:"to_region_id"`
+	// Source is "member" or "admin".
+	Source string `gorm:"size:16;not null" json:"source"`
+	// Status is "pending", "approved" or "rejected".
+	Status      string     `gorm:"size:16;not null;index" json:"status"`
+	Reason      string     `gorm:"size:500;not null" json:"reason"`
+	Note        string     `gorm:"size:500;not null" json:"note"`
+	OldAddress  string     `gorm:"size:15;not null" json:"old_address"`
+	NewAddress  string     `gorm:"size:15;not null" json:"new_address"`
+	RequestedBy *uint      `json:"requested_by"`
+	DecidedBy   *uint      `json:"decided_by"`
+	DecidedAt   *time.Time `json:"decided_at"`
+	CreatedAt   time.Time  `gorm:"not null" json:"created_at"`
+}
+
+func (MeshRegionChange) TableName() string { return "v5_mesh_region_change" }
+
+// Region change sources and states.
+const (
+	MeshChangeMember   = "member"
+	MeshChangeAdmin    = "admin"
+	MeshChangePending  = "pending"
+	MeshChangeApproved = "approved"
+	MeshChangeRejected = "rejected"
+)
+
+// MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses).
+func MeshModels() []any {
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}}
+}

@@ -182,4 +182,9 @@
 //     regions, the nodes' fixed addresses and the latest status of each
 //     node (v5_mesh_region, v5_mesh_member, v5_mesh_status,
 //     internal/meshregion).
+//   - 0046_mesh_addresses: the mesh's global settings, the personal devices
+//     with their pool addresses, the host groups, the names gateway nodes
+//     publish and the region changes (v5_mesh_settings, v5_mesh_device,
+//     v5_mesh_host_group, v5_mesh_device_name, v5_mesh_region_change,
+//     internal/meshregion).
 package migrations

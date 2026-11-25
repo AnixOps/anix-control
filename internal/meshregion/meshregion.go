@@ -204,7 +204,7 @@ func checkRegion(tx *gorm.DB, id uint, input RegionInput, prefix netip.Prefix) e
 			return conflict("the range overlaps region %q (%s)", other.Code, other.CIDR)
 		}
 	}
-	return nil
+	return checkOutsideSettings(tx, prefix)
 }
 
 // CreateRegion creates a region; every boundary node gets an address in it.
@@ -259,6 +259,9 @@ func UpdateRegion(ctx context.Context, db *gorm.DB, id uint, input RegionInput, 
 			if count > 0 {
 				return conflict("the range of a region with members cannot change")
 			}
+			if err := regionHasDevices(tx, id); err != nil {
+				return err
+			}
 		}
 		if row.Secret == "" {
 			row.Secret = rand.Text()
@@ -283,6 +286,12 @@ func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 		}
 		if count > 0 {
 			return conflict("the region is the home region of %d nodes; move or remove them first", count)
+		}
+		if err := regionHasDevices(tx, id); err != nil {
+			return err
+		}
+		if err := regionHasPendingChanges(tx, id); err != nil {
+			return err
 		}
 		if err := tx.Where("region_id = ?", id).Delete(&model.MeshMember{}).Error; err != nil {
 			return err
@@ -335,14 +344,10 @@ func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, bou
 		}
 		row = home
 		if regionID != 0 && regionID != home.RegionID {
-			var region model.MeshRegion
-			if err := findRegion(tx, regionID, &region); err != nil {
+			if row, err = moveNode(tx, home, regionID, boundary, now); err != nil {
 				return err
 			}
-			if err := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{}).Error; err != nil {
-				return err
-			}
-			if row, err = join(tx, region, home.NodeRef, true, boundary, now); err != nil {
+			if err := recordMove(tx, &home.NodeRef, nil, home.RegionID, regionID, home.Address, row.Address, now); err != nil {
 				return err
 			}
 		} else if home.Boundary != boundary {
@@ -358,12 +363,35 @@ func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, bou
 	return row, err
 }
 
+// moveNode makes regionID the home region of the node of home, with a new
+// fixed address there; the caller rejoins the other regions of a boundary
+// node.
+func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, now time.Time) (model.MeshMember, error) {
+	if err := checkGatewayStays(tx, home.NodeRef); err != nil {
+		return model.MeshMember{}, err
+	}
+	var region model.MeshRegion
+	if err := findRegion(tx, regionID, &region); err != nil {
+		return model.MeshMember{}, err
+	}
+	if err := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{}).Error; err != nil {
+		return model.MeshMember{}, err
+	}
+	return join(tx, region, home.NodeRef, true, boundary, now)
+}
+
 // RemoveNode takes the node of the home membership memberID out of the
 // mesh.
 func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 	return change(ctx, db, func(tx *gorm.DB) error {
 		home, err := findHome(tx, memberID)
 		if err != nil {
+			return err
+		}
+		if err := checkGatewayStays(tx, home.NodeRef); err != nil {
+			return err
+		}
+		if err := rejectPendingOf(tx, home.NodeRef, "the node left the mesh", time.Now().UTC()); err != nil {
 			return err
 		}
 		return tx.Where("node_ref = ?", home.NodeRef).Delete(&model.MeshMember{}).Error

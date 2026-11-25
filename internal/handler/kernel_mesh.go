@@ -86,6 +86,8 @@ func meshError(c *gin.Context, err error) {
 		kernelError(c, http.StatusConflict, "mesh_conflict", err.Error())
 	case errors.Is(err, meshregion.ErrFull):
 		kernelError(c, http.StatusConflict, "segment_full", err.Error())
+	case errors.Is(err, meshregion.ErrPoolFull):
+		kernelError(c, http.StatusConflict, "pool_full", err.Error())
 	default:
 		kernelDBError(c, err)
 	}

@@ -17,7 +17,7 @@ import (
 
 func TestMeshAPI(t *testing.T) {
 	env := newDiagnosticsEnv(t)
-	require.NoError(t, env.db.AutoMigrate(&model.MeshRegion{}, &model.MeshMember{}, &model.MeshStatus{}))
+	require.NoError(t, env.db.AutoMigrate(model.MeshModels()...))
 	now := time.Date(2026, 11, 25, 8, 0, 0, 0, time.UTC)
 	handler := &MeshHandler{db: func() *gorm.DB { return env.db }, now: func() time.Time { return now }}
 	router := gin.New()
