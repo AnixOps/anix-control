@@ -55,6 +55,9 @@ const (
 	// DefaultCacheRequestsPerSource bounds the cache requests one address
 	// has open at once.
 	DefaultCacheRequestsPerSource = 16
+	// DefaultCacheMaxConnections bounds the cache's open connections, the
+	// idle ones and those of every source together.
+	DefaultCacheMaxConnections = 1024
 )
 
 // DefaultRedirectHosts are the hosts, besides the origins' own, that an
@@ -138,6 +141,10 @@ type CacheConfig struct {
 	// MaxRequestsPerSource bounds the open requests of one address; zero
 	// is DefaultCacheRequestsPerSource.
 	MaxRequestsPerSource int `yaml:"max_requests_per_source"`
+	// MaxConnections bounds the cache's open connections from everyone
+	// together; zero is DefaultCacheMaxConnections. Over it, new
+	// connections wait for one to close.
+	MaxConnections int `yaml:"max_connections"`
 	// MaxBytes bounds the stored files; the least recently used go first.
 	// Zero is DefaultCacheMaxBytes. Downloads in progress are not counted:
 	// the disk needs room for max_bytes plus max_fetches times
@@ -286,8 +293,11 @@ func (c *Config) validate() error {
 		}
 		cache.AllowedSources[i] = source
 	}
-	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 || cache.MaxRequestsPerSource < 0 {
-		return errors.New("cache: max_bytes, max_object_bytes, max_fetches, fetch_timeout and max_requests_per_source cannot be negative")
+	if cache.MaxBytes < 0 || cache.MaxObjectBytes < 0 || cache.MaxFetches < 0 || cache.FetchTimeout < 0 || cache.MaxRequestsPerSource < 0 || cache.MaxConnections < 0 {
+		return errors.New("cache: max_bytes, max_object_bytes, max_fetches, fetch_timeout, max_requests_per_source and max_connections cannot be negative")
+	}
+	if cache.MaxConnections == 0 {
+		cache.MaxConnections = DefaultCacheMaxConnections
 	}
 	if cache.MaxRequestsPerSource == 0 {
 		cache.MaxRequestsPerSource = DefaultCacheRequestsPerSource

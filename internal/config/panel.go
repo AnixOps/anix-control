@@ -373,8 +373,13 @@ func narrowRelaySource(source string) error {
 	if err != nil {
 		return nil // NewPolicy already judged the syntax.
 	}
+	// An IPv4-mapped IPv6 prefix would be judged by its IPv6 width (a /96
+	// is all of IPv4): write IPv4 ranges as IPv4.
+	if prefix.Addr().Is4In6() {
+		return fmt.Errorf("%s is an IPv4-mapped IPv6 range: write the relays' IPv4 addresses as IPv4", source)
+	}
 	limit := 24
-	if !prefix.Addr().Unmap().Is4() {
+	if !prefix.Addr().Is4() {
 		limit = 64
 	}
 	if prefix.Bits() < limit {

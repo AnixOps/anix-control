@@ -56,7 +56,7 @@ type Cache struct {
 	// request that names another hash for a known source is refused without
 	// downloading it again.
 	sumsMu sync.Mutex
-	sums   map[string]string
+	sums   map[string]knownSum
 	// now is time.Now, replaced in tests.
 	now func() time.Time
 }
@@ -106,12 +106,22 @@ func NewCache(config CacheConfig, logger *slog.Logger) (*Cache, error) {
 		now:            time.Now,
 		allowedSources: allowed,
 		requests:       map[string]int{},
-		sums:           map[string]string{},
+		sums:           map[string]knownSum{},
 	}, nil
 }
 
 // maxKnownSums bounds the remembered source hashes.
 const maxKnownSums = 4096
+
+// knownSumLifetime is how long a source's learned SHA-256 refuses other
+// hashes for it.
+var knownSumLifetime = time.Hour
+
+// knownSum is a source's SHA-256 and when it was learned.
+type knownSum struct {
+	sum string
+	at  time.Time
+}
 
 // downloadClient is the client of the origin downloads: https only, at
 // most five redirects, every one https, and, unless allow_private_origins,
@@ -267,11 +277,16 @@ func (c *Cache) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !c.allowed(source) {
+	// Everything below works on the canonical source: a query, a fragment
+	// or another spelling of the host would otherwise make a new entry in
+	// the known hashes and the download dedupe for the same file.
+	canonical, ok := c.canonicalSource(source)
+	if !ok {
 		c.logger.Warn("refused a source outside the origins", "sha256", sum, "src", redact(source), "remote", r.RemoteAddr)
 		http.Error(w, "source is not an allowed origin", http.StatusForbidden)
 		return
 	}
+	source = canonical
 	if known, ok := c.knownSum(source); ok && known != sum {
 		http.Error(w, "the source does not have this SHA-256", http.StatusNotFound)
 		return
@@ -324,29 +339,35 @@ func (c *Cache) path(sum string) string {
 	return filepath.Join(c.config.Dir, "sha256", sum)
 }
 
-// allowed tells whether source starts with one of the origins.
-func (c *Cache) allowed(source string) bool {
+// canonicalSource answers source in its canonical form, https://<lower
+// case host><escaped path>, and whether it starts with one of the origins.
+// A source with a user, a query or a fragment is refused: release
+// downloads have none, and each would be another key for the same file.
+func (c *Cache) canonicalSource(source string) (string, bool) {
 	parsed, err := url.Parse(source)
-	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Host == "" {
-		return false
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Host == "" || parsed.Opaque != "" ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || strings.ContainsAny(source, "?#") {
+		return "", false
 	}
 	// Compare the parsed form, so dot segments or a changed host spelling
 	// cannot step outside a prefix.
 	if parsed.Path != "" && parsed.Path != cleanURLPath(parsed.Path) {
-		return false
+		return "", false
 	}
-	normalised := parsed.Scheme + "://" + strings.ToLower(parsed.Host) + parsed.EscapedPath()
+	// Escape from the decoded path, so another percent-encoding of the same
+	// path is the same source.
+	canonical := "https://" + strings.ToLower(parsed.Host) + (&url.URL{Path: parsed.Path}).EscapedPath()
 	for _, origin := range c.config.Origins {
 		prefix, err := url.Parse(origin)
 		if err != nil {
 			continue
 		}
 		want := prefix.Scheme + "://" + strings.ToLower(prefix.Host) + prefix.EscapedPath()
-		if strings.HasPrefix(normalised, want) {
-			return true
+		if strings.HasPrefix(canonical, want) {
+			return canonical, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // cleanURLPath is path cleaning that keeps a trailing slash.
@@ -431,11 +452,18 @@ func (c *Cache) fetch(ctx context.Context, sum, source string) error {
 	return nil
 }
 
+// knownSum answers the SHA-256 source was last found to have, for
+// knownSumLifetime: after that the source may have been replaced (a
+// re-published release) and is downloaded again.
 func (c *Cache) knownSum(source string) (string, bool) {
 	c.sumsMu.Lock()
 	defer c.sumsMu.Unlock()
-	sum, ok := c.sums[source]
-	return sum, ok
+	known, ok := c.sums[source]
+	if !ok || c.now().Sub(known.at) >= knownSumLifetime {
+		delete(c.sums, source)
+		return "", false
+	}
+	return known.sum, true
 }
 
 func (c *Cache) rememberSum(source, sum string) {
@@ -444,9 +472,9 @@ func (c *Cache) rememberSum(source, sum string) {
 	if _, ok := c.sums[source]; !ok && len(c.sums) >= maxKnownSums {
 		// Forget everything rather than track an order: the price is one
 		// more download per source.
-		c.sums = map[string]string{}
+		c.sums = map[string]knownSum{}
 	}
-	c.sums[source] = sum
+	c.sums[source] = knownSum{sum: sum, at: c.now()}
 }
 
 func remoteIP(remote string) netip.Addr {
@@ -473,8 +501,23 @@ func (c *Cache) sourceAllowed(ip netip.Addr) bool {
 	return false
 }
 
+// sourceGroup is the key a source's limits count against: the IPv4
+// address, or the IPv6 /64, since one host usually holds a whole /64 and
+// could otherwise take a new address for every request (re-audit N6).
+func sourceGroup(ip netip.Addr) string {
+	ip = ip.Unmap()
+	if ip.Is4() {
+		return ip.String()
+	}
+	prefix, err := ip.WithZone("").Prefix(64)
+	if err != nil {
+		return ip.String()
+	}
+	return prefix.String()
+}
+
 func (c *Cache) claimRequest(ip netip.Addr) bool {
-	key := ip.String()
+	key := sourceGroup(ip)
 	c.requestsMu.Lock()
 	defer c.requestsMu.Unlock()
 	if c.requests[key] >= c.config.MaxRequestsPerSource {
@@ -485,7 +528,7 @@ func (c *Cache) claimRequest(ip netip.Addr) bool {
 }
 
 func (c *Cache) releaseRequest(ip netip.Addr) {
-	key := ip.String()
+	key := sourceGroup(ip)
 	c.requestsMu.Lock()
 	defer c.requestsMu.Unlock()
 	if c.requests[key] <= 1 {

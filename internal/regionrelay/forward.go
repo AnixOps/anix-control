@@ -136,16 +136,14 @@ func (f *Forward) Close() error {
 	return err
 }
 
-// sourceKey is the node address a connection counts against.
+// sourceKey is the node address a connection counts against: one IPv4
+// address, or one IPv6 /64 (a host usually holds a whole /64).
 func sourceKey(addr net.Addr) string {
-	if tcp, ok := addr.(*net.TCPAddr); ok {
-		return tcp.IP.String()
-	}
-	host, _, err := net.SplitHostPort(addr.String())
-	if err != nil {
+	ip := remoteIP(addr.String())
+	if !ip.IsValid() {
 		return addr.String()
 	}
-	return host
+	return sourceGroup(ip)
 }
 
 func (f *Forward) claimSource(source string) bool {
