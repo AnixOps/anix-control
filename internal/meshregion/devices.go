@@ -462,12 +462,20 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 		if err := findDevice(tx, id, &row); err != nil {
 			return err
 		}
+		// Read again under the region's lock, which a request choosing
+		// the device an address at the same time also takes.
+		var region model.MeshRegion
+		if err := findLockedRegion(tx, row.RegionID, &region); err != nil {
+			return err
+		}
+		if err := findDevice(tx, id, &row); err != nil {
+			return err
+		}
+		if row.RegionID != region.ID {
+			return conflict("the device moved to another region; try again")
+		}
 		if row.Address != nil {
 			return conflict("the device has the address %s", *row.Address)
-		}
-		var region model.MeshRegion
-		if err := findRegion(tx, row.RegionID, &region); err != nil {
-			return err
 		}
 		address, err := deviceAddress(tx, region, row.ID, now)
 		if err != nil {

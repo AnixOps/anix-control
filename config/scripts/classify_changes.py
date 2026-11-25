@@ -80,6 +80,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/kernelforward/*",
         "internal/agentpki/*",
         "internal/agentupgrade/*",
+        # The mesh's address locks run on PostgreSQL as well.
+        "internal/meshregion/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",
         "identity/*",
@@ -282,6 +284,7 @@ def self_test() -> None:
     check(["internal/grpc/node_server.go"], {"code"})
     check(["internal/agentpki/enrollment.go"], {"code", "db"})
     check(["internal/agentupgrade/worker.go"], {"code", "db"})
+    check(["internal/meshregion/devices.go"], {"code", "db"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
     check(["packages/order/native/orders.go"], {"code", "db", "packages"})
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "deploy", "packages"})

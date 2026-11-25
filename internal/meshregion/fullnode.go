@@ -2,6 +2,7 @@ package meshregion
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"strings"
 	"time"
@@ -26,8 +27,8 @@ const (
 // maxFullNodeSubnets bounds the subnets a full node advertises.
 const maxFullNodeSubnets = 32
 
-// subnetsLock is the PostgreSQL advisory lock key of the full nodes'
-// subnets ("mesh_sn" in ASCII).
+// subnetsLock is the PostgreSQL advisory lock key of the address plan
+// (lockAddressPlan; "mesh_sn" in ASCII).
 const subnetsLock int64 = 0x6d6573685f736e
 
 // lockRegion locks the region's row until the transaction ends, so that
@@ -35,12 +36,75 @@ const subnetsLock int64 = 0x6d6573685f736e
 // node's or a pool address) take turns (PostgreSQL; SQLite writes one
 // transaction at a time). The members, the devices and the credentials
 // keep their addresses in separate tables, which no one unique index
-// covers.
+// covers. It answers ErrNotFound for a region that does not exist.
 func lockRegion(tx *gorm.DB, regionID uint) error {
+	var row model.MeshRegion
+	return findLockedRegion(tx, regionID, &row)
+}
+
+// findLockedRegion reads the region after locking its row (lockRegion), so
+// that what it answers stays true until the transaction ends.
+func findLockedRegion(tx *gorm.DB, id uint, row *model.MeshRegion) error {
+	query := tx
+	if tx.Name() == "postgres" {
+		query = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var rows []model.MeshRegion
+	if err := query.Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("%w: region %d", ErrNotFound, id)
+	}
+	*row = rows[0]
+	return nil
+}
+
+// lockAllRegions locks every region's row in ascending id order. A change
+// that may choose addresses in more than one region (a boundary node, a
+// move between regions) takes it first, so that two such changes, or one
+// and a change of a single region, always lock regions in the same order
+// and never wait on each other in a cycle.
+func lockAllRegions(tx *gorm.DB) error {
 	if tx.Name() != "postgres" {
 		return nil
 	}
-	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", regionID).Find(&[]model.MeshRegion{}).Error
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Order("id ASC").Find(&[]model.MeshRegion{}).Error
+}
+
+// lockAddressPlan serializes the changes of the address plan: the regions'
+// ranges, the host group supernet, the reserved ranges and the full nodes'
+// subnets (PostgreSQL advisory lock), so that the overlap checks of two
+// changes at once each see the other. A transaction takes it before any
+// region lock.
+func lockAddressPlan(tx *gorm.DB) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	return tx.Exec("SELECT pg_advisory_xact_lock(?)", subnetsLock).Error
+}
+
+// checkFullNodeSubnets refuses ranges that overlap a full node's confirmed
+// subnets.
+func checkFullNodeSubnets(tx *gorm.DB, field string, ranges ...netip.Prefix) error {
+	var rows []model.MeshFullNode
+	if err := tx.Where("subnets <> ''").Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		for _, raw := range splitSubnets(row.Subnets) {
+			subnet, err := netip.ParsePrefix(raw)
+			if err != nil {
+				continue
+			}
+			for _, prefix := range ranges {
+				if prefix.Overlaps(subnet) {
+					return conflict("%s: %s overlaps the confirmed subnet %s of a full node", field, prefix, raw)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // usedServerAddresses answers the addresses of region the members and the
@@ -183,10 +247,8 @@ func SetDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, raw []str
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Two full nodes saving at once take turns, so that the overlap
 		// check sees the other's subnets (PostgreSQL).
-		if tx.Name() == "postgres" {
-			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", subnetsLock).Error; err != nil {
-				return err
-			}
+		if err := lockAddressPlan(tx); err != nil {
+			return err
 		}
 		row, full, err := isFullNode(tx, deviceID)
 		if err != nil {

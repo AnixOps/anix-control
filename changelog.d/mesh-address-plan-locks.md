@@ -1,0 +1,3 @@
+### Fixed
+
+- 组网: changing or deleting a region locks it first, so a node or device joining at the same time can no longer keep an address outside the new range or in a deleted region. Changes that choose addresses in several regions lock every region in one order, and a deadlock or serialization failure runs the change again. Giving a device its address reads the device again under the region's lock. A new region code alone keeps the addresses unused full node credentials reserve. Regions, the host group supernet and reserved ranges can no longer overlap a full node's confirmed subnets, and these changes take turns. The address locks are tested with concurrent changes on PostgreSQL in CI.
