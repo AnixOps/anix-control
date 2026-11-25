@@ -8,6 +8,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/health"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -31,6 +32,19 @@ func registeredPackageWebSocketRoute(gateway gin.HandlerFunc, packageID, routeID
 }
 
 // Setup 设置路由
+// relaySourcePolicy returns the region relays of grpc.relay_sources, or nil
+// when there are none (config validation already refused bad entries).
+func relaySourcePolicy(cfg *config.Config) *requestorigin.Policy {
+	if cfg == nil || len(cfg.GRPC.RelaySources) == 0 {
+		return nil
+	}
+	policy, err := requestorigin.NewPolicy(cfg.GRPC.RelaySources)
+	if err != nil {
+		return nil
+	}
+	return policy
+}
+
 func Setup(r *gin.Engine, cfg *config.Config) {
 	subscribePath := config.PrepareSubscribePath(cfg)
 
@@ -59,6 +73,18 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	adminLimiter.StartCleanup(1 * time.Minute)
 	userLimiter.StartCleanup(1 * time.Minute)
 	publicLimiter.StartCleanup(1 * time.Minute)
+	// Region relays (grpc.relay_sources) carry every install of their
+	// region from one address, so the install routes give them a budget of
+	// their own instead of the per-address public one.
+	installLimiter := publicLimiter.Middleware()
+	if relays := relaySourcePolicy(cfg); relays != nil {
+		relayLimiter := middleware.NewRateLimiter(50, 200,
+			middleware.WithExemptPaths(exemptPaths),
+			middleware.WithTTL(5*time.Minute),
+		)
+		relayLimiter.StartCleanup(1 * time.Minute)
+		installLimiter = publicLimiter.SplitByClient(relays.TrustedIP, relayLimiter)
+	}
 
 	// Admin API tokens ("Authorization: Bearer anixadm_...", docs/reference/
 	// admin-api-tokens.md) authenticate the administrator APIs in front of
@@ -107,7 +133,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// Agent release when Control holds it. Public downloads, rate limited.
 	agentInstall := handler.NewAgentInstallHandler()
 	installPublic := r.Group("")
-	installPublic.Use(publicLimiter.Middleware())
+	installPublic.Use(installLimiter)
 	installPublic.GET("/install.sh", agentInstall.Script)
 	installPublic.GET("/install.sh.sig", agentInstall.Signature)
 	installPublic.GET("/install/agent.env", agentInstall.Metadata)

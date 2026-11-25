@@ -189,8 +189,8 @@ type CommandInput struct {
 //	curl -fsSL [--connect-to ...] <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
 //	  [--relay host:port]... [--release-cache https://...]...
 //
-// With relays, a script served by Control is fetched through the first
-// relay (scriptConnectTo), as the script then reaches Control.
+// With relays, a script served by Control is fetched through the relays
+// (scriptConnectTo), each tried in turn, as the script then reaches Control.
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
 func RenderCommand(input CommandInput) string {
@@ -198,12 +198,26 @@ func RenderCommand(input CommandInput) string {
 	if strings.ContainsAny(input.ScriptURL, "[]") {
 		curl += "g"
 	}
-	words := []string{curl}
-	if connect := scriptConnectTo(input); connect != "" {
-		words = append(words, "--connect-to", ShellQuote(connect))
+	var words []string
+	switch connects := scriptConnectTo(input); len(connects) {
+	case 0:
+		words = []string{curl, ShellQuote(input.ScriptURL), "|"}
+	case 1:
+		words = []string{curl, "--connect-to", ShellQuote(connects[0]), ShellQuote(input.ScriptURL), "|"}
+	default:
+		// Several relays: each is tried in turn. The script is read whole
+		// before bash runs it, so an attempt cut off midway never leaves
+		// part of a script in front of the next one.
+		for i, connect := range connects {
+			if i > 0 {
+				words = append(words, "||")
+			}
+			words = append(words, `script="$(`+curl, "--connect-to", ShellQuote(connect), ShellQuote(input.ScriptURL)+`)"`)
+		}
+		words = append(words, "&&", "printf", `'%s\n'`, `"$script"`, "|")
 	}
 	words = append(words,
-		ShellQuote(input.ScriptURL), "|", "sudo", "bash", "-s", "--",
+		"sudo", "bash", "-s", "--",
 		"-u", ShellQuote(input.ControlURL), "-t", ShellQuote(input.Token),
 	)
 	if input.Mirror != "" && input.Mirror != MirrorControl {
@@ -219,26 +233,32 @@ func RenderCommand(input CommandInput) string {
 }
 
 // scriptConnectTo is the curl --connect-to of a routed command whose
-// script Control serves: Control's host:port, then the first relay's host
-// with the same port, where a region relay forwards Control's https port
-// (docs/design/region-relay). TLS and the certificate check stay with
-// Control's name. "" without relays or for a script from elsewhere
-// (GitHub releases).
-func scriptConnectTo(input CommandInput) string {
+// script Control serves, one per relay host in order: Control's host:port,
+// then the relay's host with the same port, where a region relay forwards
+// Control's https port (docs/design/region-relay). TLS and the certificate
+// check stay with Control's name. None without relays or for a script from
+// elsewhere (GitHub releases).
+func scriptConnectTo(input CommandInput) []string {
 	if len(input.Relays) == 0 {
-		return ""
+		return nil
 	}
 	control, controlErr := url.Parse(input.ControlURL)
 	script, scriptErr := url.Parse(input.ScriptURL)
 	if controlErr != nil || scriptErr != nil || control.Hostname() == "" ||
 		!strings.EqualFold(control.Hostname(), script.Hostname()) || httpsPort(control) != httpsPort(script) {
-		return ""
+		return nil
 	}
-	relayHost, _, err := net.SplitHostPort(input.Relays[0])
-	if err != nil {
-		return ""
+	var connects []string
+	seen := map[string]bool{}
+	for _, relay := range input.Relays {
+		relayHost, _, err := net.SplitHostPort(relay)
+		if err != nil || seen[strings.ToLower(relayHost)] {
+			continue
+		}
+		seen[strings.ToLower(relayHost)] = true
+		connects = append(connects, net.JoinHostPort(control.Hostname(), httpsPort(control))+":"+net.JoinHostPort(relayHost, httpsPort(control)))
 	}
-	return net.JoinHostPort(control.Hostname(), httpsPort(control)) + ":" + net.JoinHostPort(relayHost, httpsPort(control))
+	return connects
 }
 
 func httpsPort(u *url.URL) string {

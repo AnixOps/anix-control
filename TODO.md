@@ -38,6 +38,11 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   and the hourly miss bound per certificate identity rather than per
   address (two allowed hosts can still take every slot, nodes behind one
   NAT share 30 misses an hour). Next minor version.
+- [ ] Region relays, Agent side (anix-agent, fourth R34 re-audit K6): an
+  installed Agent reads `control_route` from its desired configuration and
+  switches relays and release caches without a reinstall, keeping the
+  route it has when the list arrives empty (the contract above). Until
+  then a node moves by re-running its group's command.
 - [ ] Region relays, with the 0.4 region model (G3): Control checks that a
   node of the mainland region is in a group with relays and warns
   otherwise; the per-region fallback setting of the R33 assessment.
