@@ -501,3 +501,44 @@ func TestBridgeDowngradeResidueKeepsHolds(t *testing.T) {
 	report(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`)
 	require.Zero(t, count())
 }
+
+// external_bridge_lock_held marks the bridge unsupported and, since the
+// process holding the lock may be an old instance that still bridges,
+// releases nothing while reported, even with null in two consecutive
+// reports; once it clears, two reports without it release.
+func TestBridgeLockHeldAlert(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	bridge, err := CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	_, err = UpdateBridge(ctx, db, bridge.ID, BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	require.NoError(t, err)
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1)
+
+	at := time.Now().UTC().Add(time.Minute)
+	report := func(payload string) {
+		t.Helper()
+		at = at.Add(time.Second)
+		require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(payload), at, at))
+	}
+	for _, held := range []string{
+		`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_lock_held"}]}]}`,
+		`{"networks":[{"id":"cn","running":true,"externalBridge":null,"alerts":[{"code":"external_bridge_lock_held"}]}]}`,
+		`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_unsupported"},{"code":"external_bridge_lock_held"}]}]}`,
+	} {
+		report(held)
+		report(held)
+		view := bridgeView(t, db, "proxy-1")
+		require.Contains(t, view.Warnings, WarningBridgeUnsupported, held)
+		require.Len(t, view.Held, 1, held)
+	}
+	report(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`)
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "the report before still had the alert")
+	report(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`)
+	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
+}

@@ -31,3 +31,7 @@
   rules may remain after a kernel downgrade), nothing held there is
   released, even with `null` or `external_bridge_unsupported`; the alert
   is shown as 外部网络桥接规则可能残留，请清理后删除记录文件.
+  The alert `external_bridge_lock_held` (another process on the host holds
+  the bridge lock) is labelled and, like
+  `external_bridge_downgrade_residue`, releases nothing while reported:
+  the holder may be an old instance that hangs with its rules in force.
