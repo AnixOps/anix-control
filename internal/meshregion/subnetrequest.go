@@ -60,9 +60,9 @@ func RequestDeviceSubnets(ctx context.Context, db *gorm.DB, device model.MeshDev
 	})
 }
 
-// pendingOf answers the full node of deviceID and its pending request,
+// pendingSubnets answers the full node of deviceID and its pending request,
 // ErrNotFound when there is none.
-func pendingOf(tx *gorm.DB, deviceID uint) (model.MeshFullNode, SubnetRequest, error) {
+func pendingSubnets(tx *gorm.DB, deviceID uint) (model.MeshFullNode, SubnetRequest, error) {
 	row, full, err := isFullNode(tx, deviceID)
 	if err != nil {
 		return row, SubnetRequest{}, err
@@ -107,7 +107,7 @@ func ApproveDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, subne
 		if err := lockAddressPlan(tx); err != nil {
 			return err
 		}
-		row, request, err := pendingOf(tx, deviceID)
+		row, request, err := pendingSubnets(tx, deviceID)
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func ApproveDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, subne
 func RejectDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, now time.Time) ([]string, error) {
 	var rejected []string
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, request, err := pendingOf(tx, deviceID)
+		row, request, err := pendingSubnets(tx, deviceID)
 		if err != nil {
 			return err
 		}
