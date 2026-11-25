@@ -644,8 +644,10 @@ func TestCacheBoundsMissesPerSource(t *testing.T) {
 	clock := time.Unix(1_700_000_000, 0)
 	cache.now = func() time.Time { return clock }
 	ip, other := remoteIP("192.0.2.1:1234"), remoteIP("192.0.2.2:1")
-	if !cache.claimMiss(ip, "a") || !cache.claimMiss(ip, "a") {
-		t.Fatal("requests for one source were refused")
+	for range 2 {
+		if !cache.claimMiss(ip, "a") {
+			t.Fatal("requests for one source were refused")
+		}
 	}
 	if !cache.claimMiss(ip, "b") {
 		t.Fatal("a second source was refused")
