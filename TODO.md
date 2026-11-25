@@ -83,6 +83,12 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   marked and moved only by an administrator ("Assign new address");
   moving it automatically is to be considered (#641 audit). The resolver
   address of an IPv6 range is not defined by the spec yet.
+  The Agent must leave out `dns.resolver_address` for kernels that do not
+  take it (as for the other sections), or those kernels reject the whole
+  configuration; devices without an Agent take it from the release that
+  supports it. Bridge allow lists (spec #328 U4, R36): configured by
+  member, delivered expanded to /32, /128 and host group segments, and
+  pushed again when a member changes or is revoked.
 
 - [ ] Region relays, deferred from the third R34 re-audit (requirements
   thread decision 2026-11-25): G6 check a group's relay addresses against

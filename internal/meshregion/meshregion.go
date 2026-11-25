@@ -109,13 +109,19 @@ type Region struct {
 	ResolverAddress string `json:"resolver_address"`
 	// Warnings: WarningFewBoundaryNodes when the region is enabled with
 	// fewer than two boundary nodes (R19); WarningSharedAddressSpace when
-	// its range lies in 100.64.0.0/10.
+	// its range lies in 100.64.0.0/10; WarningResolverAddressHeld while a
+	// device holds its resolver address, which is then not delivered.
 	Warnings []string `json:"warnings"`
 }
 
 // WarningFewBoundaryNodes: an enabled region has fewer than two boundary
 // nodes, so a failing one cuts it off from the other regions.
 const WarningFewBoundaryNodes = "few_boundary_nodes"
+
+// WarningResolverAddressHeld: a device holds the region's resolver
+// address from before it was reserved, so the nodes are not given it
+// (dns.resolver_address) until the device takes another address.
+const WarningResolverAddressHeld = "resolver_address_held"
 
 // MemberView is a membership with its node and the node's last status.
 type MemberView struct {
@@ -174,6 +180,10 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 	if err != nil {
 		return nil, err
 	}
+	resolvers, err := resolverAddresses(db, regions)
+	if err != nil {
+		return nil, err
+	}
 	answer := make([]Region, len(regions))
 	index := map[uint]int{}
 	for i, region := range regions {
@@ -183,6 +193,9 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		}
 		if inSharedSpace(region.CIDR) {
 			answer[i].Warnings = append(answer[i].Warnings, WarningSharedAddressSpace)
+		}
+		if answer[i].ResolverAddress != "" && resolvers[region.ID] == "" {
+			answer[i].Warnings = append(answer[i].Warnings, WarningResolverAddressHeld)
 		}
 		index[region.ID] = i
 	}
@@ -740,6 +753,10 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
+	resolvers, err := resolverAddresses(db, regions)
+	if err != nil {
+		return nil, err
+	}
 	networks := []map[string]any{}
 	for _, region := range regions {
 		member, ok := mine[region.ID]
@@ -774,7 +791,7 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			"peers":       regionPeers,
 			"subnets":     map[string]any{"accept": []string{}, "advertise": advertise},
 			"routing":     map[string]any{"policy": policy, "paths": []any{}},
-			"dns":         dns,
+			"dns":         regionDNS(dns, resolvers[region.ID]),
 			"host_groups": groups,
 		})
 	}

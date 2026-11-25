@@ -560,6 +560,10 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	if err != nil {
 		return nil, err
 	}
+	resolvers, err := resolverAddresses(db, []model.MeshRegion{region})
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{"networks": []map[string]any{{
 		"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
 		"secret": region.Secret, "secure_mode": true, "cipher": cipher,
@@ -567,7 +571,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 		"peers":   peers,
 		"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
 		"routing": map[string]any{"policy": policy, "paths": []any{}},
-		"dns":     dns,
+		"dns":     regionDNS(dns, resolvers[region.ID]),
 	}}}, nil
 }
 

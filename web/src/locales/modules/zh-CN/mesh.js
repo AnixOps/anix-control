@@ -20,6 +20,7 @@ export default {
       fewBoundaries: '边界节点少于两台',
       sharedAddressSpace: '位于共享地址段',
       resolverAddress: '解析地址 {address}',
+      resolverAddressHeld: '解析地址被占用',
       memberCount: '{n} 个节点',
       boundaryCount: '{n} 台边界节点',
       note: '地区网络强制启用前向保密。地区停用后，其节点停止该网络。',

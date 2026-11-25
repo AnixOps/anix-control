@@ -2,6 +2,7 @@ package meshregion
 
 import (
 	"encoding/json"
+	"net/netip"
 	"regexp"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -65,6 +66,51 @@ func dnsSection(db *gorm.DB) (map[string]any, error) {
 		names = append(names, map[string]any{"name": entry.Name + "." + entry.RegionCode, "address": entry.Address})
 	}
 	return map[string]any{"enabled": true, "suffix": list.Suffix, "names": names}, nil
+}
+
+// resolverAddresses answers, by region id, the resolver address each of
+// regions delivers as dns.resolver_address: none while a device still
+// holds it from before it was reserved (spec section 15.9.2, item 8,
+// transition), and none for a range it cannot be read from.
+func resolverAddresses(db *gorm.DB, regions []model.MeshRegion) (map[uint]string, error) {
+	answer := map[uint]string{}
+	ids := make([]uint, 0, len(regions))
+	for _, region := range regions {
+		if prefix, err := netip.ParsePrefix(region.CIDR); err == nil && prefix.Addr().Is4() {
+			answer[region.ID] = ResolverAddress(prefix).String()
+			ids = append(ids, region.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return answer, nil
+	}
+	var holders []struct {
+		RegionID uint
+		Address  string
+	}
+	if err := db.Model(&model.MeshDevice{}).Select("region_id", "address").Where("region_id IN ? AND address IS NOT NULL", ids).Scan(&holders).Error; err != nil {
+		return nil, err
+	}
+	for _, holder := range holders {
+		if answer[holder.RegionID] == holder.Address {
+			delete(answer, holder.RegionID)
+		}
+	}
+	return answer, nil
+}
+
+// regionDNS answers the section "dns" of one network: dns with the
+// network's resolver address, when it has one to deliver.
+func regionDNS(dns map[string]any, resolver string) map[string]any {
+	if resolver == "" {
+		return dns
+	}
+	section := make(map[string]any, len(dns)+1)
+	for key, value := range dns {
+		section[key] = value
+	}
+	section["resolver_address"] = resolver
+	return section
 }
 
 // hostGroupSections answers the section "host_groups" of each region: the

@@ -21,6 +21,7 @@ export default {
       fewBoundaries: 'Fewer than two boundary nodes',
       sharedAddressSpace: 'In shared address space',
       resolverAddress: 'Resolver {address}',
+      resolverAddressHeld: 'Resolver address held',
       memberCount: '{n} node | {n} nodes',
       boundaryCount: '{n} boundary node | {n} boundary nodes',
       note: 'Region networks always use forward secrecy. The nodes of a disabled region stop its network.',
