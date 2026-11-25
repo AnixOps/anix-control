@@ -458,3 +458,46 @@ func TestStatusAfterClockSetBack(t *testing.T) {
 	require.Empty(t, bridgeView(t, db, "proxy-1").Held, "the set-back node still releases")
 	require.Equal(t, dropped+1, droppedReports.Load())
 }
+
+// While a network reports external_bridge_downgrade_residue, old bridge
+// rules may remain: nothing held there is released, even with null or
+// external_bridge_unsupported in two consecutive reports.
+func TestBridgeDowngradeResidueKeepsHolds(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	bridge, err := CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	require.NoError(t, DeleteBridge(ctx, db, bridge.ID))
+	var holds int64
+	count := func() int64 {
+		t.Helper()
+		require.NoError(t, db.Model(&model.MeshBridgeHold{}).Where("node_ref = ?", "proxy-1").Count(&holds).Error)
+		return holds
+	}
+	require.EqualValues(t, 1, count())
+
+	at := time.Now().UTC().Add(time.Minute)
+	report := func(payload string) {
+		t.Helper()
+		at = at.Add(time.Second)
+		require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(payload), at, at))
+	}
+	for _, residue := range []string{
+		`{"networks":[{"id":"cn","running":true,"externalBridge":null,"alerts":[{"code":"external_bridge_downgrade_residue"}]}]}`,
+		`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_unsupported"},{"code":"external_bridge_downgrade_residue"}]}]}`,
+	} {
+		report(residue)
+		report(residue)
+		require.EqualValues(t, 1, count(), residue)
+	}
+	// Cleared: the next two reports without the alert release.
+	report(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`)
+	require.EqualValues(t, 1, count(), "the report before still had the alert")
+	report(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`)
+	require.Zero(t, count())
+}

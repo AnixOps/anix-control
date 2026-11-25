@@ -27,3 +27,7 @@
   Only a report received within two minutes of the stored one counts as
   out of order (logged and counted); later, an earlier observed time is
   taken as the node's clock set back and the report is accepted.
+  While a network reports `external_bridge_downgrade_residue` (old bridge
+  rules may remain after a kernel downgrade), nothing held there is
+  released, even with `null` or `external_bridge_unsupported`; the alert
+  is shown as 外部网络桥接规则可能残留，请清理后删除记录文件.

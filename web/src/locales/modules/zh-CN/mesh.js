@@ -66,7 +66,8 @@ export default {
         static_key_taken: '公钥与其他成员重复',
         external_bridge_unsupported: '内核不支持外部网络桥接',
         external_bridge_apply_failed: '外部网络桥接未能生效',
-        external_bridge_ipv6_forwarding_off: '未开启 IPv6 转发'
+        external_bridge_ipv6_forwarding_off: '未开启 IPv6 转发',
+        external_bridge_downgrade_residue: '外部网络桥接规则可能残留，请清理后删除记录文件'
       }
     },
     region: {
