@@ -99,6 +99,9 @@ type PanelSettings struct {
 	// the proxy's addresses, the only peers the listener admits.
 	GRPCEdge        bool
 	GRPCEdgeProxies []string
+	// GRPCRelaySources are the region relays whose PROXY v2 header the
+	// gRPC listener reads (grpc.relay_sources); empty: none.
+	GRPCRelaySources []string
 	// PublicURL is the https address nodes and browsers use:
 	// agent_install.public_url, else https://<domain>; empty when unknown
 	// (then the request's origin is used).
@@ -179,6 +182,9 @@ func (c *Config) Panel() PanelSettings {
 		settings.GRPCEnabled = true
 		settings.GRPCEdge = true
 		settings.GRPCEdgeProxies = append([]string(nil), c.GRPC.EdgeProxies...)
+	}
+	if len(c.GRPC.RelaySources) > 0 {
+		settings.GRPCRelaySources = append([]string(nil), c.GRPC.RelaySources...)
 	}
 	grpcHost := strings.TrimSpace(c.GRPC.Host)
 	if grpcHost == "" {
@@ -312,6 +318,14 @@ func (c *Config) validatePanel() error {
 		}
 		if strings.TrimSpace(c.GRPC.TLSCertFile) != "" || strings.TrimSpace(c.TLS.CertFile) != "" {
 			return fmt.Errorf("grpc.edge_proxies excludes grpc.tls_cert_file and tls.cert_file: the public certificate stays on the proxy")
+		}
+	}
+	if len(c.GRPC.RelaySources) > 0 {
+		if _, err := requestorigin.NewPolicy(c.GRPC.RelaySources); err != nil {
+			return fmt.Errorf("grpc.relay_sources: %w", err)
+		}
+		if len(c.GRPC.EdgeProxies) > 0 {
+			return fmt.Errorf("grpc.relay_sources excludes grpc.edge_proxies: behind an edge proxy the relays' PROXY header belongs to the proxy (docs/design/region-relay)")
 		}
 	}
 	if listen := strings.TrimSpace(c.Listen); listen != "" {

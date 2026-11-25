@@ -804,6 +804,9 @@ func startGRPCServer(cfg *config.Config, panel config.PanelSettings, certs *pane
 	// grpc.edge_proxies: a reverse proxy terminates the nodes' TLS (no gRPC
 	// certificate here) and the listener admits its address only.
 	grpcCfg.EdgeProxies = panel.GRPCEdgeProxies
+	// grpc.relay_sources: region relays forward nodes' connections byte for
+	// byte with a PROXY v2 header naming the node.
+	grpcCfg.RelaySources = panel.GRPCRelaySources
 	if certs != nil && certs.HasRole(panelcert.RoleGRPC) {
 		grpcCfg.GetCertificate = certs.GetCertificate(panelcert.RoleGRPC)
 	}

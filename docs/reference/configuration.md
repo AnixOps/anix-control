@@ -1,7 +1,8 @@
 # Configuration
 
-This page defines the configuration of `anix-control`: ten operator keys (nine,
-and `grpc.edge_proxies` for a reverse proxy on another machine), the
+This page defines the configuration of `anix-control`: eleven operator keys (nine,
+`grpc.edge_proxies` for a reverse proxy on another machine and
+`grpc.relay_sources` for region relays), the
 [database](#database) section (PostgreSQL by default), the root key in the
 data directory, and the keys earlier releases read.
 
@@ -35,6 +36,7 @@ domain: panel.example.com
 | `grpc.port` | `50051` | The node gRPC port; nodes dial `<grpc.public_name or domain>:<grpc.port>`. |
 | `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
 | `grpc.edge_proxies` | empty | Non-empty: a reverse proxy on another machine (its addresses, IPs or CIDRs) terminates the nodes' TLS with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires `tls.mode` `external` and no certificate files. The recommended layout: [two hosts](../guide/deploy-two-hosts.md). |
+| `grpc.relay_sources` | empty | Region relays (their addresses as Control sees them, IPs or CIDRs) that forward nodes' gRPC connections byte for byte ([`design/region-relay`](../design/region-relay/README.md)). A connection from one of them must open with a PROXY v2 header naming the node; TLS and the client certificate still run end to end. Not with `grpc.edge_proxies`. |
 | `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
 | `source_url` | `https://github.com/AnixOps/anix-control` | The source code address the web app links to (the AGPL-3.0 offer of the source to the panel's users, [LICENSING.md](../../LICENSING.md)). Point it at your repository when you run modified code. |
 | `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`). Absolute. |
@@ -402,6 +404,7 @@ grpc:
 | `grpc.port` (`ANIX_CONTROL_GRPC_PORT`) | `50051` | Node gRPC port. `/install/agent.env` hands nodes `<gRPC name>:<grpc.port>`. |
 | `grpc.public_name` (`ANIX_CONTROL_GRPC_PUBLIC_NAME`) | empty (`domain`) | The DNS-only name nodes dial for gRPC when `domain` is proxied by a CDN (the CDN mode below). Control obtains a publicly trusted certificate for it over ACME. |
 | `grpc.edge_proxies` (`ANIX_CONTROL_GRPC_EDGE_PROXIES`) | empty | Addresses (IPs or CIDRs) of a reverse proxy that terminates the nodes' TLS on another machine. Non-empty: the gRPC listener is plain HTTP/2 and admits these addresses only (any other connection is closed before the gRPC layer), reads the node's certificate from the `x-anix-client-cert` header and its address from `x-forwarded-for`, and only from these addresses. `tls.mode` must be `external`; `grpc.tls_cert_file` and `tls.cert_file` must be unset. Nodes dial the proxy: set `agent_install.grpc_target` to its name and port 443. The design: [`design/edge-grpc`](../design/edge-grpc/README.md). |
+| `grpc.relay_sources` (`ANIX_CONTROL_GRPC_RELAY_SOURCES`) | empty | Addresses (IPs or CIDRs) of the region relays (`anix-relay`). A connection from one of them must open with a PROXY v2 header (TCP over IPv4 or IPv6, or LOCAL) within 10 seconds, or it is closed; the header's source address then stands for the node's (enrollment records it, and the per-address rules apply to it). From any other peer no header is read. The relay terminates nothing: the node verifies Control's certificate by Control's name and presents its client certificate to Control, so a relay can neither read nor forge a node's stream. Cannot be combined with `grpc.edge_proxies`. The design: [`design/region-relay`](../design/region-relay/README.md). |
 
 With `grpc.edge_proxies` the listener holds no certificate and this order does
 not apply: the proxy's certificate is the one nodes verify.

@@ -388,6 +388,12 @@ type GRPCConfig struct {
 	// only and takes each node's client certificate from the proxy's
 	// X-Anix-Client-Cert header. Empty: the listener is TLS.
 	EdgeProxies []string `yaml:"edge_proxies"`
+	// RelaySources are the addresses (IPs or CIDRs) of the region relays
+	// (cmd/anix-relay, docs/design/region-relay). A connection from one of
+	// them must open with a PROXY v2 header, whose address then stands for
+	// the node's; from any other peer no header is read. TLS still runs
+	// end to end between the node and Control. Empty: no relays.
+	RelaySources []string `yaml:"relay_sources"`
 	// TLSCertFile and TLSKeyFile are a certificate of the gRPC listener's own
 	// (PEM files, reloaded when they change). Empty: the certificate Control
 	// manages for the gRPC name.
