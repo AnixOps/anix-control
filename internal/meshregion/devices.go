@@ -55,6 +55,10 @@ type DeviceView struct {
 	LastSeenAt       *time.Time      `json:"last_seen_at"`
 	Status           json.RawMessage `json:"status,omitempty" swaggertype:"object"`
 	StatusReceivedAt *time.Time      `json:"status_received_at,omitempty"`
+	// Role is access (a pool address) or full (a fixed address of the
+	// server segment, R32); Subnets are a full node's confirmed subnets.
+	Role    string   `json:"role"`
+	Subnets []string `json:"subnets"`
 }
 
 // pool answers the first and last address of the device pool of prefix:
@@ -133,6 +137,10 @@ func allocate(tx *gorm.DB, region model.MeshRegion, now time.Time) (string, erro
 	for i := range holders {
 		holder := &holders[i]
 		if holder.AddressUsedAt != nil && now.Sub(*holder.AddressUsedAt) < PoolReclaimAfter {
+			continue
+		}
+		// A full node's fixed address is never reclaimed.
+		if address, err := netip.ParseAddr(*holder.Address); err != nil || address.Less(addrOf(first)) {
 			continue
 		}
 		if idlest == nil || used(holder).Before(used(idlest)) {
@@ -220,6 +228,10 @@ func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) erro
 		if err := tx.Where("node_ref = ?", DeviceRef(id)).Delete(&model.MeshStatus{}).Error; err != nil {
 			return err
 		}
+		// A full node's credential stays as its record, without the device.
+		if err := tx.Model(&model.MeshFullNode{}).Where("device_id = ?", id).Updates(map[string]any{"device_id": nil, "updated_at": now}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&row).Error
 	})
 }
@@ -262,9 +274,21 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 	for _, status := range statuses {
 		reports[status.NodeRef] = status
 	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	full, err := fullNodes(db, ids)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]DeviceView, 0, len(rows))
 	for _, row := range rows {
-		view := DeviceView{MeshDevice: row, RegionCode: codes[row.RegionID], Warnings: []string{}}
+		view := DeviceView{MeshDevice: row, RegionCode: codes[row.RegionID], Warnings: []string{}, Role: RoleAccess, Subnets: []string{}}
+		node, isFull := full[row.ID]
+		if isFull {
+			view.Role, view.Subnets = RoleFull, splitSubnets(node.Subnets)
+		}
 		view.LastSeenAt, view.Enrolled = seen[row.ID]
 		if status, ok := reports[DeviceRef(row.ID)]; ok {
 			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
@@ -273,7 +297,7 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 		switch {
 		case row.Address == nil:
 			view.Warnings = append(view.Warnings, WarningNoAddress)
-		case row.AddressUsedAt == nil || now.Sub(*row.AddressUsedAt) >= PoolReclaimAfter:
+		case !isFull && (row.AddressUsedAt == nil || now.Sub(*row.AddressUsedAt) >= PoolReclaimAfter):
 			view.Warnings = append(view.Warnings, WarningAddressIdle)
 		}
 		views = append(views, view)
@@ -442,7 +466,7 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 		if err := findRegion(tx, row.RegionID, &region); err != nil {
 			return err
 		}
-		address, err := allocate(tx, region, now)
+		address, err := deviceAddress(tx, region, row.ID, now)
 		if err != nil {
 			return err
 		}
@@ -450,4 +474,21 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 		return tx.Save(&row).Error
 	})
 	return row, err
+}
+
+// deviceAddress answers a new address of region for the device: a fixed
+// address of the server segment for a full node, a pool address otherwise.
+func deviceAddress(tx *gorm.DB, region model.MeshRegion, deviceID uint, now time.Time) (string, error) {
+	node, full, err := isFullNode(tx, deviceID)
+	if err != nil {
+		return "", err
+	}
+	if !full {
+		return allocate(tx, region, now)
+	}
+	address, err := serverAddress(tx, region, "", 0)
+	if err != nil {
+		return "", err
+	}
+	return address, tx.Model(&node).Updates(map[string]any{"address": address, "updated_at": now}).Error
 }

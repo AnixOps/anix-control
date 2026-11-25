@@ -59,6 +59,22 @@ describe('mesh addresses', () => {
     wrapper.unmount()
   })
 
+  it('marks a full node and the subnets it advertises', async () => {
+    api.listKernelMeshDevices.mockResolvedValue([
+      { id: 4, region_id: 1, hostname: 'router', fqdn: 'router.cn.mesh.internal', address: '10.150.0.9', warnings: [], role: 'full', subnets: ['192.168.1.0/24'] }
+    ])
+    api.listKernelMeshEnrollments.mockResolvedValue([
+      { id: 5, region_id: 1, hostname: 'router', role: 'full', address: '10.150.0.9', expires_at: '2026-11-26T08:00:00Z', used_at: null, device_id: null }
+    ])
+    const devices = mount(MeshDevices, { props: { regions: REGIONS, pools: [] }, attachTo: document.body })
+    const enrollments = mount(MeshEnrollments, { props: { regions: REGIONS }, attachTo: document.body })
+    await flushPromises()
+    expect(devices.get('[data-testid="mesh-devices"]').text()).toContain('完整节点 · 通告 192.168.1.0/24')
+    expect(enrollments.get('[data-testid="mesh-enrollment-table"]').text()).toContain('完整节点 · 10.150.0.9')
+    devices.unmount()
+    enrollments.unmount()
+  })
+
   it('lists the enrollment credentials and shows an issued token once', async () => {
     api.listKernelMeshEnrollments.mockResolvedValue([
       { id: 3, region_id: 0, hostname: 'laptop', expires_at: '2026-11-26T08:00:00Z', used_at: '2026-11-25T08:00:00Z', device_id: 5 }

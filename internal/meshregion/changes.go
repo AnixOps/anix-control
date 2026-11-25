@@ -210,7 +210,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 	if err := findRegion(tx, row.ToRegionID, &region); err != nil {
 		return "", err
 	}
-	address, err := allocate(tx, region, now)
+	address, err := deviceAddress(tx, region, device.ID, now)
 	if err != nil {
 		return "", err
 	}

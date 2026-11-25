@@ -29,7 +29,7 @@ export default {
       description: '未安装 Agent 的设备凭一次性接入凭证加入组网，换取设备令牌后定期读取配置并上报状态。',
       issue: '签发接入凭证',
       issueTitle: '签发接入凭证',
-      issueDescription: '凭证仅可使用一次。设备以个人设备身份加入，从设备地址池获得地址。',
+      issueDescription: '凭证仅可使用一次。接入端从设备地址池获得地址；完整节点使用服务器地址段中的固定地址。',
       issueConfirm: '签发',
       empty: '暂无接入凭证',
       loadFailed: '无法加载接入凭证',
@@ -38,6 +38,15 @@ export default {
       device: '设备',
       newDevice: '新设备',
       deviceHelp: '重新接入该设备：沿用其名称、地区与地址，原设备令牌失效；设备已登记密钥时须使用相同密钥。',
+      role: '角色',
+      roles: {
+        access: '接入端',
+        full: '完整节点'
+      },
+      roleHelp: '完整节点适用于未安装 Agent 的路由器或服务器：使用固定地址，监听连接并中继流量，仅通告经管理员确认的网段。须指定地区。',
+      address: '固定地址',
+      addressHelp: '该地区服务器地址段（网段前半）中的地址；留空则在接入时分配最低的可用地址。凭证使用或撤回前保留该地址。',
+      regionRequired: '完整节点须指定地区',
       hours: '有效期（小时）',
       hoursHelp: '1 至 168 小时。',
       token: '接入凭证',
@@ -88,7 +97,14 @@ export default {
       warnings: {
         no_address: '地址已回收',
         address_idle: '30 天未使用'
-      }
+      },
+      fullNode: '完整节点',
+      subnets: '通告网段…',
+      subnetsTitle: '{name} 通告的网段',
+      subnetsDescription: '完整节点仅通告此处确认的局域网网段。每行一个私有 IPv4 网段，至多 32 个，不得与地区网段、宿主组总网段、保留网段或其他完整节点的网段重叠。留空则不通告。',
+      subnetsLabel: '网段',
+      subnetsSaved: '已保存，节点下次读取配置时生效',
+      advertised: '通告 {subnets}'
     },
     hostGroups: {
       title: '宿主组',

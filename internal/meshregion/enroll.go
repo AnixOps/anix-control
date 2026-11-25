@@ -24,7 +24,8 @@ import (
 // own device token and its network, and from then on reads its network,
 // sends its read-only status and asks to change region with that token.
 // The device is an ordinary device of the pool (devices.go): its address
-// stays while it is used, and every read or report uses it.
+// stays while it is used, and every read or report uses it. A credential of
+// the role full enrolls a full node instead (fullnode.go).
 
 const (
 	// DefaultEnrollmentTTL and MaxEnrollmentTTL bound a credential's life.
@@ -56,33 +57,67 @@ func DeviceRef(id uint) string { return "device-" + strconv.FormatUint(uint64(id
 
 // EnrollmentInput issues a credential: for a new device (Hostname, and
 // RegionID or 0 to let the device's latencies choose), or for the device
-// DeviceID to enroll again, which keeps its name, region and address.
+// DeviceID to enroll again, which keeps its name, region, role and
+// address.
 type EnrollmentInput struct {
 	RegionID uint   `json:"region_id"`
 	Hostname string `json:"hostname"`
 	DeviceID uint   `json:"device_id"`
 	// Hours the credential stays valid: 1 to 168, 24 when 0.
 	Hours int `json:"hours"`
+	// Role is access (default) or full (a full node without an Agent,
+	// which needs a region).
+	Role string `json:"role" enums:"access,full"`
+	// Address is a full node's fixed address of the region's server
+	// segment; empty: the lowest free one when the device enrolls.
+	Address string `json:"address"`
+}
+
+// EnrollmentView is a credential with the role of the device it enrolls
+// and a full node's fixed address.
+type EnrollmentView struct {
+	model.MeshEnrollment
+	Role    string `json:"role"`
+	Address string `json:"address"`
 }
 
 // IssuedEnrollment is a credential just issued with its token, which no
 // later answer carries.
 type IssuedEnrollment struct {
-	model.MeshEnrollment
+	EnrollmentView
 	Token string `json:"token"`
 }
 
 // CreateEnrollment issues a one-time credential.
 func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, createdBy *uint, now time.Time) (IssuedEnrollment, error) {
 	db = db.WithContext(ctx)
+	role := input.Role
+	if role == "" {
+		role = RoleAccess
+	}
+	if role != RoleAccess && role != RoleFull {
+		return IssuedEnrollment{}, invalid("role: access or full")
+	}
 	var target *uint
 	if input.DeviceID != 0 {
 		var device model.MeshDevice
 		if err := findDevice(db, input.DeviceID, &device); err != nil {
 			return IssuedEnrollment{}, err
 		}
+		node, full, err := isFullNode(db, device.ID)
+		if err != nil {
+			return IssuedEnrollment{}, err
+		}
+		current := RoleAccess
+		if full {
+			current = RoleFull
+		}
+		if (input.Role != "" && input.Role != current) || input.Address != "" {
+			return IssuedEnrollment{}, invalid("role, address: a device enrolling again keeps its role and address")
+		}
 		id := device.ID
-		target, input.Hostname, input.RegionID = &id, device.Hostname, device.RegionID
+		target, input.Hostname, input.RegionID, role = &id, device.Hostname, device.RegionID, current
+		input.Address = node.Address
 	}
 	hostname, err := normalizeLabel("hostname", input.Hostname)
 	if err != nil {
@@ -95,23 +130,86 @@ func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, c
 	if ttl < time.Hour || ttl > MaxEnrollmentTTL {
 		return IssuedEnrollment{}, invalid("hours: 1 to 168")
 	}
-	if input.RegionID != 0 {
-		if err := findRegion(db, input.RegionID, &model.MeshRegion{}); err != nil {
-			return IssuedEnrollment{}, err
-		}
+	if role == RoleFull && input.RegionID == 0 {
+		return IssuedEnrollment{}, invalid("region_id: a full node needs a region")
+	}
+	if role == RoleAccess && input.Address != "" {
+		return IssuedEnrollment{}, invalid("address: only a full node has a fixed address")
 	}
 	token := enrollmentPrefix + rand.Text()
 	row := model.MeshEnrollment{RegionID: input.RegionID, Hostname: hostname, TokenHash: hashToken(token), DeviceID: target, ExpiresAt: now.Add(ttl), CreatedBy: createdBy, CreatedAt: now}
-	if err := db.Create(&row).Error; err != nil {
+	address := input.Address
+	// No node's configuration changes: a plain transaction, no push.
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if input.RegionID != 0 {
+			var region model.MeshRegion
+			if err := findRegion(tx, input.RegionID, &region); err != nil {
+				return err
+			}
+			if role == RoleFull && target == nil && address != "" {
+				// The address is kept for this credential until it is used.
+				checked, err := serverAddress(tx, region, address, 0)
+				if err != nil {
+					return err
+				}
+				address = checked
+			}
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		if role != RoleFull || target != nil {
+			return nil
+		}
+		return tx.Create(&model.MeshFullNode{EnrollmentID: row.ID, Address: address, Subnets: "", CreatedAt: now, UpdatedAt: now}).Error
+	})
+	if err != nil {
 		return IssuedEnrollment{}, err
 	}
-	return IssuedEnrollment{MeshEnrollment: row, Token: token}, nil
+	return IssuedEnrollment{EnrollmentView: EnrollmentView{MeshEnrollment: row, Role: role, Address: address}, Token: token}, nil
 }
 
 // Enrollments answers the newest 200 credentials.
-func Enrollments(ctx context.Context, db *gorm.DB) ([]model.MeshEnrollment, error) {
+func Enrollments(ctx context.Context, db *gorm.DB) ([]EnrollmentView, error) {
+	db = db.WithContext(ctx)
 	rows := []model.MeshEnrollment{}
-	return rows, db.WithContext(ctx).Order("id DESC").Limit(200).Find(&rows).Error
+	if err := db.Order("id DESC").Limit(200).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	ids, devices := []uint{}, []uint{}
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+		if row.DeviceID != nil {
+			devices = append(devices, *row.DeviceID)
+		}
+	}
+	var issued []model.MeshFullNode
+	if len(ids) > 0 {
+		if err := db.Where("enrollment_id IN ?", ids).Find(&issued).Error; err != nil {
+			return nil, err
+		}
+	}
+	byEnrollment := map[uint]model.MeshFullNode{}
+	for _, node := range issued {
+		byEnrollment[node.EnrollmentID] = node
+	}
+	byDevice, err := fullNodes(db, devices)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]EnrollmentView, 0, len(rows))
+	for _, row := range rows {
+		view := EnrollmentView{MeshEnrollment: row, Role: RoleAccess}
+		node, full := byEnrollment[row.ID]
+		if !full && row.DeviceID != nil {
+			node, full = byDevice[*row.DeviceID]
+		}
+		if full {
+			view.Role, view.Address = RoleFull, node.Address
+		}
+		views = append(views, view)
+	}
+	return views, nil
 }
 
 // DeleteEnrollment withdraws an unused credential; a used one stays as the
@@ -124,11 +222,17 @@ func DeleteEnrollment(ctx context.Context, db *gorm.DB, id uint) error {
 	if len(rows) > 0 && rows[0].UsedAt != nil {
 		return conflict("a used credential stays as the record of its device")
 	}
-	result := db.WithContext(ctx).Where("id = ? AND used_at IS NULL", id).Delete(&model.MeshEnrollment{})
-	if result.Error == nil && result.RowsAffected == 0 {
-		return fmt.Errorf("%w: enrollment %d", ErrNotFound, id)
-	}
-	return result.Error
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("id = ? AND used_at IS NULL", id).Delete(&model.MeshEnrollment{})
+		if result.Error == nil && result.RowsAffected == 0 {
+			return fmt.Errorf("%w: enrollment %d", ErrNotFound, id)
+		}
+		if result.Error != nil {
+			return result.Error
+		}
+		// The fixed address it kept is free again.
+		return tx.Where("enrollment_id = ? AND device_id IS NULL", id).Delete(&model.MeshFullNode{}).Error
+	})
 }
 
 // EnrollRequest is what a device sends with its credential.
@@ -211,13 +315,27 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 			if err != nil {
 				return err
 			}
-			address, err := allocate(tx, region, now)
+			var nodes []model.MeshFullNode
+			if err := tx.Where("enrollment_id = ?", enrollment.ID).Limit(1).Find(&nodes).Error; err != nil {
+				return err
+			}
+			var address string
+			if len(nodes) > 0 {
+				address, err = serverAddress(tx, region, nodes[0].Address, enrollment.ID)
+			} else {
+				address, err = allocate(tx, region, now)
+			}
 			if err != nil {
 				return err
 			}
 			device = model.MeshDevice{RegionID: region.ID, DeviceKey: key, Hostname: enrollment.Hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&device).Error; err != nil {
 				return err
+			}
+			if len(nodes) > 0 {
+				if err := tx.Model(&nodes[0]).Updates(map[string]any{"device_id": device.ID, "address": address, "updated_at": now}).Error; err != nil {
+					return err
+				}
 			}
 		}
 		if enrollment.UsedAt == nil {
@@ -306,9 +424,10 @@ func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
 }
 
 // DeviceConfig answers the device's networks in the shape of the member
-// "mesh" (agent-contract.md section 2): its region's network as an access
-// member while the region is enabled, none otherwise. A device whose
-// address went to another device gets a new one.
+// "mesh" (agent-contract.md section 2): its region's network while the
+// region is enabled, none otherwise; an access member, or for a full node
+// a full member that listens and advertises its confirmed subnets. A
+// device whose address went to another device gets a new one.
 func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now time.Time) (map[string]any, error) {
 	db = db.WithContext(ctx)
 	var region model.MeshRegion
@@ -320,7 +439,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	}
 	if device.Address == nil {
 		err := change(ctx, db, func(tx *gorm.DB) error {
-			address, err := allocate(tx, region, now)
+			address, err := deviceAddress(tx, region, device.ID, now)
 			if err != nil {
 				return err
 			}
@@ -353,11 +472,20 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, now
 	if err != nil {
 		return nil, err
 	}
+	node, full, err := isFullNode(db, device.ID)
+	if err != nil {
+		return nil, err
+	}
+	role, listen, advertise := RoleAccess, []map[string]any{}, []string{}
+	if full {
+		role, advertise = RoleFull, splitSubnets(node.Subnets)
+		listen = []map[string]any{{"transport": "tcp", "port": Port}, {"transport": "udp", "port": Port}}
+	}
 	return map[string]any{"networks": []map[string]any{{
 		"id": region.Code, "name": "mesh-" + region.Code, "secret": region.Secret, "secure_mode": true, "cipher": cipher,
-		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": "access", "listen": []map[string]any{},
+		"address": fmt.Sprintf("%s/%d", *device.Address, prefix.Bits()), "role": role, "listen": listen,
 		"peers":   peers,
-		"subnets": map[string]any{"accept": []string{}, "advertise": []string{}},
+		"subnets": map[string]any{"accept": []string{}, "advertise": advertise},
 		"routing": map[string]any{"policy": policy, "paths": []any{}},
 		"dns":     dns,
 	}}}, nil

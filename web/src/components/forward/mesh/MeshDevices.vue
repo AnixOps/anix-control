@@ -29,6 +29,7 @@
         <span class="mesh-cell">
           <span>{{ row.hostname }}</span>
           <span class="mesh-muted mesh-mono">{{ row.fqdn }}</span>
+          <span v-if="row.role === 'full'" class="mesh-muted">{{ t('meshAddr.devices.fullNode') }}<template v-if="row.subnets?.length"> · {{ t('meshAddr.devices.advertised', { subnets: row.subnets.join(', ') }) }}</template></span>
           <span v-if="row.last_seen_at" class="mesh-muted">{{ t('meshAddr.devices.lastSeen') }} {{ format.dateTime(row.last_seen_at) }}</span>
         </span>
       </template>
@@ -47,10 +48,11 @@
       </template>
     </UiDataTable>
 
-    <UiSheet :open="Boolean(sheet)" size="md" :title="sheetTitle" :description="sheet?.mode === 'move' ? t('meshAddr.devices.moveDescription') : t('meshAddr.devices.hostnameHelp')" :dismissible="!saving" @update:open="value => { if (!value) sheet = null }">
+    <UiSheet :open="Boolean(sheet)" size="md" :title="sheetTitle" :description="sheetDescription" :dismissible="!saving" @update:open="value => { if (!value) sheet = null }">
       <form v-if="sheet" class="mesh-form" novalidate data-testid="mesh-device-form" @submit.prevent="save">
-        <UiSelect v-if="sheet.mode !== 'edit'" v-model="sheet.regionId" size="md" :label="t('meshAddr.common.region')" :options="regionOptions" required :error="sheet.errors.region" />
-        <template v-if="sheet.mode !== 'move'">
+        <UiTextarea v-if="sheet.mode === 'subnets'" v-model="sheet.subnets" :rows="6" :label="t('meshAddr.devices.subnetsLabel')" placeholder="192.168.1.0/24" data-testid="mesh-device-subnets" />
+        <UiSelect v-else-if="sheet.mode !== 'edit'" v-model="sheet.regionId" size="md" :label="t('meshAddr.common.region')" :options="regionOptions" required :error="sheet.errors.region" />
+        <template v-if="sheet.mode === 'add' || sheet.mode === 'edit'">
           <UiTextField v-model="sheet.hostname" size="md" :label="t('meshAddr.devices.hostname')" required :error="sheet.errors.hostname" data-testid="mesh-device-hostname" />
           <UiTextField v-model="sheet.deviceKey" size="md" :label="t('meshAddr.devices.deviceKey')" :help="t('meshAddr.devices.deviceKeyHelp')" />
         </template>
@@ -66,12 +68,14 @@
 
 <script setup>
 // 组网 → 设备: personal devices with their pool addresses (R29); an address
-// stays the device's until it has gone unused for 30 days.
+// stays the device's until it has gone unused for 30 days. Full nodes
+// without an Agent (R32) keep a fixed address and advertise the subnets an
+// administrator confirms here (R17).
 import { computed, onMounted, ref } from 'vue'
-import { Ban, MapPinPlus, MoveRight, Pencil, Plus, Trash2 } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
+import { Ban, MapPinPlus, MoveRight, Network, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { UiBadge, UiButton, UiDataTable, UiSection, UiSelect, UiSheet, UiTextarea, UiTextField, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, updateKernelMeshDevice } from '@/api/kernel'
+import { assignKernelMeshDeviceAddress, createKernelMeshDevice, deleteKernelMeshDevice, listKernelMeshDevices, moveKernelMeshDevice, revokeKernelMeshDevice, setKernelMeshDeviceSubnets, updateKernelMeshDevice } from '@/api/kernel'
 import { deviceStatus, meshErrorMessage } from '../meshModel'
 
 const props = defineProps({
@@ -103,7 +107,12 @@ const sheetTitle = computed(() => {
   if (!sheet.value) return ''
   if (sheet.value.mode === 'add') return t('meshAddr.devices.addTitle')
   const name = sheet.value.device.hostname
-  return t(sheet.value.mode === 'move' ? 'meshAddr.devices.moveTitle' : 'meshAddr.devices.editTitle', { name })
+  const titles = { move: 'meshAddr.devices.moveTitle', subnets: 'meshAddr.devices.subnetsTitle', edit: 'meshAddr.devices.editTitle' }
+  return t(titles[sheet.value.mode], { name })
+})
+const sheetDescription = computed(() => {
+  const descriptions = { move: 'meshAddr.devices.moveDescription', subnets: 'meshAddr.devices.subnetsDescription' }
+  return t(descriptions[sheet.value?.mode] || 'meshAddr.devices.hostnameHelp')
 })
 
 async function load() {
@@ -123,6 +132,7 @@ function openSheet(mode, device) {
     regionId: mode === 'add' ? String(props.regions[0]?.id || '') : '',
     hostname: device?.hostname || '',
     deviceKey: device?.device_key || '',
+    subnets: (device?.subnets || []).join('\n'),
     errors: {}
   }
 }
@@ -131,16 +141,17 @@ async function save() {
   const form = sheet.value
   if (!form || saving.value) return
   form.errors = {}
-  if (form.mode !== 'edit' && !form.regionId) form.errors.region = t('meshAddr.common.required')
-  if (form.mode !== 'move' && !form.hostname.trim()) form.errors.hostname = t('meshAddr.common.required')
+  if ((form.mode === 'add' || form.mode === 'move') && !form.regionId) form.errors.region = t('meshAddr.common.required')
+  if ((form.mode === 'add' || form.mode === 'edit') && !form.hostname.trim()) form.errors.hostname = t('meshAddr.common.required')
   if (Object.keys(form.errors).length) return
   saving.value = true
   saveError.value = ''
   try {
     if (form.mode === 'add') await createKernelMeshDevice(form.regionId, form)
     else if (form.mode === 'edit') await updateKernelMeshDevice(form.device.id, form)
+    else if (form.mode === 'subnets') await setKernelMeshDeviceSubnets(form.device.id, form.subnets.split(/[\s,]+/))
     else await moveKernelMeshDevice(form.device.id, form.regionId)
-    toast.success(t('meshAddr.common.saved'))
+    toast.success(t(form.mode === 'subnets' ? 'meshAddr.devices.subnetsSaved' : 'meshAddr.common.saved'))
     sheet.value = null
     await load()
     emit('changed')
@@ -167,6 +178,7 @@ function rowActions(row) {
   return [
     ...(row.address ? [] : [{ key: 'assign', label: t('meshAddr.devices.assign'), icon: MapPinPlus, onSelect: () => assignAddress(row) }]),
     { key: 'edit', label: t('meshAddr.devices.edit'), icon: Pencil, onSelect: () => openSheet('edit', row) },
+    ...(row.role === 'full' ? [{ key: 'subnets', label: t('meshAddr.devices.subnets'), icon: Network, onSelect: () => openSheet('subnets', row) }] : []),
     { key: 'move', label: t('meshAddr.devices.move'), icon: MoveRight, onSelect: () => openSheet('move', row) },
     ...(row.enrolled
       ? [{
