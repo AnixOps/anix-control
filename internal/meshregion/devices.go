@@ -208,8 +208,12 @@ func UpdateDevice(ctx context.Context, db *gorm.DB, id uint, input DeviceInput, 
 		if err := checkDeviceKey(tx, id, key); err != nil {
 			return err
 		}
-		row.Hostname, row.DeviceKey, row.UpdatedAt = hostname, key, now
-		return saveExisting(tx, &row, "device")
+		// Only the columns this change owns: a move or a new address at
+		// the same time keeps its region and address.
+		if err := updateExisting(tx, &model.MeshDevice{}, id, map[string]any{"hostname": hostname, "device_key": key, "updated_at": now}, "device"); err != nil {
+			return err
+		}
+		return findDevice(tx, id, &row)
 	})
 	return row, err
 }
@@ -487,7 +491,7 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 			return err
 		}
 		row.Address, row.AddressUsedAt, row.UpdatedAt = &address, &now, now
-		return saveExisting(tx, &row, "device")
+		return updateExisting(tx, &model.MeshDevice{}, row.ID, map[string]any{"address": address, "address_used_at": now, "updated_at": now}, "device")
 	})
 	return row, err
 }
@@ -495,6 +499,11 @@ func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Tim
 // deviceAddress answers a new address of region for the device: a fixed
 // address of the server segment for a full node, a pool address otherwise.
 func deviceAddress(tx *gorm.DB, region model.MeshRegion, deviceID uint, now time.Time) (string, error) {
+	// The device's row before its full node row, in the order a delete
+	// takes them.
+	if err := lockRows(tx, &model.MeshDevice{}, "id = ?", deviceID); err != nil {
+		return "", err
+	}
 	node, full, err := isFullNode(tx, deviceID)
 	if err != nil {
 		return "", err

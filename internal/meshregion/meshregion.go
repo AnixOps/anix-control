@@ -523,6 +523,21 @@ func saveExisting(tx *gorm.DB, row any, what string) error {
 	return nil
 }
 
+// updateExisting writes only the given columns of the row of table with
+// id, which must still exist. A change writes the columns it owns, so
+// that it does not write back another change's columns from a row read
+// before that change.
+func updateExisting(tx *gorm.DB, table any, id uint, columns map[string]any, what string) error {
+	result := tx.Model(table).Where("id = ?", id).Updates(columns)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return conflict("the %s was removed meanwhile", what)
+	}
+	return nil
+}
+
 // lockRows locks the rows of table that match the condition until the
 // transaction ends (PostgreSQL).
 func lockRows(tx *gorm.DB, table any, query string, args ...any) error {
