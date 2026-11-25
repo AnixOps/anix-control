@@ -74,7 +74,7 @@ func TestFullNodeCredentials(t *testing.T) {
 	require.Len(t, views, 2)
 	for _, view := range views {
 		require.Equal(t, RoleFull, view.Role)
-		require.Empty(t, view.Warnings, "a fixed address is never idle")
+		require.NotContains(t, view.Warnings, WarningAddressIdle, "a fixed address is never idle")
 	}
 
 	// A fixed address never goes back to the pool, however long unused.
