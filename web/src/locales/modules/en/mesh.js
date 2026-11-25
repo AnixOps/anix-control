@@ -64,7 +64,10 @@ export default {
         native_keys_pending: 'Waiting for the admission list',
         native_keys_unsupported: 'Kernel without admission list',
         invalid_kind: 'Invalid network kind',
-        static_key_taken: 'Static key used by another member'
+        static_key_taken: 'Static key used by another member',
+        external_bridge_unsupported: 'Kernel without external network bridges',
+        external_bridge_apply_failed: 'External network bridge not applied',
+        external_bridge_ipv6_forwarding_off: 'IPv6 forwarding off'
       }
     },
     region: {

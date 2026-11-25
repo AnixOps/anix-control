@@ -209,13 +209,19 @@ func (MeshDeviceToken) TableName() string { return "v5_mesh_device_token" }
 // Subnets an administrator confirmed (R17), comma separated
 // (0048_mesh_full_nodes).
 type MeshFullNode struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	EnrollmentID uint      `gorm:"not null;uniqueIndex" json:"enrollment_id"`
-	DeviceID     *uint     `gorm:"uniqueIndex" json:"device_id"`
-	Address      string    `gorm:"size:15;not null" json:"address"`
-	Subnets      string    `gorm:"type:text;not null" json:"-"`
-	CreatedAt    time.Time `gorm:"not null" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"not null" json:"updated_at"`
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	EnrollmentID uint   `gorm:"not null;uniqueIndex" json:"enrollment_id"`
+	DeviceID     *uint  `gorm:"uniqueIndex" json:"device_id"`
+	Address      string `gorm:"size:15;not null" json:"address"`
+	Subnets      string `gorm:"type:text;not null" json:"-"`
+	// RequestedSubnets are the subnets the node itself asked to advertise
+	// (comma separated, R35; 0052_mesh_subnet_requests), pending until an
+	// administrator approves or rejects them; RequestedAt is when. Both are
+	// NULL while nothing is pending.
+	RequestedSubnets *string    `gorm:"type:text" json:"-"`
+	RequestedAt      *time.Time `json:"-"`
+	CreatedAt        time.Time  `gorm:"not null" json:"created_at"`
+	UpdatedAt        time.Time  `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshFullNode) TableName() string { return "v5_mesh_full_node" }

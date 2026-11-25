@@ -872,6 +872,16 @@ export async function setKernelMeshDeviceSubnets(id, subnets) {
   return unwrap(await v4({ url: meshPath('devices', id, 'subnets'), method: 'put', data: { subnets: (subnets || []).map(subnet => String(subnet).trim()).filter(Boolean) } }))
 }
 
+// A full node's own request for other subnets (R35): approving repeats the
+// requested list as shown, rejecting keeps the confirmed subnets.
+export async function approveKernelMeshDeviceSubnets(id, subnets) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'subnet-request', 'approve'), method: 'post', data: { subnets: subnets || [] } }))
+}
+
+export async function rejectKernelMeshDeviceSubnets(id) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'subnet-request'), method: 'delete' }))
+}
+
 // Devices without an Agent: one-time enrollment credentials (the token is
 // answered only when issued) and revoking an enrolled device's token.
 export async function listKernelMeshEnrollments() {

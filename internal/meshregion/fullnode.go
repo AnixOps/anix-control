@@ -237,85 +237,100 @@ func splitSubnets(raw string) []string {
 // group supernet, the reserved ranges and the other full nodes' subnets,
 // at most 32. It answers them.
 func SetDeviceSubnets(ctx context.Context, db *gorm.DB, deviceID uint, raw []string, now time.Time) ([]string, error) {
+	subnets, err := parseSubnets("subnets", raw, maxFullNodeSubnets)
+	if err != nil {
+		return nil, err
+	}
+	// Only the full node's own configuration changes, which it reads.
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return setSubnets(tx, deviceID, subnets, now)
+	})
+	return subnets, err
+}
+
+// setSubnets confirms subnets, parsed already, for the full node deviceID.
+func setSubnets(tx *gorm.DB, deviceID uint, subnets []string, now time.Time) error {
+	// Two full nodes saving at once take turns, so that the overlap check
+	// sees the other's subnets (PostgreSQL).
+	if err := lockAddressPlan(tx); err != nil {
+		return err
+	}
+	row, full, err := isFullNode(tx, deviceID)
+	if err != nil {
+		return err
+	}
+	if !full {
+		var device model.MeshDevice
+		if err := findDevice(tx, deviceID, &device); err != nil {
+			return err
+		}
+		return invalid("only a full node advertises subnets")
+	}
+	var regions []model.MeshRegion
+	if err := tx.Find(&regions).Error; err != nil {
+		return err
+	}
+	settings, err := loadSettings(tx)
+	if err != nil {
+		return err
+	}
+	blocked := []string{settings.HostGroupSupernet}
+	blocked = append(blocked, settings.ReservedRanges...)
+	for _, region := range regions {
+		blocked = append(blocked, region.CIDR)
+	}
+	// Two full nodes do not advertise overlapping subnets.
+	var others []model.MeshFullNode
+	if err := tx.Where("id <> ? AND device_id IS NOT NULL", row.ID).Find(&others).Error; err != nil {
+		return err
+	}
+	for _, other := range others {
+		blocked = append(blocked, splitSubnets(other.Subnets)...)
+	}
+	// Nor do they overlap an external bridge's routes.
+	var bridges []model.MeshExternalBridge
+	if err := tx.Where("routes <> ''").Find(&bridges).Error; err != nil {
+		return err
+	}
+	for _, bridge := range bridges {
+		blocked = append(blocked, splitSubnets(bridge.Routes)...)
+	}
+	for _, subnet := range subnets {
+		prefix := netip.MustParsePrefix(subnet)
+		for _, raw := range blocked {
+			if other, err := netip.ParsePrefix(raw); err == nil && other.Overlaps(prefix) {
+				return conflict("subnets: %s overlaps %s", subnet, raw)
+			}
+		}
+	}
+	return tx.Model(&row).Updates(map[string]any{"subnets": strings.Join(subnets, ","), "updated_at": now}).Error
+}
+
+// parseSubnets answers the private IPv4 networks of raw in order, without
+// blank entries and repeats, refusing more than limit.
+func parseSubnets(field string, raw []string, limit int) ([]string, error) {
 	subnets := []string{}
 	seen := map[string]bool{}
 	for _, entry := range raw {
 		if strings.TrimSpace(entry) == "" {
 			continue
 		}
-		prefix, err := parseRange("subnets", entry)
+		prefix, err := parseRange(field, entry)
 		if err != nil {
 			return nil, err
 		}
 		if !isPrivate(prefix) {
-			return nil, invalid("subnets: %s is not a private network", prefix)
+			return nil, invalid("%s: %s is not a private network", field, prefix)
 		}
 		if !seen[prefix.String()] {
 			seen[prefix.String()] = true
 			subnets = append(subnets, prefix.String())
 		}
 	}
-	if len(subnets) > maxFullNodeSubnets {
-		return nil, invalid("subnets: at most %d", maxFullNodeSubnets)
+	if len(subnets) > limit {
+		return nil, invalid("%s: at most %d", field, limit)
 	}
-	// Only the full node's own configuration changes, which it reads.
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Two full nodes saving at once take turns, so that the overlap
-		// check sees the other's subnets (PostgreSQL).
-		if err := lockAddressPlan(tx); err != nil {
-			return err
-		}
-		row, full, err := isFullNode(tx, deviceID)
-		if err != nil {
-			return err
-		}
-		if !full {
-			var device model.MeshDevice
-			if err := findDevice(tx, deviceID, &device); err != nil {
-				return err
-			}
-			return invalid("only a full node advertises subnets")
-		}
-		var regions []model.MeshRegion
-		if err := tx.Find(&regions).Error; err != nil {
-			return err
-		}
-		settings, err := loadSettings(tx)
-		if err != nil {
-			return err
-		}
-		blocked := []string{settings.HostGroupSupernet}
-		blocked = append(blocked, settings.ReservedRanges...)
-		for _, region := range regions {
-			blocked = append(blocked, region.CIDR)
-		}
-		// Two full nodes do not advertise overlapping subnets.
-		var others []model.MeshFullNode
-		if err := tx.Where("id <> ? AND device_id IS NOT NULL", row.ID).Find(&others).Error; err != nil {
-			return err
-		}
-		for _, other := range others {
-			blocked = append(blocked, splitSubnets(other.Subnets)...)
-		}
-		// Nor do they overlap an external bridge's routes.
-		var bridges []model.MeshExternalBridge
-		if err := tx.Where("routes <> ''").Find(&bridges).Error; err != nil {
-			return err
-		}
-		for _, bridge := range bridges {
-			blocked = append(blocked, splitSubnets(bridge.Routes)...)
-		}
-		for _, subnet := range subnets {
-			prefix := netip.MustParsePrefix(subnet)
-			for _, raw := range blocked {
-				if other, err := netip.ParsePrefix(raw); err == nil && other.Overlaps(prefix) {
-					return conflict("subnets: %s overlaps %s", subnet, raw)
-				}
-			}
-		}
-		return tx.Model(&row).Updates(map[string]any{"subnets": strings.Join(subnets, ","), "updated_at": now}).Error
-	})
-	return subnets, err
+	return subnets, nil
 }
 
 // unusedEnrollments is a subquery of the unused credentials for region id.

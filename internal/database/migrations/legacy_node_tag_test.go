@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// 0052_drop_legacy_node_tag clears the tag "legacy-node" and leaves every
+// 0053_drop_legacy_node_tag clears the tag "legacy-node" and leaves every
 // other tag alone.
 func TestDropLegacyNodeTagStep(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, open opener) {
 		ctx := context.Background()
 		history := steps(t)
-		at := stepIndex(t, history, "0052_drop_legacy_node_tag")
+		at := stepIndex(t, history, "0053_drop_legacy_node_tag")
 		db := open(t)
 		_, err := migrations.RunSteps(ctx, db, history[:at], migrateOptions())
 		require.NoError(t, err)

@@ -21,4 +21,4 @@
 ### Removed
 
 - The node tag `legacy-node` (the only tag of the nodes from before the 5.0
-  Agent) is cleared (migration 0052, data only).
+  Agent) is cleared (migration 0053, data only).

@@ -203,6 +203,16 @@ func TestExternalBridge(t *testing.T) {
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Where("node_ref = ?", "proxy-1").Count(&holds).Error)
 	require.EqualValues(t, 3, holds, "the phone, the host group and the former member wait for the node")
 	later := time.Now().UTC().Add(time.Minute)
+	// A missing externalBridge, or a network missing from the report, is
+	// unknown: the node may still bridge with the old list.
+	for _, unknown := range []string{`{"networks":[{"id":"cn","running":true}]}`, `{"networks":[]}`, `{"networks":[{"id":"cn","externalBridge":{"allowDigest":""}}]}`} {
+		require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(unknown), later, later))
+		require.NoError(t, db.Model(&model.MeshBridgeHold{}).Where("node_ref = ?", "proxy-1").Count(&holds).Error)
+		require.EqualValues(t, 3, holds, unknown)
+	}
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), now.Add(-time.Hour), now.Add(-time.Hour)))
+	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
+	require.EqualValues(t, 3, holds, "a null observed before the bridge was removed")
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"externalBridge":null}]}`), later, later))
 	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Count(&holds).Error)
 	require.Zero(t, holds, "the node reports the bridge gone")
@@ -255,7 +265,9 @@ func TestBridgeHoldsAReleasedAddress(t *testing.T) {
 	later := time.Now().UTC().Add(time.Minute)
 	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later, address+"/32"), later, later))
 	require.Len(t, bridgeView(t, db, "proxy-1").Held, 2)
-	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later), later, later))
+	// Received after the hold, the list without them releases them, even
+	// when the node's clock puts appliedAt a day earlier.
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", now.Add(-24*time.Hour)), later.Add(-24*time.Hour), later))
 	view := bridgeView(t, db, "proxy-1")
 	require.Empty(t, view.Held)
 	require.True(t, view.Confirmed)
@@ -298,4 +310,55 @@ func TestPoolReclaimWaitsForTheBridge(t *testing.T) {
 	next, err := CreateDevice(ctx, db, lab.ID, DeviceInput{Hostname: "next"}, now)
 	require.NoError(t, err)
 	require.Equal(t, *idle.Address, *next.Address)
+}
+
+// A prefix removed again waits again: a report received between the two
+// removals confirms nothing about the second.
+func TestBridgeHoldWaitsAgainWhenRemovedAgain(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	for _, i := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(i), false, now)
+		require.NoError(t, err)
+	}
+	input := BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{"node:proxy-2"}}
+	input.Node = "proxy-1"
+	bridge, err := CreateBridge(ctx, db, input, now)
+	require.NoError(t, err)
+	without := BridgeInput{Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}
+	_, err = UpdateBridge(ctx, db, bridge.ID, without, now)
+	require.NoError(t, err)
+	first := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Model(&model.MeshBridgeHold{}).Where("node_ref = ?", "proxy-1").Update("created_at", first).Error)
+	_, err = UpdateBridge(ctx, db, bridge.ID, input, now)
+	require.NoError(t, err)
+	_, err = UpdateBridge(ctx, db, bridge.ID, without, now)
+	require.NoError(t, err)
+	var hold model.MeshBridgeHold
+	require.NoError(t, db.Where("node_ref = ?", "proxy-1").First(&hold).Error)
+	require.True(t, hold.CreatedAt.After(first.Add(30*time.Minute)), "the wait starts again")
+
+	between := first.Add(time.Minute)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", between), between, between))
+	require.Len(t, bridgeView(t, db, "proxy-1").Held, 1, "received before the second removal")
+	later := time.Now().UTC().Add(time.Minute)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), bridgeStatus("cn", later), later, later))
+	require.Empty(t, bridgeView(t, db, "proxy-1").Held)
+}
+
+// The Agent's alert shows a kernel without external network bridges.
+func TestBridgeUnsupportedAlert(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	cn := region(t, db, "cn", "10.150.0.0/24")
+	_, err := AddNode(ctx, db, cn.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	_, err = CreateBridge(ctx, db, BridgeInput{Node: "proxy-1", Interface: "eth1", Routes: []string{"192.168.50.0/24"}, Allow: []string{}}, now)
+	require.NoError(t, err)
+	require.NotContains(t, bridgeView(t, db, "proxy-1").Warnings, WarningBridgeUnsupported)
+	require.NoError(t, RecordStatus(ctx, db, proxy(1), []byte(`{"networks":[{"id":"cn","running":true,"alerts":[{"code":"external_bridge_unsupported"}]}]}`), now, now))
+	view := bridgeView(t, db, "proxy-1")
+	require.Contains(t, view.Warnings, WarningBridgeUnsupported)
+	require.False(t, view.Confirmed)
 }

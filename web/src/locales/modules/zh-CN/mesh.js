@@ -63,7 +63,10 @@ export default {
         native_keys_pending: '等待准入清单',
         native_keys_unsupported: '内核不支持准入清单',
         invalid_kind: '网络类型无效',
-        static_key_taken: '公钥与其他成员重复'
+        static_key_taken: '公钥与其他成员重复',
+        external_bridge_unsupported: '内核不支持外部网络桥接',
+        external_bridge_apply_failed: '外部网络桥接未能生效',
+        external_bridge_ipv6_forwarding_off: '未开启 IPv6 转发'
       }
     },
     region: {

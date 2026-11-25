@@ -10,3 +10,10 @@
   list expanded to current addresses. An address or segment that leaves
   an allow list is not given out again until the bridge node reports a
   list without it applied (migration 0051).
+
+### Fixed
+
+- Mesh: a bridge node's report without `externalBridge` no longer releases
+  the addresses held for it. Only an explicit `null` observed after the
+  bridge was removed shows the node no longer bridges; a missing value is
+  unknown, as the kernel may still bridge with the old allow list.

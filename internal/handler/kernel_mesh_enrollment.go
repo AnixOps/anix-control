@@ -289,3 +289,43 @@ func (h *MeshHandler) MeshDeviceChange(c *gin.Context) {
 	}
 	kernelData(c, http.StatusCreated, row)
 }
+
+type meshDeviceSubnetRequest struct {
+	// CIDRs are the subnets to advertise; empty withdraws the request.
+	CIDRs []string `json:"cidrs"`
+}
+
+// MeshDeviceSubnetRequest godoc
+// @Summary Ask to advertise subnets from a mesh full node
+// @Description Records the subnets a full node without an Agent asks to advertise (cidrs: private IPv4 networks with no host bits, at most 16) for an administrator to approve or reject on the device. A new request replaces the pending one; an empty cidrs withdraws it. Approval makes them the node's confirmed subnets, which it reads with its next configuration; rejection keeps the confirmed subnets. 202 with no body. 400 invalid_request for an invalid list, 409 mesh_conflict for an access device, 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Accept json
+// @Security BearerAuth
+// @Param request body meshDeviceSubnetRequest true "cidrs"
+// @Success 202
+// @Router /api/v5/mesh/device/subnet-request [post]
+func (h *MeshHandler) MeshDeviceSubnetRequest(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	var request meshDeviceSubnetRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, meshDeviceRequestBytes)
+	if err := c.ShouldBindJSON(&request); err != nil {
+		if tooLarge(err) {
+			kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the request is too large")
+			return
+		}
+		kernelError(c, http.StatusBadRequest, "invalid_request", "cidrs is expected")
+		return
+	}
+	if request.CIDRs == nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "cidrs is expected")
+		return
+	}
+	if err := meshregion.RequestDeviceSubnets(c.Request.Context(), h.db(), device, request.CIDRs, h.now()); err != nil {
+		meshError(c, err)
+		return
+	}
+	c.Status(http.StatusAccepted)
+}
