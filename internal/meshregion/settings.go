@@ -34,6 +34,21 @@ type Settings struct {
 	UpdatedAt      *time.Time `json:"updated_at"`
 }
 
+// maxSuffix keeps a full name <63-byte name>.<16-byte code>.<suffix>
+// within the 253 bytes of a DNS name.
+const maxSuffix = 253 - 63 - 1 - 16 - 1
+
+// privateSuffix tells whether suffix lies under a domain reserved for
+// private networks, so the names never shadow public ones.
+func privateSuffix(suffix string) bool {
+	for _, private := range []string{"internal", "home.arpa"} {
+		if suffix == private || strings.HasSuffix(suffix, "."+private) {
+			return true
+		}
+	}
+	return false
+}
+
 var (
 	labelPattern  = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 	suffixPattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -109,8 +124,11 @@ type SettingsInput struct {
 // a reserved range may overlap a region.
 func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now time.Time) (Settings, error) {
 	suffix := strings.Trim(strings.ToLower(strings.TrimSpace(input.NameSuffix)), ".")
-	if len(suffix) > 200 || !suffixPattern.MatchString(suffix) {
-		return Settings{}, invalid("name_suffix: DNS labels separated by dots, such as mesh.internal")
+	if len(suffix) > maxSuffix || !suffixPattern.MatchString(suffix) {
+		return Settings{}, invalid("name_suffix: DNS labels separated by dots, such as mesh.internal, at most %d characters", maxSuffix)
+	}
+	if !privateSuffix(suffix) {
+		return Settings{}, invalid("name_suffix: under internal or home.arpa, which no public name uses")
 	}
 	supernet, err := parseRange("host_group_supernet", input.HostGroupSupernet)
 	if err != nil {
@@ -140,7 +158,7 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 		return Settings{}, invalid("reserved_ranges: at most 32")
 	}
 	var answer Settings
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = change(ctx, db, func(tx *gorm.DB) error {
 		current, err := loadSettings(tx)
 		if err != nil {
 			return err

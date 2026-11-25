@@ -786,6 +786,10 @@ export async function listKernelMeshRegions() {
   return unwrap(await v4({ url: '/kernel/mesh/regions', method: 'get' }))
 }
 
+export async function rotateKernelMeshRegionSecret(id) {
+  return unwrap(await v4({ url: `/kernel/mesh/regions/${encodeURIComponent(id)}/rotate-secret`, method: 'post' }))
+}
+
 export async function saveKernelMeshRegion(id, { code, name, cidr, enabled, sort }) {
   const data = { code: String(code || '').trim(), name: String(name || '').trim(), cidr: String(cidr || '').trim(), enabled: Boolean(enabled), sort: Number(sort) || 0 }
   return unwrap(await v4(id ? { url: `/kernel/mesh/regions/${encodeURIComponent(id)}`, method: 'put', data } : { url: '/kernel/mesh/regions', method: 'post', data }))
@@ -851,14 +855,18 @@ export async function moveKernelMeshDevice(id, regionId) {
   return unwrap(await v4({ url: meshPath('devices', id, 'move'), method: 'post', data: { region_id: Number(regionId) || 0 } }))
 }
 
+export async function assignKernelMeshDeviceAddress(id) {
+  return unwrap(await v4({ url: meshPath('devices', id, 'address'), method: 'post' }))
+}
+
 // Devices without an Agent: one-time enrollment credentials (the token is
 // answered only when issued) and revoking an enrolled device's token.
 export async function listKernelMeshEnrollments() {
   return unwrap(await v4({ url: meshPath('enrollments'), method: 'get' }))
 }
 
-export async function createKernelMeshEnrollment({ regionId, hostname, hours }) {
-  return unwrap(await v4({ url: meshPath('enrollments'), method: 'post', data: { region_id: Number(regionId) || 0, hostname: String(hostname || '').trim(), hours: Number(hours) || 0 } }))
+export async function createKernelMeshEnrollment({ regionId, hostname, hours, deviceId }) {
+  return unwrap(await v4({ url: meshPath('enrollments'), method: 'post', data: { region_id: Number(regionId) || 0, hostname: String(hostname || '').trim(), hours: Number(hours) || 0, device_id: Number(deviceId) || 0 } }))
 }
 
 export async function deleteKernelMeshEnrollment(id) {

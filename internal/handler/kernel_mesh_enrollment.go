@@ -42,7 +42,7 @@ func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
 
 // CreateMeshEnrollment godoc
 // @Summary Issue a mesh enrollment credential
-// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
+// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). The device enrolls as a personal device with a pool address. With device_id the credential enrolls that existing device again (its name, region and address stay; hostname and region_id are ignored); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -71,7 +71,7 @@ func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
 
 // DeleteMeshEnrollment godoc
 // @Summary Withdraw a mesh enrollment credential
-// @Description Deletes the credential; a device that already used it stays enrolled. Audited (module mesh, action mesh_enrollment_delete).
+// @Description Deletes an unused credential; 409 mesh_conflict for a used one, which stays as the record of the device it enrolled. Audited (module mesh, action mesh_enrollment_delete).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -136,6 +136,15 @@ func (h *MeshHandler) device(c *gin.Context) (model.MeshDevice, bool) {
 	return device, true
 }
 
+// meshDeviceRequestBytes bounds the body of an enrollment and of a region
+// change request.
+const meshDeviceRequestBytes = 16 << 10
+
+func tooLarge(err error) bool {
+	var maxBytes *http.MaxBytesError
+	return errors.As(err, &maxBytes)
+}
+
 func meshDeviceError(c *gin.Context, err error) {
 	if errors.Is(err, meshregion.ErrUnauthorized) {
 		kernelError(c, http.StatusUnauthorized, "unauthorized", err.Error())
@@ -146,7 +155,7 @@ func meshDeviceError(c *gin.Context, err error) {
 
 // EnrollMeshDevice godoc
 // @Summary Enroll a mesh device
-// @Description A device without an Agent exchanges a one-time credential (token) for its device token, sent as `Authorization: Bearer <device_token>` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps: enrolling the same key again keeps the device, its region and its address. latencies (milliseconds by region code) choose the region when the credential names none. 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.
+// @Description A device without an Agent exchanges a one-time credential (token) for its device token, sent as `Authorization: Bearer <device_token>` from then on, and its networks (config, the shape of the Agent's member mesh). device_key (16 to 128 base64 characters) is the identity the device keeps. A key another device has is refused (409) unless the credential was issued for that device, which then keeps its region and address. Within 10 minutes of a use the same credential and key enroll again with a new token, for an answer that was lost. latencies (milliseconds by region code, at most 64) choose the region when the credential names none. The body is at most 16 KiB (413). 401 for an unknown, used or expired credential. Rate limited; 404 feature_disabled while the mesh is not available in this build.
 // @Tags Mesh
 // @Accept json
 // @Produce json
@@ -159,7 +168,12 @@ func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
 		return
 	}
 	var request meshregion.EnrollRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, meshDeviceRequestBytes)
 	if err := c.ShouldBindJSON(&request); err != nil {
+		if tooLarge(err) {
+			kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the request is too large")
+			return
+		}
 		kernelError(c, http.StatusBadRequest, "invalid_request", "token and device_key are expected")
 		return
 	}
@@ -240,7 +254,12 @@ func (h *MeshHandler) MeshDeviceChange(c *gin.Context) {
 		return
 	}
 	var request meshDeviceChangeRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, meshDeviceRequestBytes)
 	if err := c.ShouldBindJSON(&request); err != nil {
+		if tooLarge(err) {
+			kernelError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "the request is too large")
+			return
+		}
 		kernelError(c, http.StatusBadRequest, "invalid_request", "region and reason are expected")
 		return
 	}

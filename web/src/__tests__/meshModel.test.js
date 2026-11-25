@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boundaryCount, enrollmentState, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
+import { boundaryCount, deviceStatus, enrollmentState, isFeatureDisabled, memberRows, STATUS_STALE_MS, statusSummary } from '@/components/forward/meshModel'
 import zhMesh from '@/locales/modules/zh-CN/mesh'
 import enMesh from '@/locales/modules/en/mesh'
 
@@ -38,6 +38,14 @@ describe('mesh model', () => {
       status_received_at: fresh
     }, now)).toEqual({ state: 'stopped', alerts: ['address_conflict'] })
     expect(statusSummary({ status: { networks: [] }, status_received_at: new Date(now - STATUS_STALE_MS - 1).toISOString() }, now).state).toBe('lost')
+  })
+
+  it('marks an enrolled device that has gone silent as lost', () => {
+    const now = Date.parse('2026-11-25T08:00:00Z')
+    expect(deviceStatus({ enrolled: true, last_seen_at: '2026-11-25T07:59:00Z' }, now).state).toBe('none')
+    expect(deviceStatus({ enrolled: true, last_seen_at: '2026-11-25T07:50:00Z' }, now).state).toBe('lost')
+    expect(deviceStatus({ enrolled: true }, now).state).toBe('lost')
+    expect(deviceStatus({ status: { networks: [{ running: true }] }, status_received_at: '2026-11-25T07:59:30Z' }, now).state).toBe('running')
   })
 
   it('recognizes the disabled feature', () => {

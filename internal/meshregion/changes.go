@@ -2,11 +2,13 @@ package meshregion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -162,9 +164,24 @@ func ApproveChange(ctx context.Context, db *gorm.DB, id uint, note string, decid
 			return err
 		}
 		row.Status, row.Note, row.NewAddress, row.DecidedBy, row.DecidedAt = model.MeshChangeApproved, note, address, decidedBy, &now
-		return tx.Save(&row).Error
+		return decide(tx, row)
 	})
 	return row, err
+}
+
+// decide writes row's decision while the change is still pending: of two
+// decisions at once, the second is refused.
+func decide(tx *gorm.DB, row model.MeshRegionChange) error {
+	result := tx.Model(&model.MeshRegionChange{}).Where("id = ? AND status = ?", row.ID, model.MeshChangePending).Updates(map[string]any{
+		"status": row.Status, "note": row.Note, "new_address": row.NewAddress, "decided_by": row.DecidedBy, "decided_at": row.DecidedAt,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return conflict("the change was decided meanwhile")
+	}
+	return nil
 }
 
 // move carries out row and answers the new address.
@@ -213,7 +230,7 @@ func RejectChange(ctx context.Context, db *gorm.DB, id uint, note string, decide
 			return err
 		}
 		row.Status, row.Note, row.DecidedBy, row.DecidedAt = model.MeshChangeRejected, note, decidedBy, &now
-		return tx.Save(&row).Error
+		return decide(tx, row)
 	})
 	return row, err
 }
@@ -222,7 +239,7 @@ func RejectChange(ctx context.Context, db *gorm.DB, id uint, note string, decide
 // administrator's approved change.
 func MoveDevice(ctx context.Context, db *gorm.DB, deviceID, toRegionID uint, decidedBy *uint, now time.Time) (model.MeshRegionChange, error) {
 	var row model.MeshRegionChange
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := change(ctx, db, func(tx *gorm.DB) error {
 		var device model.MeshDevice
 		if err := findDevice(tx, deviceID, &device); err != nil {
 			return err
@@ -243,7 +260,7 @@ func MoveDevice(ctx context.Context, db *gorm.DB, deviceID, toRegionID uint, dec
 		if err != nil {
 			return err
 		}
-		if err := settlePending(tx, nil, &id, region.ID, now); err != nil {
+		if err := settlePending(tx, nil, &id, region.ID, decidedBy, now); err != nil {
 			return err
 		}
 		row.Status, row.NewAddress, row.DecidedBy, row.DecidedAt = model.MeshChangeApproved, address, decidedBy, &now
@@ -254,18 +271,18 @@ func MoveDevice(ctx context.Context, db *gorm.DB, deviceID, toRegionID uint, dec
 
 // recordMove records a move an administrator made directly and settles the
 // member's pending change: approved when it asked for that region,
-// rejected otherwise.
-func recordMove(tx *gorm.DB, nodeRef *string, deviceID *uint, from, to uint, oldAddress, newAddress string, now time.Time) error {
-	if err := settlePending(tx, nodeRef, deviceID, to, now); err != nil {
+// rejected otherwise. actor is the administrator.
+func recordMove(tx *gorm.DB, nodeRef *string, deviceID *uint, from, to uint, oldAddress, newAddress string, actor *uint, now time.Time) error {
+	if err := settlePending(tx, nodeRef, deviceID, to, actor, now); err != nil {
 		return err
 	}
 	return tx.Create(&model.MeshRegionChange{
 		NodeRef: nodeRef, DeviceID: deviceID, FromRegionID: from, ToRegionID: to, Source: model.MeshChangeAdmin, Status: model.MeshChangeApproved,
-		OldAddress: oldAddress, NewAddress: newAddress, DecidedAt: &now, CreatedAt: now,
+		OldAddress: oldAddress, NewAddress: newAddress, RequestedBy: actor, DecidedBy: actor, DecidedAt: &now, CreatedAt: now,
 	}).Error
 }
 
-func settlePending(tx *gorm.DB, nodeRef *string, deviceID *uint, to uint, now time.Time) error {
+func settlePending(tx *gorm.DB, nodeRef *string, deviceID *uint, to uint, actor *uint, now time.Time) error {
 	var pending []model.MeshRegionChange
 	if err := pendingOf(tx, nodeRef, deviceID).Find(&pending).Error; err != nil {
 		return err
@@ -276,7 +293,7 @@ func settlePending(tx *gorm.DB, nodeRef *string, deviceID *uint, to uint, now ti
 			status, note = model.MeshChangeApproved, "an administrator moved the member"
 		}
 		if err := tx.Model(&model.MeshRegionChange{}).Where("id = ?", row.ID).
-			Updates(map[string]any{"status": status, "note": note, "decided_at": now}).Error; err != nil {
+			Updates(map[string]any{"status": status, "note": note, "decided_by": actor, "decided_at": now}).Error; err != nil {
 			return err
 		}
 	}
@@ -312,4 +329,33 @@ func findPending(tx *gorm.DB, id uint, row *model.MeshRegionChange) error {
 	}
 	*row = rows[0]
 	return nil
+}
+
+// The node's own region change request: the package report
+// "mesh.region_request" (agent-contract.md section 4), which the node's
+// kernel sends when its owner asks for another region.
+const (
+	RegionRequestKind    = "mesh.region_request"
+	RegionRequestVersion = "v1"
+)
+
+// RequestNodeChange records node's request, a "mesh.region_request"
+// payload {"region": "<code>", "reason": "..."}, as a pending change of the
+// source model.MeshChangeMember. A node asks only for itself.
+func RequestNodeChange(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, payload []byte, now time.Time) (model.MeshRegionChange, error) {
+	var request struct {
+		Region string `json:"region"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(payload, &request); err != nil || request.Region == "" {
+		return model.MeshRegionChange{}, invalid("payload: a JSON object with a region code")
+	}
+	var regions []model.MeshRegion
+	if err := db.WithContext(ctx).Where("code = ?", request.Region).Limit(1).Find(&regions).Error; err != nil {
+		return model.MeshRegionChange{}, err
+	}
+	if len(regions) == 0 {
+		return model.MeshRegionChange{}, fmt.Errorf("%w: region %q", ErrNotFound, request.Region)
+	}
+	return RequestChange(ctx, db, ChangeInput{Node: node.String(), ToRegionID: regions[0].ID, Reason: request.Reason}, model.MeshChangeMember, nil, now)
 }

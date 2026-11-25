@@ -33,6 +33,16 @@ export function statusSummary(member, now = Date.now()) {
   return { state: running ? 'running' : 'stopped', alerts }
 }
 
+// deviceStatus answers { state, alerts } of an enrolled device without an
+// Agent: its last report's summary, or lost when it has not reported and
+// has not been seen for longer than STATUS_STALE_MS.
+export function deviceStatus(device, now = Date.now()) {
+  if (device?.status) return statusSummary(device, now)
+  const seen = Date.parse(device?.last_seen_at || '')
+  if (!Number.isFinite(seen) || now - seen > STATUS_STALE_MS) return { state: 'lost', alerts: [] }
+  return { state: 'none', alerts: [] }
+}
+
 // boundaryCount is the number of boundary nodes in a region.
 export function boundaryCount(region) {
   return (region.members || []).filter(member => !member.home || member.boundary).length

@@ -95,6 +95,27 @@ func TestAgentControlMeshMemberAndStatus(t *testing.T) {
 	require.NoError(t, db.First(&status, "node_ref = ?", node.String()).Error)
 	assert.JSONEq(t, `{"networks":[{"id":"cn","running":true}]}`, status.Payload)
 
+	// The node's own request for another region waits for the manager.
+	eu, err := meshregion.CreateRegion(ctx, db, meshregion.RegionInput{Code: "eu", Name: "欧洲", CIDR: "10.152.0.0/16", Enabled: true}, time.Now())
+	require.NoError(t, err)
+	accepted = readPackageReportCounts().results[packageReportAccepted]
+	request := meshStatusReport(`{"region":"eu","reason":"relocated"}`)
+	request.Kind = meshregion.RegionRequestKind
+	session.send(packageReportMessage("", uint32(node.ID), request))
+	session.heartbeat()
+	session.untilHeartbeatAck()
+	assert.Equal(t, accepted+1, readPackageReportCounts().results[packageReportAccepted])
+	var asked model.MeshRegionChange
+	require.NoError(t, db.First(&asked, "node_ref = ?", node.String()).Error)
+	assert.Equal(t, model.MeshChangeMember, asked.Source)
+	assert.Equal(t, eu.ID, asked.ToRegionID)
+	assert.Equal(t, model.MeshChangePending, asked.Status)
+	badRequests := readPackageReportCounts().reasons[service.PackageReportRefusedBadPayload]
+	session.send(packageReportMessage("", uint32(node.ID), request))
+	session.heartbeat()
+	session.untilHeartbeatAck()
+	assert.Equal(t, badRequests+1, readPackageReportCounts().reasons[service.PackageReportRefusedBadPayload], "one pending request at a time")
+
 	bad := readPackageReportCounts().reasons[service.PackageReportRefusedBadPayload]
 	session.send(packageReportMessage("", uint32(node.ID), meshStatusReport(`{"peers":[]}`)))
 	session.heartbeat()

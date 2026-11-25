@@ -69,6 +69,10 @@ func (s *AgentControlGRPCServer) handlePackageReport(connection *AgentControlCon
 		handleMeshStatus(connection, node, report)
 		return nil
 	}
+	if report.GetPluginId() == meshregion.StatusPluginID && report.GetKind() == meshregion.RegionRequestKind {
+		handleMeshRegionRequest(connection, node, report)
+		return nil
+	}
 	input := service.PackageReportInput{
 		NodeKind: node.Kind, NodeID: uint(node.ID),
 		PluginID: report.PluginId, Kind: report.Kind, Version: report.Version, Payload: report.PayloadJson,

@@ -164,7 +164,7 @@ func CreateDevice(ctx context.Context, db *gorm.DB, regionID uint, input DeviceI
 		return model.MeshDevice{}, err
 	}
 	var row model.MeshDevice
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = change(ctx, db, func(tx *gorm.DB) error {
 		var region model.MeshRegion
 		if err := findRegion(tx, regionID, &region); err != nil {
 			return err
@@ -190,7 +190,7 @@ func UpdateDevice(ctx context.Context, db *gorm.DB, id uint, input DeviceInput, 
 		return model.MeshDevice{}, err
 	}
 	var row model.MeshDevice
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = change(ctx, db, func(tx *gorm.DB) error {
 		if err := findDevice(tx, id, &row); err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func UpdateDevice(ctx context.Context, db *gorm.DB, id uint, input DeviceInput, 
 
 // DeleteDevice removes a device; its pending region changes are rejected.
 func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) error {
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return change(ctx, db, func(tx *gorm.DB) error {
 		var row model.MeshDevice
 		if err := findDevice(tx, id, &row); err != nil {
 			return err
@@ -375,4 +375,79 @@ func LoadSummary(ctx context.Context, db *gorm.DB) (Summary, error) {
 		return Summary{}, err
 	}
 	return summary, nil
+}
+
+// maxTouched bounds the peer addresses one status refreshes per network.
+const maxTouched = 4096
+
+// touchDevices marks the pool addresses a node's status lists among its
+// peers as used at observedAt (R29: a pool address goes to another device
+// only after PoolReclaimAfter unused).
+func touchDevices(db *gorm.DB, payload []byte, observedAt time.Time) error {
+	var shape struct {
+		Networks []struct {
+			ID    string `json:"id"`
+			Peers []struct {
+				Address string `json:"address"`
+			} `json:"peers"`
+		} `json:"networks"`
+	}
+	if json.Unmarshal(payload, &shape) != nil {
+		return nil
+	}
+	var regions []model.MeshRegion
+	if err := db.Select("id", "code").Find(&regions).Error; err != nil {
+		return err
+	}
+	ids := make(map[string]uint, len(regions))
+	for _, region := range regions {
+		ids[region.Code] = region.ID
+	}
+	for _, network := range shape.Networks {
+		regionID, ok := ids[network.ID]
+		if !ok {
+			continue
+		}
+		addresses := []string{}
+		for _, peer := range network.Peers {
+			raw, _, _ := strings.Cut(peer.Address, "/")
+			if address, err := netip.ParseAddr(raw); err == nil && address.Is4() && len(addresses) < maxTouched {
+				addresses = append(addresses, address.String())
+			}
+		}
+		if len(addresses) == 0 {
+			continue
+		}
+		if err := db.Model(&model.MeshDevice{}).
+			Where("region_id = ? AND address IN ? AND (address_used_at IS NULL OR address_used_at < ?)", regionID, addresses, observedAt).
+			Update("address_used_at", observedAt).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssignDeviceAddress gives a device that lost its pool address a new one
+// of its region.
+func AssignDeviceAddress(ctx context.Context, db *gorm.DB, id uint, now time.Time) (model.MeshDevice, error) {
+	var row model.MeshDevice
+	err := change(ctx, db, func(tx *gorm.DB) error {
+		if err := findDevice(tx, id, &row); err != nil {
+			return err
+		}
+		if row.Address != nil {
+			return conflict("the device has the address %s", *row.Address)
+		}
+		var region model.MeshRegion
+		if err := findRegion(tx, row.RegionID, &region); err != nil {
+			return err
+		}
+		address, err := allocate(tx, region, now)
+		if err != nil {
+			return err
+		}
+		row.Address, row.AddressUsedAt, row.UpdatedAt = &address, &now, now
+		return tx.Save(&row).Error
+	})
+	return row, err
 }
