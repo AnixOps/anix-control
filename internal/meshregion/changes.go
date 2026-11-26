@@ -227,7 +227,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 		if err != nil {
 			return "", err
 		}
-		moved, err := moveNode(tx, home, row.ToRegionID, home.Boundary, now)
+		moved, err := moveNode(tx, home, row.ToRegionID, home.Boundary, basisOfChange(row), now)
 		if err != nil {
 			return "", err
 		}
@@ -254,7 +254,16 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 	if err := deleteSourcePaths(tx, deviceEntry(device.ID)); err != nil {
 		return "", err
 	}
-	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "static_key": gorm.Expr("NULL"), "updated_at": now}, "device")
+	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "static_key": gorm.Expr("NULL"), "region_basis": basisOfChange(row), "updated_at": now}, "device")
+}
+
+// basisOfChange is the basis of the region a change moves to: migration
+// for an approved request of the member's own, admin otherwise.
+func basisOfChange(row model.MeshRegionChange) string {
+	if row.Source == model.MeshChangeMember {
+		return model.MeshBasisMigration
+	}
+	return model.MeshBasisAdmin
 }
 
 // RejectChange records a rejection; nothing moves.

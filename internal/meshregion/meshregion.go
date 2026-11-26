@@ -434,6 +434,11 @@ func DeleteRegion(ctx context.Context, db *gorm.DB, id uint) error {
 // AddNode makes regionID the home region of node, with a fixed address
 // from its server segment; a boundary node joins every other region too.
 func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.AgentNode, boundary bool, now time.Time) (model.MeshMember, error) {
+	return addNode(ctx, db, regionID, node, boundary, model.MeshBasisAdmin, now)
+}
+
+// addNode is AddNode with the basis of the node's region (appendix D.9.1).
+func addNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.AgentNode, boundary bool, basis string, now time.Time) (model.MeshMember, error) {
 	var row model.MeshMember
 	err := change(ctx, db, func(tx *gorm.DB) error {
 		if boundary {
@@ -457,6 +462,9 @@ func AddNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.
 		}
 		var err error
 		if row, err = join(tx, region, node.String(), true, boundary, now); err != nil {
+			return err
+		}
+		if err := setBasis(tx, &row, basis); err != nil {
 			return err
 		}
 		if boundary {
@@ -486,7 +494,7 @@ func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, bou
 		}
 		row = home
 		if regionID != 0 && regionID != home.RegionID {
-			if row, err = moveNode(tx, home, regionID, boundary, now); err != nil {
+			if row, err = moveNode(tx, home, regionID, boundary, model.MeshBasisAdmin, now); err != nil {
 				return err
 			}
 			if err := recordMove(tx, &home.NodeRef, nil, home.RegionID, regionID, home.Address, row.Address, actor, now); err != nil {
@@ -508,7 +516,7 @@ func UpdateMember(ctx context.Context, db *gorm.DB, memberID, regionID uint, bou
 // moveNode makes regionID the home region of the node of home, with a new
 // fixed address there; the caller rejoins the other regions of a boundary
 // node.
-func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, now time.Time) (model.MeshMember, error) {
+func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, basis string, now time.Time) (model.MeshMember, error) {
 	if err := checkGatewayStays(tx, home.NodeRef); err != nil {
 		return model.MeshMember{}, err
 	}
@@ -527,7 +535,17 @@ func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, 
 	if result.RowsAffected == 0 {
 		return model.MeshMember{}, conflict("the node left the mesh meanwhile")
 	}
-	return join(tx, region, home.NodeRef, true, boundary, now)
+	row, err := join(tx, region, home.NodeRef, true, boundary, now)
+	if err != nil {
+		return row, err
+	}
+	return row, setBasis(tx, &row, basis)
+}
+
+// setBasis records why the home membership row is in its region.
+func setBasis(tx *gorm.DB, row *model.MeshMember, basis string) error {
+	row.RegionBasis = &basis
+	return updateExisting(tx, &model.MeshMember{}, row.ID, map[string]any{"region_basis": basis}, "member")
 }
 
 // RemoveNode takes the node of the home membership memberID out of the
@@ -780,6 +798,8 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 		return nil, err
 	}
 	networks := []map[string]any{}
+	var home *model.MeshRegion
+	var homeMember model.MeshMember
 	for _, region := range regions {
 		member, ok := mine[region.ID]
 		if !ok {
@@ -834,13 +854,37 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			if bridge != nil {
 				network["external_bridge"] = bridge
 			}
+			// The region request of the node, on its home network only
+			// (appendix D.7); the Agent leaves it out of a kernel
+			// without mesh_region_request_state.
+			request, err := regionRequestValue(db, node.String(), 0)
+			if err != nil {
+				return nil, err
+			}
+			network["region_request"] = request
+			region := region
+			home, homeMember = &region, member
 		}
 		networks = append(networks, network)
 	}
 	if len(networks) == 0 {
 		return nil, nil
 	}
-	return map[string]any{"networks": networks}, nil
+	// The region object (appendix D.9.1), which the Agent leaves out of a
+	// kernel without mesh_region_probe: the node's home region while its
+	// network is delivered, the directory and, for a border node, the
+	// probe responder.
+	directory, err := defaultDirectory(db)
+	if err != nil {
+		return nil, err
+	}
+	var responder map[string]any
+	if home != nil && homeMember.Boundary {
+		if responder, err = responderSection(db); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"networks": networks, "region": regionObject(directory, home, basisValue(homeMember.RegionBasis), responder)}, nil
 }
 
 // RecordStatus keeps payload, a "mesh.status" report of node, as the

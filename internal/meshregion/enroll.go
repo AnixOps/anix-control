@@ -397,7 +397,11 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 			if err != nil {
 				return err
 			}
-			device = model.MeshDevice{RegionID: region.ID, DeviceKey: key, StaticKey: static, Hostname: enrollment.Hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
+			basis := model.MeshBasisLatency
+			if enrollment.RegionID != 0 {
+				basis = model.MeshBasisCredential
+			}
+			device = model.MeshDevice{RegionID: region.ID, RegionBasis: &basis, DeviceKey: key, StaticKey: static, Hostname: enrollment.Hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&device).Error; err != nil {
 				return err
 			}
@@ -570,12 +574,39 @@ func RevokeDevice(ctx context.Context, db *gorm.DB, id uint) error {
 // latest report.
 func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, features []string, now time.Time) (map[string]any, error) {
 	db = db.WithContext(ctx)
-	var region model.MeshRegion
-	if err := readRegion(db, device.RegionID, &region); err != nil {
+	capabilities, err := deviceFeatures(db, device.ID)
+	if err != nil {
 		return nil, err
 	}
+	if features != nil {
+		capabilities = featureSet(features)
+	}
+	config, delivered, err := deviceNetworks(ctx, db, device, capabilities, now)
+	if err != nil {
+		return nil, err
+	}
+	// The region object, for a kernel that lists mesh_region_probe only:
+	// a device refuses a field it does not know (appendix D.9.1).
+	if capabilities[FeatureRegionProbe] {
+		directory, err := defaultDirectory(db)
+		if err != nil {
+			return nil, err
+		}
+		config["region"] = regionObject(directory, delivered, basisValue(device.RegionBasis), nil)
+	}
+	return config, nil
+}
+
+// deviceNetworks is the networks of DeviceConfig for a device whose kernel
+// has capabilities; it answers the region whose network it delivered, nil
+// when it delivered none.
+func deviceNetworks(ctx context.Context, db *gorm.DB, device model.MeshDevice, capabilities map[string]bool, now time.Time) (map[string]any, *model.MeshRegion, error) {
+	var region model.MeshRegion
+	if err := readRegion(db, device.RegionID, &region); err != nil {
+		return nil, nil, err
+	}
 	if !region.Enabled {
-		return map[string]any{"networks": []any{}}, nil
+		return map[string]any{"networks": []any{}}, nil, nil
 	}
 	if device.Address == nil {
 		err := change(ctx, db, func(tx *gorm.DB) error {
@@ -610,25 +641,25 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 			return result.Error
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !region.Enabled {
-			return map[string]any{"networks": []any{}}, nil
+			return map[string]any{"networks": []any{}}, nil, nil
 		}
 	}
 	prefix, err := netip.ParsePrefix(region.CIDR)
 	if err != nil {
-		return nil, fmt.Errorf("region %q: %w", region.Code, err)
+		return nil, nil, fmt.Errorf("region %q: %w", region.Code, err)
 	}
 	var boundaries []model.MeshMember
 	if err := db.Where("region_id = ? AND (home = ? OR boundary = ?)", region.ID, false, true).Order("id ASC").Find(&boundaries).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	peers := []map[string]any{}
 	for _, peer := range boundaries {
 		info, err := lookupNode(db, peer.NodeRef)
 		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, err
+			return nil, nil, err
 		}
 		if info.host != "" {
 			peers = append(peers, map[string]any{"server": info.host, "port": Port, "transport": "tcp"})
@@ -636,11 +667,11 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 	}
 	dns, err := dnsSection(db)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	node, full, err := isFullNode(db, device.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	role, listen, advertise := RoleAccess, []map[string]any{}, []string{}
 	if full {
@@ -649,25 +680,18 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 	}
 	keys, err := nativeKeys(db, []uint{region.ID})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resolvers, err := resolverAddresses(db, []model.MeshRegion{region})
 	if err != nil {
-		return nil, err
-	}
-	capabilities, err := deviceFeatures(db, device.ID)
-	if err != nil {
-		return nil, err
-	}
-	if features != nil {
-		capabilities = featureSet(features)
+		return nil, nil, err
 	}
 	// A region network admits only the keys it lists, which a kernel
 	// without mesh_native_keys ignores: such a device, or one that has
 	// not named its kernel's capabilities yet, gets no network until its
 	// report does (spec section 8.3.1; the Agent does the same for nodes).
 	if !capabilities[FeatureNativeKeys] {
-		return map[string]any{"networks": []any{}}, nil
+		return map[string]any{"networks": []any{}}, nil, nil
 	}
 	network := map[string]any{
 		"id": region.Code, "name": "mesh-" + region.Code, "kind": KindManaged, "native_keys": regionKeys(keys, region.ID),
@@ -682,9 +706,17 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 	if full && capabilities[FeaturePaths] {
 		paths, err := deliveredPaths(db, deviceEntry(device.ID), region.ID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		network["routing"] = map[string]any{"policy": policy, "paths": pathsValue(paths)}
+	}
+	// The region request, for a kernel that lists mesh_region_request_state.
+	if capabilities[FeatureRegionRequestState] {
+		request, err := regionRequestValue(db, "", device.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		network["region_request"] = request
 	}
 	// A field the device's kernel does not take is left out: it refuses
 	// a configuration with unknown fields (agent-contract.md section 4).
@@ -694,7 +726,7 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 	case capabilities[FeatureResolverAddress]:
 		network["dns"] = regionDNS(dns, resolvers[region.ID])
 	}
-	return map[string]any{"networks": []map[string]any{network}}, nil
+	return map[string]any{"networks": []map[string]any{network}}, &region, nil
 }
 
 // The kernel capabilities a device names in its report's features that

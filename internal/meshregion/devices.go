@@ -265,7 +265,8 @@ func CreateDevice(ctx context.Context, db *gorm.DB, regionID uint, input DeviceI
 		if err != nil {
 			return err
 		}
-		row = model.MeshDevice{RegionID: region.ID, DeviceKey: key, Hostname: hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
+		admin := model.MeshBasisAdmin
+		row = model.MeshDevice{RegionID: region.ID, RegionBasis: &admin, DeviceKey: key, Hostname: hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
 		return tx.Create(&row).Error
 	})
 	return row, err

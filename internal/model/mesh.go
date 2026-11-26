@@ -40,8 +40,11 @@ type MeshMember struct {
 	// StaticKey is the node's static public key in this region's network
 	// as its Agent last reported it (0050_mesh_native_keys): 32 bytes of
 	// X25519 in standard base64; nil before the first report.
-	StaticKey *string   `gorm:"size:44" json:"static_key"`
-	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+	StaticKey *string `gorm:"size:44" json:"static_key"`
+	// RegionBasis is, on a home row, why the node is in its region
+	// (0057_mesh_region_basis): the MeshBasis values; NULL counts as admin.
+	RegionBasis *string   `gorm:"size:16" json:"region_basis"`
+	CreatedAt   time.Time `gorm:"not null" json:"created_at"`
 }
 
 func (MeshMember) TableName() string { return "v5_mesh_member" }
@@ -103,9 +106,12 @@ type MeshDevice struct {
 	// StaticKey is the device's static public key in its region's network
 	// (0050_mesh_native_keys), from its enrollment or its first report
 	// after it; nil before either and after a move to another region.
-	StaticKey *string   `gorm:"size:44" json:"static_key"`
-	CreatedAt time.Time `gorm:"not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+	StaticKey *string `gorm:"size:44" json:"static_key"`
+	// RegionBasis is why the device is in its region (0057_mesh_region_basis):
+	// the MeshBasis values; NULL counts as admin.
+	RegionBasis *string   `gorm:"size:16" json:"region_basis"`
+	CreatedAt   time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshDevice) TableName() string { return "v5_mesh_device" }
@@ -153,7 +159,7 @@ type MeshRegionChange struct {
 	ToRegionID   uint    `gorm:"not null" json:"to_region_id"`
 	// Source is "member" or "admin".
 	Source string `gorm:"size:16;not null" json:"source"`
-	// Status is "pending", "approved" or "rejected".
+	// Status is "pending", "approved", "rejected" or "withdrawn".
 	Status      string     `gorm:"size:16;not null;index" json:"status"`
 	Reason      string     `gorm:"size:500;not null" json:"reason"`
 	Note        string     `gorm:"size:500;not null" json:"note"`
@@ -167,6 +173,16 @@ type MeshRegionChange struct {
 
 func (MeshRegionChange) TableName() string { return "v5_mesh_region_change" }
 
+// Why a member or device is in its region (the basis of the region object,
+// appendix D.9.1): chosen by latency, fixed by its credential, placed by an
+// administrator, or moved there by an approved request of its own.
+const (
+	MeshBasisLatency    = "latency"
+	MeshBasisCredential = "credential"
+	MeshBasisAdmin      = "admin"
+	MeshBasisMigration  = "migration"
+)
+
 // Region change sources and states.
 const (
 	MeshChangeMember   = "member"
@@ -174,6 +190,8 @@ const (
 	MeshChangePending  = "pending"
 	MeshChangeApproved = "approved"
 	MeshChangeRejected = "rejected"
+	// MeshChangeWithdrawn: the member took its pending request back.
+	MeshChangeWithdrawn = "withdrawn"
 )
 
 // MeshEnrollment is a one-time enrollment credential for a device without

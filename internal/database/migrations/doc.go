@@ -217,4 +217,7 @@
 //   - 0056_mesh_responder_port: the UDP port of the border nodes' region
 //     probe responders (v5_mesh_settings.responder_port,
 //     internal/meshregion).
+//   - 0057_mesh_region_basis: why a member or device is in its region
+//     (v5_mesh_member.region_basis, v5_mesh_device.region_basis,
+//     internal/meshregion).
 package migrations
