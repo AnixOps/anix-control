@@ -70,7 +70,9 @@ func TestMeshPathsAPI(t *testing.T) {
 	assert.Equal(t, meshregion.PathTargetSubnet, views[0].TargetKind)
 	require.Len(t, views[0].Via, 1)
 	assert.Equal(t, "10.150.0.2", views[0].Via[0].Address)
-	assert.Empty(t, views[0].Warnings)
+	// Nodes added by an administrator have no static key until they
+	// report one: the waypoint is not admitted yet.
+	assert.Equal(t, []string{meshregion.WarningPathWaypointNotAdmitted}, views[0].Warnings)
 	assert.Nil(t, views[0].Status)
 
 	response = serveJSON(router, http.MethodPut, path, `{"source":"node:proxy-5","target":"192.168.7.0/24","via":["node:proxy-5"]}`)

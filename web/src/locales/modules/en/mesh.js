@@ -69,7 +69,8 @@ export default {
         external_bridge_apply_failed: 'External network bridge not applied',
         external_bridge_ipv6_forwarding_off: 'IPv6 forwarding off',
         external_bridge_downgrade_residue: 'External network bridge rules may remain. Remove them, then delete the record file.',
-        external_bridge_lock_held: 'Another process on this host holds the external network bridge; the bridge capability is not enabled.'
+        external_bridge_lock_held: 'Another process on this host holds the external network bridge; the bridge capability is not enabled.',
+        paths_unsupported: 'The kernel on this host does not support custom paths; the paths are not applied.'
       }
     },
     region: {

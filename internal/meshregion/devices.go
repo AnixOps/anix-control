@@ -318,7 +318,7 @@ func DeleteDevice(ctx context.Context, db *gorm.DB, id uint, now time.Time) erro
 		if err := tx.Where("node_ref = ?", DeviceRef(id)).Delete(&model.MeshStatus{}).Error; err != nil {
 			return err
 		}
-		if err := deleteSourcePaths(tx, deviceEntry(id)); err != nil {
+		if err := deleteMemberPaths(tx, deviceEntry(id)); err != nil {
 			return err
 		}
 		// A full node's credential stays as its record, without the device.

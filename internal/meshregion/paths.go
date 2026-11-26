@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +50,14 @@ const (
 	// whose latest report does not list mesh_paths, so it is given no
 	// paths.
 	WarningPathUnsupported = "path_unsupported"
+	// WarningPathTargetInHostGroup: the subnet target now lies inside a
+	// host group's segment with a longer prefix (the group was created
+	// after the path); the kernel would refuse the whole configuration, so
+	// the path is not delivered.
+	WarningPathTargetInHostGroup = "path_target_in_host_group"
+	// WarningPathWaypointNotAdmitted: a waypoint has no static key in the
+	// region's admission list yet, so the path falls back until it has.
+	WarningPathWaypointNotAdmitted = "path_waypoint_not_admitted"
 )
 
 // PathInput creates or changes a custom path.
@@ -94,7 +104,8 @@ type PathView struct {
 	Via        []PathMemberView `json:"via"`
 	CreatedAt  time.Time        `json:"created_at"`
 	UpdatedAt  time.Time        `json:"updated_at"`
-	// Warnings: WarningPathMemberMissing, WarningPathUnsupported.
+	// Warnings: WarningPathMemberMissing, WarningPathUnsupported,
+	// WarningPathTargetInHostGroup, WarningPathWaypointNotAdmitted.
 	Warnings []string `json:"warnings"`
 	// Status is from the source's latest mesh.status report; nil when it
 	// has none for this path.
@@ -138,6 +149,9 @@ type pathMember struct {
 	// relay: the member forwards for others (a node of the mesh, or a full
 	// node device).
 	relay bool
+	// admitted: the member has a static key in the region's admission
+	// list (native_keys).
+	admitted bool
 }
 
 // resolved tells whether the member has an address in the region.
@@ -164,6 +178,7 @@ func resolvePathMember(tx *gorm.DB, regionID uint, entry string) (pathMember, er
 		}
 		if len(rows) > 0 {
 			answer.found, answer.relay, answer.address = true, true, rows[0].Address
+			answer.admitted = rows[0].StaticKey != nil
 		}
 	case AllowDevice:
 		id, _ := strconv.ParseUint(ref, 10, 32)
@@ -178,7 +193,7 @@ func resolvePathMember(tx *gorm.DB, regionID uint, entry string) (pathMember, er
 		if rows[0].RegionID != regionID {
 			return answer, nil
 		}
-		answer.found = true
+		answer.found, answer.admitted = true, rows[0].StaticKey != nil
 		if rows[0].Address != nil {
 			answer.address = *rows[0].Address
 		}
@@ -241,15 +256,12 @@ func checkPathTarget(tx *gorm.DB, region netip.Prefix, regionID uint, source, ra
 		if prefix.Overlaps(region) {
 			return "", "", invalid("target: %s overlaps the region's range %s", prefix, region)
 		}
-		var groups []model.MeshHostGroup
-		if err := tx.Find(&groups).Error; err != nil {
+		segment, inside, err := insideHostGroup(tx, prefix)
+		if err != nil {
 			return "", "", err
 		}
-		for _, group := range groups {
-			segment, err := netip.ParsePrefix(group.Segment)
-			if err == nil && segment.Overlaps(prefix) && prefix.Bits() > segment.Bits() {
-				return "", "", invalid("target: %s lies inside the host group segment %s; the members of a host group follow their gateway's path, target the whole segment", prefix, segment)
-			}
+		if inside {
+			return "", "", invalid("target: %s lies inside the host group segment %s; the members of a host group follow their gateway's path, target the whole segment", prefix, segment)
 		}
 		return prefix.String(), PathTargetSubnet, nil
 	}
@@ -268,6 +280,39 @@ func checkPathTarget(tx *gorm.DB, region netip.Prefix, regionID uint, source, ra
 		return "", "", invalid("target: %s is not in the source's region", entry)
 	}
 	return entry, PathTargetPeer, nil
+}
+
+// insideHostGroup tells whether prefix lies inside a host group's segment
+// with a longer prefix, which the kernel refuses as a path target (the
+// members of a host group follow their gateway's path), and which segment.
+func insideHostGroup(tx *gorm.DB, prefix netip.Prefix) (netip.Prefix, bool, error) {
+	var segments []string
+	if err := tx.Model(&model.MeshHostGroup{}).Pluck("segment", &segments).Error; err != nil {
+		return netip.Prefix{}, false, err
+	}
+	for _, raw := range segments {
+		segment, err := netip.ParsePrefix(raw)
+		if err == nil && segment.Overlaps(prefix) && prefix.Bits() > segment.Bits() {
+			return segment, true, nil
+		}
+	}
+	return netip.Prefix{}, false, nil
+}
+
+// subnetTargets answers the subnet targets of every path, for host group
+// segments to keep clear of them.
+func subnetTargets(tx *gorm.DB) ([]netip.Prefix, error) {
+	var targets []string
+	if err := tx.Model(&model.MeshPath{}).Where("target_kind = ?", PathTargetSubnet).Pluck("target", &targets).Error; err != nil {
+		return nil, err
+	}
+	answer := make([]netip.Prefix, 0, len(targets))
+	for _, raw := range targets {
+		if prefix, err := netip.ParsePrefix(raw); err == nil {
+			answer = append(answer, prefix)
+		}
+	}
+	return answer, nil
 }
 
 // checkPathVia reads the waypoints of a path: 1 to 6 distinct full nodes of
@@ -314,6 +359,11 @@ func checkPathVia(tx *gorm.DB, regionID uint, source, target, kind string, raw [
 // savePath checks input and writes the path row (id 0 creates it).
 func savePath(tx *gorm.DB, id uint, input PathInput, now time.Time) (model.MeshPath, error) {
 	var row model.MeshPath
+	// Host groups are created under the same lock: a group's segment and a
+	// path's subnet target are checked against each other.
+	if err := lockAddressPlan(tx); err != nil {
+		return row, err
+	}
 	if id != 0 {
 		var rows []model.MeshPath
 		if err := forUpdate(tx).Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
@@ -433,21 +483,73 @@ func DeletePath(ctx context.Context, db *gorm.DB, id uint) error {
 	})
 }
 
-// deleteSourcePaths deletes the paths of the source entry: a node that
-// left its region, or a device that was deleted or moved, has none. Paths
-// that only name it as target or waypoint stay and warn.
+// deleteSourcePaths deletes the paths of the source entry: a node or a
+// device that moved to another region has none there. Paths that only
+// name it as target or waypoint stay and warn until it is back.
 func deleteSourcePaths(tx *gorm.DB, source string) error {
-	return tx.Where("source_ref = ?", source).Delete(&model.MeshPath{}).Error
+	result := tx.Where("source_ref = ?", source).Delete(&model.MeshPath{})
+	if result.Error == nil && result.RowsAffected > 0 {
+		slog.Info("mesh paths deleted with their source's move", "source", source, "paths", result.RowsAffected)
+	}
+	return result.Error
 }
+
+// memberPathIDs answers the ids of the paths that name entry as source,
+// target or waypoint.
+func memberPathIDs(tx *gorm.DB, entry string) ([]uint, error) {
+	var rows []model.MeshPath
+	if err := tx.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	ids := []uint{}
+	for _, row := range rows {
+		if row.SourceRef == entry || row.Target == entry || slices.Contains(splitSubnets(row.Via), entry) {
+			ids = append(ids, row.ID)
+		}
+	}
+	return ids, nil
+}
+
+// deleteMemberPaths deletes every path that names entry, a node removed
+// from the mesh or a device deleted: a node or device that later comes
+// back under the same identity is not given the old paths.
+func deleteMemberPaths(tx *gorm.DB, entry string) error {
+	ids, err := memberPathIDs(tx, entry)
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+	return tx.Where("id IN ?", ids).Delete(&model.MeshPath{}).Error
+}
+
+// MemberPaths answers how many paths name the member entry (node:<node
+// ref> or device:<id>), which removing it deletes.
+func MemberPaths(ctx context.Context, db *gorm.DB, entry string) (int, error) {
+	ids, err := memberPathIDs(db.WithContext(ctx), entry)
+	return len(ids), err
+}
+
+// NodeEntry is the path entry of a node.
+func NodeEntry(ref string) string { return AllowNode + ":" + ref }
 
 // deviceEntry is the path entry of a device.
 func deviceEntry(id uint) string { return AllowDevice + ":" + strconv.FormatUint(uint64(id), 10) }
+
+// DeviceEntry is the path entry of a device.
+func DeviceEntry(id uint) string { return deviceEntry(id) }
 
 // resolvePath answers the kernel entry of row in region regionID, false
 // when a member of it does not resolve to an address there.
 func resolvePath(tx *gorm.DB, regionID uint, row model.MeshPath) (map[string]any, bool, error) {
 	entry := map[string]any{}
 	if row.TargetKind == PathTargetSubnet {
+		// A host group created after the path may hold the target now.
+		prefix, err := netip.ParsePrefix(row.Target)
+		if err != nil {
+			return nil, false, nil
+		}
+		if _, inside, err := insideHostGroup(tx, prefix); err != nil || inside {
+			return nil, false, err
+		}
 		entry["to_subnet"] = row.Target
 	} else {
 		target, err := resolvePathMember(tx, regionID, row.Target)
@@ -586,6 +688,15 @@ func Paths(ctx context.Context, db *gorm.DB) ([]PathView, error) {
 		missing := !isSource
 		view.TargetName = row.Target
 		targetAddress := ""
+		inGroup := false
+		if row.TargetKind == PathTargetSubnet {
+			if prefix, err := netip.ParsePrefix(row.Target); err == nil {
+				if _, inGroup, err = insideHostGroup(db, prefix); err != nil {
+					return nil, err
+				}
+			}
+		}
+		notAdmitted := false
 		if row.TargetKind == PathTargetPeer {
 			target, err := resolvePathMember(db, regionID, row.Target)
 			if err != nil {
@@ -601,9 +712,16 @@ func Paths(ctx context.Context, db *gorm.DB) ([]PathView, error) {
 			}
 			view.Via = append(view.Via, PathMemberView{Entry: item, Name: member.name, Address: member.address})
 			missing = missing || !member.resolved() || !member.relay
+			notAdmitted = notAdmitted || member.found && !member.admitted
 		}
 		if missing {
 			view.Warnings = append(view.Warnings, WarningPathMemberMissing)
+		}
+		if inGroup {
+			view.Warnings = append(view.Warnings, WarningPathTargetInHostGroup)
+		}
+		if notAdmitted {
+			view.Warnings = append(view.Warnings, WarningPathWaypointNotAdmitted)
 		}
 		status, hasStatus := statuses[statusRef(row.SourceRef)]
 		if strings.HasPrefix(row.SourceRef, AllowDevice+":") {
@@ -615,7 +733,7 @@ func Paths(ctx context.Context, db *gorm.DB) ([]PathView, error) {
 				view.Warnings = append(view.Warnings, WarningPathUnsupported)
 			}
 		}
-		if hasStatus && !missing {
+		if hasStatus && !missing && !inGroup {
 			id := "subnet:" + row.Target
 			if row.TargetKind == PathTargetPeer {
 				id = "peer:" + targetAddress

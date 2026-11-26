@@ -199,11 +199,18 @@ func (h *MeshHandler) DeleteMeshDevice(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// The custom paths that name the device go with it; the audit counts
+	// them.
+	paths, err := meshregion.MemberPaths(c.Request.Context(), db, meshregion.DeviceEntry(id))
+	if err != nil {
+		meshError(c, err)
+		return
+	}
 	if err := meshregion.DeleteDevice(c.Request.Context(), db, id, h.now()); err != nil {
 		meshError(c, err)
 		return
 	}
-	h.audit(c, db, "mesh_device_delete", id, fmt.Sprintf(`{"device_id":%d}`, id))
+	h.audit(c, db, "mesh_device_delete", id, fmt.Sprintf(`{"device_id":%d,"paths_deleted":%d}`, id, paths))
 	c.Status(http.StatusNoContent)
 }
 

@@ -82,7 +82,10 @@
 | 途经节点 | 1–6 项，不重复，不得是起点或对端目标；须为同一地区的组网节点或完整节点设备，接入端设备不可作途经节点。 |
 | 下发 | 对端 `{"to_peer": "<虚拟地址>", "via": [...]}`，子网 `{"to_subnet": "<CIDR>", "via": [...]}`，按编号顺序。起点、目标或任一途经节点解析不到当前地区内的地址（已离开地区、设备被删除或失去完整节点角色、没有地址）时，该条不下发，列表标记 `path_member_missing`。 |
 | 能力 | Agent 节点的路径由 Agent 按内核能力名单处理（不列出 `mesh_paths` 的内核得到空列表）。无 Agent 的完整节点设备只在最近一次上报或读取配置时的能力名单列出 `mesh_paths` 时才下发路径，否则 `paths` 为空，列表标记 `path_unsupported`。 |
-| 清理 | 删除设备、节点移出组网、节点或设备迁移到其他地区时，以其为起点的路径一并删除；仅作为目标或途经节点出现的路径保留并标记 `path_member_missing`。 |
+| 清理 | 删除设备或节点移出组网时，凡以其为起点、目标或途经节点的路径一并删除（同一身份以后重新加入时不继承旧路径），设备删除与成员移出的审计内容带 `paths_deleted`；节点或设备迁移到其他地区时，以其为起点的路径删除，仅作为目标或途经节点出现的路径保留并标记 `path_member_missing`。 |
 | 状态 | 取起点最近一次 `mesh.status` 中该地区网络的 `paths[]`，条目 `id` 为 `peer:<目标地址>` 或 `subnet:<CIDR>`。列表原样给出 `state`、`reason`、`unreachable`，界面将 `active` 显示为「按自定义路径」、`first_hop_only`「仅保证首段」、`fallback`「已回落」、`pending`「检测中」。 |
+| 宿主组 | 子网目标不得位于宿主组网段之内且前缀更长（内核会拒绝起点的整份配置）。保存路径与新建宿主组都先取地址规划锁，相互校验：指定网段包含已有路径的子网目标时拒绝新建宿主组（`409`），自动选段时跳过这类网段；此前已存在的冲突在下发时按当前宿主组重新校验，跳过该路径并标记 `path_target_in_host_group`。 |
+| 准入 | 途经节点在本地区尚无静态公钥（未进入准入清单 `native_keys`）时标记 `path_waypoint_not_admitted`，路径照常下发，内核在其准入前回落。 |
+| 地址族 | 子网目标目前只支持 IPv4。 |
 
 接口：`GET/POST /api/v4/kernel/mesh/paths`、`PUT/DELETE /api/v4/kernel/mesh/paths/{id}`（`{"source","target","via":[…]}`，`target` 为成员或 CIDR，更新时 `source` 不得改变；记入操作日志 `mesh_path_create`、`mesh_path_update`、`mesh_path_delete`）。校验失败回 400，同一起点与目标重复回 409，未知编号回 404。
