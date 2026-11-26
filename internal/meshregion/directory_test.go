@@ -38,6 +38,8 @@ func TestDirectoryListsBorderNodesWithProbeKeys(t *testing.T) {
 		_, err := AddNode(ctx, db, home, proxy(uint32(ref)), ref != 3, now)
 		require.NoError(t, err)
 	}
+	// openDB has nodes 1 to 4.
+	require.NoError(t, db.Create(&model.Node{ID: 5, Name: "e", Host: "e.example.com"}).Error)
 	_, err := AddNode(ctx, db, off.ID, proxy(5), true, now)
 	require.NoError(t, err)
 	_, err = UpdateRegion(ctx, db, off.ID, RegionInput{Code: "ap", Name: "ap", CIDR: off.CIDR, Enabled: false}, now)

@@ -25,7 +25,7 @@ func TestChooseRegionScores(t *testing.T) {
 		{"preferred loses when 0.8 times its latency is not lower (45 against 35)", map[string]float64{"cn": 45, "eu": 35}, 1, "eu"},
 		{"preferred without a latency is ignored", map[string]float64{"eu": 35, "na": 50}, 1, "eu"},
 		{"equal scores: the lower sort", map[string]float64{"cn": 30, "eu": 30, "na": 30}, 0, "cn"},
-		{"equal scores after the factor: the lower sort", map[string]float64{"cn": 25, "eu": 20}, 2, "cn"},
+		{"equal scores after the factor: the lower sort", map[string]float64{"cn": 16, "eu": 20}, 2, "cn"},
 		{"a zero latency counts", map[string]float64{"cn": 0, "eu": 1}, 0, "cn"},
 		{"a negative latency is ignored", map[string]float64{"cn": -1, "eu": 90}, 0, "eu"},
 		{"a code that is no region is ignored", map[string]float64{"xx": 1, "na": 90}, 0, "na"},

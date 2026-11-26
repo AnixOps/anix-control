@@ -31,10 +31,12 @@ func parseSuggestion(raw json.RawMessage) (*RegionSuggestion, error) {
 		return nil, nil
 	}
 	var shape struct {
-		Region            string      `json:"region"`
-		CurrentMedianMS   json.Number `json:"current_median_ms"`
-		SuggestedMedianMS json.Number `json:"suggested_median_ms"`
-		Since             string      `json:"since"`
+		Region string `json:"region"`
+		// Pointers to whole numbers: a missing time stays nil, and a
+		// string or a fraction fails to decode.
+		CurrentMedianMS   *int64 `json:"current_median_ms"`
+		SuggestedMedianMS *int64 `json:"suggested_median_ms"`
+		Since             string `json:"since"`
 	}
 	if err := json.Unmarshal(raw, &shape); err != nil {
 		return nil, invalid("payload: region_probe.suggestion is null or an object of region, current_median_ms, suggested_median_ms and since")
@@ -42,16 +44,14 @@ func parseSuggestion(raw json.RawMessage) (*RegionSuggestion, error) {
 	if !codePattern.MatchString(shape.Region) {
 		return nil, invalid("payload: region_probe.suggestion.region is a region code")
 	}
-	current, err := shape.CurrentMedianMS.Int64()
-	suggested, err2 := shape.SuggestedMedianMS.Int64()
-	if err != nil || err2 != nil || current < 0 || suggested < 0 {
+	if shape.CurrentMedianMS == nil || shape.SuggestedMedianMS == nil || *shape.CurrentMedianMS < 0 || *shape.SuggestedMedianMS < 0 {
 		return nil, invalid("payload: region_probe.suggestion median times are whole milliseconds, 0 or more")
 	}
 	since, err := time.Parse(time.RFC3339, shape.Since)
 	if err != nil {
 		return nil, invalid("payload: region_probe.suggestion.since is an RFC 3339 time")
 	}
-	return &RegionSuggestion{Region: shape.Region, CurrentMedianMS: current, SuggestedMedianMS: suggested, Since: since}, nil
+	return &RegionSuggestion{Region: shape.Region, CurrentMedianMS: *shape.CurrentMedianMS, SuggestedMedianMS: *shape.SuggestedMedianMS, Since: since}, nil
 }
 
 // regionProbeSuggestion reads the suggestion of a status payload; an error

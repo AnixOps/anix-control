@@ -255,6 +255,8 @@ func TestWithdrawnRegionRequests(t *testing.T) {
 	device, err = Authenticate(ctx, db, enrolled.DeviceToken, now)
 	require.NoError(t, err)
 	require.NoError(t, WithdrawDeviceChange(ctx, db, device, now))
-	require.NoError(t, db.First(&row, second.ID).Error)
-	require.Equal(t, model.MeshChangeApproved, row.Status, "an approved change stays")
+	// A fresh row: First adds the primary key of a filled one.
+	var approved model.MeshRegionChange
+	require.NoError(t, db.First(&approved, second.ID).Error)
+	require.Equal(t, model.MeshChangeApproved, approved.Status, "an approved change stays")
 }

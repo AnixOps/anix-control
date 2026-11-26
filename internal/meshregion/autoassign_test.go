@@ -103,6 +103,7 @@ func TestAutoNodeIsPlacedByItsLatencies(t *testing.T) {
 	_, err = AddAutoNode(ctx, db, proxy(3), nil, now)
 	require.NoError(t, err)
 	require.NoError(t, RecordStatus(ctx, db, proxy(3), probeStatus(`[{"region":"eu","rtt_ms":35},{"region":"cn","rtt_ms":40}]`), now, now))
+	home = model.MeshMember{} // First adds the primary key of a filled row.
 	require.NoError(t, db.Where("node_ref = ? AND home = ?", "proxy-3", true).First(&home).Error)
 	require.Equal(t, eu.ID, home.RegionID)
 	_, err = AddAutoNode(ctx, db, proxy(4), nil, now)
@@ -111,6 +112,7 @@ func TestAutoNodeIsPlacedByItsLatencies(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Model(&model.MeshAutoNode{}).Count(&marks).Error)
 	require.EqualValues(t, 0, marks)
+	home = model.MeshMember{}
 	require.NoError(t, db.Where("node_ref = ? AND home = ?", "proxy-4", true).First(&home).Error)
 	require.Equal(t, "admin", *home.RegionBasis)
 
