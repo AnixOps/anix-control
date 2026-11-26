@@ -17,7 +17,10 @@ const api = vi.hoisted(() => ({
   revokeKernelMeshDevice: vi.fn(),
   listKernelMeshBridges: vi.fn(),
   listKernelMeshHostGroups: vi.fn(),
-  saveKernelMeshBridge: vi.fn()
+  saveKernelMeshBridge: vi.fn(),
+  listKernelMeshPaths: vi.fn(),
+  saveKernelMeshPath: vi.fn(),
+  deleteKernelMeshPath: vi.fn()
 }))
 
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...api }))
@@ -28,6 +31,7 @@ const MeshNames = (await import('@/components/forward/mesh/MeshNames.vue')).defa
 const MeshChanges = (await import('@/components/forward/mesh/MeshChanges.vue')).default
 const MeshSettings = (await import('@/components/forward/mesh/MeshSettings.vue')).default
 const MeshBridges = (await import('@/components/forward/mesh/MeshBridges.vue')).default
+const MeshPaths = (await import('@/components/forward/mesh/MeshPaths.vue')).default
 const { nameSuffixProblem } = await import('@/components/forward/meshModel')
 
 const REGIONS = [{ id: 1, code: 'cn', name: '中国大陆', cidr: '10.150.0.0/16' }, { id: 2, code: 'eu', name: '欧洲', cidr: '10.152.0.0/16' }]
@@ -242,6 +246,67 @@ describe('mesh addresses', () => {
     document.querySelector('[data-testid="mesh-bridge-save"]').click()
     await flushPromises()
     expect(api.saveKernelMeshBridge).toHaveBeenCalledWith(null, { node: 'proxy-2', iface: 'eth1', routes: ['192.168.50.0/24'], allow: ['device:4'] })
+    expect(wrapper.emitted().changed).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('lists the custom paths with their state and warnings', async () => {
+    const members = [
+      { node_ref: 'proxy-1', node_name: 'edge', address: '10.150.0.1', region: REGIONS[0] },
+      { node_ref: 'proxy-2', node_name: 'home', address: '10.150.0.2', region: REGIONS[0] },
+      { node_ref: 'proxy-3', node_name: 'hop', address: '10.150.0.3', region: REGIONS[0] }
+    ]
+    api.listKernelMeshDevices.mockResolvedValue([])
+    api.listKernelMeshPaths.mockResolvedValue([
+      { id: 1, source: 'node:proxy-1', source_name: 'edge', region_id: 1, target_kind: 'peer', target: 'node:proxy-2', target_name: 'home',
+        via: [{ entry: 'node:proxy-3', name: 'hop', address: '10.150.0.3' }], warnings: [],
+        status: { state: 'first_hop_only', reason: 'unreachable', unreachable: '10.150.0.3' } },
+      { id: 2, source: 'node:proxy-1', source_name: 'edge', region_id: 1, target_kind: 'subnet', target: '192.168.50.0/24', target_name: '192.168.50.0/24',
+        via: [{ entry: 'node:proxy-9', name: '', address: '' }, { entry: 'node:proxy-3', name: 'hop', address: '10.150.0.3' }], warnings: ['path_member_missing'], status: null },
+      { id: 3, source: 'device:4', source_name: 'router', region_id: 1, target_kind: 'peer', target: 'node:proxy-2', target_name: 'home',
+        via: [{ entry: 'node:proxy-3', name: 'hop', address: '10.150.0.3' }], warnings: ['path_unsupported'],
+        status: { state: 'fallback', reason: 'other_reason', unreachable: null } }
+    ])
+    const wrapper = mount(MeshPaths, { props: { regions: REGIONS, members }, attachTo: document.body })
+    await flushPromises()
+    const text = wrapper.get('[data-testid="mesh-path-table"]').text()
+    expect(text).toContain('仅保证首段')
+    expect(text).toContain('途经节点无法连接')
+    expect(text).toContain('无法连接：hop')
+    expect(text).toContain('192.168.50.0/24')
+    expect(text).toContain('node:proxy-9 → hop')
+    expect(text).toContain('尚未上报')
+    expect(text).toContain('成员缺失，未下发')
+    expect(text).toContain('已回落')
+    expect(text).toContain('other_reason')
+    expect(text).toContain('内核不支持')
+    wrapper.unmount()
+  })
+
+  it('saves a custom path through a full node', async () => {
+    const members = [
+      { node_ref: 'proxy-1', node_name: 'edge', address: '10.150.0.1', region: REGIONS[0] },
+      { node_ref: 'proxy-2', node_name: 'home', address: '10.150.0.2', region: REGIONS[0] },
+      { node_ref: 'proxy-3', node_name: 'paris', address: '10.152.0.1', region: REGIONS[1] }
+    ]
+    api.listKernelMeshDevices.mockResolvedValue([{ id: 4, region_id: 1, hostname: 'router', role: 'full', address: '10.150.0.9' }, { id: 5, region_id: 1, hostname: 'phone', role: 'access', address: '10.150.128.0' }])
+    api.listKernelMeshPaths.mockResolvedValue([])
+    api.saveKernelMeshPath.mockResolvedValue({ id: 1 })
+    const wrapper = mount(MeshPaths, { props: { regions: REGIONS, members }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.get('[data-testid="mesh-path-add"]').trigger('click')
+    await flushPromises()
+    const form = document.querySelector('[data-testid="mesh-path-form"]')
+    const via = form.querySelector('textarea')
+    expect(form.textContent).toContain('router = device:4')
+    expect(form.textContent).not.toContain('paris')
+    expect(form.textContent).not.toContain('phone')
+    via.value = 'device:4'
+    via.dispatchEvent(new Event('input'))
+    await flushPromises()
+    document.querySelector('[data-testid="mesh-path-save"]').click()
+    await flushPromises()
+    expect(api.saveKernelMeshPath).toHaveBeenCalledWith(null, { source: 'node:proxy-1', target: 'node:proxy-2', via: ['device:4'] })
     expect(wrapper.emitted().changed).toBeTruthy()
     wrapper.unmount()
   })

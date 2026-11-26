@@ -209,4 +209,6 @@
 //     internal/meshregion).
 //   - 0053_drop_legacy_node_tag: data only; v5_node.tags "legacy-node"
 //     (the only tag of the nodes from before the 5.0 Agent) becomes NULL.
+//   - 0054_mesh_paths: the custom paths of the region networks, stored by
+//     member identity (v5_mesh_path, internal/meshregion).
 package migrations

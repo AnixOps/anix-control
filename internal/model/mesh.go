@@ -261,8 +261,27 @@ type MeshBridgeHold struct {
 
 func (MeshBridgeHold) TableName() string { return "v5_mesh_bridge_hold" }
 
+// MeshPath is a custom path of a region network (0054_mesh_paths): traffic
+// of the member SourceRef to Target goes through the waypoint members of Via
+// in order. TargetKind is "peer" (Target is a member entry) or "subnet"
+// (Target is a CIDR). Members are stored by identity, as node:<node ref> or
+// device:<device id>, and Via lists them comma separated; their addresses
+// are resolved when the path is delivered.
+type MeshPath struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	SourceRef  string    `gorm:"size:32;not null;uniqueIndex:idx_v5_mesh_path_target,priority:1" json:"source"`
+	TargetKind string    `gorm:"size:8;not null" json:"target_kind"`
+	Target     string    `gorm:"size:64;not null;uniqueIndex:idx_v5_mesh_path_target,priority:2" json:"target"`
+	Via        string    `gorm:"type:text;not null" json:"-"`
+	CreatedAt  time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (MeshPath) TableName() string { return "v5_mesh_path" }
+
 // MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
-// 0047_mesh_enrollment, 0048_mesh_full_nodes, 0051_mesh_external_bridges).
+// 0047_mesh_enrollment, 0048_mesh_full_nodes, 0051_mesh_external_bridges,
+// 0054_mesh_paths).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}, &MeshPath{}}
 }

@@ -8,6 +8,7 @@ export default {
       devices: 'Devices',
       hostGroups: 'Host groups',
       bridges: 'External bridges',
+      paths: 'Custom paths',
       names: 'Intranet names',
       changes: 'Region changes',
       changesPending: 'Region changes ({n})',
@@ -180,6 +181,49 @@ export default {
       edit: 'Edit…',
       deleteTitle: 'Delete the bridge of {name}',
       deleteMessage: 'The node no longer bridges the external network. The addresses of its list are not given to other members until the node confirms.'
+    },
+    paths: {
+      title: 'Custom paths',
+      description: 'For one member of a region, the path to another member or to a subnet through the listed waypoints, in order.',
+      add: 'Add path',
+      empty: 'No custom paths',
+      loadFailed: 'Could not load the custom paths',
+      source: 'Source',
+      sourceHelp: 'A node with an Agent, or a full node device.',
+      target: 'Target',
+      targetHelp: 'A member of the same region, or a subnet inside the private ranges.',
+      targetSubnet: 'Subnet…',
+      subnet: 'Subnet',
+      subnetHelp: 'In CIDR form, such as 192.168.50.0/24. It must not overlap the region\'s range or lie inside a host group segment (the whole segment may be given).',
+      via: 'Waypoints',
+      viaHelp: 'One per line, in the order they are passed: 1 to 6 full nodes. Available: {options}',
+      viaEmpty: 'No full nodes in this region can be waypoints',
+      state: 'State',
+      noReport: 'Not reported',
+      unreachable: 'Unreachable: {name}',
+      states: {
+        active: 'On the custom path',
+        first_hop_only: 'First hop only',
+        fallback: 'Fell back',
+        pending: 'Checking'
+      },
+      reasons: {
+        unreachable: 'A waypoint is unreachable',
+        unsupported: 'A waypoint does not support custom paths',
+        not_relay: 'A waypoint does not relay',
+        hop_limit: 'Too many waypoints',
+        no_echo: 'A waypoint does not answer probes',
+        pending_timeout: 'Check timed out'
+      },
+      warnings: {
+        path_member_missing: 'Member missing, not delivered',
+        path_unsupported: 'Kernel unsupported'
+      },
+      addTitle: 'Add custom path',
+      editTitle: 'Edit the path of {name}',
+      edit: 'Edit…',
+      deleteTitle: 'Delete the path of {name}',
+      deleteMessage: 'The path is removed from the configuration of the nodes, and the traffic takes the default route again.'
     },
     deviceNames: {
       title: 'Device names',

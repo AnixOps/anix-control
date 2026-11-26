@@ -247,6 +247,7 @@ func laterModels() []any {
 		&model.MeshFullNode{},              // 0048_mesh_full_nodes
 		&model.MeshExternalBridge{},        // 0051_mesh_external_bridges
 		&model.MeshBridgeHold{},            // 0051_mesh_external_bridges
+		&model.MeshPath{},                  // 0054_mesh_paths
 	}
 }
 
