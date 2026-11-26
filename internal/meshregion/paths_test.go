@@ -185,9 +185,10 @@ func TestPathDelivery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []map[string]any{{"to_peer": mesh.address(2), "via": []string{mesh.address(3)}}}, routingPaths(t, config["networks"].([]map[string]any)[0]))
 
-	// A waypoint that left the region: the path is not delivered, the
-	// view warns.
-	require.NoError(t, RemoveNode(ctx, db, mesh.members[5].ID))
+	// A waypoint that moved to another region: the path is not delivered,
+	// the view warns.
+	_, err = UpdateMember(ctx, db, mesh.members[5].ID, mesh.eu.ID, false, nil, now)
+	require.NoError(t, err)
 	network = nodeNetwork(t, db, proxy(1), "cn")
 	require.Equal(t, []map[string]any{{"to_peer": mesh.address(3), "via": []string{mesh.address(2), *mesh.router.Address}}}, routingPaths(t, network))
 	warned := map[string][]string{}
@@ -206,25 +207,14 @@ func TestPathDelivery(t *testing.T) {
 	require.Equal(t, []any{}, routingPaths(t, nodeNetwork(t, db, proxy(1), "cn")))
 	require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", mesh.router.ID).Update("address", *mesh.router.Address).Error)
 
-	// A removed node takes the paths it is the source of; paths that only
-	// name it stay and warn.
+	// A removed node takes every path that names it: proxy-3 is the
+	// target of one and the waypoint of another.
 	require.NoError(t, RemoveNode(ctx, db, mesh.members[3].ID))
 	var left []model.MeshPath
 	require.NoError(t, db.Order("id").Find(&left).Error)
-	require.Len(t, left, 3)
-	views := pathViews(t, db)
-	for _, view := range views {
-		if view.Source == deviceID(mesh.router) {
-			require.Equal(t, []string{WarningPathMemberMissing, WarningPathUnsupported}, view.Warnings, "its waypoint left")
-		}
-	}
-	require.NoError(t, RemoveNode(ctx, db, mesh.members[1].ID))
-	require.NoError(t, db.Order("id").Find(&left).Error)
 	require.Len(t, left, 1)
-	require.Equal(t, deviceID(mesh.router), left[0].SourceRef)
-
-	// A deleted device takes the paths it is the source of.
-	require.NoError(t, DeleteDevice(ctx, db, mesh.router.ID, now))
+	require.Equal(t, "192.168.5.0/24", left[0].Target)
+	require.NoError(t, RemoveNode(ctx, db, mesh.members[1].ID))
 	require.NoError(t, db.Find(&left).Error)
 	require.Empty(t, left)
 }
