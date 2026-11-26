@@ -549,7 +549,7 @@ func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 		if err := rejectPendingOf(tx, home.NodeRef, "the node left the mesh", time.Now().UTC()); err != nil {
 			return err
 		}
-		if err := deleteSourcePaths(tx, AllowNode+":"+home.NodeRef); err != nil {
+		if err := deleteMemberPaths(tx, AllowNode+":"+home.NodeRef); err != nil {
 			return err
 		}
 		return tx.Where("node_ref = ?", home.NodeRef).Delete(&model.MeshMember{}).Error

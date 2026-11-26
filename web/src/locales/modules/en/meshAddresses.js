@@ -194,7 +194,7 @@ export default {
       targetHelp: 'A member of the same region, or a subnet inside the private ranges.',
       targetSubnet: 'Subnet…',
       subnet: 'Subnet',
-      subnetHelp: 'In CIDR form, such as 192.168.50.0/24. It must not overlap the region\'s range or lie inside a host group segment (the whole segment may be given).',
+      subnetHelp: 'In CIDR form, such as 192.168.50.0/24. It must not overlap the region\'s range or lie inside a host group segment (the whole segment may be given). Only IPv4 is supported for now.',
       via: 'Waypoints',
       viaHelp: 'One per line, in the order they are passed: 1 to 6 full nodes. Available: {options}',
       viaEmpty: 'No full nodes in this region can be waypoints',
@@ -217,7 +217,9 @@ export default {
       },
       warnings: {
         path_member_missing: 'Member missing, not delivered',
-        path_unsupported: 'Kernel unsupported'
+        path_unsupported: 'Kernel unsupported',
+        path_target_in_host_group: 'Target inside a host group segment; not delivered',
+        path_waypoint_not_admitted: 'Waypoint not admitted yet'
       },
       addTitle: 'Add custom path',
       editTitle: 'Edit the path of {name}',

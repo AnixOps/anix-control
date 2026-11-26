@@ -51,6 +51,14 @@ func newPathMesh(t *testing.T) pathMesh {
 	require.NoError(t, err)
 	require.NoError(t, db.First(&mesh.router, enrolled.DeviceID).Error)
 	require.NotNil(t, mesh.router.Address)
+	// Every member is admitted (has a static key) unless a test says
+	// otherwise.
+	for id, member := range mesh.members {
+		require.NoError(t, db.Model(&model.MeshMember{}).Where("id = ?", member.ID).Update("static_key", testStaticKey(byte('A'+id))).Error)
+	}
+	for _, device := range []model.MeshDevice{mesh.phone, mesh.router} {
+		require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", device.ID).Update("static_key", testStaticKey(byte('a'+device.ID))).Error)
+	}
 	return mesh
 }
 
@@ -177,9 +185,10 @@ func TestPathDelivery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []map[string]any{{"to_peer": mesh.address(2), "via": []string{mesh.address(3)}}}, routingPaths(t, config["networks"].([]map[string]any)[0]))
 
-	// A waypoint that left the region: the path is not delivered, the
-	// view warns.
-	require.NoError(t, RemoveNode(ctx, db, mesh.members[5].ID))
+	// A waypoint that moved to another region: the path is not delivered,
+	// the view warns.
+	_, err = UpdateMember(ctx, db, mesh.members[5].ID, mesh.eu.ID, false, nil, now)
+	require.NoError(t, err)
 	network = nodeNetwork(t, db, proxy(1), "cn")
 	require.Equal(t, []map[string]any{{"to_peer": mesh.address(3), "via": []string{mesh.address(2), *mesh.router.Address}}}, routingPaths(t, network))
 	warned := map[string][]string{}
@@ -198,41 +207,106 @@ func TestPathDelivery(t *testing.T) {
 	require.Equal(t, []any{}, routingPaths(t, nodeNetwork(t, db, proxy(1), "cn")))
 	require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", mesh.router.ID).Update("address", *mesh.router.Address).Error)
 
-	// A removed node takes the paths it is the source of; paths that only
-	// name it stay and warn.
+	// A removed node takes every path that names it: proxy-3 is the
+	// target of one and the waypoint of another.
 	require.NoError(t, RemoveNode(ctx, db, mesh.members[3].ID))
 	var left []model.MeshPath
 	require.NoError(t, db.Order("id").Find(&left).Error)
-	require.Len(t, left, 3)
-	views := pathViews(t, db)
-	for _, view := range views {
-		if view.Source == deviceID(mesh.router) {
-			require.Equal(t, []string{WarningPathMemberMissing, WarningPathUnsupported}, view.Warnings, "its waypoint left")
-		}
-	}
-	require.NoError(t, RemoveNode(ctx, db, mesh.members[1].ID))
-	require.NoError(t, db.Order("id").Find(&left).Error)
 	require.Len(t, left, 1)
-	require.Equal(t, deviceID(mesh.router), left[0].SourceRef)
-
-	// A deleted device takes the paths it is the source of.
-	require.NoError(t, DeleteDevice(ctx, db, mesh.router.ID, now))
+	require.Equal(t, "192.168.5.0/24", left[0].Target)
+	require.NoError(t, RemoveNode(ctx, db, mesh.members[1].ID))
 	require.NoError(t, db.Find(&left).Error)
 	require.Empty(t, left)
 }
 
-func TestPathsOfADeletedTargetDevice(t *testing.T) {
+// Removing a device or a node deletes every path that names it, as source,
+// target or waypoint: one that comes back under the same identity is not
+// given the old paths. A device moving to another region keeps the paths
+// that name it as target (they warn there) and loses its own.
+func TestPathsOfARemovedMember(t *testing.T) {
 	mesh := newPathMesh(t)
 	db, ctx := mesh.db, context.Background()
 	_, err := CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: deviceID(mesh.phone), Via: []string{"node:proxy-2"}}, now)
 	require.NoError(t, err)
-	require.Len(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID), 1)
+	_, err = CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "192.168.5.0/24", Via: []string{"node:proxy-3", "node:proxy-5"}}, now)
+	require.NoError(t, err)
+	_, err = CreatePath(ctx, db, PathInput{Source: "node:proxy-6", Target: "192.168.6.0/24", Via: []string{"node:proxy-7"}}, now)
+	require.NoError(t, err)
+	require.Len(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID), 2)
+
+	count, err := MemberPaths(ctx, db, DeviceEntry(mesh.phone.ID))
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
 	require.NoError(t, DeleteDevice(ctx, db, mesh.phone.ID, now))
+	require.Len(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID), 1)
+
+	count, err = MemberPaths(ctx, db, NodeEntry("proxy-5"))
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "a waypoint")
+	require.NoError(t, RemoveNode(ctx, db, mesh.members[5].ID))
 	require.Empty(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID))
 	views := pathViews(t, db)
-	require.Len(t, views, 1)
-	require.Equal(t, []string{WarningPathMemberMissing}, views[0].Warnings)
-	require.Empty(t, views[0].TargetName)
+	require.Len(t, views, 1, "the path of proxy-6 stays")
+	require.Equal(t, "node:proxy-6", views[0].Source)
+
+	// proxy-5 joins again: no path of the old one names it.
+	_, err = AddNode(ctx, db, mesh.cn.ID, proxy(5), false, now)
+	require.NoError(t, err)
+	require.Empty(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID))
+}
+
+// A host group created after a path may not take a segment holding the
+// path's subnet target with a longer prefix (the kernel would refuse the
+// source's whole configuration): an explicit segment is refused, an
+// automatic one skips it. A group that holds a target anyway (written
+// before this check) keeps the path from being delivered, with a warning.
+func TestPathTargetAndHostGroups(t *testing.T) {
+	mesh := newPathMesh(t)
+	db, ctx := mesh.db, context.Background()
+	_, err := CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "10.127.0.0/26", Via: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	_, err = CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "10.127.3.0/26", Via: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+	_, err = CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "10.127.4.0/24", Via: []string{"node:proxy-2"}}, now)
+	require.NoError(t, err)
+
+	_, err = CreateHostGroup(ctx, db, HostGroupInput{Name: "vms", Gateway: "proxy-1", Segment: "10.127.3.0/24"}, now)
+	require.ErrorIs(t, err, ErrConflict, "it holds the path's target")
+	group, err := CreateHostGroup(ctx, db, HostGroupInput{Name: "vms", Gateway: "proxy-1"}, now)
+	require.NoError(t, err)
+	require.Equal(t, "10.127.1.0/24", group.Segment, "10.127.0.0/24 holds a target")
+	group, err = CreateHostGroup(ctx, db, HostGroupInput{Name: "lab", Gateway: "proxy-1", Segment: "10.127.4.0/24"}, now)
+	require.NoError(t, err, "the whole segment as target is fine")
+	require.Len(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID), 3)
+
+	// A group written past the check.
+	require.NoError(t, db.Create(&model.MeshHostGroup{Name: "old", Segment: "10.127.3.0/24", GatewayRef: "proxy-1", CreatedAt: now, UpdatedAt: now}).Error)
+	delivered := deliveredOf(t, db, "node:proxy-1", mesh.cn.ID)
+	require.Len(t, delivered, 2)
+	for _, entry := range delivered {
+		require.NotEqual(t, "10.127.3.0/26", entry["to_subnet"])
+	}
+	for _, view := range pathViews(t, db) {
+		if view.Target == "10.127.3.0/26" {
+			require.Equal(t, []string{WarningPathTargetInHostGroup}, view.Warnings)
+		} else {
+			require.Empty(t, view.Warnings, view.Target)
+		}
+	}
+	_, err = CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "10.127.3.128/25", Via: []string{"node:proxy-2"}}, now)
+	require.ErrorIs(t, err, ErrInvalid)
+}
+
+// A waypoint without a static key in the admission list is flagged.
+func TestPathWaypointNotAdmitted(t *testing.T) {
+	mesh := newPathMesh(t)
+	db, ctx := mesh.db, context.Background()
+	_, err := CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: "node:proxy-3", Via: []string{"node:proxy-2", deviceID(mesh.router)}}, now)
+	require.NoError(t, err)
+	require.Empty(t, pathViews(t, db)[0].Warnings)
+	require.NoError(t, db.Model(&model.MeshDevice{}).Where("id = ?", mesh.router.ID).Update("static_key", gorm.Expr("NULL")).Error)
+	require.Equal(t, []string{WarningPathWaypointNotAdmitted}, pathViews(t, db)[0].Warnings)
+	require.Len(t, deliveredOf(t, db, "node:proxy-1", mesh.cn.ID), 1, "still delivered: the kernel falls back until it is admitted")
 }
 
 func deliveredOf(t *testing.T, db *gorm.DB, source string, regionID uint) []map[string]any {

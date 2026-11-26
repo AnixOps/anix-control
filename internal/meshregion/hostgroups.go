@@ -89,6 +89,20 @@ func pickSegment(tx *gorm.DB, settings Settings, raw string) (netip.Prefix, erro
 	if err != nil {
 		return netip.Prefix{}, err
 	}
+	// A custom path's subnet target may not end up inside a segment with a
+	// shorter prefix: the kernel would refuse the source's configuration.
+	targets, err := subnetTargets(tx)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	holdsTarget := func(candidate netip.Prefix) (netip.Prefix, bool) {
+		for _, target := range targets {
+			if target.Overlaps(candidate) && target.Bits() > candidate.Bits() {
+				return target, true
+			}
+		}
+		return netip.Prefix{}, false
+	}
 	free := func(candidate netip.Prefix) bool {
 		for _, raw := range segments {
 			if other, err := netip.ParsePrefix(raw); err == nil && other.Overlaps(candidate) {
@@ -100,7 +114,8 @@ func pickSegment(tx *gorm.DB, settings Settings, raw string) (netip.Prefix, erro
 				return false
 			}
 		}
-		return true
+		_, taken := holdsTarget(candidate)
+		return !taken
 	}
 	if strings.TrimSpace(raw) != "" {
 		segment, err := parseRange("segment", raw)
@@ -109,6 +124,9 @@ func pickSegment(tx *gorm.DB, settings Settings, raw string) (netip.Prefix, erro
 		}
 		if segment.Bits() != settings.HostGroupPrefix || !supernet.Contains(segment.Addr()) {
 			return segment, invalid("segment: a /%d inside the host group supernet %s", settings.HostGroupPrefix, supernet)
+		}
+		if target, taken := holdsTarget(segment); taken {
+			return segment, conflict("segment: %s holds %s, the subnet target of a custom path; change or delete the path first", segment, target)
 		}
 		if !free(segment) {
 			return segment, conflict("segment: %s overlaps another host group", segment)
@@ -144,6 +162,11 @@ func CreateHostGroup(ctx context.Context, db *gorm.DB, input HostGroupInput, now
 	}
 	var row model.MeshHostGroup
 	err = change(ctx, db, func(tx *gorm.DB) error {
+		// Paths are saved under the same lock: a path's subnet target and a
+		// group's segment are checked against each other.
+		if err := lockAddressPlan(tx); err != nil {
+			return err
+		}
 		home, standby, err := checkGateways(tx, input.Gateway, input.Standby)
 		if err != nil {
 			return err

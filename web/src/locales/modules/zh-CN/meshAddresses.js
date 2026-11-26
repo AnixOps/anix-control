@@ -193,7 +193,7 @@ export default {
       targetHelp: '同一地区的成员，或私有地址范围内的子网。',
       targetSubnet: '子网…',
       subnet: '子网',
-      subnetHelp: 'CIDR 格式，如 192.168.50.0/24；不得与本地区网段重叠，也不得位于宿主组网段之内（可填写整个宿主组网段）。',
+      subnetHelp: 'CIDR 格式，如 192.168.50.0/24；不得与本地区网段重叠，也不得位于宿主组网段之内（可填写整个宿主组网段）。目前只支持 IPv4。',
       via: '途经节点',
       viaHelp: '每行一项，按经过的先后顺序，1 至 6 项，须为完整节点。可选：{options}',
       viaEmpty: '该地区暂无可作为途经节点的完整节点',
@@ -216,7 +216,9 @@ export default {
       },
       warnings: {
         path_member_missing: '成员缺失，未下发',
-        path_unsupported: '内核不支持'
+        path_unsupported: '内核不支持',
+        path_target_in_host_group: '目标位于宿主组网段内，未下发',
+        path_waypoint_not_admitted: '途经节点尚未准入'
       },
       addTitle: '新建自定义路径',
       editTitle: '编辑 {name} 的路径',

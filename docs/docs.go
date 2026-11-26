@@ -11461,7 +11461,7 @@ const docTemplate = `{
                     }
                 },
                 "warnings": {
-                    "description": "Warnings: WarningPathMemberMissing, WarningPathUnsupported.",
+                    "description": "Warnings: WarningPathMemberMissing, WarningPathUnsupported,\nWarningPathTargetInHostGroup, WarningPathWaypointNotAdmitted.",
                     "type": "array",
                     "items": {
                         "type": "string"

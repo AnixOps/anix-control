@@ -320,10 +320,26 @@ func (h *MeshHandler) RemoveMember(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// The custom paths that name the node go with it; the audit counts
+	// them.
+	paths := 0
+	var members []model.MeshMember
+	if err := db.WithContext(c.Request.Context()).Where("id = ?", id).Limit(1).Find(&members).Error; err != nil {
+		meshError(c, err)
+		return
+	}
+	if len(members) > 0 {
+		count, err := meshregion.MemberPaths(c.Request.Context(), db, meshregion.NodeEntry(members[0].NodeRef))
+		if err != nil {
+			meshError(c, err)
+			return
+		}
+		paths = count
+	}
 	if err := meshregion.RemoveNode(c.Request.Context(), db, id); err != nil {
 		meshError(c, err)
 		return
 	}
-	h.audit(c, db, "mesh_member_remove", id, fmt.Sprintf(`{"member_id":%d}`, id))
+	h.audit(c, db, "mesh_member_remove", id, fmt.Sprintf(`{"member_id":%d,"paths_deleted":%d}`, id, paths))
 	c.Status(http.StatusNoContent)
 }

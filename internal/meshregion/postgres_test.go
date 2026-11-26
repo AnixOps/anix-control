@@ -416,3 +416,37 @@ func TestPostgresRenameTogether(t *testing.T) {
 		requireDistinctAddresses(t, db)
 	}
 }
+
+// A path to a subnet and a host group over it, at the same time: exactly
+// one of the two is accepted (both take the address plan lock), so no
+// group ever holds a path's target with a shorter prefix.
+func TestPostgresPathAndHostGroupTogether(t *testing.T) {
+	db := openPostgres(t)
+	ctx := context.Background()
+	cn, err := CreateRegion(ctx, db, RegionInput{Code: "cn", Name: "cn", CIDR: "10.150.0.0/24", Enabled: true}, now)
+	require.NoError(t, err)
+	for _, id := range []uint32{1, 2} {
+		_, err := AddNode(ctx, db, cn.ID, proxy(id), false, now)
+		require.NoError(t, err)
+	}
+	for round := 0; round < 5; round++ {
+		segment := fmt.Sprintf("10.127.%d.0/24", round)
+		target := fmt.Sprintf("10.127.%d.0/26", round)
+		errs := together(func() error {
+			_, err := CreatePath(ctx, db, PathInput{Source: "node:proxy-1", Target: target, Via: []string{"node:proxy-2"}}, now)
+			return err
+		}, func() error {
+			_, err := CreateHostGroup(ctx, db, HostGroupInput{Name: fmt.Sprintf("g%d", round), Gateway: "proxy-1", Segment: segment}, now)
+			return err
+		})
+		accepted := 0
+		for _, err := range errs {
+			if err == nil {
+				accepted++
+			} else if !errors.Is(err, ErrInvalid) {
+				require.ErrorIs(t, err, ErrConflict)
+			}
+		}
+		require.Equal(t, 1, accepted, "round %d: %v", round, errs)
+	}
+}
