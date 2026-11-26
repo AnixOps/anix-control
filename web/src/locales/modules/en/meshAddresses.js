@@ -197,6 +197,7 @@ export default {
       deleteMessage: 'The name is no longer published.'
     },
     names: {
+      suffixInvalid: 'The domain suffix does not meet the rules, so these names are not delivered to nodes. Save a suffix under internal in Settings.',
       title: 'Intranet names',
       description: 'Names take the form name.region-code.{suffix}, in the member\'s region. Duplicate names are all listed and marked.',
       empty: 'No intranet names',

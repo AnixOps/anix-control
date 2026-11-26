@@ -79,12 +79,13 @@ export function boundaryCount(region) {
 
 // nameSuffixProblem applies the rule the panel and the kernel enforce on
 // the intranet domain suffix (spec section 15.9.2, item 1), compared
-// without surrounding spaces and one final dot, in lowercase: DNS labels
+// without surrounding spaces and one final dot, with ASCII letters in
+// lowercase (no Unicode case mapping, as on the server): DNS labels
 // of 1 to 63 lowercase letters, digits and inner hyphens, at most 172
 // characters, under internal with at least two labels. It answers
 // 'labels', 'length' or 'internal', or '' when the suffix is valid.
 export function nameSuffixProblem(raw) {
-  const suffix = String(raw ?? '').trim().replace(/\.$/, '').toLowerCase()
+  const suffix = String(raw ?? '').trim().replace(/\.$/, '').replace(/[A-Z]/g, letter => letter.toLowerCase())
   if (suffix.length > 172) return 'length'
   const labels = suffix.split('.')
   if (!labels.every(label => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return 'labels'

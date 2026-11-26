@@ -63,9 +63,17 @@ func withWarnings(settings Settings) Settings {
 const maxSuffix = 253 - 63 - 1 - 16 - 1
 
 // normalizeSuffix reads a suffix as the kernel compares it: without
-// surrounding spaces and one final dot, in lowercase.
+// surrounding spaces and one final dot, with ASCII letters in lowercase.
+// Other characters are left as they are (and then refused), so no
+// Unicode case mapping turns them into ASCII: U+0130 or the Kelvin sign
+// does not become i or k, as in the client and the settings form.
 func normalizeSuffix(raw string) string {
-	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	return strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, strings.TrimSuffix(strings.TrimSpace(raw), "."))
 }
 
 // checkSuffix applies the rule of spec section 15.9.2 item 1 to a

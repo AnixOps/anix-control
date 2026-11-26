@@ -57,9 +57,12 @@ type UnnamedNode struct {
 
 // NameList is the intranet name list.
 type NameList struct {
-	Suffix  string        `json:"suffix"`
-	Entries []NameEntry   `json:"entries"`
-	Unnamed []UnnamedNode `json:"unnamed"`
+	Suffix string `json:"suffix"`
+	// SuffixInvalid: the saved suffix breaks the rule of checkSuffix
+	// (WarningNameSuffixInvalid), so no name is delivered to the nodes.
+	SuffixInvalid bool          `json:"suffix_invalid"`
+	Entries       []NameEntry   `json:"entries"`
+	Unnamed       []UnnamedNode `json:"unnamed"`
 }
 
 func checkDeviceName(tx *gorm.DB, input DeviceNameInput) (model.MeshDeviceName, error) {
@@ -190,7 +193,7 @@ func Names(ctx context.Context, db *gorm.DB) (NameList, error) {
 	if err != nil {
 		return NameList{}, err
 	}
-	list := NameList{Suffix: settings.NameSuffix, Entries: []NameEntry{}, Unnamed: []UnnamedNode{}}
+	list := NameList{Suffix: settings.NameSuffix, SuffixInvalid: checkSuffix(settings.NameSuffix) != nil, Entries: []NameEntry{}, Unnamed: []UnnamedNode{}}
 	add := func(name string, region uint, address, source, ref string) {
 		code := codes[region]
 		list.Entries = append(list.Entries, NameEntry{FQDN: fqdn(name, code, settings.NameSuffix), Name: name, RegionCode: code, Address: address, Source: source, Ref: ref})

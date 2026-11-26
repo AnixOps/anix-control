@@ -61,7 +61,7 @@ func dnsSection(db *gorm.DB) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if checkSuffix(list.Suffix) != nil {
+	if list.SuffixInvalid {
 		return map[string]any{"enabled": false, "names": []map[string]any{}}, nil
 	}
 	names := []map[string]any{}
@@ -106,9 +106,11 @@ func resolverAddresses(db *gorm.DB, regions []model.MeshRegion) (map[uint]string
 }
 
 // regionDNS answers the section "dns" of one network: dns with the
-// network's resolver address, when it has one to deliver.
+// network's resolver address, when it has one to deliver and dns is
+// enabled. A disabled section (a suffix breaking the rule) carries none,
+// so no node intercepts queries it would not answer.
 func regionDNS(dns map[string]any, resolver string) map[string]any {
-	if resolver == "" {
+	if resolver == "" || dns["enabled"] != true {
 		return dns
 	}
 	section := make(map[string]any, len(dns)+1)

@@ -11216,6 +11216,10 @@ const docTemplate = `{
                 "suffix": {
                     "type": "string"
                 },
+                "suffix_invalid": {
+                    "description": "SuffixInvalid: the saved suffix breaks the rule of checkSuffix\n(WarningNameSuffixInvalid), so no name is delivered to the nodes.",
+                    "type": "boolean"
+                },
                 "unnamed": {
                     "type": "array",
                     "items": {

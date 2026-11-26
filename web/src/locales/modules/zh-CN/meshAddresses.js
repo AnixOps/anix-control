@@ -196,6 +196,7 @@ export default {
       deleteMessage: '该名称不再发布。'
     },
     names: {
+      suffixInvalid: '域名后缀不符合规则，以下名称暂未下发到节点。请在设置中保存 internal 之下的后缀。',
       title: '内网域名',
       description: '名称格式为 名称.地区代码.{suffix}，与所在地区一致。重名的条目全部列出并标记。',
       empty: '暂无内网域名',

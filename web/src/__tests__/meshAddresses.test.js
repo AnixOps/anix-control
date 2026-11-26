@@ -117,6 +117,7 @@ describe('mesh addresses', () => {
     })
     const wrapper = mount(MeshNames, { attachTo: document.body })
     await flushPromises()
+    expect(wrapper.find('[data-testid="mesh-names-suffix-invalid"]').exists()).toBe(false)
     const text = wrapper.get('[data-testid="mesh-names"]').text()
     expect(text).toContain('重名')
     expect(text).toContain('局域网设备')
@@ -171,14 +172,29 @@ describe('mesh addresses', () => {
     wrapper.unmount()
   })
 
+  it('marks the names as not delivered while the saved suffix breaks the rule', async () => {
+    api.getKernelMeshNames.mockResolvedValue({
+      suffix: 'mesh.home.arpa',
+      suffix_invalid: true,
+      entries: [{ fqdn: 'db.cn.mesh.home.arpa', address: '10.150.0.3', source: 'node', ref: 'proxy-1', duplicate: false }],
+      unnamed: []
+    })
+    const wrapper = mount(MeshNames, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="mesh-names-suffix-invalid"]').text()).toContain('暂未下发到节点')
+    wrapper.unmount()
+  })
+
   it('checks the domain suffix as the kernel does', () => {
-    for (const good of ['mesh.internal', 'Mesh.Internal.', ' lab.mesh.internal ', `${'a'.repeat(63)}.internal`]) {
+    for (const good of ['mesh.internal', 'Mesh.Internal.', 'MESH.INTERNAL', ' lab.mesh.internal ', 'xn--fiqs8s.internal', `${'a'.repeat(63)}.internal`]) {
       expect(nameSuffixProblem(good), good).toBe('')
     }
-    for (const bad of ['internal', 'local', 'com', 'home.arpa', 'mesh.home.arpa', 'mesh.local', 'corp.example', 'internal.mesh']) {
+    for (const bad of ['internal', 'local', 'com', 'home.arpa', 'mesh.home.arpa', 'mesh.local', 'corp.example', 'internal.mesh', 'xinternal', 'mesh.xinternal']) {
       expect(nameSuffixProblem(bad), bad).toBe('internal')
     }
-    for (const bad of ['', '.mesh.internal', 'mesh..internal', '-mesh.internal', 'mesh_lab.internal', `${'a'.repeat(64)}.internal`]) {
+    // Only ASCII letters are lowercased, as on the server: U+0130 and the
+    // Kelvin sign stay as they are and are refused.
+    for (const bad of ['', '.mesh.internal', 'mesh..internal', '-mesh.internal', 'mesh_lab.internal', `${'a'.repeat(64)}.internal`, 'MESH.\u0130NTERNAL', '\u212Aube.internal', '中国.internal']) {
       expect(nameSuffixProblem(bad), bad).toBe('labels')
     }
     expect(nameSuffixProblem(`${`${'a'.repeat(63)}.`.repeat(2)}${'a'.repeat(36)}.internal`)).toBe('length')

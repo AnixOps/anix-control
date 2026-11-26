@@ -1,5 +1,6 @@
 <template>
   <UiSection :title="t('meshAddr.names.title')" :description="t('meshAddr.names.description', { suffix: list?.suffix || '' })" heading-tag="h2" data-testid="mesh-names">
+    <p v-if="list?.suffix_invalid" class="mesh-error" role="alert" data-testid="mesh-names-suffix-invalid">{{ t('meshAddr.names.suffixInvalid') }}</p>
     <UiDataTable
       :columns="columns"
       :rows="rows"
