@@ -108,6 +108,7 @@
       </template>
       <MeshHostGroups v-else-if="section === 'hostGroups'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshBridges v-else-if="section === 'bridges'" :regions="regions" :members="members" @changed="refreshAll" />
+      <MeshPaths v-else-if="section === 'paths'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshNames v-else-if="section === 'names'" />
       <MeshChanges v-else-if="section === 'changes'" :regions="regions" :members="members" @changed="refreshAll" />
       <MeshSettings v-else-if="section === 'settings'" :settings="meshSummary?.settings || null" @changed="refreshAll" />
@@ -133,6 +134,7 @@ import MeshBridges from '@/components/forward/mesh/MeshBridges.vue'
 import MeshChanges from '@/components/forward/mesh/MeshChanges.vue'
 import MeshDevices from '@/components/forward/mesh/MeshDevices.vue'
 import MeshEnrollments from '@/components/forward/mesh/MeshEnrollments.vue'
+import MeshPaths from '@/components/forward/mesh/MeshPaths.vue'
 import MeshHostGroups from '@/components/forward/mesh/MeshHostGroups.vue'
 import MeshNames from '@/components/forward/mesh/MeshNames.vue'
 import MeshSettings from '@/components/forward/mesh/MeshSettings.vue'
@@ -174,10 +176,10 @@ const { loading, secondsAgo, refresh } = usePolling(async () => {
 const members = computed(() => memberRows(regions.value))
 
 // The sections of the page: the regions and nodes, then the devices, host
-// groups, external network bridges, intranet names, region changes and
+// groups, external network bridges, custom paths, intranet names, region changes and
 // settings, with the summary (settings, device pools, pending changes) they
 // share.
-const SECTIONS = ['regions', 'devices', 'hostGroups', 'bridges', 'names', 'changes', 'settings']
+const SECTIONS = ['regions', 'devices', 'hostGroups', 'bridges', 'paths', 'names', 'changes', 'settings']
 const section = ref('regions')
 const meshSummary = ref(null)
 const sectionOptions = computed(() => SECTIONS.map(value => ({

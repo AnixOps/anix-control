@@ -7,6 +7,7 @@ export default {
       devices: '设备',
       hostGroups: '宿主组',
       bridges: '外部网络桥接',
+      paths: '自定义路径',
       names: '内网域名',
       changes: '地区变更',
       changesPending: '地区变更（{n}）',
@@ -179,6 +180,49 @@ export default {
       edit: '编辑…',
       deleteTitle: '删除 {name} 的桥接',
       deleteMessage: '节点不再桥接外部网络。名单中的地址在节点确认前不分配给其他成员。'
+    },
+    paths: {
+      title: '自定义路径',
+      description: '为地区内的某个成员指定到另一成员或子网的路径，依次经过所列的途经节点。',
+      add: '新建路径',
+      empty: '暂无自定义路径',
+      loadFailed: '无法加载自定义路径',
+      source: '起点',
+      sourceHelp: '安装 Agent 的节点，或完整节点设备。',
+      target: '目标',
+      targetHelp: '同一地区的成员，或私有地址范围内的子网。',
+      targetSubnet: '子网…',
+      subnet: '子网',
+      subnetHelp: 'CIDR 格式，如 192.168.50.0/24；不得与本地区网段重叠，也不得位于宿主组网段之内（可填写整个宿主组网段）。',
+      via: '途经节点',
+      viaHelp: '每行一项，按经过的先后顺序，1 至 6 项，须为完整节点。可选：{options}',
+      viaEmpty: '该地区暂无可作为途经节点的完整节点',
+      state: '状态',
+      noReport: '尚未上报',
+      unreachable: '无法连接：{name}',
+      states: {
+        active: '按自定义路径',
+        first_hop_only: '仅保证首段',
+        fallback: '已回落',
+        pending: '检测中'
+      },
+      reasons: {
+        unreachable: '途经节点无法连接',
+        unsupported: '途经节点不支持自定义路径',
+        not_relay: '途经节点未开启中转',
+        hop_limit: '途经节点数超出限制',
+        no_echo: '途经节点未回应探测',
+        pending_timeout: '检测超时'
+      },
+      warnings: {
+        path_member_missing: '成员缺失，未下发',
+        path_unsupported: '内核不支持'
+      },
+      addTitle: '新建自定义路径',
+      editTitle: '编辑 {name} 的路径',
+      edit: '编辑…',
+      deleteTitle: '删除 {name} 的路径',
+      deleteMessage: '该路径从各节点的配置中移除，流量恢复为默认路由。'
     },
     deviceNames: {
       title: '设备命名',

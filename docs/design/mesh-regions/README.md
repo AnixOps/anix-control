@@ -69,3 +69,20 @@
 | 待桥接确认 | 地址或地址段从某桥接节点的名单中移出（成员移出、删除、撤销、迁移、地址回收，宿主组删除，名单修改，删除桥接）后记为待确认（`v5_mesh_bridge_hold`），不再分配给节点、设备、完整节点或宿主组，直到该节点上报的已生效名单摘要（`mesh.status` 的 `networks[].externalBridge.allowDigest`，算法见接口约定第 3 节）等于面板对当前名单算出的摘要，且生效时间 `appliedAt` 晚于移出时刻。桥接节点离线期间一直保留，桥接列表标记 `bridge_unconfirmed`（「未确认」）并列出这些地址。设备地址池已满且唯一可回收的闲置地址在名单中时，先从原设备收回该地址，本次请求回 `pool_full`，桥接节点确认后才分配；每个地区同时只收回一个。所有组网变更在 PostgreSQL 上先取同一个咨询锁，名单移出与地址分配不会交错。 |
 
 接口：`GET/POST /api/v4/kernel/mesh/bridges`、`PUT/DELETE /api/v4/kernel/mesh/bridges/{id}`（`{"node","interface","routes":[…],"allow":[…]}`，记入操作日志 `mesh_bridge_create`、`mesh_bridge_update`、`mesh_bridge_delete`）。
+
+## 自定义路径（迁移 0054，内核能力 `mesh_paths`）
+
+管理员为地区内的某个成员（起点）指定到另一成员或某个子网（目标）的路径，依次经过 1–6 个途经节点。面板按成员身份保存，下发时再解析为地址，写入起点所在网络的 `routing.paths`（接口约定第 2 节）。
+
+| 项 | 规则 |
+| --- | --- |
+| 保存 | 表 `v5_mesh_path`：起点 `source_ref`、目标类型 `target_kind`（`peer` 或 `subnet`）、目标 `target`、途经节点 `via`（逗号分隔）。成员写作 `node:<节点>` 或 `device:<设备编号>`，不保存地址；同一起点对同一目标至多一条（唯一索引，重复回 409）。 |
+| 起点 | 组网节点（Agent），或角色为完整节点的无 Agent 设备；接入端设备不可作起点。起点的地区即其归属地区，创建后不可更改。 |
+| 目标 | 对端：同一地区的任一成员（接入端设备可作目标），不得是起点自身。子网：私有地址范围内的 IPv4 网段，不得与起点地区网段重叠，也不得落在宿主组网段内且前缀更长（宿主组成员跟随网关的路径，只能以整个宿主组网段为目标）。 |
+| 途经节点 | 1–6 项，不重复，不得是起点或对端目标；须为同一地区的组网节点或完整节点设备，接入端设备不可作途经节点。 |
+| 下发 | 对端 `{"to_peer": "<虚拟地址>", "via": [...]}`，子网 `{"to_subnet": "<CIDR>", "via": [...]}`，按编号顺序。起点、目标或任一途经节点解析不到当前地区内的地址（已离开地区、设备被删除或失去完整节点角色、没有地址）时，该条不下发，列表标记 `path_member_missing`。 |
+| 能力 | Agent 节点的路径由 Agent 按内核能力名单处理（不列出 `mesh_paths` 的内核得到空列表）。无 Agent 的完整节点设备只在最近一次上报或读取配置时的能力名单列出 `mesh_paths` 时才下发路径，否则 `paths` 为空，列表标记 `path_unsupported`。 |
+| 清理 | 删除设备、节点移出组网、节点或设备迁移到其他地区时，以其为起点的路径一并删除；仅作为目标或途经节点出现的路径保留并标记 `path_member_missing`。 |
+| 状态 | 取起点最近一次 `mesh.status` 中该地区网络的 `paths[]`，条目 `id` 为 `peer:<目标地址>` 或 `subnet:<CIDR>`。列表原样给出 `state`、`reason`、`unreachable`，界面将 `active` 显示为「按自定义路径」、`first_hop_only`「仅保证首段」、`fallback`「已回落」、`pending`「检测中」。 |
+
+接口：`GET/POST /api/v4/kernel/mesh/paths`、`PUT/DELETE /api/v4/kernel/mesh/paths/{id}`（`{"source","target","via":[…]}`，`target` 为成员或 CIDR，更新时 `source` 不得改变；记入操作日志 `mesh_path_create`、`mesh_path_update`、`mesh_path_delete`）。校验失败回 400，同一起点与目标重复回 409，未知编号回 404。

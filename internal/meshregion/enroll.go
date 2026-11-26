@@ -606,6 +606,14 @@ func DeviceConfig(ctx context.Context, db *gorm.DB, device model.MeshDevice, fea
 		"routing": map[string]any{"policy": policy, "paths": []any{}},
 		"dns":     dns,
 	}
+	// Custom paths go to a full node whose kernel lists mesh_paths only.
+	if full && capabilities[FeaturePaths] {
+		paths, err := deliveredPaths(db, deviceEntry(device.ID), region.ID)
+		if err != nil {
+			return nil, err
+		}
+		network["routing"] = map[string]any{"policy": policy, "paths": pathsValue(paths)}
+	}
 	// A field the device's kernel does not take is left out: it refuses
 	// a configuration with unknown fields (agent-contract.md section 4).
 	switch {

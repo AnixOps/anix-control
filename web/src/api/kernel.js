@@ -936,6 +936,26 @@ export async function deleteKernelMeshBridge(id) {
   return unwrap(await v4({ url: meshPath('bridges', id), method: 'delete' }))
 }
 
+// Custom paths: for one source member (node:<node>, device:<id> of a full
+// node), the path to a peer (node:<node>, device:<id>) or to a subnet
+// (CIDR) through 1 to 6 waypoints in order. The source never changes.
+export async function listKernelMeshPaths() {
+  return unwrap(await v4({ url: meshPath('paths'), method: 'get' }))
+}
+
+export async function saveKernelMeshPath(id, { source, target, via }) {
+  const data = {
+    source: source || '',
+    target: String(target || '').trim(),
+    via: (via || []).map(entry => String(entry).trim()).filter(Boolean)
+  }
+  return unwrap(await v4(id ? { url: meshPath('paths', id), method: 'put', data } : { url: meshPath('paths'), method: 'post', data }))
+}
+
+export async function deleteKernelMeshPath(id) {
+  return unwrap(await v4({ url: meshPath('paths', id), method: 'delete' }))
+}
+
 export async function listKernelMeshDeviceNames() {
   return unwrap(await v4({ url: meshPath('device-names'), method: 'get' }))
 }

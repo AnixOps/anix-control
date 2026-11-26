@@ -516,6 +516,10 @@ func moveNode(tx *gorm.DB, home model.MeshMember, regionID uint, boundary bool, 
 	if err := findRegion(tx, regionID, &region); err != nil {
 		return model.MeshMember{}, err
 	}
+	// Its paths were of the region it leaves.
+	if err := deleteSourcePaths(tx, AllowNode+":"+home.NodeRef); err != nil {
+		return model.MeshMember{}, err
+	}
 	result := tx.Where("node_ref = ? AND region_id IN ?", home.NodeRef, []uint{home.RegionID, regionID}).Delete(&model.MeshMember{})
 	if result.Error != nil {
 		return model.MeshMember{}, result.Error
@@ -543,6 +547,9 @@ func RemoveNode(ctx context.Context, db *gorm.DB, memberID uint) error {
 			return err
 		}
 		if err := rejectPendingOf(tx, home.NodeRef, "the node left the mesh", time.Now().UTC()); err != nil {
+			return err
+		}
+		if err := deleteSourcePaths(tx, AllowNode+":"+home.NodeRef); err != nil {
 			return err
 		}
 		return tx.Where("node_ref = ?", home.NodeRef).Delete(&model.MeshMember{}).Error
@@ -808,6 +815,14 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 			"routing":     map[string]any{"policy": policy, "paths": []any{}},
 			"dns":         regionDNS(dns, resolvers[region.ID]),
 			"host_groups": groups,
+		}
+		// Custom paths belong to the node's home region (paths.go).
+		if member.Home {
+			paths, err := deliveredPaths(db, AllowNode+":"+node.String(), region.ID)
+			if err != nil {
+				return nil, err
+			}
+			network["routing"] = map[string]any{"policy": policy, "paths": pathsValue(paths)}
 		}
 		// An external network bridge bridges in its home region only
 		// (spec section 15.12).

@@ -6921,6 +6921,146 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/paths": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every custom path: its source member (node:\u003cnode\u003e or device:\u003cid\u003e) with name and region, the target (a member entry or a subnet) with its name, the waypoints in order with name and current address, and the state the source last reported for it (status: state, reason, unreachable as reported; null without a report). Warnings: path_member_missing (the source, the target or a waypoint does not resolve to an address in the source's region, so the path is not delivered), path_unsupported (the source is a device without an Agent whose last report does not list mesh_paths).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The mesh's custom paths",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.PathView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "source (node:\u003cnode\u003e of a node in the mesh, or device:\u003cid\u003e of a full node device; its region is the source's home region), target (a member of that region, node:\u003cnode\u003e or device:\u003cid\u003e, or a private IPv4 subnet in CIDR form outside the region's range and not a part of a host group's segment) and via (1 to 6 distinct full nodes of the region, never the source or the target). A source has at most one path per target: 409 mesh_conflict otherwise. Audited (module mesh, action mesh_path_create).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a custom path",
+                "parameters": [
+                    {
+                        "description": "source, target, via",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.PathInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshPath"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/paths/{path_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the target and the waypoints; the source never changes (400 when source differs). Audited (module mesh, action mesh_path_update).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a custom path",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "path id",
+                        "name": "path_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source (unchanged, may be left out), target, via",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.PathInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshPath"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Audited (module mesh, action mesh_path_delete).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Remove a custom path",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "path id",
+                        "name": "path_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/regions": {
             "get": {
                 "security": [
@@ -11228,6 +11368,107 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.PathInput": {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "description": "Source is the member the path starts at: node:\u003cnode ref\u003e or\ndevice:\u003cdevice id\u003e of a full node; it never changes on an update\n(it may then be left out).",
+                    "type": "string"
+                },
+                "target": {
+                    "description": "Target is a member of the source's region (node:\u003cnode ref\u003e or\ndevice:\u003cdevice id\u003e, any role) or a private IPv4 subnet in CIDR form.",
+                    "type": "string"
+                },
+                "via": {
+                    "description": "Via are the waypoints in order: 1 to 6 full nodes of the region\n(node:\u003cnode ref\u003e or device:\u003cdevice id\u003e of a full node).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "meshregion.PathMemberView": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Address is empty while the member does not resolve.",
+                    "type": "string"
+                },
+                "entry": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.PathStatus": {
+            "type": "object",
+            "properties": {
+                "reason": {},
+                "state": {
+                    "type": "string"
+                },
+                "unreachable": {}
+            }
+        },
+        "meshregion.PathView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "region_code": {
+                    "type": "string"
+                },
+                "region_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "source_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is from the source's latest mesh.status report; nil when it\nhas none for this path.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meshregion.PathStatus"
+                        }
+                    ]
+                },
+                "target": {
+                    "type": "string"
+                },
+                "target_kind": {
+                    "type": "string"
+                },
+                "target_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "via": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.PathMemberView"
+                    }
+                },
+                "warnings": {
+                    "description": "Warnings: WarningPathMemberMissing, WarningPathUnsupported.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "meshregion.Region": {
             "type": "object",
             "properties": {
@@ -11559,6 +11800,29 @@ const docTemplate = `{
                 },
                 "static_key": {
                     "description": "StaticKey is the node's static public key in this region's network\nas its Agent last reported it (0050_mesh_native_keys): 32 bytes of\nX25519 in standard base64; nil before the first report.",
+                    "type": "string"
+                }
+            }
+        },
+        "model.MeshPath": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "target_kind": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
