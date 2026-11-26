@@ -392,7 +392,10 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 		if status, ok := reports[DeviceRef(row.ID)]; ok {
 			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
 		}
-		view.FQDN = fqdn(row.Hostname, view.RegionCode, settings.NameSuffix)
+		if checkSuffix(settings.NameSuffix) == nil {
+			// None while the saved suffix breaks the rule: nodes get no names.
+			view.FQDN = fqdn(row.Hostname, view.RegionCode, settings.NameSuffix)
+		}
 		if view.Enrolled && !reportedFeatures(string(view.Status))[FeatureNativeKeys] {
 			view.Warnings = append(view.Warnings, WarningNativeKeysUnsupported)
 		}
