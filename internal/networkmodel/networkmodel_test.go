@@ -408,18 +408,18 @@ func TestSharedKeys(t *testing.T) {
 func TestPlanRejectsMultiHopCycle(t *testing.T) {
 	doc := twoHops()
 	doc.Ingresses = append(doc.Ingresses, Ingress{
-		ID: "in-back", Line: "l1", Audience: "hop", Family: "v4", Listen: Listen{Address: "0.0.0.0", Port: 20443},
+		ID: "in-back", Line: "ln-ix", Kind: "direct", Audience: "hop", Family: "v4", Listen: Endpoint{Address: "0.0.0.0", Port: 20443},
 	})
 	doc.Egresses = append(doc.Egresses, Egress{
-		ID: "eg-back", Line: "l2", Kind: "hop", Audience: "hop", Family: "v4", Source: "10.0.0.2",
+		ID: "eg-back", Line: "ln-jp", Kind: "hop", Audience: "hop", Family: "v4", Source: "203.0.113.20",
 	})
 	doc.Transports = append(doc.Transports, Transport{
-		ID: "t-back", FromEgress: "eg-back", ToIngress: "in-back", Kind: "anx_line",
+		ID: "tr-back", FromEgress: "eg-back", ToIngress: "in-back", Kind: "anx_line", Trusted: true,
 	})
-	doc.Paths[0].Segments = []string{"t1", "t-back"}
-	doc.Paths[0].Egress = "eg1"
+	doc.Paths[0].Segments = []string{"tr-jp", "tr-back"}
+	doc.Paths[0].Egress = "eg-jp"
 
-	_, err := Plan(doc, map[string]string{"t1": "01", "t-back": "02"}, nil, nil)
+	_, err := Plan(doc, map[string]string{"tr-jp": linkKey, "tr-back": linkKey}, japanKey(), nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cycle")
 }
@@ -433,13 +433,14 @@ func TestDevicePlanCacheInvalidatesOnChange(t *testing.T) {
 	p1, found, err := s.DevicePlan(ctx, "proxy-1")
 	require.NoError(t, err)
 	require.True(t, found)
+	gen1 := p1.Generation
 	// Second call hits cache and must still return an independent clone.
 	p1.DeviceRef = "mutated-by-caller"
 	p2, found, err := s.DevicePlan(ctx, "proxy-1")
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "proxy-1", p2.DeviceRef)
-	require.Equal(t, p1.Generation, p2.Generation)
+	require.Equal(t, gen1, p2.Generation)
 
 	// Replacing the model bumps generation and invalidates the cached plan.
 	doc := twoHops()
@@ -449,5 +450,5 @@ func TestDevicePlanCacheInvalidatesOnChange(t *testing.T) {
 	p3, found, err := s.DevicePlan(ctx, "proxy-1")
 	require.NoError(t, err)
 	require.True(t, found)
-	require.Greater(t, p3.Generation, p2.Generation)
+	require.Greater(t, p3.Generation, gen1)
 }
