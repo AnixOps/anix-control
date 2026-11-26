@@ -40,8 +40,11 @@ type Settings struct {
 	// for none; a region deleted since counts as none.
 	PreferredRegion string `json:"preferred_region"`
 	// PreferredRegionID is its id, 0 for none.
-	PreferredRegionID uint       `json:"preferred_region_id"`
-	UpdatedAt         *time.Time `json:"updated_at"`
+	PreferredRegionID uint `json:"preferred_region_id"`
+	// ResponderPort is the UDP port of the border nodes' probe responders
+	// (appendix D.9.3), DefaultResponderPort until saved.
+	ResponderPort int        `json:"responder_port"`
+	UpdatedAt     *time.Time `json:"updated_at"`
 	// Warnings: WarningSharedAddressSpace when the host group supernet
 	// lies in 100.64.0.0/10; WarningNameSuffixInvalid when the saved
 	// suffix breaks the rule of checkSuffix.
@@ -142,7 +145,7 @@ func isPrivate(prefix netip.Prefix) bool {
 }
 
 func defaultSettings() Settings {
-	return Settings{NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet, HostGroupPrefix: DefaultHostGroupPrefix, ReservedRanges: []string{}}
+	return Settings{NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet, HostGroupPrefix: DefaultHostGroupPrefix, ReservedRanges: []string{}, ResponderPort: DefaultResponderPort}
 }
 
 // loadSettings answers the saved settings, or the defaults.
@@ -155,7 +158,10 @@ func loadSettings(tx *gorm.DB) (Settings, error) {
 		return withWarnings(defaultSettings()), nil
 	}
 	row := rows[0]
-	settings := Settings{NameSuffix: row.NameSuffix, HostGroupSupernet: row.HostGroupSupernet, HostGroupPrefix: row.HostGroupPrefix, ReservedRanges: []string{}, UpdatedAt: &row.UpdatedAt}
+	settings := Settings{NameSuffix: row.NameSuffix, HostGroupSupernet: row.HostGroupSupernet, HostGroupPrefix: row.HostGroupPrefix, ReservedRanges: []string{}, ResponderPort: DefaultResponderPort, UpdatedAt: &row.UpdatedAt}
+	if row.ResponderPort != nil && *row.ResponderPort > 0 && *row.ResponderPort <= 65535 {
+		settings.ResponderPort = *row.ResponderPort
+	}
 	for _, raw := range strings.Split(row.ReservedRanges, ",") {
 		if raw = strings.TrimSpace(raw); raw != "" {
 			settings.ReservedRanges = append(settings.ReservedRanges, raw)
@@ -187,6 +193,10 @@ type SettingsInput struct {
 	// PreferredRegion is the code of the default preferred region, empty
 	// for none.
 	PreferredRegion string `json:"preferred_region"`
+	// ResponderPort is the UDP port of the border nodes' probe
+	// responders, 1 to 65535 other than the network port; 0 for the
+	// default.
+	ResponderPort int `json:"responder_port"`
 }
 
 // SaveSettings changes the global settings. The supernet and the segment
@@ -223,6 +233,17 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 	}
 	if len(reserved) > 32 {
 		return Settings{}, invalid("reserved_ranges: at most 32")
+	}
+	port := input.ResponderPort
+	if port == 0 {
+		port = DefaultResponderPort
+	}
+	if port < 1 || port > 65535 || port == Port {
+		return Settings{}, invalid("responder_port: 1 to 65535, not %d (the network port); 0 for %d", Port, DefaultResponderPort)
+	}
+	var savedPort *int
+	if port != DefaultResponderPort {
+		savedPort = &port
 	}
 	var answer Settings
 	err = change(ctx, db, func(tx *gorm.DB) error {
@@ -285,10 +306,10 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 				return err
 			}
 		}
-		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), PreferredRegionID: preferred, UpdatedAt: now}
+		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), PreferredRegionID: preferred, ResponderPort: savedPort, UpdatedAt: now}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"name_suffix", "host_group_supernet", "host_group_prefix", "reserved_ranges", "preferred_region_id", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"name_suffix", "host_group_supernet", "host_group_prefix", "reserved_ranges", "preferred_region_id", "responder_port", "updated_at"}),
 		}).Create(&row).Error; err != nil {
 			return err
 		}

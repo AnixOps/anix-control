@@ -38,6 +38,7 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	router.POST("/mesh/changes/:change_id/approve", handler.ApproveMeshChange)
 	router.POST("/device/enroll", handler.EnrollMeshDevice)
 	router.GET("/device/config", handler.MeshDeviceConfig)
+	router.GET("/device/directory", handler.MeshDeviceDirectory)
 	router.POST("/device/report", handler.MeshDeviceReport)
 	router.POST("/device/region-change", handler.MeshDeviceChange)
 	device := func(method, path, token, body string) *httptest.ResponseRecorder {
@@ -75,6 +76,11 @@ func TestMeshEnrollmentAPI(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, device(http.MethodPost, "/device/region-change", enrolled.DeviceToken, `{"reason":"`+strings.Repeat("x", 20<<10)+`"}`).Code)
 
 	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/config", "msd_unknown", "").Code)
+	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/directory", "msd_unknown", "").Code)
+	assert.Equal(t, http.StatusUnauthorized, device(http.MethodGet, "/device/directory", "", "").Code)
+	response = device(http.MethodGet, "/device/directory", enrolled.DeviceToken, "")
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	assert.JSONEq(t, `{"data":{"version":1,"preferred":null,"regions":[]}}`, response.Body.String())
 	response = device(http.MethodGet, "/device/config", enrolled.DeviceToken, "")
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), `"networks":[]`, "no network before the kernel names mesh_native_keys")

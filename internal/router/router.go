@@ -804,7 +804,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// Mesh devices without an Agent (internal/meshregion/enroll.go): enroll
 	// with a one-time credential, then read the networks, report the status,
 	// ask for another region and ask to advertise subnets with the device
-	// token. Rate limited like
+	// token; the region directory is read with a credential or the token. Rate limited like
 	// the other public routes; 404 while the gated feature "mesh" is off.
 	meshDevices := handler.NewMeshHandler()
 	meshDevice := r.Group("/api/v5/mesh/device")
@@ -812,6 +812,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	{
 		meshDevice.POST("/enroll", meshDevices.EnrollMeshDevice)
 		meshDevice.GET("/config", meshDevices.MeshDeviceConfig)
+		meshDevice.GET("/directory", meshDevices.MeshDeviceDirectory)
 		meshDevice.POST("/report", meshDevices.MeshDeviceReport)
 		meshDevice.POST("/region-change", meshDevices.MeshDeviceChange)
 		meshDevice.POST("/subnet-request", meshDevices.MeshDeviceSubnetRequest)

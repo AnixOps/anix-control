@@ -185,6 +185,28 @@ func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
 	kernelData(c, http.StatusCreated, enrolled)
 }
 
+// MeshDeviceDirectory godoc
+// @Summary The mesh region directory
+// @Description The directory a device measures to choose or change its region (appendix D.2): version 1, preferred (the code of the credential's preferred region, else the mesh settings' default, else null; for a device token the default), and the enabled regions in order with code, subnet and borders (name, probe: the border node's address literal and the responder port, key: the responder's X25519 public key in base64). Only border nodes whose latest status reports a responder key are listed, and a region with none is left out. Authorization: Bearer an enrollment credential (mse_), which is not used up by this read (it counts while unexpired, not withdrawn and unused or used within 10 minutes), or a device token (msd_). 401 otherwise. Rate limited; 404 feature_disabled while the mesh is not available in this build.
+// @Tags Mesh
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} meshregion.Directory
+// @Router /api/v5/mesh/device/directory [get]
+func (h *MeshHandler) MeshDeviceDirectory(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	token, _ := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	directory, err := meshregion.DeviceDirectory(c.Request.Context(), db, token, h.now())
+	if err != nil {
+		meshDeviceError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, directory)
+}
+
 // maxFeaturesQuery bounds the features a device names on a configuration
 // read.
 const maxFeaturesQuery = 4 << 10

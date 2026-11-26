@@ -76,8 +76,11 @@ type MeshSettings struct {
 	// PreferredRegionID is the panel-wide default preferred region of the
 	// automatic region choice (0055_mesh_region_assignment): its latency
 	// counts 0.8 times. NULL: none.
-	PreferredRegionID *uint     `json:"-"`
-	UpdatedAt         time.Time `gorm:"not null" json:"updated_at"`
+	PreferredRegionID *uint `json:"-"`
+	// ResponderPort is the UDP port of the border nodes' probe responders
+	// (0056_mesh_responder_port); NULL: the default.
+	ResponderPort *int      `json:"-"`
+	UpdatedAt     time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshSettings) TableName() string { return "v5_mesh_settings" }

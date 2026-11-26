@@ -214,4 +214,7 @@
 //   - 0055_mesh_preferred_region: the preferred region of the automatic
 //     region choice (v5_mesh_enrollment.preferred_region_id,
 //     v5_mesh_settings.preferred_region_id, internal/meshregion).
+//   - 0056_mesh_responder_port: the UDP port of the border nodes' region
+//     probe responders (v5_mesh_settings.responder_port,
+//     internal/meshregion).
 package migrations
