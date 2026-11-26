@@ -114,7 +114,7 @@ func TestProbeKeysAndAddresses(t *testing.T) {
 func TestDirectoryAuthentication(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
-	cn := region(t, db, "cn", "10.150.0.0/16")
+	region(t, db, "cn", "10.150.0.0/16")
 	eu := region(t, db, "eu", "10.152.0.0/16")
 	_, err := AddNode(ctx, db, eu.ID, proxy(1), true, now)
 	require.NoError(t, err)
