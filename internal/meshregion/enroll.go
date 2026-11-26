@@ -791,6 +791,11 @@ func RecordDeviceStatus(ctx context.Context, db *gorm.DB, device model.MeshDevic
 	if err := checkLatencies(shape.Networks); err != nil {
 		return err
 	}
+	// The kernel's region probe, whose suggestion the administrator sees
+	// (suggestion.go); other top-level fields are kept as they come.
+	if _, err := regionProbeSuggestion(payload); err != nil {
+		return err
+	}
 	row := model.MeshStatus{NodeRef: DeviceRef(device.ID), Payload: string(payload), ObservedAt: now, ReceivedAt: now}
 	if err := db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "node_ref"}},

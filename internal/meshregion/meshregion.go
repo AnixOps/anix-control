@@ -134,6 +134,9 @@ type MemberView struct {
 	Status           json.RawMessage `json:"status" swaggertype:"object"`
 	StatusObservedAt *time.Time      `json:"status_observed_at"`
 	StatusReceivedAt *time.Time      `json:"status_received_at"`
+	// RegionSuggestion is the move the node's kernel suggests in its last
+	// status (region_probe.suggestion, appendix D.6): null for none.
+	RegionSuggestion *RegionSuggestion `json:"region_suggestion"`
 	// ExternalBridge: the node is an external network bridge of its home
 	// region (R36).
 	ExternalBridge bool `json:"external_bridge"`
@@ -222,6 +225,7 @@ func List(ctx context.Context, db *gorm.DB) ([]Region, error) {
 		}
 		if status, ok := byNode[member.NodeRef]; ok {
 			view.Status = json.RawMessage(status.Payload)
+			view.RegionSuggestion = suggestionOf(status.Payload)
 			view.StatusObservedAt, view.StatusReceivedAt = &status.ObservedAt, &status.ReceivedAt
 		}
 		answer[i].Members = append(answer[i].Members, view)
