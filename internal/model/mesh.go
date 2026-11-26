@@ -72,8 +72,12 @@ type MeshSettings struct {
 	HostGroupPrefix int `gorm:"not null" json:"host_group_prefix"`
 	// ReservedRanges are IPv4 ranges no region or host group may overlap,
 	// comma-separated.
-	ReservedRanges string    `gorm:"type:text;not null" json:"-"`
-	UpdatedAt      time.Time `gorm:"not null" json:"updated_at"`
+	ReservedRanges string `gorm:"type:text;not null" json:"-"`
+	// PreferredRegionID is the panel-wide default preferred region of the
+	// automatic region choice (0055_mesh_region_assignment): its latency
+	// counts 0.8 times. NULL: none.
+	PreferredRegionID *uint     `json:"-"`
+	UpdatedAt         time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshSettings) TableName() string { return "v5_mesh_settings" }
@@ -176,14 +180,18 @@ type MeshEnrollment struct {
 	ID uint `gorm:"primaryKey" json:"id"`
 	// RegionID is the device's region; 0 lets the latencies the device
 	// reports choose among the enabled regions.
-	RegionID  uint       `gorm:"not null" json:"region_id"`
-	Hostname  string     `gorm:"size:63;not null" json:"hostname"`
-	TokenHash string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
-	ExpiresAt time.Time  `gorm:"not null" json:"expires_at"`
-	UsedAt    *time.Time `json:"used_at"`
-	DeviceID  *uint      `json:"device_id"`
-	CreatedBy *uint      `json:"created_by"`
-	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
+	RegionID uint `gorm:"not null" json:"region_id"`
+	// PreferredRegionID is the region whose latency counts 0.8 times when
+	// the latencies choose the region (0055_mesh_region_assignment); NULL:
+	// the settings' default.
+	PreferredRegionID *uint      `json:"preferred_region_id"`
+	Hostname          string     `gorm:"size:63;not null" json:"hostname"`
+	TokenHash         string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	ExpiresAt         time.Time  `gorm:"not null" json:"expires_at"`
+	UsedAt            *time.Time `json:"used_at"`
+	DeviceID          *uint      `json:"device_id"`
+	CreatedBy         *uint      `json:"created_by"`
+	CreatedAt         time.Time  `gorm:"not null" json:"created_at"`
 }
 
 func (MeshEnrollment) TableName() string { return "v5_mesh_enrollment" }

@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -71,14 +73,19 @@ type EnrollmentInput struct {
 	// Address is a full node's fixed address of the region's server
 	// segment; empty: the lowest free one when the device enrolls.
 	Address string `json:"address"`
+	// PreferredRegion is the code of the region whose latency counts 0.8
+	// times when the device's latencies choose the region (D.5); empty:
+	// the settings' default. Only for a credential without a region.
+	PreferredRegion string `json:"preferred_region"`
 }
 
-// EnrollmentView is a credential with the role of the device it enrolls
-// and a full node's fixed address.
+// EnrollmentView is a credential with the role of the device it enrolls,
+// a full node's fixed address and the code of its preferred region.
 type EnrollmentView struct {
 	model.MeshEnrollment
-	Role    string `json:"role"`
-	Address string `json:"address"`
+	Role            string `json:"role"`
+	Address         string `json:"address"`
+	PreferredRegion string `json:"preferred_region"`
 }
 
 // IssuedEnrollment is a credential just issued with its token, which no
@@ -136,11 +143,25 @@ func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, c
 	if role == RoleAccess && input.Address != "" {
 		return IssuedEnrollment{}, invalid("address: only a full node has a fixed address")
 	}
+	preferred := strings.TrimSpace(input.PreferredRegion)
+	if preferred != "" && (input.RegionID != 0 || target != nil) {
+		return IssuedEnrollment{}, invalid("preferred_region: only for a credential without a region")
+	}
 	token := enrollmentPrefix + rand.Text()
 	row := model.MeshEnrollment{RegionID: input.RegionID, Hostname: hostname, TokenHash: hashToken(token), DeviceID: target, ExpiresAt: now.Add(ttl), CreatedBy: createdBy, CreatedAt: now}
 	address := input.Address
 	// No node's configuration changes: a plain transaction, no push.
 	err = db.Transaction(func(tx *gorm.DB) error {
+		if preferred != "" {
+			id, err := regionIDOfCode(tx, preferred)
+			if errors.Is(err, ErrNotFound) {
+				return invalid("preferred_region: unknown region code %q", preferred)
+			}
+			if err != nil {
+				return err
+			}
+			row.PreferredRegionID = &id
+		}
 		if input.RegionID != 0 {
 			var region model.MeshRegion
 			if err := findRegion(tx, input.RegionID, &region); err != nil {
@@ -166,7 +187,7 @@ func CreateEnrollment(ctx context.Context, db *gorm.DB, input EnrollmentInput, c
 	if err != nil {
 		return IssuedEnrollment{}, err
 	}
-	return IssuedEnrollment{EnrollmentView: EnrollmentView{MeshEnrollment: row, Role: role, Address: address}, Token: token}, nil
+	return IssuedEnrollment{EnrollmentView: EnrollmentView{MeshEnrollment: row, Role: role, Address: address, PreferredRegion: preferred}, Token: token}, nil
 }
 
 // Enrollments answers the newest 200 credentials.
@@ -197,9 +218,16 @@ func Enrollments(ctx context.Context, db *gorm.DB) ([]EnrollmentView, error) {
 	if err != nil {
 		return nil, err
 	}
+	codes, err := regionCodes(db)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]EnrollmentView, 0, len(rows))
 	for _, row := range rows {
 		view := EnrollmentView{MeshEnrollment: row, Role: RoleAccess}
+		if row.PreferredRegionID != nil {
+			view.PreferredRegion = codes[*row.PreferredRegionID]
+		}
 		node, full := byEnrollment[row.ID]
 		if !full && row.DeviceID != nil {
 			node, full = byDevice[*row.DeviceID]
@@ -352,7 +380,7 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 		case len(known) > 0:
 			return conflict("another device has this device_key; enroll it again with a credential issued for it")
 		default:
-			region, err := enrollmentRegion(tx, enrollment.RegionID, request.Latencies)
+			region, err := enrollmentRegion(tx, enrollment, request.Latencies)
 			if err != nil {
 				return err
 			}
@@ -412,29 +440,73 @@ func Enroll(ctx context.Context, db *gorm.DB, request EnrollRequest, now time.Ti
 	return Enrolled{DeviceID: device.ID, DeviceToken: token, Config: config}, err
 }
 
+// PreferredFactor is the factor of the preferred region's latency in the
+// automatic region choice (appendix D.5).
+const PreferredFactor = 0.8
+
+// chooseRegion answers the region of the lowest score among regions,
+// false when none has a latency. The score is the latency, times
+// PreferredFactor for the region preferredID (0: none). Ties go to the
+// region of the lower sort, then the lower id: regions are ordered so
+// here, whatever the order they come in, and the first of equal scores
+// stays. Only the regions given count: the caller passes the enabled ones.
+func chooseRegion(regions []model.MeshRegion, latencies map[string]float64, preferredID uint) (model.MeshRegion, bool) {
+	ordered := append([]model.MeshRegion(nil), regions...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].Sort != ordered[j].Sort {
+			return ordered[i].Sort < ordered[j].Sort
+		}
+		return ordered[i].ID < ordered[j].ID
+	})
+	var best model.MeshRegion
+	score, found := 0.0, false
+	for _, candidate := range ordered {
+		latency, ok := latencies[candidate.Code]
+		if !ok || latency < 0 {
+			continue
+		}
+		if candidate.ID == preferredID && preferredID != 0 {
+			latency *= PreferredFactor
+		}
+		if !found || latency < score {
+			best, score, found = candidate, latency, true
+		}
+	}
+	return best, found
+}
+
+// preferredRegionID is the credential's preferred region, else the
+// settings' default; 0 for none.
+func preferredRegionID(tx *gorm.DB, credential *uint) (uint, error) {
+	if credential != nil {
+		return *credential, nil
+	}
+	settings, err := loadSettings(tx)
+	return settings.PreferredRegionID, err
+}
+
 // enrollmentRegion is the credential's region, or the enabled region of
-// lowest latency.
-func enrollmentRegion(tx *gorm.DB, id uint, latencies map[string]float64) (model.MeshRegion, error) {
+// the lowest score (chooseRegion) of the latencies, by code.
+func enrollmentRegion(tx *gorm.DB, enrollment model.MeshEnrollment, latencies map[string]float64) (model.MeshRegion, error) {
 	var region model.MeshRegion
-	if id != 0 {
-		return region, findRegion(tx, id, &region)
+	if enrollment.RegionID != 0 {
+		return region, findRegion(tx, enrollment.RegionID, &region)
 	}
 	var regions []model.MeshRegion
 	if err := tx.Where("enabled = ?", true).Order("sort ASC, id ASC").Find(&regions).Error; err != nil {
 		return region, err
 	}
-	best := -1.0
-	for _, candidate := range regions {
-		if latency, ok := latencies[candidate.Code]; ok && latency >= 0 && (best < 0 || latency < best) {
-			region, best = candidate, latency
-		}
+	preferred, err := preferredRegionID(tx, enrollment.PreferredRegionID)
+	if err != nil {
+		return region, err
 	}
-	if best < 0 {
+	chosen, ok := chooseRegion(regions, latencies, preferred)
+	if !ok {
 		return region, invalid("latencies: the round trip to at least one enabled region, by code")
 	}
 	// Read again under the region's lock, which a change of its range
 	// takes too.
-	if err := findRegion(tx, region.ID, &region); err != nil {
+	if err := findRegion(tx, chosen.ID, &region); err != nil {
 		return region, err
 	}
 	if !region.Enabled {

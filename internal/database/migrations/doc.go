@@ -211,4 +211,7 @@
 //     (the only tag of the nodes from before the 5.0 Agent) becomes NULL.
 //   - 0054_mesh_paths: the custom paths of the region networks, stored by
 //     member identity (v5_mesh_path, internal/meshregion).
+//   - 0055_mesh_preferred_region: the preferred region of the automatic
+//     region choice (v5_mesh_enrollment.preferred_region_id,
+//     v5_mesh_settings.preferred_region_id, internal/meshregion).
 package migrations

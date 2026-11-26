@@ -42,12 +42,12 @@ func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
 
 // CreateMeshEnrollment godoc
 // @Summary Issue a mesh enrollment credential
-// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
+// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions, the lowest latency times 0.8 for the preferred region, which is preferred_region, a region code, or else the default preferred region of the mesh settings; preferred_region is refused with a region_id or device_id and for an unknown code) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body meshregion.EnrollmentInput true "region_id, hostname, hours, role, address"
+// @Param request body meshregion.EnrollmentInput true "region_id, preferred_region, hostname, hours, role, address"
 // @Success 201 {object} meshregion.IssuedEnrollment
 // @Router /api/v4/kernel/mesh/enrollments [post]
 func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
