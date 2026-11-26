@@ -52,11 +52,17 @@ func instanceIDs(db *gorm.DB, refs []string) (map[string]string, error) {
 // dnsSection is the section "dns": the suffix and every intranet name as
 // <name>.<region code> with its address. A name more than one entry has
 // goes with each of its addresses (R28): the kernel answers them all and
-// marks the name, as the panel does.
+// marks the name, as the panel does. A saved suffix that breaks the rule
+// of checkSuffix is never delivered: the kernel would refuse the whole
+// configuration, so the section is disabled, with no names, until an
+// administrator saves a valid one (WarningNameSuffixInvalid).
 func dnsSection(db *gorm.DB) (map[string]any, error) {
 	list, err := Names(db.Statement.Context, db)
 	if err != nil {
 		return nil, err
+	}
+	if checkSuffix(list.Suffix) != nil {
+		return map[string]any{"enabled": false, "names": []map[string]any{}}, nil
 	}
 	names := []map[string]any{}
 	for _, entry := range list.Entries {

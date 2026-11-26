@@ -28,6 +28,7 @@ const MeshNames = (await import('@/components/forward/mesh/MeshNames.vue')).defa
 const MeshChanges = (await import('@/components/forward/mesh/MeshChanges.vue')).default
 const MeshSettings = (await import('@/components/forward/mesh/MeshSettings.vue')).default
 const MeshBridges = (await import('@/components/forward/mesh/MeshBridges.vue')).default
+const { nameSuffixProblem } = await import('@/components/forward/meshModel')
 
 const REGIONS = [{ id: 1, code: 'cn', name: '中国大陆', cidr: '10.150.0.0/16' }, { id: 2, code: 'eu', name: '欧洲', cidr: '10.152.0.0/16' }]
 
@@ -154,6 +155,33 @@ describe('mesh addresses', () => {
     expect(input.reservedRanges.filter(Boolean)).toEqual(['10.126.0.0/16', '192.168.50.0/24'])
     expect(wrapper.emitted().changed).toBeTruthy()
     wrapper.unmount()
+  })
+
+  it('refuses a domain suffix outside internal before saving and flags a saved one', async () => {
+    const wrapper = mount(MeshSettings, {
+      props: { settings: { name_suffix: 'mesh.home.arpa', host_group_supernet: '10.127.0.0/16', host_group_prefix: 24, reserved_ranges: [], warnings: ['name_suffix_invalid'] } },
+      attachTo: document.body
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="mesh-settings-suffix-invalid"]').exists()).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.saveKernelMeshSettings).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('后缀须位于 internal 之下且至少两级')
+    wrapper.unmount()
+  })
+
+  it('checks the domain suffix as the kernel does', () => {
+    for (const good of ['mesh.internal', 'Mesh.Internal.', ' lab.mesh.internal ', `${'a'.repeat(63)}.internal`]) {
+      expect(nameSuffixProblem(good), good).toBe('')
+    }
+    for (const bad of ['internal', 'local', 'com', 'home.arpa', 'mesh.home.arpa', 'mesh.local', 'corp.example', 'internal.mesh']) {
+      expect(nameSuffixProblem(bad), bad).toBe('internal')
+    }
+    for (const bad of ['', '.mesh.internal', 'mesh..internal', '-mesh.internal', 'mesh_lab.internal', `${'a'.repeat(64)}.internal`]) {
+      expect(nameSuffixProblem(bad), bad).toBe('labels')
+    }
+    expect(nameSuffixProblem(`${`${'a'.repeat(63)}.`.repeat(2)}${'a'.repeat(36)}.internal`)).toBe('length')
   })
 
   it('lists the external network bridges and saves one with its allowed sources', async () => {

@@ -27,6 +27,12 @@ func TestSettings(t *testing.T) {
 		{NameSuffix: "Mesh..internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "corp.example", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "com", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: ".corp.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: "mesh.internal..", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: "-mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: "mesh_lab.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: strings.Repeat("a", 64) + ".internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
+		{NameSuffix: strings.Repeat(strings.Repeat("a", 63)+".", 2) + strings.Repeat("a", 36) + ".internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "8.8.0.0/16", HostGroupPrefix: 24},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 12},
 		{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24, ReservedRanges: []string{"10.127.5.0/24"}},
@@ -39,7 +45,7 @@ func TestSettings(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflict, "the supernet may not overlap a region")
 	_, err = SaveSettings(ctx, db, SettingsInput{NameSuffix: "mesh.internal", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 24, ReservedRanges: []string{"10.126.0.0/24"}}, now)
 	require.ErrorIs(t, err, ErrConflict, "an old network has the regions' prefix length")
-	saved, err := SaveSettings(ctx, db, SettingsInput{NameSuffix: ".Corp.Internal.", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 26, ReservedRanges: []string{"10.126.0.0/16", " "}}, now)
+	saved, err := SaveSettings(ctx, db, SettingsInput{NameSuffix: " Corp.Internal. ", HostGroupSupernet: "10.127.0.0/16", HostGroupPrefix: 26, ReservedRanges: []string{"10.126.0.0/16", " "}}, now)
 	require.NoError(t, err)
 	require.Equal(t, "corp.internal", saved.NameSuffix)
 	require.Equal(t, []string{"10.126.0.0/16"}, saved.ReservedRanges)

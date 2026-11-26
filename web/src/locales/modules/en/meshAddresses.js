@@ -246,7 +246,13 @@ export default {
     settings: {
       title: 'Settings',
       nameSuffix: 'Domain suffix',
-      nameSuffixHelp: 'Names take the form name.region-code.suffix. The suffix lies under internal or home.arpa.',
+      nameSuffixHelp: 'Names take the form name.region-code.suffix. The suffix has at least two labels and lies under internal, such as mesh.internal.',
+      savedSuffixInvalid: 'The saved domain suffix does not meet the rules, so nodes do not use intranet names. Save a suffix under internal.',
+      suffixProblems: {
+        labels: 'Each label has 1 to 63 lowercase letters, digits or hyphens, with no hyphen at either end, and labels are separated by dots.',
+        length: 'The suffix has at most 172 characters.',
+        internal: 'The suffix has at least two labels and lies under internal, such as mesh.internal. A single label, arpa, local and other domains are not accepted.'
+      },
       hostGroupSupernet: 'Host group range',
       hostGroupPrefix: 'Host group segment prefix length',
       hostGroupHelp: 'Cannot be changed while host groups exist.',

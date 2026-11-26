@@ -35,15 +35,25 @@ type Settings struct {
 	ReservedRanges []string   `json:"reserved_ranges"`
 	UpdatedAt      *time.Time `json:"updated_at"`
 	// Warnings: WarningSharedAddressSpace when the host group supernet
-	// lies in 100.64.0.0/10.
+	// lies in 100.64.0.0/10; WarningNameSuffixInvalid when the saved
+	// suffix breaks the rule of checkSuffix.
 	Warnings []string `json:"warnings"`
 }
+
+// WarningNameSuffixInvalid: the suffix, saved before the rule of spec
+// section 15.9.2 item 1, breaks it. The kernel would refuse the whole
+// configuration, so nodes get no intranet names (dns.enabled false) until
+// an administrator saves a valid one.
+const WarningNameSuffixInvalid = "name_suffix_invalid"
 
 // withWarnings answers settings with their warnings.
 func withWarnings(settings Settings) Settings {
 	settings.Warnings = []string{}
 	if inSharedSpace(settings.HostGroupSupernet) {
 		settings.Warnings = append(settings.Warnings, WarningSharedAddressSpace)
+	}
+	if checkSuffix(settings.NameSuffix) != nil {
+		settings.Warnings = append(settings.Warnings, WarningNameSuffixInvalid)
 	}
 	return settings
 }
@@ -52,20 +62,38 @@ func withWarnings(settings Settings) Settings {
 // within the 253 bytes of a DNS name.
 const maxSuffix = 253 - 63 - 1 - 16 - 1
 
-// privateSuffix tells whether suffix lies under a domain reserved for
-// private networks, so the names never shadow public ones.
-func privateSuffix(suffix string) bool {
-	for _, private := range []string{"internal", "home.arpa"} {
-		if suffix == private || strings.HasSuffix(suffix, "."+private) {
-			return true
+// normalizeSuffix reads a suffix as the kernel compares it: without
+// surrounding spaces and one final dot, in lowercase.
+func normalizeSuffix(raw string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+}
+
+// checkSuffix applies the rule of spec section 15.9.2 item 1 to a
+// normalized suffix: DNS labels of lowercase letters, digits and inner
+// hyphens, 1 to 63 bytes each, at most maxSuffix bytes in all, under
+// internal with at least two labels, such as mesh.internal. The root, any
+// single label (internal, local, com and the like), arpa and everything
+// under it (home.arpa among them), local and everything under it, and
+// every other domain are refused, so the names never shadow public ones.
+// The kernel refuses them as well.
+func checkSuffix(suffix string) error {
+	if len(suffix) > maxSuffix {
+		return invalid("name_suffix: at most %d characters", maxSuffix)
+	}
+	labels := strings.Split(suffix, ".")
+	for _, label := range labels {
+		if !labelPattern.MatchString(label) {
+			return invalid("name_suffix: DNS labels of 1 to 63 lowercase letters, digits and inner hyphens, separated by dots, such as mesh.internal")
 		}
 	}
-	return false
+	if len(labels) < 2 || labels[len(labels)-1] != "internal" {
+		return invalid("name_suffix: at least one label under internal, such as mesh.internal; a single label, arpa, local and other domains are refused")
+	}
+	return nil
 }
 
 var (
-	labelPattern  = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
-	suffixPattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+	labelPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 )
 
 // normalizeLabel reads a name as one DNS label: lowercase letters, digits
@@ -137,12 +165,9 @@ type SettingsInput struct {
 // length change only while no host group exists; neither the supernet nor
 // a reserved range may overlap a region.
 func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now time.Time) (Settings, error) {
-	suffix := strings.Trim(strings.ToLower(strings.TrimSpace(input.NameSuffix)), ".")
-	if len(suffix) > maxSuffix || !suffixPattern.MatchString(suffix) {
-		return Settings{}, invalid("name_suffix: DNS labels separated by dots, such as mesh.internal, at most %d characters", maxSuffix)
-	}
-	if !privateSuffix(suffix) {
-		return Settings{}, invalid("name_suffix: under internal or home.arpa, which no public name uses")
+	suffix := normalizeSuffix(input.NameSuffix)
+	if err := checkSuffix(suffix); err != nil {
+		return Settings{}, err
 	}
 	supernet, err := parseRange("host_group_supernet", input.HostGroupSupernet)
 	if err != nil {
