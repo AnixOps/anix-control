@@ -394,7 +394,9 @@ func savePath(tx *gorm.DB, id uint, input PathInput, now time.Time) (model.MeshP
 	if id == 0 {
 		return row, tx.Create(&row).Error
 	}
-	return row, saveExisting(tx, &row, "path")
+	// Only its own columns, with the given time: saving the whole row would
+	// stamp updated_at with the clock instead.
+	return row, updateExisting(tx, &model.MeshPath{}, row.ID, map[string]any{"target_kind": row.TargetKind, "target": row.Target, "via": row.Via, "updated_at": now}, "path")
 }
 
 // CreatePath adds a custom path.
