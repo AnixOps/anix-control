@@ -111,7 +111,22 @@ func RequestChange(ctx context.Context, db *gorm.DB, input ChangeInput, source s
 		row.FromRegionID, row.OldAddress = from, address
 		return tx.Create(&row).Error
 	})
+	if err == nil {
+		notifyChangeNode(row.NodeRef)
+	}
 	return row, err
+}
+
+// notifyChangeNode tells the listeners that the region request state of the
+// node in its configuration changed, which a request, a rejection or a
+// withdrawal does without any membership changing.
+func notifyChangeNode(nodeRef *string) {
+	if nodeRef == nil {
+		return
+	}
+	if node, err := agentcontrol.ParseAgentNode(*nodeRef); err == nil {
+		notify([]agentcontrol.AgentNode{node})
+	}
 }
 
 // lockSubject locks the node's home membership or the device while a
@@ -143,10 +158,10 @@ func Changes(ctx context.Context, db *gorm.DB, status string) ([]ChangeView, err
 	query := db.Order("CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC").Limit(maxChanges)
 	switch status {
 	case "":
-	case model.MeshChangePending, model.MeshChangeApproved, model.MeshChangeRejected:
+	case model.MeshChangePending, model.MeshChangeApproved, model.MeshChangeRejected, model.MeshChangeWithdrawn:
 		query = query.Where("status = ?", status)
 	default:
-		return nil, invalid("status: pending, approved or rejected")
+		return nil, invalid("status: pending, approved, rejected or withdrawn")
 	}
 	var rows []model.MeshRegionChange
 	if err := query.Find(&rows).Error; err != nil {
@@ -227,7 +242,7 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 		if err != nil {
 			return "", err
 		}
-		moved, err := moveNode(tx, home, row.ToRegionID, home.Boundary, now)
+		moved, err := moveNode(tx, home, row.ToRegionID, home.Boundary, basisOfChange(row), now)
 		if err != nil {
 			return "", err
 		}
@@ -254,7 +269,16 @@ func move(tx *gorm.DB, row model.MeshRegionChange, now time.Time) (string, error
 	if err := deleteSourcePaths(tx, deviceEntry(device.ID)); err != nil {
 		return "", err
 	}
-	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "static_key": gorm.Expr("NULL"), "updated_at": now}, "device")
+	return address, updateExisting(tx, &model.MeshDevice{}, device.ID, map[string]any{"region_id": region.ID, "address": address, "address_used_at": now, "static_key": gorm.Expr("NULL"), "region_basis": basisOfChange(row), "updated_at": now}, "device")
+}
+
+// basisOfChange is the basis of the region a change moves to: migration
+// for an approved request of the member's own, admin otherwise.
+func basisOfChange(row model.MeshRegionChange) string {
+	if row.Source == model.MeshChangeMember {
+		return model.MeshBasisMigration
+	}
+	return model.MeshBasisAdmin
 }
 
 // RejectChange records a rejection; nothing moves.
@@ -271,7 +295,55 @@ func RejectChange(ctx context.Context, db *gorm.DB, id uint, note string, decide
 		row.Status, row.Note, row.DecidedBy, row.DecidedAt = model.MeshChangeRejected, note, decidedBy, &now
 		return decide(tx, row)
 	})
+	if err == nil {
+		notifyChangeNode(row.NodeRef)
+	}
 	return row, err
+}
+
+// WithdrawDeviceChange takes back the device's pending region change
+// request, and clears a rejected one it is still shown (appendix D.7 item
+// 2). It succeeds when there is none.
+func WithdrawDeviceChange(ctx context.Context, db *gorm.DB, device model.MeshDevice, now time.Time) error {
+	id := device.ID
+	return withdrawChange(ctx, db, nil, &id, now)
+}
+
+// withdrawChange marks the pending change of the node or device, and the
+// rejected one that is its latest (the one its configuration still shows),
+// withdrawn: the administrator's history keeps the row. The member's row is
+// locked as a request locks it, so that a request at the same time is
+// either before (and withdrawn) or after.
+func withdrawChange(ctx context.Context, db *gorm.DB, nodeRef *string, deviceID *uint, now time.Time) error {
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockSubject(tx, nodeRef, deviceID); err != nil {
+			return err
+		}
+		query := tx.Model(&model.MeshRegionChange{})
+		if nodeRef != nil {
+			query = query.Where("node_ref = ?", *nodeRef)
+		} else {
+			query = query.Where("device_id = ?", *deviceID)
+		}
+		var latest []model.MeshRegionChange
+		if err := query.Session(&gorm.Session{}).Order("id DESC").Limit(1).Find(&latest).Error; err != nil {
+			return err
+		}
+		if len(latest) == 0 {
+			return nil
+		}
+		// At most one is pending, and a pending change is the latest; a
+		// rejected one is shown only while it is the latest.
+		if latest[0].Status != model.MeshChangePending && latest[0].Status != model.MeshChangeRejected {
+			return nil
+		}
+		return tx.Model(&model.MeshRegionChange{}).Where("id = ? AND status IN ?", latest[0].ID, []string{model.MeshChangePending, model.MeshChangeRejected}).
+			Updates(map[string]any{"status": model.MeshChangeWithdrawn, "decided_at": now}).Error
+	})
+	if err == nil {
+		notifyChangeNode(nodeRef)
+	}
+	return err
 }
 
 // MoveDevice moves a device to another region at once, recorded as an
@@ -383,14 +455,22 @@ const (
 
 // RequestNodeChange records node's request, a "mesh.region_request"
 // payload {"region": "<code>", "reason": "..."}, as a pending change of the
-// source model.MeshChangeMember. A node asks only for itself.
+// source model.MeshChangeMember. A node asks only for itself. The payload
+// {"withdraw": true} withdraws its request instead (withdrawChange).
 func RequestNodeChange(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, payload []byte, now time.Time) (model.MeshRegionChange, error) {
 	var request struct {
-		Region string `json:"region"`
-		Reason string `json:"reason"`
+		Region   string `json:"region"`
+		Reason   string `json:"reason"`
+		Withdraw bool   `json:"withdraw"`
 	}
-	if err := json.Unmarshal(payload, &request); err != nil || request.Region == "" {
-		return model.MeshRegionChange{}, invalid("payload: a JSON object with a region code")
+	if err := json.Unmarshal(payload, &request); err != nil || (request.Region == "" && !request.Withdraw) {
+		return model.MeshRegionChange{}, invalid("payload: a JSON object with a region code, or withdraw true")
+	}
+	if request.Withdraw {
+		// {"withdraw": true}: takes back the node's pending request (and
+		// clears a rejected one it still shows); none is not an error.
+		ref := node.String()
+		return model.MeshRegionChange{}, withdrawChange(ctx, db, &ref, nil, now)
 	}
 	var regions []model.MeshRegion
 	if err := db.WithContext(ctx).Where("code = ?", request.Region).Limit(1).Find(&regions).Error; err != nil {

@@ -42,12 +42,12 @@ func (h *MeshHandler) ListMeshEnrollments(c *gin.Context) {
 
 // CreateMeshEnrollment godoc
 // @Summary Issue a mesh enrollment credential
-// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
+// @Description Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions, the lowest latency times 0.8 for the preferred region, which is preferred_region, a region code, or else the default preferred region of the mesh settings; preferred_region is refused with a region_id or device_id and for an unknown code) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (`mse_` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body meshregion.EnrollmentInput true "region_id, hostname, hours, role, address"
+// @Param request body meshregion.EnrollmentInput true "region_id, preferred_region, hostname, hours, role, address"
 // @Success 201 {object} meshregion.IssuedEnrollment
 // @Router /api/v4/kernel/mesh/enrollments [post]
 func (h *MeshHandler) CreateMeshEnrollment(c *gin.Context) {
@@ -185,13 +185,35 @@ func (h *MeshHandler) EnrollMeshDevice(c *gin.Context) {
 	kernelData(c, http.StatusCreated, enrolled)
 }
 
+// MeshDeviceDirectory godoc
+// @Summary The mesh region directory
+// @Description The directory a device measures to choose or change its region (appendix D.2): version 1, preferred (the code of the credential's preferred region, else the mesh settings' default, else null; for a device token the default), and the enabled regions in order with code, subnet and borders (name, probe: the border node's address literal and the responder port, key: the responder's X25519 public key in base64). Only border nodes whose latest status reports a responder key are listed, and a region with none is left out. Authorization: Bearer an enrollment credential (mse_), which is not used up by this read (it counts while unexpired, not withdrawn and unused or used within 10 minutes), or a device token (msd_). 401 otherwise. Rate limited; 404 feature_disabled while the mesh is not available in this build.
+// @Tags Mesh
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} meshregion.Directory
+// @Router /api/v5/mesh/device/directory [get]
+func (h *MeshHandler) MeshDeviceDirectory(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	token, _ := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	directory, err := meshregion.DeviceDirectory(c.Request.Context(), db, token, h.now())
+	if err != nil {
+		meshDeviceError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, directory)
+}
+
 // maxFeaturesQuery bounds the features a device names on a configuration
 // read.
 const maxFeaturesQuery = 4 << 10
 
 // MeshDeviceConfig godoc
 // @Summary A mesh device's networks
-// @Description The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
+// @Description The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. The answer's top-level region (current, basis: latency, credential, admin or migration, directory, responder null) is added only when the kernel lists mesh_region_probe, and each network's region_request (null, or id, region, state pending or rejected, reason, reject_reason) only with mesh_region_request_state. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.
 // @Tags Mesh
 // @Produce json
 // @Security BearerAuth
@@ -288,6 +310,25 @@ func (h *MeshHandler) MeshDeviceChange(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusCreated, row)
+}
+
+// MeshDeviceWithdrawChange godoc
+// @Summary Withdraw a mesh device's region change request
+// @Description Takes back the device's pending region change request (status withdrawn in the administrator's region changes), and clears a rejected one the device's configuration still shows, so that the network's region_request becomes null (appendix D.7). Answered 204 also when there is none. 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Security BearerAuth
+// @Success 204
+// @Router /api/v5/mesh/device/region-change [delete]
+func (h *MeshHandler) MeshDeviceWithdrawChange(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	if err := meshregion.WithdrawDeviceChange(c.Request.Context(), h.db(), device, h.now()); err != nil {
+		meshError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 type meshDeviceSubnetRequest struct {

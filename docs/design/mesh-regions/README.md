@@ -89,3 +89,19 @@
 | 地址族 | 子网目标目前只支持 IPv4。 |
 
 接口：`GET/POST /api/v4/kernel/mesh/paths`、`PUT/DELETE /api/v4/kernel/mesh/paths/{id}`（`{"source","target","via":[…]}`，`target` 为成员或 CIDR，更新时 `source` 不得改变；记入操作日志 `mesh_path_create`、`mesh_path_update`、`mesh_path_delete`）。校验失败回 400，同一起点与目标重复回 409，未知编号回 404。
+
+## 区域目录、自动选区与迁区建议（迁移 0055–0058，内核能力 `mesh_region_probe`、`mesh_region_request_state`）
+
+协议见 networkcore `docs/protocols/intranet-mesh-appendix.md` D 节；接口字段见接口约定第 2、4、5 节。
+
+| 项 | 规则 |
+| --- | --- |
+| 偏好区域（D.5） | 入网凭据可带 `preferred_region`（地区代码，签发时校验存在；与 `region_id` 或 `device_id` 同时给出回 400）；组网设置 `preferred_region` 为全面板默认。凭据未指定地区时，面板对每个已启用且有时延的地区算 `score = 时延 × 0.8`（偏好区域，凭据的优先于默认）或 `score = 时延`，取最小者，得分相同依次按 `sort`、`id` 升序（`chooseRegion` 显式排序，不依赖列表顺序）；没有任何已启用地区有时延时回 400。地区被删除后其偏好视为没有。表列：`v5_mesh_enrollment.preferred_region_id`、`v5_mesh_settings.preferred_region_id`（可空）。 |
+| 探测应答器端口 | 组网设置 `responder_port`，默认 11013（1–65535，不得等于组网端口 11010）；`v5_mesh_settings.responder_port` 可空，空为默认。 |
+| 目录（D.2） | `GET /api/v5/mesh/device/directory`；Agent 节点的目录随配置下发。只列已启用地区中、有边界节点（主成员行 `boundary` 为真）且该节点最近一次 `mesh.status` 的 `region_probe.responder.public_key` 合规（44 字符标准 base64，解码 32 字节，非全零）、且有可探测地址的项；一个地区没有这样的边界节点就整个省略。`borders[].probe` 取节点的单播 IP 字面量（依次为 `server_ip`、`last_public_address`、`host`，不解析主机名；内网地址允许）加响应端口，IPv6 加方括号；`name` 为节点名按 §15.9.2 规范化得到的 DNS 标签，为空时 `node-<节点>`，同一地区重名时附 `-<节点>`。至多 64 个地区、每地区 16 个边界节点。 |
+| 区域对象（D.9.1） | `current` 为已下发网络的归属地区代码（该地区网络未下发，例如地区停用时为 `null`），`basis` 为 `latency`（按时延选区）、`credential`（凭据指定）、`admin`（管理员指定或移动）、`migration`（节点申请经批准迁入）。保存在 `v5_mesh_member.region_basis`（主成员行）与 `v5_mesh_device.region_basis`，空按 `admin`。Agent 节点另在 `responder` 给出 `{"listen": ["0.0.0.0:<端口>", "[::]:<端口>"]}`，只对边界节点。 |
+| 能力门控 | 设备：只有设备的内核能力名单（查询参数 `features`，否则最近一次上报，接入应答用请求体的 `features`）列出 `mesh_region_probe` 时配置才带顶层 `region`，列出 `mesh_region_request_state` 时才带网络内的 `region_request`；设备拒绝未知字段，门控须精确。Agent 节点：面板始终下发（同 `dns`、`external_bridge`），Agent 按内核能力名单省略。 |
+| 自动选区的 Agent 节点（D.5 第 2 条） | 管理员 `POST /api/v4/kernel/mesh/auto-members {"node": "proxy-<id>"}` 把未入网的节点加入「待选区」（表 `v5_mesh_auto_node`，节点唯一，已入网或已待选区回 409；`GET` 列出，`DELETE .../auto-members/{id}` 取消）。待选区节点的成员 `mesh` 为 `{"networks": [], "region": {"current": null, "basis": null, "directory": …}}`。节点的 `mesh.status` 带 `region_probe.regions`（`[{region, rtt_ms}]`）且至少一个已启用地区有时延时，面板用同一选区函数（默认偏好区域）选区，在选定地区的锁下按 AddNode 的方式分配服务器段固定地址（基础 `latency`，非边界），删除待选区记录并推送配置。管理员此后直接 `AddMember` 同一节点则取代待选区。 |
+| 撤回（D.7 第 2 条） | 设备 `DELETE /api/v5/mesh/device/region-change`、Agent 的 `mesh.region_request` 载荷 `{"withdraw": true}`：待审批的申请记为 `withdrawn`（保留在地区变更历史，列表可按该状态过滤），仍被显示的被拒申请也记为 `withdrawn` 而清除 `region_request`；没有申请时也成功。 |
+| `region_request`（D.7 第 3 条） | 每个网络（Agent 节点为主地区网络）带 `null`，或该成员最近一条地区变更为 `pending`、或为 `rejected` 时的 `{id（字符串）, region（目标地区代码）, state, reason, reject_reason（被拒时为管理员备注）}`；之后有更新的变更（批准、撤回、管理员移动）即为 `null`。节点的申请、驳回、撤回都立即推送该节点配置。 |
+| 迁区建议（D.6、D.9.2） | 节点或设备上报的 `region_probe` 随状态原样保存；设备上报校验 `suggestion` 为 `null` 或 `{region, current_median_ms, suggested_median_ms, since}`（地区代码、非负整数毫秒、RFC 3339 时间），不合规回 400，其他顶层字段不拒绝。成员列表与设备列表的 `region_suggestion` 为 `null` 或该对象，仅作提示，面板不据此移动。 |

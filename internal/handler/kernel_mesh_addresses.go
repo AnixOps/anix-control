@@ -55,7 +55,7 @@ func (h *MeshHandler) MeshSummary(c *gin.Context) {
 
 // SaveMeshSettings godoc
 // @Summary Change the mesh settings
-// @Description name_suffix (a name is name.region-code.suffix; at least two DNS labels under internal, such as mesh.internal, at most 172 characters; a single label, arpa, local and other domains are refused), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).
+// @Description name_suffix (a name is name.region-code.suffix; at least two DNS labels under internal, such as mesh.internal, at most 172 characters; a single label, arpa, local and other domains are refused), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap), preferred_region (a region code, empty for none: the default preferred region of the automatic region choice, whose latency counts 0.8 times; 400 for an unknown code). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -631,11 +631,11 @@ func (h *MeshHandler) ListMeshNames(c *gin.Context) {
 
 // ListMeshChanges godoc
 // @Summary The region changes
-// @Description The latest 500 region changes, pending first, or those of one status (pending, approved, rejected), with their regions' codes.
+// @Description The latest 500 region changes, pending first, or those of one status (pending, approved, rejected, withdrawn: the member took its request back), with their regions' codes.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Param status query string false "pending, approved or rejected"
+// @Param status query string false "pending, approved, rejected or withdrawn"
 // @Success 200 {array} meshregion.ChangeView
 // @Router /api/v4/kernel/mesh/changes [get]
 func (h *MeshHandler) ListMeshChanges(c *gin.Context) {

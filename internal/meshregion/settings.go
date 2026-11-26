@@ -2,6 +2,8 @@ package meshregion
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/netip"
 	"regexp"
 	"strings"
@@ -32,8 +34,17 @@ type Settings struct {
 	// the range of a network the mesh replaces. They have the regions'
 	// prefix length: during a migration the old network and the regions
 	// carry traffic for each other (spec section 15.7, item 2).
-	ReservedRanges []string   `json:"reserved_ranges"`
-	UpdatedAt      *time.Time `json:"updated_at"`
+	ReservedRanges []string `json:"reserved_ranges"`
+	// PreferredRegion is the code of the default preferred region of the
+	// automatic region choice (D.5: its latency counts 0.8 times), empty
+	// for none; a region deleted since counts as none.
+	PreferredRegion string `json:"preferred_region"`
+	// PreferredRegionID is its id, 0 for none.
+	PreferredRegionID uint `json:"preferred_region_id"`
+	// ResponderPort is the UDP port of the border nodes' probe responders
+	// (appendix D.9.3), DefaultResponderPort until saved.
+	ResponderPort int        `json:"responder_port"`
+	UpdatedAt     *time.Time `json:"updated_at"`
 	// Warnings: WarningSharedAddressSpace when the host group supernet
 	// lies in 100.64.0.0/10; WarningNameSuffixInvalid when the saved
 	// suffix breaks the rule of checkSuffix.
@@ -134,7 +145,7 @@ func isPrivate(prefix netip.Prefix) bool {
 }
 
 func defaultSettings() Settings {
-	return Settings{NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet, HostGroupPrefix: DefaultHostGroupPrefix, ReservedRanges: []string{}}
+	return Settings{NameSuffix: DefaultNameSuffix, HostGroupSupernet: DefaultHostGroupSupernet, HostGroupPrefix: DefaultHostGroupPrefix, ReservedRanges: []string{}, ResponderPort: DefaultResponderPort}
 }
 
 // loadSettings answers the saved settings, or the defaults.
@@ -147,10 +158,22 @@ func loadSettings(tx *gorm.DB) (Settings, error) {
 		return withWarnings(defaultSettings()), nil
 	}
 	row := rows[0]
-	settings := Settings{NameSuffix: row.NameSuffix, HostGroupSupernet: row.HostGroupSupernet, HostGroupPrefix: row.HostGroupPrefix, ReservedRanges: []string{}, UpdatedAt: &row.UpdatedAt}
+	settings := Settings{NameSuffix: row.NameSuffix, HostGroupSupernet: row.HostGroupSupernet, HostGroupPrefix: row.HostGroupPrefix, ReservedRanges: []string{}, ResponderPort: DefaultResponderPort, UpdatedAt: &row.UpdatedAt}
+	if row.ResponderPort != nil && *row.ResponderPort > 0 && *row.ResponderPort <= 65535 {
+		settings.ResponderPort = *row.ResponderPort
+	}
 	for _, raw := range strings.Split(row.ReservedRanges, ",") {
 		if raw = strings.TrimSpace(raw); raw != "" {
 			settings.ReservedRanges = append(settings.ReservedRanges, raw)
+		}
+	}
+	if row.PreferredRegionID != nil {
+		var regions []model.MeshRegion
+		if err := tx.Where("id = ?", *row.PreferredRegionID).Limit(1).Find(&regions).Error; err != nil {
+			return Settings{}, err
+		}
+		if len(regions) > 0 {
+			settings.PreferredRegion, settings.PreferredRegionID = regions[0].Code, regions[0].ID
 		}
 	}
 	return withWarnings(settings), nil
@@ -167,6 +190,13 @@ type SettingsInput struct {
 	HostGroupSupernet string   `json:"host_group_supernet"`
 	HostGroupPrefix   int      `json:"host_group_prefix"`
 	ReservedRanges    []string `json:"reserved_ranges"`
+	// PreferredRegion is the code of the default preferred region, empty
+	// for none.
+	PreferredRegion string `json:"preferred_region"`
+	// ResponderPort is the UDP port of the border nodes' probe
+	// responders, 1 to 65535 other than the network port; 0 for the
+	// default.
+	ResponderPort int `json:"responder_port"`
 }
 
 // SaveSettings changes the global settings. The supernet and the segment
@@ -204,10 +234,32 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 	if len(reserved) > 32 {
 		return Settings{}, invalid("reserved_ranges: at most 32")
 	}
+	port := input.ResponderPort
+	if port == 0 {
+		port = DefaultResponderPort
+	}
+	if port < 1 || port > 65535 || port == Port {
+		return Settings{}, invalid("responder_port: 1 to 65535, not %d (the network port); 0 for %d", Port, DefaultResponderPort)
+	}
+	var savedPort *int
+	if port != DefaultResponderPort {
+		savedPort = &port
+	}
 	var answer Settings
 	err = change(ctx, db, func(tx *gorm.DB) error {
 		if err := lockAddressPlan(tx); err != nil {
 			return err
+		}
+		var preferred *uint
+		if code := strings.TrimSpace(input.PreferredRegion); code != "" {
+			id, err := regionIDOfCode(tx, code)
+			if errors.Is(err, ErrNotFound) {
+				return invalid("preferred_region: a region code, or empty for none")
+			}
+			if err != nil {
+				return err
+			}
+			preferred = &id
 		}
 		current, err := loadSettings(tx)
 		if err != nil {
@@ -254,10 +306,10 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 				return err
 			}
 		}
-		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), UpdatedAt: now}
+		row := model.MeshSettings{ID: settingsID, NameSuffix: suffix, HostGroupSupernet: supernet.String(), HostGroupPrefix: input.HostGroupPrefix, ReservedRanges: strings.Join(reserved, ","), PreferredRegionID: preferred, ResponderPort: savedPort, UpdatedAt: now}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"name_suffix", "host_group_supernet", "host_group_prefix", "reserved_ranges", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"name_suffix", "host_group_supernet", "host_group_prefix", "reserved_ranges", "preferred_region_id", "responder_port", "updated_at"}),
 		}).Create(&row).Error; err != nil {
 			return err
 		}
@@ -265,6 +317,20 @@ func SaveSettings(ctx context.Context, db *gorm.DB, input SettingsInput, now tim
 		return err
 	})
 	return answer, err
+}
+
+// regionIDOfCode answers the id of the region of code, ErrNotFound when
+// there is none. It does not lock the region: a region deleted meanwhile
+// leaves a preferred id that counts as none.
+func regionIDOfCode(tx *gorm.DB, code string) (uint, error) {
+	var ids []uint
+	if err := tx.Model(&model.MeshRegion{}).Where("code = ?", code).Limit(1).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("%w: region %q", ErrNotFound, code)
+	}
+	return ids[0], nil
 }
 
 // checkOutsideSettings refuses a region range that overlaps the host group

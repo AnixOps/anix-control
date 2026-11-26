@@ -40,8 +40,11 @@ type MeshMember struct {
 	// StaticKey is the node's static public key in this region's network
 	// as its Agent last reported it (0050_mesh_native_keys): 32 bytes of
 	// X25519 in standard base64; nil before the first report.
-	StaticKey *string   `gorm:"size:44" json:"static_key"`
-	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+	StaticKey *string `gorm:"size:44" json:"static_key"`
+	// RegionBasis is, on a home row, why the node is in its region
+	// (0057_mesh_region_basis): the MeshBasis values; NULL counts as admin.
+	RegionBasis *string   `gorm:"size:16" json:"region_basis"`
+	CreatedAt   time.Time `gorm:"not null" json:"created_at"`
 }
 
 func (MeshMember) TableName() string { return "v5_mesh_member" }
@@ -72,8 +75,15 @@ type MeshSettings struct {
 	HostGroupPrefix int `gorm:"not null" json:"host_group_prefix"`
 	// ReservedRanges are IPv4 ranges no region or host group may overlap,
 	// comma-separated.
-	ReservedRanges string    `gorm:"type:text;not null" json:"-"`
-	UpdatedAt      time.Time `gorm:"not null" json:"updated_at"`
+	ReservedRanges string `gorm:"type:text;not null" json:"-"`
+	// PreferredRegionID is the panel-wide default preferred region of the
+	// automatic region choice (0055_mesh_region_assignment): its latency
+	// counts 0.8 times. NULL: none.
+	PreferredRegionID *uint `json:"-"`
+	// ResponderPort is the UDP port of the border nodes' probe responders
+	// (0056_mesh_responder_port); NULL: the default.
+	ResponderPort *int      `json:"-"`
+	UpdatedAt     time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshSettings) TableName() string { return "v5_mesh_settings" }
@@ -96,9 +106,12 @@ type MeshDevice struct {
 	// StaticKey is the device's static public key in its region's network
 	// (0050_mesh_native_keys), from its enrollment or its first report
 	// after it; nil before either and after a move to another region.
-	StaticKey *string   `gorm:"size:44" json:"static_key"`
-	CreatedAt time.Time `gorm:"not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+	StaticKey *string `gorm:"size:44" json:"static_key"`
+	// RegionBasis is why the device is in its region (0057_mesh_region_basis):
+	// the MeshBasis values; NULL counts as admin.
+	RegionBasis *string   `gorm:"size:16" json:"region_basis"`
+	CreatedAt   time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (MeshDevice) TableName() string { return "v5_mesh_device" }
@@ -146,7 +159,7 @@ type MeshRegionChange struct {
 	ToRegionID   uint    `gorm:"not null" json:"to_region_id"`
 	// Source is "member" or "admin".
 	Source string `gorm:"size:16;not null" json:"source"`
-	// Status is "pending", "approved" or "rejected".
+	// Status is "pending", "approved", "rejected" or "withdrawn".
 	Status      string     `gorm:"size:16;not null;index" json:"status"`
 	Reason      string     `gorm:"size:500;not null" json:"reason"`
 	Note        string     `gorm:"size:500;not null" json:"note"`
@@ -160,6 +173,16 @@ type MeshRegionChange struct {
 
 func (MeshRegionChange) TableName() string { return "v5_mesh_region_change" }
 
+// Why a member or device is in its region (the basis of the region object,
+// appendix D.9.1): chosen by latency, fixed by its credential, placed by an
+// administrator, or moved there by an approved request of its own.
+const (
+	MeshBasisLatency    = "latency"
+	MeshBasisCredential = "credential"
+	MeshBasisAdmin      = "admin"
+	MeshBasisMigration  = "migration"
+)
+
 // Region change sources and states.
 const (
 	MeshChangeMember   = "member"
@@ -167,6 +190,8 @@ const (
 	MeshChangePending  = "pending"
 	MeshChangeApproved = "approved"
 	MeshChangeRejected = "rejected"
+	// MeshChangeWithdrawn: the member took its pending request back.
+	MeshChangeWithdrawn = "withdrawn"
 )
 
 // MeshEnrollment is a one-time enrollment credential for a device without
@@ -176,14 +201,18 @@ type MeshEnrollment struct {
 	ID uint `gorm:"primaryKey" json:"id"`
 	// RegionID is the device's region; 0 lets the latencies the device
 	// reports choose among the enabled regions.
-	RegionID  uint       `gorm:"not null" json:"region_id"`
-	Hostname  string     `gorm:"size:63;not null" json:"hostname"`
-	TokenHash string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
-	ExpiresAt time.Time  `gorm:"not null" json:"expires_at"`
-	UsedAt    *time.Time `json:"used_at"`
-	DeviceID  *uint      `json:"device_id"`
-	CreatedBy *uint      `json:"created_by"`
-	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
+	RegionID uint `gorm:"not null" json:"region_id"`
+	// PreferredRegionID is the region whose latency counts 0.8 times when
+	// the latencies choose the region (0055_mesh_region_assignment); NULL:
+	// the settings' default.
+	PreferredRegionID *uint      `json:"preferred_region_id"`
+	Hostname          string     `gorm:"size:63;not null" json:"hostname"`
+	TokenHash         string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	ExpiresAt         time.Time  `gorm:"not null" json:"expires_at"`
+	UsedAt            *time.Time `json:"used_at"`
+	DeviceID          *uint      `json:"device_id"`
+	CreatedBy         *uint      `json:"created_by"`
+	CreatedAt         time.Time  `gorm:"not null" json:"created_at"`
 }
 
 func (MeshEnrollment) TableName() string { return "v5_mesh_enrollment" }
@@ -279,9 +308,23 @@ type MeshPath struct {
 
 func (MeshPath) TableName() string { return "v5_mesh_path" }
 
+// MeshAutoNode marks an Agent node an administrator added to the mesh
+// without a region (0058_mesh_auto_nodes): it gets a configuration with no
+// network until its status reports the latencies of the regions
+// (region_probe.regions), from which the panel chooses its home region and
+// removes the mark (appendix D.5).
+type MeshAutoNode struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	NodeRef   string    `gorm:"size:32;not null;uniqueIndex" json:"node_ref"`
+	CreatedBy *uint     `json:"created_by"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+}
+
+func (MeshAutoNode) TableName() string { return "v5_mesh_auto_node" }
+
 // MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
 // 0047_mesh_enrollment, 0048_mesh_full_nodes, 0051_mesh_external_bridges,
-// 0054_mesh_paths).
+// 0054_mesh_paths, 0058_mesh_auto_nodes).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}, &MeshPath{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}, &MeshPath{}, &MeshAutoNode{}}
 }

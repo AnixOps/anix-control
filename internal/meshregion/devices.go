@@ -76,6 +76,9 @@ type DeviceView struct {
 	LastSeenAt       *time.Time      `json:"last_seen_at"`
 	Status           json.RawMessage `json:"status,omitempty" swaggertype:"object"`
 	StatusReceivedAt *time.Time      `json:"status_received_at,omitempty"`
+	// RegionSuggestion is the move the device's kernel suggests in its
+	// last report (region_probe.suggestion, appendix D.6): null for none.
+	RegionSuggestion *RegionSuggestion `json:"region_suggestion"`
 	// Role is access (a pool address) or full (a fixed address of the
 	// server segment, R32); Subnets are a full node's confirmed subnets.
 	Role    string   `json:"role"`
@@ -265,7 +268,8 @@ func CreateDevice(ctx context.Context, db *gorm.DB, regionID uint, input DeviceI
 		if err != nil {
 			return err
 		}
-		row = model.MeshDevice{RegionID: region.ID, DeviceKey: key, Hostname: hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
+		admin := model.MeshBasisAdmin
+		row = model.MeshDevice{RegionID: region.ID, RegionBasis: &admin, DeviceKey: key, Hostname: hostname, Address: &address, AddressUsedAt: &now, CreatedAt: now, UpdatedAt: now}
 		return tx.Create(&row).Error
 	})
 	return row, err
@@ -394,6 +398,7 @@ func Devices(ctx context.Context, db *gorm.DB, regionID uint, now time.Time) ([]
 		view.LastSeenAt, view.Enrolled = seen[row.ID]
 		if status, ok := reports[DeviceRef(row.ID)]; ok {
 			view.Status, view.StatusReceivedAt = json.RawMessage(status.Payload), &status.ReceivedAt
+			view.RegionSuggestion = suggestionOf(status.Payload)
 		}
 		if checkSuffix(settings.NameSuffix) == nil {
 			// None while the saved suffix breaks the rule: nodes get no names.

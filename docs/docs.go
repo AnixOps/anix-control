@@ -5791,6 +5791,102 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/mesh/auto-members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The Agent nodes added with an automatic region that have not reported latencies of an enabled region yet, with the node's name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The nodes waiting for an automatic region",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/meshregion.AutoNodeView"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds an Agent node that is in no region and lets its measured latencies choose the region (appendix D.5): the node's configuration carries the region directory and no network until its mesh status reports region_probe.regions (region code and rtt_ms of each region it reached); the panel then chooses the enabled region of the lowest score (the latency, times 0.8 for the default preferred region of the mesh settings; ties by sort, then id), gives the node its fixed address of that region's server segment as AddMember does, with the basis latency, and removes the waiting entry. 409 mesh_conflict when the node is in a region or already waits. Audited (module mesh, action mesh_member_add_auto).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a node to the mesh with an automatic region",
+                "parameters": [
+                    {
+                        "description": "node",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.meshAutoMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.MeshAutoNode"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/mesh/auto-members/{auto_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the waiting entry auto_id; the node's configuration loses the member mesh at once. 404 when it was placed or removed meanwhile. Audited (module mesh, action mesh_member_auto_remove).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Stop a node from waiting for an automatic region",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "waiting entry id",
+                        "name": "auto_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/mesh/bridges": {
             "get": {
                 "security": [
@@ -5938,7 +6034,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The latest 500 region changes, pending first, or those of one status (pending, approved, rejected), with their regions' codes.",
+                "description": "The latest 500 region changes, pending first, or those of one status (pending, approved, rejected, withdrawn: the member took its request back), with their regions' codes.",
                 "produces": [
                     "application/json"
                 ],
@@ -5949,7 +6045,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "pending, approved or rejected",
+                        "description": "pending, approved, rejected or withdrawn",
                         "name": "status",
                         "in": "query"
                     }
@@ -6618,7 +6714,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
+                "description": "Issues a one-time credential for a device without an Agent: hostname (one DNS label, the device's name), region_id (0 lets the device's reported latencies choose among the enabled regions, the lowest latency times 0.8 for the preferred region, which is preferred_region, a region code, or else the default preferred region of the mesh settings; preferred_region is refused with a region_id or device_id and for an unknown code) and hours (1 to 168, 24 when 0). role access (default) enrolls a personal device with a pool address; role full enrolls a full node without an Agent (a router or a server), which needs region_id and gets a fixed address of the region's server segment: address, kept for the credential until it is used or withdrawn, or the lowest free one when empty (409 mesh_conflict when taken). A full node listens and advertises only the subnets an administrator confirms. With device_id the credential enrolls that existing device again (its name, region, role and address stay; hostname and region_id are ignored, role and address are refused); a device key another device has is refused otherwise. The token (` + "`" + `mse_` + "`" + ` and 26 characters) is answered only here; only its SHA-256 is stored. Audited (module mesh, action mesh_enrollment_create).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6631,7 +6727,7 @@ const docTemplate = `{
                 "summary": "Issue a mesh enrollment credential",
                 "parameters": [
                     {
-                        "description": "region_id, hostname, hours, role, address",
+                        "description": "region_id, preferred_region, hostname, hours, role, address",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -7331,7 +7427,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "name_suffix (a name is name.region-code.suffix; at least two DNS labels under internal, such as mesh.internal, at most 172 characters; a single label, arpa, local and other domains are refused), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).",
+                "description": "name_suffix (a name is name.region-code.suffix; at least two DNS labels under internal, such as mesh.internal, at most 172 characters; a single label, arpa, local and other domains are refused), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap), preferred_region (a region code, empty for none: the default preferred region of the automatic region choice, whose latency counts 0.8 times; 400 for an unknown code). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).",
                 "consumes": [
                     "application/json"
                 ],
@@ -9437,7 +9533,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
+                "description": "The device's networks in the shape of the Agent's member mesh: its region's network, kind managed with the static keys of its members and devices as native_keys, as an access member (its pool address, no listeners, the region's boundary nodes as peers) while the region is enabled, none otherwise. The networks follow the capabilities of the device's kernel, from features (comma separated) or else its latest report's features: without mesh_native_keys no network is answered, and dns.resolver_address only with mesh_resolver_address. The answer's top-level region (current, basis: latency, credential, admin or migration, directory, responder null) is added only when the kernel lists mesh_region_probe, and each network's region_request (null, or id, region, state pending or rejected, reason, reject_reason) only with mesh_region_request_state. Every read uses the device's address. A device reads it every minute. 401 for an unknown or revoked device token.",
                 "produces": [
                     "application/json"
                 ],
@@ -9458,6 +9554,31 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/mesh/device/directory": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The directory a device measures to choose or change its region (appendix D.2): version 1, preferred (the code of the credential's preferred region, else the mesh settings' default, else null; for a device token the default), and the enabled regions in order with code, subnet and borders (name, probe: the border node's address literal and the responder port, key: the responder's X25519 public key in base64). Only border nodes whose latest status reports a responder key are listed, and a region with none is left out. Authorization: Bearer an enrollment credential (mse_), which is not used up by this read (it counts while unexpired, not withdrawn and unused or used within 10 minutes), or a device token (msd_). 401 otherwise. Rate limited; 404 feature_disabled while the mesh is not available in this build.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "The mesh region directory",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/meshregion.Directory"
                         }
                     }
                 }
@@ -9532,6 +9653,23 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/model.MeshRegionChange"
                         }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Takes back the device's pending region change request (status withdrawn in the administrator's region changes), and clears a rejected one the device's configuration still shows, so that the network's region_request becomes null (appendix D.7). Answered 204 also when there is none. 401 for an unknown or revoked device token.",
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "Withdraw a mesh device's region change request",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -10393,6 +10531,15 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.meshAutoMemberRequest": {
+            "type": "object",
+            "properties": {
+                "node": {
+                    "description": "Node is proxy-\u003cid\u003e or forward-\u003cid\u003e.",
+                    "type": "string"
+                }
+            }
+        },
         "handler.meshDecisionRequest": {
             "type": "object",
             "properties": {
@@ -10744,6 +10891,26 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.AutoNodeView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "node_name": {
+                    "type": "string"
+                },
+                "node_ref": {
+                    "type": "string"
+                }
+            }
+        },
         "meshregion.BridgeAllowView": {
             "type": "object",
             "properties": {
@@ -10931,7 +11098,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status is \"pending\", \"approved\" or \"rejected\".",
+                    "description": "Status is \"pending\", \"approved\", \"rejected\" or \"withdrawn\".",
                     "type": "string"
                 },
                 "to_region_code": {
@@ -11005,11 +11172,23 @@ const docTemplate = `{
                 "last_seen_at": {
                     "type": "string"
                 },
+                "region_basis": {
+                    "description": "RegionBasis is why the device is in its region (0057_mesh_region_basis):\nthe MeshBasis values; NULL counts as admin.",
+                    "type": "string"
+                },
                 "region_code": {
                     "type": "string"
                 },
                 "region_id": {
                     "type": "integer"
+                },
+                "region_suggestion": {
+                    "description": "RegionSuggestion is the move the device's kernel suggests in its\nlast report (region_probe.suggestion, appendix D.6): null for none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meshregion.RegionSuggestion"
+                        }
+                    ]
                 },
                 "role": {
                     "description": "Role is access (a pool address) or full (a fixed address of the\nserver segment, R32); Subnets are a full node's confirmed subnets.",
@@ -11047,6 +11226,58 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "meshregion.Directory": {
+            "type": "object",
+            "properties": {
+                "preferred": {
+                    "description": "Preferred is the code of the preferred region, null for none; only\nfor display, the panel applies the factor (D.5).",
+                    "type": "string"
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.DirectoryRegion"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "meshregion.DirectoryBorder": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "Key is the responder's X25519 public key, standard base64.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is a DNS label of the node, unique in its region.",
+                    "type": "string"
+                },
+                "probe": {
+                    "description": "Probe is the node's address literal and the responder port.",
+                    "type": "string"
+                }
+            }
+        },
+        "meshregion.DirectoryRegion": {
+            "type": "object",
+            "properties": {
+                "borders": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meshregion.DirectoryBorder"
+                    }
+                },
+                "code": {
+                    "type": "string"
+                },
+                "subnet": {
+                    "type": "string"
                 }
             }
         },
@@ -11112,6 +11343,10 @@ const docTemplate = `{
                     "description": "Hours the credential stays valid: 1 to 168, 24 when 0.",
                     "type": "integer"
                 },
+                "preferred_region": {
+                    "description": "PreferredRegion is the code of the region whose latency counts 0.8\ntimes when the device's latencies choose the region (D.5); empty:\nthe settings' default. Only for a credential without a region.",
+                    "type": "string"
+                },
                 "region_id": {
                     "type": "integer"
                 },
@@ -11147,6 +11382,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "preferred_region": {
+                    "type": "string"
+                },
+                "preferred_region_id": {
+                    "description": "PreferredRegionID is the region whose latency counts 0.8 times when\nthe latencies choose the region (0055_mesh_region_assignment); NULL:\nthe settings' default.",
                     "type": "integer"
                 },
                 "region_id": {
@@ -11243,6 +11485,13 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "preferred_region": {
+                    "type": "string"
+                },
+                "preferred_region_id": {
+                    "description": "PreferredRegionID is the region whose latency counts 0.8 times when\nthe latencies choose the region (0055_mesh_region_assignment); NULL:\nthe settings' default.",
+                    "type": "integer"
+                },
                 "region_id": {
                     "description": "RegionID is the device's region; 0 lets the latencies the device\nreports choose among the enabled regions.",
                     "type": "integer"
@@ -11290,8 +11539,20 @@ const docTemplate = `{
                     "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
                     "type": "string"
                 },
+                "region_basis": {
+                    "description": "RegionBasis is, on a home row, why the node is in its region\n(0057_mesh_region_basis): the MeshBasis values; NULL counts as admin.",
+                    "type": "string"
+                },
                 "region_id": {
                     "type": "integer"
+                },
+                "region_suggestion": {
+                    "description": "RegionSuggestion is the move the node's kernel suggests in its last\nstatus (region_probe.suggestion, appendix D.6): null for none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meshregion.RegionSuggestion"
+                        }
+                    ]
                 },
                 "static_key": {
                     "description": "StaticKey is the node's static public key in this region's network\nas its Agent last reported it (0050_mesh_native_keys): 32 bytes of\nX25519 in standard base64; nil before the first report.",
@@ -11555,6 +11816,26 @@ const docTemplate = `{
                 }
             }
         },
+        "meshregion.RegionSuggestion": {
+            "type": "object",
+            "properties": {
+                "current_median_ms": {
+                    "description": "CurrentMedianMS and SuggestedMedianMS are the median round trips of\nthe current and the suggested region, in whole milliseconds.",
+                    "type": "integer"
+                },
+                "region": {
+                    "description": "Region is the code of the suggested region.",
+                    "type": "string"
+                },
+                "since": {
+                    "description": "Since is when the condition began to hold (RFC 3339).",
+                    "type": "string"
+                },
+                "suggested_median_ms": {
+                    "type": "integer"
+                }
+            }
+        },
         "meshregion.Settings": {
             "type": "object",
             "properties": {
@@ -11569,12 +11850,24 @@ const docTemplate = `{
                     "description": "NameSuffix: a name is \u003cname\u003e.\u003cregion code\u003e.\u003csuffix\u003e (R28).",
                     "type": "string"
                 },
+                "preferred_region": {
+                    "description": "PreferredRegion is the code of the default preferred region of the\nautomatic region choice (D.5: its latency counts 0.8 times), empty\nfor none; a region deleted since counts as none.",
+                    "type": "string"
+                },
+                "preferred_region_id": {
+                    "description": "PreferredRegionID is its id, 0 for none.",
+                    "type": "integer"
+                },
                 "reserved_ranges": {
                     "description": "ReservedRanges: ranges no region or host group may overlap, such as\nthe range of a network the mesh replaces. They have the regions'\nprefix length: during a migration the old network and the regions\ncarry traffic for each other (spec section 15.7, item 2).",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "responder_port": {
+                    "description": "ResponderPort is the UDP port of the border nodes' probe responders\n(appendix D.9.3), DefaultResponderPort until saved.",
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"
@@ -11600,11 +11893,19 @@ const docTemplate = `{
                 "name_suffix": {
                     "type": "string"
                 },
+                "preferred_region": {
+                    "description": "PreferredRegion is the code of the default preferred region, empty\nfor none.",
+                    "type": "string"
+                },
                 "reserved_ranges": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "responder_port": {
+                    "description": "ResponderPort is the UDP port of the border nodes' probe\nresponders, 1 to 65535 other than the network port; 0 for the\ndefault.",
+                    "type": "integer"
                 }
             }
         },
@@ -11664,6 +11965,23 @@ const docTemplate = `{
                 }
             }
         },
+        "model.MeshAutoNode": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "node_ref": {
+                    "type": "string"
+                }
+            }
+        },
         "model.MeshDevice": {
             "type": "object",
             "properties": {
@@ -11687,6 +12005,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "region_basis": {
+                    "description": "RegionBasis is why the device is in its region (0057_mesh_region_basis):\nthe MeshBasis values; NULL counts as admin.",
+                    "type": "string"
                 },
                 "region_id": {
                     "type": "integer"
@@ -11793,6 +12115,10 @@ const docTemplate = `{
                 },
                 "node_ref": {
                     "description": "NodeRef is the node (\"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\").",
+                    "type": "string"
+                },
+                "region_basis": {
+                    "description": "RegionBasis is, on a home row, why the node is in its region\n(0057_mesh_region_basis): the MeshBasis values; NULL counts as admin.",
                     "type": "string"
                 },
                 "region_id": {
@@ -11902,7 +12228,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status is \"pending\", \"approved\" or \"rejected\".",
+                    "description": "Status is \"pending\", \"approved\", \"rejected\" or \"withdrawn\".",
                     "type": "string"
                 },
                 "to_region_id": {
