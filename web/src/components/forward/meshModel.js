@@ -77,6 +77,21 @@ export function boundaryCount(region) {
   return (region.members || []).filter(member => !member.home || member.boundary).length
 }
 
+// nameSuffixProblem applies the rule the panel and the kernel enforce on
+// the intranet domain suffix (spec section 15.9.2, item 1), compared
+// without surrounding spaces and one final dot, in lowercase: DNS labels
+// of 1 to 63 lowercase letters, digits and inner hyphens, at most 172
+// characters, under internal with at least two labels. It answers
+// 'labels', 'length' or 'internal', or '' when the suffix is valid.
+export function nameSuffixProblem(raw) {
+  const suffix = String(raw ?? '').trim().replace(/\.$/, '').toLowerCase()
+  if (suffix.length > 172) return 'length'
+  const labels = suffix.split('.')
+  if (!labels.every(label => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return 'labels'
+  if (labels.length < 2 || labels[labels.length - 1] !== 'internal') return 'internal'
+  return ''
+}
+
 export function meshErrorMessage(error) {
   const answer = error?.response?.data
   return answer?.error?.message || answer?.message || error?.message || String(error)

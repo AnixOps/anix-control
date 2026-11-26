@@ -245,7 +245,13 @@ export default {
     settings: {
       title: '设置',
       nameSuffix: '域名后缀',
-      nameSuffixHelp: '名称格式为 名称.地区代码.后缀。后缀须位于 internal 或 home.arpa 之下。',
+      nameSuffixHelp: '名称格式为 名称.地区代码.后缀。后缀须位于 internal 之下且至少两级，例如 mesh.internal。',
+      savedSuffixInvalid: '当前保存的域名后缀不符合规则，节点暂不启用内网域名。请改为 internal 之下的后缀后保存。',
+      suffixProblems: {
+        labels: '每一级须为 1 至 63 个小写字母、数字或连字符，连字符不得位于首尾，各级以点分隔。',
+        length: '后缀不得超过 172 个字符。',
+        internal: '后缀须位于 internal 之下且至少两级，例如 mesh.internal。单级后缀、arpa、local 及其他域名均不可用。'
+      },
       hostGroupSupernet: '宿主组地址范围',
       hostGroupPrefix: '宿主组地址段前缀长度',
       hostGroupHelp: '存在宿主组时不可更改。',

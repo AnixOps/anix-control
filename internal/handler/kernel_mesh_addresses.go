@@ -55,7 +55,7 @@ func (h *MeshHandler) MeshSummary(c *gin.Context) {
 
 // SaveMeshSettings godoc
 // @Summary Change the mesh settings
-// @Description name_suffix (DNS labels, such as mesh.internal: a name is name.region-code.suffix), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).
+// @Description name_suffix (a name is name.region-code.suffix; at least two DNS labels under internal, such as mesh.internal, at most 172 characters; a single label, arpa, local and other domains are refused), host_group_supernet (a private network of /8 to /24 outside every region) and host_group_prefix (the segment length; both change only while no host group exists), reserved_ranges (at most 32 networks no region or host group may overlap). 409 mesh_conflict when a range overlaps a region. Audited (module mesh, action mesh_settings_update).
 // @Tags Kernel
 // @Accept json
 // @Produce json
