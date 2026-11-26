@@ -308,9 +308,23 @@ type MeshPath struct {
 
 func (MeshPath) TableName() string { return "v5_mesh_path" }
 
+// MeshAutoNode marks an Agent node an administrator added to the mesh
+// without a region (0058_mesh_auto_nodes): it gets a configuration with no
+// network until its status reports the latencies of the regions
+// (region_probe.regions), from which the panel chooses its home region and
+// removes the mark (appendix D.5).
+type MeshAutoNode struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	NodeRef   string    `gorm:"size:32;not null;uniqueIndex" json:"node_ref"`
+	CreatedBy *uint     `json:"created_by"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+}
+
+func (MeshAutoNode) TableName() string { return "v5_mesh_auto_node" }
+
 // MeshModels are the mesh's tables (0045_mesh_regions, 0046_mesh_addresses,
 // 0047_mesh_enrollment, 0048_mesh_full_nodes, 0051_mesh_external_bridges,
-// 0054_mesh_paths).
+// 0054_mesh_paths, 0058_mesh_auto_nodes).
 func MeshModels() []any {
-	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}, &MeshPath{}}
+	return []any{&MeshRegion{}, &MeshMember{}, &MeshStatus{}, &MeshSettings{}, &MeshDevice{}, &MeshHostGroup{}, &MeshDeviceName{}, &MeshRegionChange{}, &MeshEnrollment{}, &MeshDeviceToken{}, &MeshFullNode{}, &MeshExternalBridge{}, &MeshBridgeHold{}, &MeshPath{}, &MeshAutoNode{}}
 }

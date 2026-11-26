@@ -268,6 +268,93 @@ func (h *MeshHandler) AddMember(c *gin.Context) {
 	kernelData(c, http.StatusCreated, row)
 }
 
+type meshAutoMemberRequest struct {
+	// Node is proxy-<id> or forward-<id>.
+	Node string `json:"node"`
+}
+
+// AddAutoMember godoc
+// @Summary Add a node to the mesh with an automatic region
+// @Description Adds an Agent node that is in no region and lets its measured latencies choose the region (appendix D.5): the node's configuration carries the region directory and no network until its mesh status reports region_probe.regions (region code and rtt_ms of each region it reached); the panel then chooses the enabled region of the lowest score (the latency, times 0.8 for the default preferred region of the mesh settings; ties by sort, then id), gives the node its fixed address of that region's server segment as AddMember does, with the basis latency, and removes the waiting entry. 409 mesh_conflict when the node is in a region or already waits. Audited (module mesh, action mesh_member_add_auto).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body meshAutoMemberRequest true "node"
+// @Success 201 {object} model.MeshAutoNode
+// @Router /api/v4/kernel/mesh/auto-members [post]
+func (h *MeshHandler) AddAutoMember(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	var request meshAutoMemberRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "node is expected")
+		return
+	}
+	node, err := agentcontrol.ParseAgentNode(request.Node)
+	if err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "node must be proxy-<id> or forward-<id>")
+		return
+	}
+	row, err := meshregion.AddAutoNode(c.Request.Context(), db, node, h.actor(c), h.now())
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_member_add_auto", row.ID, fmt.Sprintf(`{"node":%q}`, row.NodeRef))
+	kernelData(c, http.StatusCreated, row)
+}
+
+// ListAutoMembers godoc
+// @Summary The nodes waiting for an automatic region
+// @Description The Agent nodes added with an automatic region that have not reported latencies of an enabled region yet, with the node's name.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} meshregion.AutoNodeView
+// @Router /api/v4/kernel/mesh/auto-members [get]
+func (h *MeshHandler) ListAutoMembers(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	rows, err := meshregion.AutoNodes(c.Request.Context(), db)
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, rows)
+}
+
+// RemoveAutoMember godoc
+// @Summary Stop a node from waiting for an automatic region
+// @Description Removes the waiting entry auto_id; the node's configuration loses the member mesh at once. 404 when it was placed or removed meanwhile. Audited (module mesh, action mesh_member_auto_remove).
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param auto_id path int true "waiting entry id"
+// @Success 204
+// @Router /api/v4/kernel/mesh/auto-members/{auto_id} [delete]
+func (h *MeshHandler) RemoveAutoMember(c *gin.Context) {
+	db, ok := h.database(c)
+	if !ok {
+		return
+	}
+	id, ok := pathID(c, "auto_id")
+	if !ok {
+		return
+	}
+	node, err := meshregion.RemoveAutoNode(c.Request.Context(), db, id)
+	if err != nil {
+		meshError(c, err)
+		return
+	}
+	h.audit(c, db, "mesh_member_auto_remove", id, fmt.Sprintf(`{"node":%q}`, node))
+	c.Status(http.StatusNoContent)
+}
+
 // UpdateMember godoc
 // @Summary Change a node's mesh membership
 // @Description On the node's home membership: boundary makes it a boundary node (an address in every other region) or an ordinary member; region_id, when not 0, moves the node to that region, where it gets a new fixed address. Answers the node's home membership. 404 when member_id is not a home membership. Audited (module mesh, action mesh_member_update).

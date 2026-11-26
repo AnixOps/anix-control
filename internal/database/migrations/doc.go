@@ -220,4 +220,7 @@
 //   - 0057_mesh_region_basis: why a member or device is in its region
 //     (v5_mesh_member.region_basis, v5_mesh_device.region_basis,
 //     internal/meshregion).
+//   - 0058_mesh_auto_nodes: the Agent nodes added to the mesh without a
+//     region, which the panel places by their measured latencies
+//     (v5_mesh_auto_node, internal/meshregion).
 package migrations

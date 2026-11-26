@@ -460,6 +460,10 @@ func addNode(ctx context.Context, db *gorm.DB, regionID uint, node agentcontrol.
 		if count > 0 {
 			return conflict("the node is already in a region")
 		}
+		// An administrator's choice replaces waiting for the latencies.
+		if err := tx.Where("node_ref = ?", node.String()).Delete(&model.MeshAutoNode{}).Error; err != nil {
+			return err
+		}
 		var err error
 		if row, err = join(tx, region, node.String(), true, boundary, now); err != nil {
 			return err
@@ -742,8 +746,22 @@ func NodeMember(db *gorm.DB, node agentcontrol.AgentNode) (map[string]any, error
 		return nil, nil
 	}
 	var own []model.MeshMember
-	if err := db.Where("node_ref = ?", node.String()).Find(&own).Error; err != nil || len(own) == 0 {
+	if err := db.Where("node_ref = ?", node.String()).Find(&own).Error; err != nil {
 		return nil, err
+	}
+	if len(own) == 0 {
+		// A node added without a region has no network until its
+		// latencies place it (autoassign.go); its region object gives it
+		// the directory to measure.
+		wait, err := waiting(db, node.String())
+		if err != nil || !wait {
+			return nil, err
+		}
+		directory, err := defaultDirectory(db)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"networks": []map[string]any{}, "region": regionObject(directory, nil, "", nil)}, nil
 	}
 	boundary := false
 	ids := make([]uint, 0, len(own))
@@ -903,7 +921,14 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 		return err
 	}
 	if members == 0 {
-		return ErrNotMember
+		// A node waiting for its region reports the latencies it measured.
+		wait, err := waiting(db, node.String())
+		if err != nil {
+			return err
+		}
+		if !wait {
+			return ErrNotMember
+		}
 	}
 	before, err := instanceIDs(db, []string{node.String()})
 	if err != nil {
@@ -940,6 +965,9 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 		}).Create(&row).Error; err != nil {
 			return err
 		}
+		if members == 0 {
+			return nil
+		}
 		if err := touchDevices(tx, payload, observedAt); err != nil {
 			return err
 		}
@@ -949,6 +977,9 @@ func RecordStatus(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode,
 	})
 	if err != nil || dropped {
 		return err
+	}
+	if members == 0 {
+		return placeAutoNode(ctx, db, node, payload, receivedAt)
 	}
 	// A new or changed static key of the node changes its regions'
 	// native_keys.
