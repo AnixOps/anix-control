@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
 )
@@ -170,4 +171,90 @@ func TestAgentConfigCarriesTheRegionObject(t *testing.T) {
 	plain, err = NodeMember(db, proxy(2))
 	require.NoError(t, err)
 	require.Equal(t, "admin", regionOf(t, plain)["basis"])
+}
+
+func TestWithdrawnRegionRequests(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	region(t, db, "cn", "10.150.0.0/16")
+	eu := region(t, db, "eu", "10.152.0.0/16")
+	_, err := AddNode(ctx, db, eu.ID, proxy(1), false, now)
+	require.NoError(t, err)
+	var pushed []string
+	cancel := OnChange(func(nodes []agentcontrol.AgentNode) {
+		for _, node := range nodes {
+			pushed = append(pushed, node.String())
+		}
+	})
+	defer cancel()
+
+	requestOf := func() any {
+		member, err := NodeMember(db, proxy(1))
+		require.NoError(t, err)
+		return member["networks"].([]map[string]any)[0]["region_request"]
+	}
+	payload := func(body string) []byte { return []byte(body) }
+
+	// None to withdraw is not an error.
+	_, err = RequestNodeChange(ctx, db, proxy(1), payload(`{"withdraw":true}`), now)
+	require.NoError(t, err)
+	_, err = RequestNodeChange(ctx, db, proxy(1), payload(`{"withdraw":false}`), now)
+	require.ErrorIs(t, err, ErrInvalid)
+
+	// A request pushes the node's configuration; withdrawn, it is no longer
+	// pending: a new one is allowed and the history keeps the row.
+	pushed = nil
+	asked, err := RequestNodeChange(ctx, db, proxy(1), payload(`{"region":"cn","reason":"closer"}`), now)
+	require.NoError(t, err)
+	require.Equal(t, []string{"proxy-1"}, pushed)
+	require.NotNil(t, requestOf())
+	pushed = nil
+	_, err = RequestNodeChange(ctx, db, proxy(1), payload(`{"withdraw":true}`), now)
+	require.NoError(t, err)
+	require.Equal(t, []string{"proxy-1"}, pushed)
+	require.Nil(t, requestOf())
+	var row model.MeshRegionChange
+	require.NoError(t, db.First(&row, asked.ID).Error)
+	require.Equal(t, model.MeshChangeWithdrawn, row.Status)
+	_, err = ApproveChange(ctx, db, asked.ID, "", nil, now)
+	require.ErrorIs(t, err, ErrConflict, "a withdrawn request is not decided")
+	views, err := Changes(ctx, db, model.MeshChangeWithdrawn)
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	again, err := RequestNodeChange(ctx, db, proxy(1), payload(`{"region":"cn"}`), now)
+	require.NoError(t, err)
+
+	// A rejected request stays shown until it is withdrawn.
+	_, err = RejectChange(ctx, db, again.ID, "no", nil, now)
+	require.NoError(t, err)
+	require.Equal(t, "rejected", requestOf().(map[string]any)["state"])
+	_, err = RequestNodeChange(ctx, db, proxy(1), payload(`{"withdraw":true}`), now)
+	require.NoError(t, err)
+	require.Nil(t, requestOf())
+	_, err = RequestNodeChange(ctx, db, proxy(1), payload(`{"withdraw":true}`), now)
+	require.NoError(t, err, "withdrawing twice")
+
+	// A device: the same, and an approved change is not touched.
+	issued, err := CreateEnrollment(ctx, db, EnrollmentInput{Hostname: "laptop", RegionID: eu.ID}, nil, now)
+	require.NoError(t, err)
+	enrolled, err := Enroll(ctx, db, EnrollRequest{Features: probeFeatures, Token: issued.Token, DeviceKey: laptopKey}, now)
+	require.NoError(t, err)
+	device, err := Authenticate(ctx, db, enrolled.DeviceToken, now)
+	require.NoError(t, err)
+	require.NoError(t, WithdrawDeviceChange(ctx, db, device, now), "none")
+	_, err = RequestDeviceChange(ctx, db, device, "cn", "", now)
+	require.NoError(t, err)
+	require.NoError(t, WithdrawDeviceChange(ctx, db, device, now))
+	config, err := DeviceConfig(ctx, db, device, probeFeatures, now)
+	require.NoError(t, err)
+	require.Nil(t, config["networks"].([]map[string]any)[0]["region_request"])
+	second, err := RequestDeviceChange(ctx, db, device, "cn", "", now)
+	require.NoError(t, err)
+	_, err = ApproveChange(ctx, db, second.ID, "", nil, now)
+	require.NoError(t, err)
+	device, err = Authenticate(ctx, db, enrolled.DeviceToken, now)
+	require.NoError(t, err)
+	require.NoError(t, WithdrawDeviceChange(ctx, db, device, now))
+	require.NoError(t, db.First(&row, second.ID).Error)
+	require.Equal(t, model.MeshChangeApproved, row.Status, "an approved change stays")
 }

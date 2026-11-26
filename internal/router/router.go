@@ -815,6 +815,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		meshDevice.GET("/directory", meshDevices.MeshDeviceDirectory)
 		meshDevice.POST("/report", meshDevices.MeshDeviceReport)
 		meshDevice.POST("/region-change", meshDevices.MeshDeviceChange)
+		meshDevice.DELETE("/region-change", meshDevices.MeshDeviceWithdrawChange)
 		meshDevice.POST("/subnet-request", meshDevices.MeshDeviceSubnetRequest)
 	}
 

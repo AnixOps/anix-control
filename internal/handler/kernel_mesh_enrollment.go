@@ -312,6 +312,25 @@ func (h *MeshHandler) MeshDeviceChange(c *gin.Context) {
 	kernelData(c, http.StatusCreated, row)
 }
 
+// MeshDeviceWithdrawChange godoc
+// @Summary Withdraw a mesh device's region change request
+// @Description Takes back the device's pending region change request (status withdrawn in the administrator's region changes), and clears a rejected one the device's configuration still shows, so that the network's region_request becomes null (appendix D.7). Answered 204 also when there is none. 401 for an unknown or revoked device token.
+// @Tags Mesh
+// @Security BearerAuth
+// @Success 204
+// @Router /api/v5/mesh/device/region-change [delete]
+func (h *MeshHandler) MeshDeviceWithdrawChange(c *gin.Context) {
+	device, ok := h.device(c)
+	if !ok {
+		return
+	}
+	if err := meshregion.WithdrawDeviceChange(c.Request.Context(), h.db(), device, h.now()); err != nil {
+		meshError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 type meshDeviceSubnetRequest struct {
 	// CIDRs are the subnets to advertise; empty withdraws the request.
 	CIDRs []string `json:"cidrs"`

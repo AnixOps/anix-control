@@ -631,11 +631,11 @@ func (h *MeshHandler) ListMeshNames(c *gin.Context) {
 
 // ListMeshChanges godoc
 // @Summary The region changes
-// @Description The latest 500 region changes, pending first, or those of one status (pending, approved, rejected), with their regions' codes.
+// @Description The latest 500 region changes, pending first, or those of one status (pending, approved, rejected, withdrawn: the member took its request back), with their regions' codes.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Param status query string false "pending, approved or rejected"
+// @Param status query string false "pending, approved, rejected or withdrawn"
 // @Success 200 {array} meshregion.ChangeView
 // @Router /api/v4/kernel/mesh/changes [get]
 func (h *MeshHandler) ListMeshChanges(c *gin.Context) {
