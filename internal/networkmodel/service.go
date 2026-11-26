@@ -355,6 +355,65 @@ func (s *Service) SetPublicKeys(ctx context.Context, node string, keys map[strin
 	return err
 }
 
+type cachedDevicePlan struct {
+	generation uint64
+	planHash   string
+	plan       *networkv1.NetworkPlan
+}
+
+var (
+	planCacheMu sync.RWMutex
+	planCache   = map[gorm.ConnPool]map[string]cachedDevicePlan{}
+)
+
+func cachedPlanFor(pool gorm.ConnPool, node string, gen uint64, hash string) *networkv1.NetworkPlan {
+	if pool == nil || gen == 0 || hash == "" {
+		return nil
+	}
+	planCacheMu.RLock()
+	defer planCacheMu.RUnlock()
+	entry, ok := planCache[pool][node]
+	if !ok || entry.generation != gen || entry.planHash != hash || entry.plan == nil {
+		return nil
+	}
+	return proto.Clone(entry.plan).(*networkv1.NetworkPlan)
+}
+
+func storeCachedPlans(pool gorm.ConnPool, rows []model.NetworkDevice, plans map[string]*networkv1.NetworkPlan) {
+	if pool == nil || len(rows) == 0 {
+		return
+	}
+	byNode := make(map[string]cachedDevicePlan, len(rows))
+	for _, row := range rows {
+		if row.Generation == 0 || row.PlanHash == "" {
+			continue
+		}
+		plan := plans[row.NodeRef]
+		if plan == nil {
+			plan = &networkv1.NetworkPlan{DeviceRef: row.NodeRef}
+		}
+		cloned := proto.Clone(plan).(*networkv1.NetworkPlan)
+		g := network.Stamp(cloned, network.Generation{Generation: row.Generation, Hash: row.PlanHash})
+		if g.Generation == row.Generation && g.Hash == row.PlanHash {
+			byNode[row.NodeRef] = cachedDevicePlan{
+				generation: row.Generation,
+				planHash:   row.PlanHash,
+				plan:       cloned,
+			}
+		}
+	}
+	if len(byNode) == 0 {
+		return
+	}
+	planCacheMu.Lock()
+	defer planCacheMu.Unlock()
+	// Bound total tracked pools in case tests create many ephemeral DBs.
+	if len(planCache) > 64 {
+		clear(planCache)
+	}
+	planCache[pool] = byNode
+}
+
 // DevicePlan answers a device's current plan, stamped, for its
 // configuration. found is false when the model gives the device nothing
 // and never did. Link keys are in it: it is for the device only.
@@ -364,11 +423,17 @@ func (s *Service) DevicePlan(ctx context.Context, node string) (plan *networkv1.
 	if err := db.Where("node_ref = ?", node).Limit(1).Find(&rows).Error; err != nil {
 		return nil, false, err
 	}
+	pool := db.Statement.ConnPool
+	if len(rows) > 0 {
+		if cached := cachedPlanFor(pool, node, rows[0].Generation, rows[0].PlanHash); cached != nil {
+			return cached, true, nil
+		}
+	}
 	_, doc, err := loadDocument(db)
 	if err != nil {
 		return nil, false, err
 	}
-	devices, _, err := loadDevices(db)
+	devices, allRows, err := loadDevices(db)
 	if err != nil {
 		return nil, false, err
 	}
@@ -384,6 +449,7 @@ func (s *Service) DevicePlan(ctx context.Context, node string) (plan *networkv1.
 	if err != nil {
 		return nil, false, err
 	}
+	storeCachedPlans(pool, allRows, result.Plans)
 	plan = result.Plans[node]
 	if plan == nil {
 		if len(rows) == 0 || rows[0].Generation == 0 {
