@@ -1,7 +1,7 @@
 {
   "name": "AnixOps Design",
   "repository": "https://github.com/AnixOps/AnixOps-design",
-  "tag": "v1.0.2",
+  "tag": "v1.2.0",
   "files": [
     {
       "path": "LICENSE",
@@ -90,8 +90,8 @@
     {
       "path": "tokens.css",
       "source": "tokens/css/tokens.css",
-      "bytes": 6571,
-      "sha256": "b1dabc1acbcaa8f8b8a475baceb685f4670f84bca3e3847953ad17148c4a930e"
+      "bytes": 7013,
+      "sha256": "5b0b45529d8159a61ccec89bd5e281072be61e314185fb544da65aefaf11e0ce"
     }
   ]
 }

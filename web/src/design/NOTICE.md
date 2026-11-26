@@ -1,7 +1,7 @@
-# AnixOps Design v1.0.2 (vendored)
+# AnixOps Design v1.2.0 (vendored)
 
 The files in this directory are copied unmodified from
-https://github.com/AnixOps/AnixOps-design at tag `v1.0.2` by
+https://github.com/AnixOps/AnixOps-design at tag `v1.2.0` by
 `web/scripts/sync-design.mjs`. Do not edit them here: change the design
 repository, tag a release, then run `npm run design:sync -- --tag <tag>`.
 `npm run design:check` (CI) verifies them against `manifest.json`.
