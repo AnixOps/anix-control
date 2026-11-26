@@ -102,7 +102,7 @@ func responderKey(payload string) (string, bool) {
 // nodeProbeAddr answers the address a node's probe responder is reached
 // at: the first of its server address, the public address it joined from
 // and its host that is an IP literal and a unicast address (no loopback,
-// link-local, multicast, broadcast or unspecified address; a private
+// link-local, multicast, broadcast, unspecified or 0.0.0.0/8 address; a private
 // address is fine, D.2.2). false when it has none: a host name is not
 // resolved.
 func nodeProbeAddr(db *gorm.DB, ref string) (netip.Addr, bool, error) {
@@ -160,7 +160,8 @@ func probeLiteral(raw string) (netip.Addr, bool) {
 		address = port.Addr()
 	}
 	address = address.Unmap()
-	if address.Zone() != "" || !address.IsGlobalUnicast() {
+	// 0.0.0.0/8 ("this network") is no destination; the kernel refuses it.
+	if address.Zone() != "" || !address.IsGlobalUnicast() || (address.Is4() && address.As4()[0] == 0) {
 		return netip.Addr{}, false
 	}
 	return address, true
