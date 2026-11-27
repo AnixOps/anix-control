@@ -169,7 +169,9 @@ export default {
         downloadLabel: '下载 {os} {name}',
         testflight: '加入 TestFlight',
         testflightAsk: '通过 TestFlight 安装，邀请请联系客服获取。',
-        verify: '下载链接包含订阅令牌，请勿分享。校验文件：'
+        verify: '下载链接包含订阅令牌，请勿分享。校验文件：',
+        region: '客户端不向中国大陆提供。',
+        unavailable: '当前地区不提供客户端下载。'
       },
       clients: {
         title: '导入到客户端',

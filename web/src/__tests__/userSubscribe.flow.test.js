@@ -172,6 +172,16 @@ describe('User Subscribe flow', () => {
     expect(screen.queryByRole('region', { name: 'AnixOps Net (ANX edition)' })).toBeNull()
   })
 
+  it('says the client is not offered here when the reverse proxy answers 451', async () => {
+    mockGetSubscription.mockResolvedValue(ok(SUMMARY))
+    mockFetch.mockResolvedValue({ ok: false, status: 451 })
+    await renderPage()
+    const section = await screen.findByRole('region', { name: 'AnixOps Net (ANX edition)' })
+    expect(within(section).getByText('Client downloads are not available in this region.')).toBeTruthy()
+    expect(within(section).getByText('The client is not offered in mainland China.')).toBeTruthy()
+    expect(within(section).queryAllByRole('link')).toHaveLength(0)
+  })
+
   it('previews another format from this origin and downloads it with the right extension', async () => {
     mockGetSubscription.mockResolvedValue(ok({ ...SUMMARY, subscribe_domains: ['sub-a.example.com'] }))
     mockFetch.mockResolvedValue({ ok: true, status: 200, text: async () => '[Interface]\nPrivateKey = test' })

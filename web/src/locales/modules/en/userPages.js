@@ -170,7 +170,9 @@ export default {
         downloadLabel: 'Download {os} {name}',
         testflight: 'Join TestFlight',
         testflightAsk: 'Installed through TestFlight. Contact support for an invitation.',
-        verify: 'Download links carry your subscription token. Do not share them. Checksums:'
+        verify: 'Download links carry your subscription token. Do not share them. Checksums:',
+        region: 'The client is not offered in mainland China.',
+        unavailable: 'Client downloads are not available in this region.'
       },
       clients: {
         title: 'Import to a client',
