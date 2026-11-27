@@ -1,15 +1,16 @@
 <template>
   <section
-    v-if="release"
+    v-if="release || unavailable"
     class="subscribe-section"
     aria-labelledby="subscribe-anx-title"
     data-subscribe-anx
   >
     <div class="subscribe-section__head">
       <h2 id="subscribe-anx-title" class="subscribe-section__title">{{ t('portal.subscribe.anx.title') }}</h2>
-      <span class="subscribe-section__hint">{{ t('portal.subscribe.anx.hint', { version: release.version }) }}</span>
+      <span v-if="release" class="subscribe-section__hint">{{ t('portal.subscribe.anx.hint', { version: release.version }) }}</span>
     </div>
-    <ul class="anx-downloads">
+    <p v-if="unavailable" class="anx-downloads__foot" data-anx-unavailable>{{ t('portal.subscribe.anx.unavailable') }}</p>
+    <ul v-if="release" class="anx-downloads">
       <li v-for="group in groups" :key="group.os" class="anx-download" :data-anx-os="group.os">
         <span class="anx-download__name">{{ t(`portal.subscribe.anx.os.${group.os}`) }}</span>
         <template v-if="group.os === 'ios'">
@@ -41,10 +42,11 @@
         </template>
       </li>
     </ul>
-    <p class="anx-downloads__foot">
+    <p v-if="release" class="anx-downloads__foot">
       {{ t('portal.subscribe.anx.verify') }}
       <a :href="release.sha256sums_url" data-anx-sums>SHA256SUMS</a>
     </p>
+    <p class="anx-downloads__foot" data-anx-region>{{ t('portal.subscribe.anx.region') }}</p>
   </section>
 </template>
 
@@ -53,7 +55,10 @@
 // /{subscribe_path}/{token}/client, docs/reference/client-downloads.md):
 // the newest release Control holds, grouped by system, downloaded with the
 // subscription token. Hidden when Control holds none or the request fails,
-// so a panel without client releases looks as before.
+// so a panel without client releases looks as before. The client is not
+// offered in mainland China (TERMS.md section 1): the reverse proxy answers
+// such requests with 451, and the section then says so instead of listing
+// files.
 import { computed, ref, watch } from 'vue'
 import { Download } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -68,6 +73,7 @@ const props = defineProps({
 const { t } = useAppI18n()
 const format = useFormat()
 const release = ref(null)
+const unavailable = ref(false)
 
 const OS_ORDER = ['windows', 'macos', 'linux', 'android', 'ios']
 
@@ -85,9 +91,14 @@ const groups = computed(() => {
 
 async function load(link) {
   release.value = null
+  unavailable.value = false
   if (!link) return
   try {
     const response = await fetch(`${link}/client`, { headers: { Accept: 'application/json' } })
+    if (response?.status === 451) {
+      unavailable.value = true
+      return
+    }
     if (!response?.ok) return
     const body = await response.json()
     if (body?.data?.version && Array.isArray(body.data.files) && body.data.files.length > 0) {

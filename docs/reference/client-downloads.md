@@ -95,3 +95,19 @@ link, they must not be shared.
 The subscription page (用户中心 → 订阅) reads `GET /s/{token}/client` from
 its own origin and shows the "AnixOps Net (ANX edition)" section only when a
 release is there.
+
+## Region
+
+The AnixOps Net client is not offered in mainland China (`TERMS.md`
+section 1, terms 2.2.0). Control itself does not look up countries; the
+reverse proxy in front of it answers the subscriber routes
+`/{subscribe_path}/{token}/client` and
+`/{subscribe_path}/{token}/client/{version}/{file}` with
+`451 Unavailable For Legal Reasons` for requests from mainland China. The
+AnixOps-ansible `control-host` nginx template does this with the address
+ranges APNIC registers for mainland China (and Cloudflare's country header
+when a request arrives through Cloudflare), refreshed weekly.
+
+The subscription page treats `451` as "not available in this region": the
+ANX section shows that sentence instead of the files. Every subscription
+page also states that the client is not offered in mainland China.
