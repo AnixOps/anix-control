@@ -65,7 +65,7 @@ func DefaultServerConfig() *ServerConfig {
 		KeepaliveTime:     30 * time.Second,
 		KeepaliveTimeout:  10 * time.Second,
 		MaxConnectionIdle: 15 * time.Minute,
-		MaxConnectionAge:  30 * time.Minute,
+		MaxConnectionAge:  0,
 	}
 }
 

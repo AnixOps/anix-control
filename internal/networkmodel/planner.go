@@ -151,6 +151,7 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device, forw
 			continue
 		}
 		at := nodeOf(ingress.Line)
+		visited := map[string]bool{at: true}
 		chained := true
 		for j, id := range path.Segments {
 			transport := transports[id]
@@ -164,7 +165,14 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device, forw
 				chained = false
 				break
 			}
-			at = nodeOf(ingresses[transport.ToIngress].Line)
+			next := nodeOf(ingresses[transport.ToIngress].Line)
+			if visited[next] {
+				v.add(fmt.Sprintf("%s.segments[%d]", field, j), "revisits %s (cycle)", next)
+				chained = false
+				break
+			}
+			visited[next] = true
+			at = next
 		}
 		if chained && nodeOf(egress.Line) != at {
 			v.add(field+".egress", "%q is on %s, but the path ends at %s", path.Egress, nodeOf(egress.Line), at)

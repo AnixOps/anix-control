@@ -404,3 +404,51 @@ func TestSharedKeys(t *testing.T) {
 	// An empty key is no key.
 	require.Empty(t, sharedKeys(map[string]string{"anx_line": ""}, others))
 }
+
+func TestPlanRejectsMultiHopCycle(t *testing.T) {
+	doc := twoHops()
+	doc.Ingresses = append(doc.Ingresses, Ingress{
+		ID: "in-back", Line: "ln-ix", Kind: "direct", Audience: "hop", Family: "v4", Listen: Endpoint{Address: "0.0.0.0", Port: 20443},
+	})
+	doc.Egresses = append(doc.Egresses, Egress{
+		ID: "eg-back", Line: "ln-jp", Kind: "hop", Audience: "hop", Family: "v4", Source: "203.0.113.20",
+	})
+	doc.Transports = append(doc.Transports, Transport{
+		ID: "tr-back", FromEgress: "eg-back", ToIngress: "in-back", Kind: "anx_line", Trusted: true,
+	})
+	doc.Paths[0].Segments = []string{"tr-jp", "tr-back"}
+	doc.Paths[0].Egress = "eg-jp"
+
+	_, err := Plan(doc, map[string]string{"tr-jp": linkKey, "tr-back": linkKey}, japanKey(), nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cycle")
+}
+
+func TestDevicePlanCacheInvalidatesOnChange(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	_, err := s.Replace(ctx, twoHops(), nil, Actor{Name: "op"})
+	require.NoError(t, err)
+
+	p1, found, err := s.DevicePlan(ctx, "proxy-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	gen1 := p1.Generation
+	// Second call hits cache and must still return an independent clone.
+	p1.DeviceRef = "mutated-by-caller"
+	p2, found, err := s.DevicePlan(ctx, "proxy-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "proxy-1", p2.DeviceRef)
+	require.Equal(t, gen1, p2.Generation)
+
+	// Replacing the model bumps generation and invalidates the cached plan.
+	doc := twoHops()
+	doc.Lines[0].Carrier = "cmi"
+	_, err = s.Replace(ctx, doc, nil, Actor{Name: "op"})
+	require.NoError(t, err)
+	p3, found, err := s.DevicePlan(ctx, "proxy-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Greater(t, p3.Generation, gen1)
+}
