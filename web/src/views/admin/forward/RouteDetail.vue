@@ -75,6 +75,12 @@
               <li v-for="target in route.targets || []" :key="`${target.host}:${target.port}`" class="chain__node">
                 <span class="fwd-mono">{{ showAddress(target.host) }}:{{ target.port }}</span>
                 <span class="fwd-muted">{{ t('forwardV4.detail.weightPriority', { w: num(target.weight) || 1, p: num(target.priority) }) }}</span>
+                <ul class="chain__ups">
+                  <li v-for="(up, upIndex) in pathChecksOf(target)" :key="upIndex" class="chain__up">
+                    <UiBadge :tone="HEALTH_TONES[up.state] || 'neutral'" :label="t(`forwardV4.health.${up.state}`)" />
+                    <span class="fwd-muted">{{ t('forwardV4.detail.pathCheckBy', { name: nodeName(up.node_ref) }) }} {{ up.detail }}</span>
+                  </li>
+                </ul>
               </li>
             </ul>
           </li>
@@ -265,6 +271,11 @@ const nodeRefs = computed(() => Array.from(new Set((route.value?.hops || []).fla
 const reportOf = ref => views.value.get(ref)?.report || null
 const routeErrors = ref => (reportOf(ref)?.errors || []).filter(error => error.route_id === props.id)
 const routeHealthOf = ref => health.value.filter(item => item.node_ref === ref)
+// An ANX route's entries check each target through the whole path
+// (kernelforward network_health.go): hop 0 items with a port are those
+// checks, so they belong to the targets, not to the entry's next hop.
+const pathChecked = computed(() => route.value?.hops?.[0]?.engine === 'ENGINE_NETWORK' && route.value.hops.length > 1)
+const isPathCheck = item => pathChecked.value && num(item.hop_index) === 0 && num(item.port) > 0
 const allHealth = computed(() => nodeRefs.value.flatMap(ref => routeHealthOf(ref).map(item => ({ ...item, node_ref: ref }))))
 const allErrors = computed(() => nodeRefs.value.flatMap(routeErrors))
 
@@ -278,7 +289,7 @@ const status = computed(() => routeStatus({ route: route.value, enforced: enforc
 function nodeTone(ref) {
   const node = nodeOf(ref)
   if (routeErrors(ref).length) return { tone: 'danger', text: t('forwardV4.detail.dotError', { message: routeErrors(ref)[0].message }) }
-  const bad = routeHealthOf(ref).filter(item => item.state === 'HEALTH_STATE_UNHEALTHY' || item.state === 'HEALTH_STATE_CIRCUIT_OPEN')
+  const bad = routeHealthOf(ref).filter(item => !isPathCheck(item) && (item.state === 'HEALTH_STATE_UNHEALTHY' || item.state === 'HEALTH_STATE_CIRCUIT_OPEN'))
   const generation = t('forwardV4.detail.generation', { applied: node?.reported ? num(node.reported_generation) : '—', desired: num(node?.desired_generation) })
   if (bad.length) return { tone: 'warning', text: `${generation} · ${t('forwardV4.detail.dotDegraded', { n: bad.length })}` }
   if (!node?.reported) return { tone: 'neutral', text: t('forwardV4.nodes.neverReported') }
@@ -324,9 +335,15 @@ function describe(up) {
 }
 
 function upstreamsOf(index, ref) {
-  const reported = routeHealthOf(ref).filter(item => num(item.hop_index) === index)
+  const reported = routeHealthOf(ref).filter(item => num(item.hop_index) === index && !isPathCheck(item))
   if (reported.length) return reported.map(describe)
+  if (index === 0 && pathChecked.value) return []
   return (stateHop(index, ref)?.upstreams || []).map(up => ({ state: 'HEALTH_STATE_UNSPECIFIED', label: upstreamLabel(up.address, up.port), detail: '' }))
+}
+
+function pathChecksOf(target) {
+  return allHealth.value.filter(item => isPathCheck(item) && item.address === target.host && num(item.port) === num(target.port))
+    .map(item => ({ ...describe(item), node_ref: item.node_ref }))
 }
 
 const degradedText = computed(() => {
@@ -336,7 +353,7 @@ const degradedText = computed(() => {
   const parts = []
   if (open.length) {
     const first = open[0]
-    parts.push(t('forwardV4.detail.degradedOpen', {
+    parts.push(t(isPathCheck(first) ? 'forwardV4.detail.degradedPathOpen' : 'forwardV4.detail.degradedOpen', {
       n: open.length,
       hop: num(first.hop_index) + 1,
       name: upstreamLabel(first.address, first.port),
@@ -344,12 +361,14 @@ const degradedText = computed(() => {
     }))
   }
   if (unhealthy.length) parts.push(t('forwardV4.detail.degradedUnhealthy', { n: unhealthy.length }))
-  return `${parts.join(t('forwardV4.detail.listJoin'))}${t('forwardV4.detail.degradedTail')}`
+  const checks = allHealth.value.filter(isPathCheck)
+  const down = checks.length && checks.every(item => item.state === 'HEALTH_STATE_CIRCUIT_OPEN' || item.state === 'HEALTH_STATE_UNHEALTHY')
+  return `${parts.join(t('forwardV4.detail.listJoin'))}${t(down ? 'forwardV4.detail.degradedPathDown' : 'forwardV4.detail.degradedTail')}`
 })
 
 const healthRows = computed(() => allHealth.value.map((up, index) => ({
   key: index,
-  hop: t('forwardV4.diagnose.hop', { n: num(up.hop_index) + 1 }),
+  hop: isPathCheck(up) ? t('forwardV4.detail.pathCheck') : t('forwardV4.diagnose.hop', { n: num(up.hop_index) + 1 }),
   node: nodeName(up.node_ref),
   upstream: upstreamLabel(up.address, up.port),
   state: up.state || 'HEALTH_STATE_UNSPECIFIED',
@@ -373,7 +392,7 @@ const healthColumns = computed(() => [
 const counters = ref([])
 const activeConns = computed(() => counters.value.filter(item => num(item.hop_index) === 0).reduce((sum, item) => sum + num(item.active_conns), 0))
 const entryLatency = computed(() => {
-  const rtts = allHealth.value.filter(item => num(item.hop_index) === 0 && num(item.rtt_us)).map(item => num(item.rtt_us))
+  const rtts = allHealth.value.filter(item => num(item.hop_index) === 0 && num(item.rtt_us) && !isPathCheck(item)).map(item => num(item.rtt_us))
   return rtts.length ? `${Math.round(Math.min(...rtts) / 1000)} ms` : '—'
 })
 
