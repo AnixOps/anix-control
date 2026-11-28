@@ -4,10 +4,9 @@
 
     <UiPageHeader :title="t('standby.page.title')" :description="t('standby.page.description')">
       <template #actions>
-        <UiButton :icon="Wrench" data-testid="standby-prepare" @click="openSheet">{{ t('standby.page.prepare') }}</UiButton>
-        <UiButton v-if="links.length" :icon="ShieldAlert" data-testid="standby-all-reality" @click="switchTo(null, 'reality')">{{ t('standby.page.allReality') }}</UiButton>
-        <UiButton v-if="links.length" :icon="ShieldAlert" data-testid="standby-all-xhttp" @click="switchTo(null, 'xhttp')">{{ t('standby.page.allXhttp') }}</UiButton>
+        <UiButton :variant="links.length ? 'secondary' : 'primary'" :icon="Wrench" data-testid="standby-prepare" @click="openSheet">{{ t('standby.page.prepare') }}</UiButton>
         <UiButton v-if="links.length" variant="primary" :icon="Undo2" data-testid="standby-all-off" @click="switchTo(null, 'off')">{{ t('standby.page.allOff') }}</UiButton>
+        <UiMenu v-if="links.length" :label="t('standby.page.title')" :items="bulkSwitchItems" data-testid="standby-bulk-menu" />
       </template>
     </UiPageHeader>
 
@@ -91,7 +90,7 @@
 // Agents get a switch with their next configuration (within a minute).
 import { computed, ref } from 'vue'
 import { ShieldAlert, ShieldCheck, Undo2, Wrench } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiPageHeader, UiSheet, UiTextarea, UiTextField, useConfirm, useToast } from '@/ui'
+import { UiBadge, UiButton, UiDataTable, UiMenu, UiPageHeader, UiSheet, UiTextarea, UiTextField, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getKernelStandby, prepareKernelStandby, switchKernelStandby } from '@/api/kernel'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
@@ -109,6 +108,10 @@ const loaded = ref(false)
 const loadError = ref(null)
 const links = computed(() => overview.value?.links || [])
 const stale = computed(() => overview.value?.stale || [])
+const bulkSwitchItems = computed(() => [
+  { key: 'all-reality', label: t('standby.page.allReality'), icon: ShieldAlert, onSelect: () => switchTo(null, 'reality') },
+  { key: 'all-xhttp', label: t('standby.page.allXhttp'), icon: ShieldAlert, onSelect: () => switchTo(null, 'xhttp') }
+])
 
 const { loading, secondsAgo, refresh } = usePolling(async () => {
   try {
