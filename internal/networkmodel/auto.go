@@ -201,15 +201,19 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 			a.line(at)
 		}
 		auto0 := false
+		scope := forward.transportScope()
 		for j, id := range forward.Segments {
 			if id != "" {
 				at = a.reaches(id, at)
+				if scope != "" {
+					forward.Segments[j] = a.scopedTransport(id, scope)
+				}
 				continue
 			}
 			if j >= len(forward.Via) || at == "" {
 				break
 			}
-			forward.Segments[j] = a.transport(at, forward.Via[j], forward.link(j))
+			forward.Segments[j] = a.transport(at, forward.Via[j], forward.link(j), scope)
 			auto0 = auto0 || j == 0
 			at = forward.Via[j]
 		}
@@ -219,7 +223,9 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 			case len(forward.Segments) == 0:
 				a.internetEgress(entry)
 			case auto0 && len(forward.Via) > 0:
-				a.transport(entry, forward.Via[0], forward.link(0))
+				a.transport(entry, forward.Via[0], forward.link(0), scope)
+			case scope != "":
+				a.scopeEntryTransports(entry, forward.Segments[0], scope)
 			}
 		}
 		if forward.Egress == "" && at != "" {
@@ -228,6 +234,52 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 		filled[i] = forward
 	}
 	return out, filled
+}
+
+func (a *autoCompleter) scopedTransport(id, scope string) string {
+	scoped := scopedTransportID(id, scope)
+	for _, transport := range a.doc.Transports {
+		if transport.ID == id {
+			if a.add("t:" + scoped) {
+				transport.ID, transport.privateForward = scoped, scope
+				a.doc.Transports = append(a.doc.Transports, transport)
+			}
+			return scoped
+		}
+	}
+	return id
+}
+
+func (a *autoCompleter) scopeEntryTransports(entry, firstID, scope string) {
+	var ingress string
+	for _, transport := range a.doc.Transports {
+		if transport.ID == firstID {
+			ingress = transport.ToIngress
+			break
+		}
+	}
+	if ingress == "" {
+		return
+	}
+	for _, transport := range a.doc.Transports {
+		if transport.ToIngress != ingress || transport.privateForward != "" {
+			continue
+		}
+		for _, egress := range a.doc.Egresses {
+			if egress.ID == transport.FromEgress && a.nodeOf[egress.Line] == entry {
+				a.scopedTransport(transport.ID, scope)
+				break
+			}
+		}
+	}
+}
+
+func scopedTransportID(id, scope string) string {
+	if scope == "" {
+		return id
+	}
+	sum := sha256.Sum256([]byte(id + "\x00" + scope))
+	return fmt.Sprintf("%sprivate-%x", AutoPrefix, sum[:20])
 }
 
 // kernelTargets answers forward's kernel hops with where each forwards to:
@@ -347,7 +399,7 @@ func (f *Forward) link(j int) Link {
 // link says, adding it with its hop egress and hop ingress; "" when the
 // next device (or, reversed, the dialing one) has no address to be
 // reached at.
-func (a *autoCompleter) transport(from, to string, link Link) string {
+func (a *autoCompleter) transport(from, to string, link Link, scope string) string {
 	next := a.devices[to]
 	host := strings.TrimSpace(next.Host)
 	if host == "" || from == to {
@@ -396,9 +448,9 @@ func (a *autoCompleter) transport(from, to string, link Link) string {
 		ingress.ID = ingressID
 		a.doc.Ingresses = append(a.doc.Ingresses, ingress)
 	}
-	id := AutoPrefix + from + "-" + to + link.suffix()
+	id := scopedTransportID(AutoPrefix+from+"-"+to+link.suffix(), scope)
 	if a.add("t:" + id) {
-		transport := Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingressID,
+		transport := Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingressID, privateForward: scope,
 			AnxLine: &AnxLine{ServerName: AutoServerName}}
 		switch link.Mode {
 		case LinkAnxLine:

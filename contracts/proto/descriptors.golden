@@ -1488,6 +1488,7 @@ field anixops.network.v1.ForwardTargetHealth.rtt_us = 6 optional uint32
 field anixops.network.v1.ForwardTargetHealth.state = 3 optional anixops.network.v1.TargetHealthState
 field anixops.network.v1.Forwarding.egress_id = 2 optional string oneof next
 field anixops.network.v1.Forwarding.from_transport_id = 1 optional string
+field anixops.network.v1.Forwarding.private_targets = 4 repeated string
 field anixops.network.v1.Forwarding.transport_id = 3 optional string oneof next
 field anixops.network.v1.HealthCheck.failure_threshold = 4 optional uint32
 field anixops.network.v1.HealthCheck.interval_ms = 2 optional uint32
