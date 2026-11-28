@@ -70,8 +70,9 @@ func (f Forward) privateTargets() []string {
 	var targets []string
 	for _, target := range f.Targets {
 		ip, err := netip.ParseAddr(target.GetHost())
-		if err == nil && ip.Zone() == "" && ip.Unmap().IsPrivate() && target.GetPort() > 0 && target.GetPort() <= 65535 {
-			targets = append(targets, netip.AddrPortFrom(ip.Unmap(), uint16(target.GetPort())).String())
+		port := target.GetPort()
+		if err == nil && ip.Zone() == "" && ip.Unmap().IsPrivate() && port > 0 && port <= 65535 {
+			targets = append(targets, net.JoinHostPort(ip.Unmap().String(), strconv.FormatUint(uint64(port), 10)))
 		}
 	}
 	sort.Strings(targets)
