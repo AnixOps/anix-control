@@ -40,7 +40,9 @@ type Forward struct {
 	Listen    Endpoint
 	Protocols []string
 	Targets   []*networkv1.ForwardTarget
-	Policy    *networkv1.ForwardPolicy
+	// AllowPrivateTargets is set by an administrator's forwarding route.
+	AllowPrivateTargets bool
+	Policy              *networkv1.ForwardPolicy
 	// Segments are the transports in order; none when the entry device
 	// dials the targets itself.
 	Segments []string
@@ -59,6 +61,29 @@ type Forward struct {
 	// routes' upstreams are dialed where Targets would be. Protocols,
 	// Targets and Policy are then unused.
 	ReverseProxy *ReverseProxySpec
+}
+
+func (f Forward) privateTargets() []string {
+	if !f.AllowPrivateTargets {
+		return nil
+	}
+	var targets []string
+	for _, target := range f.Targets {
+		ip, err := netip.ParseAddr(target.GetHost())
+		port := target.GetPort()
+		if err == nil && ip.Zone() == "" && ip.Unmap().IsPrivate() && port > 0 && port <= 65535 {
+			targets = append(targets, net.JoinHostPort(ip.Unmap().String(), strconv.FormatUint(uint64(port), 10)))
+		}
+	}
+	sort.Strings(targets)
+	return targets
+}
+
+func (f Forward) transportScope() string {
+	if len(f.privateTargets()) == 0 {
+		return ""
+	}
+	return "-private-" + f.ID
 }
 
 // UserEntries answers the nodes clients connect to: the first kernel
@@ -225,8 +250,12 @@ func (p *planned) entryChain(forward *Forward, k int) ([]string, string, string)
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	scope := forward.transportScope()
 	for _, id := range ids {
 		transport := p.transports[id]
+		if transport.privateForward != scope {
+			continue
+		}
 		from, to := p.egresses[transport.FromEgress], p.ingresses[transport.ToIngress]
 		if transport.ToIngress != first.ToIngress || from == nil || to == nil || p.nodeOf(from.Line) != entry ||
 			from.Disabled || to.Disabled || p.keys[id] == "" {
@@ -362,6 +391,18 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 			}
 			for j, id := range segments {
 				p.addTransport(id, continuation(segments, j, egress))
+			}
+			if len(segments) > 0 {
+				if targets := forward.privateTargets(); len(targets) > 0 {
+					last := p.transports[segments[len(segments)-1]]
+					exit := p.plans(p.nodeOf(p.ingresses[last.ToIngress].Line))
+					for _, rule := range exit.Forwarding {
+						if rule.GetFromTransportId() == last.ID {
+							rule.PrivateTargets = targets
+							break
+						}
+					}
+				}
 			}
 			plan := p.plans(entry)
 			plan.PortForwards = append(plan.PortForwards, out)

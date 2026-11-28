@@ -65,6 +65,8 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 		Protocols: NetworkProtocols(route.GetListen().GetProtocol()),
 		Policy:    NetworkPolicy(route),
 		Paused:    route.GetPaused(),
+		AllowPrivateTargets: route.GetOwner() == "admin" &&
+			route.GetPolicy().GetTargetPolicy() == forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
 	}
 	for _, target := range route.GetTargets() {
 		forward.Targets = append(forward.Targets, &networkv1.ForwardTarget{

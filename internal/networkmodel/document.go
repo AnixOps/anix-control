@@ -172,6 +172,9 @@ type Transport struct {
 	MTU         uint32   `json:"mtu,omitempty"`
 	AnxLine     *AnxLine `json:"anx_line,omitempty"`
 	KindVersion uint32   `json:"kind_version,omitempty"`
+
+	// privateForward identifies a generated transport reserved to one forwarding route.
+	privateForward string
 }
 
 // KindAnx is the jacketed transport kind (ANX-A) of the document; plans

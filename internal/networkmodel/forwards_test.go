@@ -52,6 +52,28 @@ func TestPlanForwardSharesTheTransport(t *testing.T) {
 	require.Equal(t, "eg-jp", result.Plans["proxy-2"].GetPortForwards()[0].GetEgressId())
 }
 
+func TestPlanPrivateForwardUsesDedicatedTransport(t *testing.T) {
+	forward := sshForward()
+	forward.AllowPrivateTargets = true
+	doc, forwards := complete(twoHops(), []Forward{forward}, nil)
+	scoped := forwards[0].Segments[0]
+	require.NotEqual(t, "tr-jp", scoped)
+
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey, scoped: linkKey}, japanKey(), forwards)
+	require.NoError(t, err)
+	require.Empty(t, result.Pending)
+	require.Equal(t, scoped, result.Plans["proxy-1"].GetPortForwards()[0].GetTransportId())
+	exit := result.Plans["proxy-2"].GetForwarding()
+	require.Len(t, exit, 2)
+	for _, rule := range exit {
+		if rule.GetFromTransportId() == scoped {
+			require.Equal(t, []string{"10.1.0.5:22"}, rule.GetPrivateTargets())
+		} else {
+			require.Empty(t, rule.GetPrivateTargets())
+		}
+	}
+}
+
 // A forward that cannot be planned waits; the document stays valid.
 func TestPlanForwardWaits(t *testing.T) {
 	cases := map[string]struct {

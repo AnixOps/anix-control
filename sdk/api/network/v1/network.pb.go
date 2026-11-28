@@ -2739,9 +2739,12 @@ type Forwarding struct {
 	//
 	//	*Forwarding_EgressId
 	//	*Forwarding_TransportId
-	Next          isForwarding_Next `protobuf_oneof:"next"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Next isForwarding_Next `protobuf_oneof:"next"`
+	// Exact LAN IP:port targets allowed on this dedicated accepting transport.
+	// Empty keeps the default target filtering.
+	PrivateTargets []string `protobuf:"bytes,4,rep,name=private_targets,json=privateTargets,proto3" json:"private_targets,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Forwarding) Reset() {
@@ -2804,6 +2807,13 @@ func (x *Forwarding) GetTransportId() string {
 		}
 	}
 	return ""
+}
+
+func (x *Forwarding) GetPrivateTargets() []string {
+	if x != nil {
+		return x.PrivateTargets
+	}
+	return nil
 }
 
 type isForwarding_Next interface {
@@ -3650,12 +3660,13 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"\ftransport_id\x18\x04 \x01(\tH\x00R\vtransportId\x12\x16\n" +
 	"\x06labels\x18\x05 \x03(\tR\x06labels\x12&\n" +
 	"\x0ffinal_egress_id\x18\x06 \x01(\tR\rfinalEgressIdB\x06\n" +
-	"\x04next\"\x84\x01\n" +
+	"\x04next\"\xad\x01\n" +
 	"\n" +
 	"Forwarding\x12*\n" +
 	"\x11from_transport_id\x18\x01 \x01(\tR\x0ffromTransportId\x12\x1d\n" +
 	"\tegress_id\x18\x02 \x01(\tH\x00R\begressId\x12#\n" +
-	"\ftransport_id\x18\x03 \x01(\tH\x00R\vtransportIdB\x06\n" +
+	"\ftransport_id\x18\x03 \x01(\tH\x00R\vtransportId\x12'\n" +
+	"\x0fprivate_targets\x18\x04 \x03(\tR\x0eprivateTargetsB\x06\n" +
 	"\x04next\"\xd3\x02\n" +
 	"\x0fComponentStatus\x12;\n" +
 	"\tcomponent\x18\x01 \x01(\x0e2\x1d.anixops.network.v1.ComponentR\tcomponent\x12\x0e\n" +

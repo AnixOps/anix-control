@@ -467,6 +467,9 @@ message Forwarding {
     string egress_id = 2;
     string transport_id = 3;
   }
+  // Exact LAN IP:port targets allowed on this dedicated accepting transport.
+  // Empty keeps the default target filtering.
+  repeated string private_targets = 4;
 }
 
 enum ComponentState {
