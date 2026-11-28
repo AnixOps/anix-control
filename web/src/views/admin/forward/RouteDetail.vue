@@ -75,7 +75,7 @@
               <li v-for="target in route.targets || []" :key="`${target.host}:${target.port}`" class="chain__node">
                 <span class="fwd-mono">{{ showAddress(target.host) }}:{{ target.port }}</span>
                 <span class="fwd-muted">{{ t('forwardV4.detail.weightPriority', { w: num(target.weight) || 1, p: num(target.priority) }) }}</span>
-                <ul class="chain__ups">
+                <ul v-if="pathChecksOf(target).length" class="chain__ups">
                   <li v-for="(up, upIndex) in pathChecksOf(target)" :key="upIndex" class="chain__up">
                     <UiBadge :tone="HEALTH_TONES[up.state] || 'neutral'" :label="t(`forwardV4.health.${up.state}`)" />
                     <span class="fwd-muted">{{ t('forwardV4.detail.pathCheckBy', { name: nodeName(up.node_ref) }) }} {{ up.detail }}</span>
